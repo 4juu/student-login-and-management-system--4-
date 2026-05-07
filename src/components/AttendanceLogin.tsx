@@ -49,13 +49,12 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
         type: 'error',
         text: 'لا يوجد سجل نشط! الرجاء تفعيل سجل أولاً',
       });
-
       setCode('');
       return;
     }
 
     const student = students.find(
-      (s) => s.code.toString() === codeToCheck
+      (s) => s.code === codeToCheck
     );
 
     if (student) {
@@ -76,14 +75,14 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
 
       setMessage({
         type: 'success',
-        text: `مرحباً ${student.name}! تم تسجيل حضورك بنجاح`,
+        text: `✅ مرحباً ${student.name}!\nتم تسجيل حضورك بنجاح`,
       });
 
       setCode('');
     } else {
       setMessage({
         type: 'error',
-        text: 'الرمز غير صحيح. حاول مرة أخرى',
+        text: '❌ الرمز غير صحيح. حاول مرة أخرى',
       });
 
       setCode('');
@@ -107,17 +106,20 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
 
       <div className="mb-8">
         <div className="bg-gray-100 rounded-lg p-6 mb-4">
-          <div className="text-center text-4xl font-bold text-gray-700 h-16 flex items-center justify-center tracking-widest">
-            {code || '----'}
+          <div className="text-center text-4xl font-bold text-gray-700 h-16 flex items-center justify-center tracking-[0.5em]">
+            {code ? code.padEnd(4, '_').split('').join(' ') : '_ _ _ _'}
           </div>
+          <p className="text-center text-sm text-gray-500 mt-2">
+            {code.length}/4 أرقام
+          </p>
         </div>
 
         {message && (
           <div
-            className={`p-4 rounded-md text-center font-medium ${
+            className={`p-4 rounded-md text-center font-medium whitespace-pre-line ${
               message.type === 'success'
-                ? 'bg-green-100 text-green-800 border border-green-200'
-                : 'bg-red-100 text-red-800 border border-red-200'
+                ? 'bg-green-100 text-green-800 border-2 border-green-300'
+                : 'bg-red-100 text-red-800 border-2 border-red-300'
             }`}
             dir="rtl"
           >
@@ -131,7 +133,8 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
           <button
             key={num}
             onClick={() => handleCodeInput(num.toString())}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-2xl font-bold py-6 rounded-lg transition duration-200 active:scale-95"
+            disabled={code.length >= 4}
+            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-2xl font-bold py-6 rounded-lg transition duration-200 active:scale-95 shadow-md"
           >
             {num}
           </button>
@@ -139,28 +142,52 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
 
         <button
           onClick={handleClear}
-          className="bg-red-500 hover:bg-red-600 text-white text-xl font-bold py-6 rounded-lg transition duration-200 active:scale-95"
+          className="bg-red-500 hover:bg-red-600 text-white text-xl font-bold py-6 rounded-lg transition duration-200 active:scale-95 shadow-md"
         >
           مسح
         </button>
 
         <button
           onClick={() => handleCodeInput('0')}
-          className="bg-blue-600 hover:bg-blue-700 text-white text-2xl font-bold py-6 rounded-lg transition duration-200 active:scale-95"
+          disabled={code.length >= 4}
+          className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-2xl font-bold py-6 rounded-lg transition duration-200 active:scale-95 shadow-md"
         >
           0
         </button>
 
         <button
           onClick={handleBackspace}
-          className="bg-yellow-500 hover:bg-yellow-600 text-white text-xl font-bold py-6 rounded-lg transition duration-200 active:scale-95"
+          className="bg-yellow-500 hover:bg-yellow-600 text-white text-xl font-bold py-6 rounded-lg transition duration-200 active:scale-95 shadow-md"
         >
           ⌫
         </button>
       </div>
 
-      <div className="mt-6 text-center text-gray-600">
-        <p>أدخل رمزك المكون من 4 أرقام</p>
+      <div className="mt-6 text-center">
+        <p className="text-gray-600 text-lg font-medium">
+          أدخل رمزك المكون من 4 أرقام
+        </p>
+        <p className="text-sm text-gray-500 mt-2">
+          الرموز من 1000 إلى 9999
+        </p>
+      </div>
+
+      {/* Info box */}
+      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex items-start gap-2">
+          <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="text-sm text-blue-800">
+            <p className="font-medium mb-1">💡 كيفية الاستخدام:</p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>أدخل رمزك المكون من 4 أرقام بالترتيب</li>
+              <li>سيتم التسجيل تلقائياً عند إدخال الرقم الرابع</li>
+              <li>استخدم زر "⌫" لحذف آخر رقم</li>
+              <li>استخدم زر "مسح" لمسح جميع الأرقام</li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   );

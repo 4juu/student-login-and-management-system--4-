@@ -32,54 +32,58 @@ function App() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'login' | 'manage' | 'records' | 'settings' | 'sessions' | 'teachers' | 'profile'>('sessions');
 
-  // Check auth state
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        // User is signed in - Load full user data from database
-        try {
-          const { ref: dbRef, get } = await import('firebase/database');
-          const { database } = await import('./firebase/config');
+ // Check auth state
+useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    if (firebaseUser) {
+      // User is signed in - Load full user data from database
+      try {
+        const { ref: dbRef, get } = await import('firebase/database');
+        const { database } = await import('./firebase/config');
+        
+        const userRef = dbRef(database, `users/${firebaseUser.uid}`);
+        const snapshot = await get(userRef);
+        
+        let userData: User;
+        
+        if (snapshot.exists()) {
+          // User data exists in database - use it
+          userData = snapshot.val();
+          console.log('✅ Loaded user data from Firebase:', userData);
+        } else {
+          // First time user - create basic data
+          userData = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email || '',
+            displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+            role: firebaseUser.email?.toLowerCase() === 'mujtabahaitham@gmail.com' ? 'admin' : 'teacher',
+            createdAt: firebaseUser.metadata.creationTime || new Date().toISOString(),
+            lastLogin: new Date().toISOString()
+          };
           
-          const userRef = dbRef(database, `users/${firebaseUser.uid}`);
-          const snapshot = await get(userRef);
-          
-          let userData: User;
-          
-          if (snapshot.exists()) {
-            // User data exists in database
-            userData = snapshot.val();
-            console.log('Loaded user data from database:', userData);
-          } else {
-            // First time user - create basic data
-            userData = {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-              role: firebaseUser.email?.toLowerCase() === 'mujtabahaitham@gmail.com' ? 'admin' : 'teacher',
-              createdAt: firebaseUser.metadata.creationTime || new Date().toISOString(),
-              lastLogin: new Date().toISOString()
-            };
-            console.log('Created new user data:', userData);
-          }
-          
-          setCurrentUser(userData);
-          
-          // Load user data from Firebase
-          await loadUserData(firebaseUser.uid);
-        } catch (error) {
-          console.error('Error loading user:', error);
-          setCurrentUser(null);
+          // Save to database
+          const { set } = await import('firebase/database');
+          await set(userRef, userData);
+          console.log('✅ Created new user data in Firebase:', userData);
         }
-      } else {
-        // User is signed out
+        
+        setCurrentUser(userData);
+        
+        // Load user data from Firebase
+        await loadUserData(firebaseUser.uid);
+      } catch (error) {
+        console.error('❌ Error loading user:', error);
         setCurrentUser(null);
-        resetData();
       }
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
+    } else {
+      // User is signed out
+      setCurrentUser(null);
+      resetData();
+    }
+    setLoading(false);
+  });
+  return () => unsubscribe();
+}, []);
   
   // Load user data from Firebase
   const loadUserData = async (uid: string) => {

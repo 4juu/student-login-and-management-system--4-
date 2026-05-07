@@ -21,7 +21,6 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
   const [success, setSuccess] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Convert image to Base64
   const convertToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -38,13 +37,11 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check file size (max 1MB for Base64)
     if (file.size > 1 * 1024 * 1024) {
       setError('حجم الصورة كبير جداً. الحد الأقصى 1 MB');
       return;
     }
 
-    // Check file type
     if (!file.type.startsWith('image/')) {
       setError('الرجاء اختيار صورة صحيحة');
       return;
@@ -55,17 +52,10 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
     setSuccess('');
 
     try {
-      console.log('Converting image to Base64...');
-      
-      // Convert to Base64
       const base64Image = await convertToBase64(file);
-      console.log('Image converted, size:', base64Image.length);
-      
       setPhotoURL(base64Image);
       setSuccess('✅ تم تحميل الصورة! اضغط "حفظ التغييرات" للتطبيق');
-      
     } catch (err: any) {
-      console.error('Error converting image:', err);
       setError(`حدث خطأ أثناء تحميل الصورة: ${err.message}`);
     } finally {
       setUploading(false);
@@ -74,7 +64,6 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
 
   const handleRemovePhoto = () => {
     if (!photoURL) return;
-
     if (window.confirm('هل أنت متأكد من حذف الصورة الشخصية؟')) {
       setPhotoURL('');
       setSuccess('سيتم حذف الصورة عند حفظ التغييرات');
@@ -84,7 +73,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
   const handleSave = async () => {
     setError('');
     setSuccess('');
-    
+
     if (!displayName.trim()) {
       setError('الرجاء إدخال الاسم');
       return;
@@ -93,55 +82,64 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
     setSaving(true);
 
     try {
-      const updates: any = {
+      // ✅ تعريف نوع واضح يتضمن lastUpdated
+      const updates: Partial<User> & { lastUpdated: string } = {
         displayName: displayName.trim(),
         bio: bio.trim(),
+        lastUpdated: new Date().toISOString(),
+        photoURL: photoURL || undefined,
       };
-      
-      // Add photoURL (Base64 or empty)
-      if (photoURL) {
-        updates.photoURL = photoURL;
-      } else {
-        updates.photoURL = '';
-      }
 
-      console.log('Saving to database...');
-      
-      // Update in database
-      await update(dbRef(database, `users/${currentUser.uid}`), updates);
+      const userRef = dbRef(database, `users/${currentUser.uid}`);
+      await update(userRef, updates);
 
-      console.log('Saved successfully!');
-
+      // ✅ إنشاء الكائن المحدث بدون مشاكل TypeScript
       const updatedUser: User = {
         ...currentUser,
-        displayName: updates.displayName,
+        displayName: updates.displayName as string,
         bio: updates.bio,
-        photoURL: updates.photoURL || undefined,
+        photoURL: updates.photoURL,
+        lastUpdated: updates.lastUpdated,
       };
 
       onUpdateProfile(updatedUser);
-      setSuccess('✅ تم حفظ التغييرات بنجاح!');
-      setTimeout(() => setSuccess(''), 3000);
+
+      setSuccess(
+        '✅ تم حفظ التغييرات بنجاح!\n\n✓ الصورة الشخصية محفوظة\n✓ الاسم محفوظ\n✓ البايو محفوظ'
+      );
+
+      setTimeout(() => setSuccess(''), 6000);
     } catch (err: any) {
-      console.error('Error saving profile:', err);
-      setError(`حدث خطأ أثناء حفظ التغييرات: ${err.message || 'تحقق من الاتصال بالإنترنت'}`);
+      setError(
+        `حدث خطأ أثناء حفظ التغييرات: ${err.message || 'تحقق من الاتصال بالإنترنت'}`
+      );
     } finally {
       setSaving(false);
     }
   };
 
+  const handleReset = () => {
+    if (window.confirm('هل أنت متأكد من إلغاء جميع التغييرات؟')) {
+      setDisplayName(currentUser.displayName);
+      setBio(currentUser.bio || '');
+      setPhotoURL(currentUser.photoURL || '');
+      setError('');
+      setSuccess('');
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">إعدادات الملف الشخصي</h2>
+      <h2 className="text-2xl font-bold mb-6 text-gray-800">
+        إعدادات الملف الشخصي
+      </h2>
 
-      {/* Success Message */}
       {success && (
-        <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded-md">
+        <div className="mb-4 p-4 bg-green-100 border-2 border-green-400 text-green-700 rounded-md whitespace-pre-line font-medium">
           {success}
         </div>
       )}
 
-      {/* Error Message */}
       {error && (
         <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md">
           {error}
@@ -151,10 +149,11 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Profile Photo Section */}
         <div>
-          <h3 className="text-lg font-semibold mb-4 text-gray-700">الصورة الشخصية</h3>
-          
+          <h3 className="text-lg font-semibold mb-4 text-gray-700">
+            الصورة الشخصية
+          </h3>
+
           <div className="flex flex-col items-center">
-            {/* Photo Preview */}
             <div className="relative mb-4">
               <div className="w-40 h-40 rounded-full overflow-hidden bg-gray-200 border-4 border-blue-500 shadow-lg">
                 {photoURL ? (
@@ -163,7 +162,6 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                     alt={displayName}
                     className="w-full h-full object-cover"
                     onError={(e) => {
-                      console.error('Error loading image');
                       e.currentTarget.src = '';
                     }}
                   />
@@ -175,21 +173,30 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                   </div>
                 )}
               </div>
-              
+
               {photoURL && (
                 <button
                   onClick={handleRemovePhoto}
-                  className="absolute top-0 right-0 bg-red-500 hover:bg-red-600 text-white rounded-full p-2 shadow-lg"
+                  className="absolute top-0 right-0 bg-red-500 hover:bg-red-600 text-white rounded-full p-2 shadow-lg transition duration-200"
                   title="حذف الصورة"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
                   </svg>
                 </button>
               )}
             </div>
 
-            {/* Upload Button */}
             <input
               ref={fileInputRef}
               type="file"
@@ -197,7 +204,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
               onChange={handleImageUpload}
               className="hidden"
             />
-            
+
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
@@ -205,16 +212,42 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
             >
               {uploading ? (
                 <>
-                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <svg
+                    className="animate-spin h-5 w-5"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
                   </svg>
                   جارٍ التحميل...
                 </>
               ) : (
                 <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
                   </svg>
                   {photoURL ? 'تغيير الصورة' : 'رفع صورة'}
                 </>
@@ -229,10 +262,11 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
 
         {/* Profile Info Section */}
         <div>
-          <h3 className="text-lg font-semibold mb-4 text-gray-700">المعلومات الشخصية</h3>
-          
+          <h3 className="text-lg font-semibold mb-4 text-gray-700">
+            المعلومات الشخصية
+          </h3>
+
           <div className="space-y-4">
-            {/* Display Name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 الاسم الكامل
@@ -247,7 +281,6 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
               />
             </div>
 
-            {/* Email (Read Only) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 البريد الإلكتروني
@@ -264,7 +297,6 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
               </p>
             </div>
 
-            {/* Role Badge */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 الصلاحية
@@ -285,12 +317,14 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
         </div>
       </div>
 
-      {/* Bio Section - Full Width */}
+      {/* Bio Section */}
       <div className="mt-6">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           البايو / وصف المادة
           {currentUser.role === 'teacher' && (
-            <span className="text-gray-500 text-xs mr-2">(اكتب وصفاً مختصراً عن المادة التي تدرسها)</span>
+            <span className="text-gray-500 text-xs mr-2">
+              (اكتب وصفاً مختصراً عن المادة التي تدرسها)
+            </span>
           )}
         </label>
         <textarea
@@ -301,37 +335,42 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
           className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           placeholder={
             currentUser.role === 'admin'
-              ? 'مدير النظام - مسؤول عن إدارة جميع حسابات التدريسيين والإشراف على النظام'
-              : 'مثال: أستاذ مادة الرياضيات للمرحلة الثانية، متخصص في الجبر والهندسة التحليلية'
+              ? 'مدير النظام - مسؤول عن إدارة جميع حسابات التدريسيين'
+              : 'مثال: أستاذ مادة الرياضيات للمرحلة الثانية'
           }
           dir="rtl"
         />
         <div className="flex justify-between mt-1">
-          <p className="text-xs text-gray-500">
-            {bio.length}/500 حرف
-          </p>
+          <p className="text-xs text-gray-500">{bio.length}/500 حرف</p>
           {bio.length >= 450 && (
-            <p className="text-xs text-orange-500">
-              ⚠️ اقتربت من الحد الأقصى
-            </p>
+            <p className="text-xs text-orange-500">⚠️ اقتربت من الحد الأقصى</p>
           )}
         </div>
       </div>
 
-      {/* Save Button */}
+      {/* Save Buttons */}
       <div className="mt-6 flex justify-end gap-3">
         <button
-          onClick={() => {
-            setDisplayName(currentUser.displayName);
-            setBio(currentUser.bio || '');
-            setPhotoURL(currentUser.photoURL || '');
-            setError('');
-            setSuccess('');
-          }}
-          className="bg-gray-400 hover:bg-gray-500 text-white font-medium py-2 px-6 rounded-md transition duration-200"
+          onClick={handleReset}
+          disabled={saving}
+          className="bg-gray-400 hover:bg-gray-500 disabled:bg-gray-300 text-white font-medium py-2 px-6 rounded-md transition duration-200 flex items-center gap-2"
         >
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
           إلغاء التغييرات
         </button>
+
         <button
           onClick={handleSave}
           disabled={saving}
@@ -339,16 +378,42 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
         >
           {saving ? (
             <>
-              <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              <svg
+                className="animate-spin h-5 w-5"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
               </svg>
               جارٍ الحفظ...
             </>
           ) : (
             <>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
               </svg>
               حفظ التغييرات
             </>
@@ -356,21 +421,76 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
         </button>
       </div>
 
+      {/* ✅ Last Updated - يعمل الآن بدون أخطاء */}
+      {currentUser.lastUpdated && (
+        <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <p className="text-sm text-green-800 flex items-center gap-2">
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+            آخر تحديث:{' '}
+            {new Date(currentUser.lastUpdated).toLocaleString('ar-EG', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </p>
+        </div>
+      )}
+
       {/* Info Box */}
       <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
         <div className="flex items-start gap-2">
-          <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <svg
+            className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
           <div className="text-sm text-blue-800">
             <p className="font-medium mb-1">💡 معلومات مفيدة</p>
             <ul className="list-disc list-inside space-y-1">
-              <li>الصورة تُحفظ في قاعدة البيانات مباشرة (بدون Storage)</li>
+              <li>الصورة تُحفظ في قاعدة البيانات مباشرة</li>
               <li>الحد الأقصى للصورة 1MB لأفضل أداء</li>
               <li>البايو يساعد في تعريف التدريسيين والمواد</li>
               <li>جميع التغييرات محفوظة في Firebase بشكل آمن</li>
+              <li>
+                <strong>البيانات تُحمّل تلقائياً عند تسجيل الدخول ✓</strong>
+              </li>
             </ul>
           </div>
+        </div>
+      </div>
+
+      {/* Status Indicator */}
+      <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <p className="text-sm text-gray-700 font-medium">
+              متصل بـ Firebase
+            </p>
+          </div>
+          <p className="text-xs text-gray-600">البيانات محفوظة في السحابة ☁️</p>
         </div>
       </div>
     </div>

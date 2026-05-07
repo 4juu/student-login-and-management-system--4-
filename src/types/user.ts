@@ -3,6 +3,7 @@ export interface User {
   email: string;
   displayName: string;
   role: 'admin' | 'teacher';
+  lastUpdated?: string;
   createdAt: string;
   lastLogin?: string;
   photoURL?: string; // صورة شخصية
@@ -14,6 +15,7 @@ export interface TeacherAccount {
   displayName: string;
   password: string;
   role: 'teacher';
+  lastUpdated?: string;
   createdBy: string;
   createdAt: string;
 }
