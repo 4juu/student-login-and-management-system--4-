@@ -18,6 +18,7 @@ import {
   saveAttendanceRecords,
   saveSessions,
   saveActiveSession,
+  saveUserData,
 } from './firebase/dataService';
 
 function App() {
@@ -35,19 +36,41 @@ function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // User is signed in
-        const userData: User = {
-          uid: firebaseUser.uid,
-          email: firebaseUser.email || '',
-          displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-          role: firebaseUser.email?.toLowerCase() === 'mujtabahaitham@gmail.com' ? 'admin' : 'teacher',
-          createdAt: firebaseUser.metadata.creationTime || new Date().toISOString(),
-          lastLogin: new Date().toISOString()
-        };
-        setCurrentUser(userData);
-        
-        // Load user data from Firebase
-        await loadUserData(firebaseUser.uid);
+        // User is signed in - Load full user data from database
+        try {
+          const { ref: dbRef, get } = await import('firebase/database');
+          const { database } = await import('./firebase/config');
+          
+          const userRef = dbRef(database, `users/${firebaseUser.uid}`);
+          const snapshot = await get(userRef);
+          
+          let userData: User;
+          
+          if (snapshot.exists()) {
+            // User data exists in database
+            userData = snapshot.val();
+            console.log('Loaded user data from database:', userData);
+          } else {
+            // First time user - create basic data
+            userData = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+              role: firebaseUser.email?.toLowerCase() === 'mujtabahaitham@gmail.com' ? 'admin' : 'teacher',
+              createdAt: firebaseUser.metadata.creationTime || new Date().toISOString(),
+              lastLogin: new Date().toISOString()
+            };
+            console.log('Created new user data:', userData);
+          }
+          
+          setCurrentUser(userData);
+          
+          // Load user data from Firebase
+          await loadUserData(firebaseUser.uid);
+        } catch (error) {
+          console.error('Error loading user:', error);
+          setCurrentUser(null);
+        }
       } else {
         // User is signed out
         setCurrentUser(null);
@@ -55,19 +78,20 @@ function App() {
       }
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
-
+  
   // Load user data from Firebase
   const loadUserData = async (uid: string) => {
     setDataLoading(true);
     try {
+      console.log('Loading data for user:', uid);
       const data = await loadAllData(uid);
-      setStudents(data.students);
-      setAttendanceRecords(data.attendanceRecords);
-      setSessions(data.sessions);
-      setActiveSessionId(data.activeSessionId);
+      console.log('Loaded data:', data);
+      setStudents(data.students || []);
+      setAttendanceRecords(data.attendanceRecords || []);
+      setSessions(data.sessions || []);
+      setActiveSessionId(data.activeSessionId || null);
     } catch (error) {
       console.error('Error loading user data:', error);
     } finally {
@@ -90,6 +114,11 @@ function App() {
       saveStudents(currentUser.uid, students);
     }
   }, [students, currentUser]);
+  useEffect(() => {
+  if (currentUser) {
+    saveUserData(currentUser.uid, currentUser);
+  }
+}, [currentUser]);
 
   useEffect(() => {
     if (currentUser) {
