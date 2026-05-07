@@ -1,6 +1,7 @@
 import { ref, set, get, remove, update } from "firebase/database";
 import { database } from "./config";
-import { Student, AttendanceRecord, AttendanceSession } from "../types/student";
+import { Student, AttendanceRecord, AttendanceSession} from "../types/student";
+import { User } from "../types/user";
 
 // Get user data path
 const getUserPath = (uid: string, path: string) => `userData/${uid}/${path}`;
@@ -143,5 +144,17 @@ export const loadAllData = async (uid: string): Promise<{
       sessions: [],
       activeSessionId: null
     };
+  }
+};
+
+
+export const saveUserData = async (
+  uid: string,
+  userData: User
+) => {
+  try {
+    await set(ref(database, `users/${uid}`), userData);
+  } catch (error) {
+    console.error('Error saving user data:', error);
   }
 };
