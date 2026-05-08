@@ -10,6 +10,7 @@ import { SessionManager } from './components/SessionManager';
 import { Login } from './components/Login';
 import { TeacherManagement } from './components/TeacherManagement';
 import { ProfileSettings } from './components/ProfileSettings';
+import ChatBot from './components/ChatBot';
 import { auth } from './firebase/config';
 import { signIn, signOut } from './firebase/authService';
 import {
@@ -471,13 +472,16 @@ useEffect(() => {
           )}
         </div>
 
-        {/* Footer */}
+                {/* Footer */}
         <div className="mt-12 text-center text-gray-600">
           <p className="text-sm">
             نظام تسجيل الحضور الإلكتروني - {new Date().getFullYear()}
           </p>
         </div>
       </div>
+
+      {/* 🤖 المساعد الذكي */}
+      <ChatBot userId={currentUser.uid} />
     </div>
   );
 }
