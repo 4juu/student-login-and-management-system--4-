@@ -1,12 +1,10 @@
 import { ref, set, get, remove, update } from "firebase/database";
 import { database } from "./config";
-import { Student, AttendanceRecord, AttendanceSession} from "../types/student";
+import { Student, AttendanceRecord, AttendanceSession } from "../types/student";
 import { User } from "../types/user";
 
-// Get user data path
 const getUserPath = (uid: string, path: string) => `userData/${uid}/${path}`;
 
-// Students
 export const saveStudents = async (uid: string, students: Student[]): Promise<void> => {
   try {
     await set(ref(database, getUserPath(uid, 'students')), students);
@@ -31,7 +29,6 @@ export const loadStudents = async (uid: string): Promise<Student[]> => {
   }
 };
 
-// Attendance Records
 export const saveAttendanceRecords = async (uid: string, records: AttendanceRecord[]): Promise<void> => {
   try {
     await set(ref(database, getUserPath(uid, 'attendanceRecords')), records);
@@ -56,7 +53,6 @@ export const loadAttendanceRecords = async (uid: string): Promise<AttendanceReco
   }
 };
 
-// Sessions
 export const saveSessions = async (uid: string, sessions: AttendanceSession[]): Promise<void> => {
   try {
     await set(ref(database, getUserPath(uid, 'sessions')), sessions);
@@ -81,7 +77,6 @@ export const loadSessions = async (uid: string): Promise<AttendanceSession[]> =>
   }
 };
 
-// Active Session
 export const saveActiveSession = async (uid: string, sessionId: string | null): Promise<void> => {
   try {
     if (sessionId) {
@@ -111,7 +106,6 @@ export const loadActiveSession = async (uid: string): Promise<string | null> => 
   }
 };
 
-// User Profile Management
 export const saveUserProfile = async (
   uid: string,
   profileData: Partial<User>
@@ -122,24 +116,21 @@ export const saveUserProfile = async (
       ...profileData,
       lastUpdated: new Date().toISOString()
     });
-    console.log('✅ User profile saved to Firebase:', profileData);
+    console.log('✅ User profile saved to Firebase');
   } catch (error) {
     console.error('❌ Error saving user profile:', error);
     throw error;
   }
 };
 
-// Load user profile data
 export const loadUserProfile = async (uid: string): Promise<User | null> => {
   try {
     const userRef = ref(database, `users/${uid}`);
     const snapshot = await get(userRef);
-    
     if (snapshot.exists()) {
       console.log('✅ User profile loaded from Firebase');
       return snapshot.val();
     }
-    
     console.log('⚠️ No user profile found in Firebase');
     return null;
   } catch (error) {
@@ -148,11 +139,7 @@ export const loadUserProfile = async (uid: string): Promise<User | null> => {
   }
 };
 
-// Save complete user data
-export const saveUserData = async (
-  uid: string,
-  userData: User
-): Promise<void> => {
+export const saveUserData = async (uid: string, userData: User): Promise<void> => {
   try {
     await set(ref(database, `users/${uid}`), {
       ...userData,
@@ -165,7 +152,6 @@ export const saveUserData = async (
   }
 };
 
-// Sync all data
 export const syncAllData = async (
   uid: string,
   students: Student[],
@@ -174,15 +160,13 @@ export const syncAllData = async (
   activeSessionId: string | null
 ): Promise<void> => {
   try {
-    const updates: any = {};
+    const updates: Record<string, unknown> = {};
     updates[getUserPath(uid, 'students')] = students;
     updates[getUserPath(uid, 'attendanceRecords')] = records;
     updates[getUserPath(uid, 'sessions')] = sessions;
-    
     if (activeSessionId) {
       updates[getUserPath(uid, 'activeSession')] = activeSessionId;
     }
-    
     await update(ref(database), updates);
     console.log('✅ All data synced to Firebase');
   } catch (error) {
@@ -191,7 +175,6 @@ export const syncAllData = async (
   }
 };
 
-// Load all data
 export const loadAllData = async (uid: string): Promise<{
   students: Student[];
   attendanceRecords: AttendanceRecord[];
@@ -200,39 +183,37 @@ export const loadAllData = async (uid: string): Promise<{
 }> => {
   try {
     console.log('📥 Loading all data from Firebase for user:', uid);
-    
     const [students, attendanceRecords, sessions, activeSessionId] = await Promise.all([
       loadStudents(uid),
       loadAttendanceRecords(uid),
       loadSessions(uid),
       loadActiveSession(uid)
     ]);
-    
-    console.log('✅ All data loaded successfully:', {
-      students: students.length,
-      records: attendanceRecords.length,
-      sessions: sessions.length,
-      activeSessionId
-    });
-    
-    return {
-      students,
-      attendanceRecords,
-      sessions,
-      activeSessionId
-    };
+    console.log('✅ All data loaded successfully');
+    return { students, attendanceRecords, sessions, activeSessionId };
   } catch (error) {
     console.error("❌ Error loading all data:", error);
-    return {
-      students: [],
-      attendanceRecords: [],
-      sessions: [],
-      activeSessionId: null
-    };
+    return { students: [], attendanceRecords: [], sessions: [], activeSessionId: null };
   }
 };
 
-// Delete all user data (for account deletion)
+export const syncLocalDataToFirebase = async (uid: string): Promise<void> => {
+  try {
+    console.log('🔄 Syncing data to Firebase for user:', uid);
+    const data = await loadAllData(uid);
+    await syncAllData(
+      uid,
+      data.students,
+      data.attendanceRecords,
+      data.sessions,
+      data.activeSessionId
+    );
+    console.log('✅ Data synced to Firebase');
+  } catch (error) {
+    console.error('❌ Error syncing local data:', error);
+  }
+};
+
 export const deleteAllUserData = async (uid: string): Promise<void> => {
   try {
     await remove(ref(database, `userData/${uid}`));
@@ -244,29 +225,31 @@ export const deleteAllUserData = async (uid: string): Promise<void> => {
   }
 };
 
-// Backup all data to a single object
-export const backupAllData = async (uid: string): Promise<any> => {
+export const backupAllData = async (uid: string): Promise<unknown> => {
   try {
     const allData = await loadAllData(uid);
     const userProfile = await loadUserProfile(uid);
-    
-    const backup = {
+    return {
       userData: allData,
       userProfile,
       timestamp: new Date().toISOString(),
       version: '2.0'
     };
-    
-    console.log('✅ Backup created successfully');
-    return backup;
   } catch (error) {
     console.error('❌ Error creating backup:', error);
     throw error;
   }
 };
 
-// Restore data from backup
-export const restoreFromBackup = async (uid: string, backup: any): Promise<void> => {
+export const restoreFromBackup = async (uid: string, backup: {
+  userData?: {
+    students?: Student[];
+    attendanceRecords?: AttendanceRecord[];
+    sessions?: AttendanceSession[];
+    activeSessionId?: string | null;
+  };
+  userProfile?: User;
+}): Promise<void> => {
   try {
     if (backup.userData) {
       await syncAllData(
@@ -277,11 +260,9 @@ export const restoreFromBackup = async (uid: string, backup: any): Promise<void>
         backup.userData.activeSessionId || null
       );
     }
-    
     if (backup.userProfile) {
       await saveUserData(uid, backup.userProfile);
     }
-    
     console.log('✅ Data restored from backup successfully');
   } catch (error) {
     console.error('❌ Error restoring from backup:', error);

@@ -16,13 +16,12 @@ export default function ChatBot({ userId }: ChatBotProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "bot",
-      text: "مرحباً 👋 أنا مساعدك الذكي.\nاسألني عن:\n• عدد الطلاب\n• الحضور والغياب\n• أسماء الطلاب\n• إحصائيات الجلسات",
+      text: "مرحباً 👋 أنا مساعدك الذكي.\nاسألني عن:\n• حضور أي طالب بيوم أو فترة\n• من حضر/غاب من كروب معين\n• إحصائيات الحضور والغياب",
     },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // 🔴 مسح المحادثة عند إغلاق الموقع
   useEffect(() => {
     const handleUnload = () => {
       sessionStorage.removeItem("chatMessages");
@@ -31,7 +30,6 @@ export default function ChatBot({ userId }: ChatBotProps) {
     return () => window.removeEventListener("beforeunload", handleUnload);
   }, []);
 
-  // 🟢 جلب البيانات من Firebase
   const fetchAllData = async () => {
     try {
       const studentsSnap = await get(ref(database, `userData/${userId}/students`));
@@ -57,7 +55,6 @@ export default function ChatBot({ userId }: ChatBotProps) {
     }
   };
 
-  // 🟢 إرسال الرسالة إلى Gemini
   const sendMessage = async () => {
     if (!input.trim()) return;
 
@@ -69,36 +66,104 @@ export default function ChatBot({ userId }: ChatBotProps) {
 
     try {
       const { students, attendance, sessions } = await fetchAllData();
+      
+      // ✅ التاريخ الحالي للمساعدة في فهم "اليوم" و "أمس"
+      const today = new Date();
+      const todayStr = today.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
       const dataContext = `
-أنت مساعد ذكي لنظام إدارة حضور الطلاب. أجب باللغة العربية فقط بشكل مختصر ودقيق ومفيد.
+أنت مساعد ذكي لنظام حضور الطلاب. أجب باللغة العربية فقط.
 
-📊 البيانات الحالية:
-- عدد الطلاب الكلي: ${students.length}
-- عدد سجلات الحضور: ${attendance.length}
-- عدد الجلسات: ${sessions.length}
+📅 التاريخ الحالي: ${todayStr}
 
-👥 قائمة الطلاب:
+⚠️ قواعد الإجابة الصارمة (مهم جداً):
+
+1. **أجب بإجابات قصيرة مباشرة** - لا تطوّل ولا تشرح.
+
+2. **عند السؤال عن حضور طالب بيوم معين:**
+   - إذا حضر: "✅ نعم حضر [الاسم] يوم [اليوم] [التاريخ] كوده [الكود]"
+   - إذا غاب: "❌ لم يحضر [الاسم] يوم [اليوم] [التاريخ] كوده [الكود]"
+
+3. **عند السؤال عن عدد مرات حضور/غياب طالب خلال فترة (مثلاً من 9-5 إلى 2-6):**
+   حلل البيانات بدقة واعرضها بهذا الشكل:
+   
+   📊 [اسم الطالب] - كود [الكود]
+   ✅ حضر [العدد] مرات:
+   • [التاريخ 1]
+   • [التاريخ 2]
+   • [التاريخ 3]
+   ❌ غاب [العدد] مرات:
+   • [التاريخ 1]
+   • [التاريخ 2]
+   
+   (الأرقام والتواريخ بالأرقام الإنكليزية: 1,2,3,4,5,6,7,8,9,0)
+
+4. **عند السؤال عن مجموعة طلاب خلال فترة:**
+   اعرض كل طالب بتنسيق مختصر:
+   
+   📊 محمد خالد (1001)
+   ✅ حضر 4: 9-5, 12-5, 15-5, 20-5
+   ❌ غاب 2: 10-5, 18-5
+   
+   📊 أحمد علي (1002)
+   ✅ حضر 3: 9-5, 12-5, 15-5
+   ❌ غاب 1: 10-5
+
+5. **عند السؤال "من حضر من كروب [اسم] يوم [يوم]؟":**
+   ✅ الحاضرون من كروب [الاسم] يوم [اليوم] [التاريخ]:
+   • محمد خالد (1001)
+   • أحمد علي (1002)
+   • سارة محمد (1003)
+   
+   إذا ما حضر أحد: "❌ لا يوجد حضور من كروب [الاسم] يوم [اليوم]"
+
+6. **عند السؤال "من غاب من كروب [اسم] يوم [يوم]؟":**
+   ❌ الغائبون من كروب [الاسم] يوم [اليوم] [التاريخ]:
+   • محمد خالد (1001)
+   • سارة محمد (1003)
+   
+   (احسب الغائبين = طلاب الكروب - الحاضرين بذلك اليوم)
+
+7. **عند السؤال "كم مرة حضر كل طالب؟" (بدون فترة):**
+   اعرض قائمة بسيطة:
+   محمد خالد 4
+   أحمد علي 2
+   سارة محمد 5
+
+8. **عند سؤال عن من صنع/أسس/يدير الموقع:**
+   "الدكتور الصيدلاني مجتبى هيثم محمد - مؤسس الموقع ومدير النظام والمسؤول عن جميع حسابات التدريسيين والإشراف عليهم 👨‍⚕️"
+
+9. **استخدم دائماً:** ✅ للحضور، ❌ للغياب، 📊 للإحصائيات.
+
+10. **الأرقام والتواريخ دائماً بالإنكليزي** (مثل: 9-5-2026, 1001, 4 مرات).
+
+11. **لفهم الفترات:** "من 9-5 إلى 2-6" يعني من 9 مايو إلى 2 يونيو. حلل كل التواريخ ضمن هذه الفترة.
+
+12. **لفهم أيام الأسبوع:** السبت، الأحد، الاثنين، الثلاثاء، الأربعاء، الخميس، الجمعة - استخرج اليوم من التاريخ تلقائياً.
+
+📊 البيانات المتاحة:
+
+👥 الطلاب (${students.length}):
 ${(students as any[])
-  .map((s, i) => `${i + 1}. ${s.name} (كود: ${s.code})`)
+  .map((s) => `${s.name} | كود: ${s.code} | كروب: ${s.group || '-'}`)
   .join("\n")}
 
-📋 الجلسات:
+📋 الجلسات (${sessions.length}):
 ${(sessions as any[])
-  .map((s, i) => `${i + 1}. ${s.name} - تاريخ: ${s.date}`)
+  .map((s) => `${s.name} - ${s.date}`)
   .join("\n")}
 
-✅ سجلات الحضور:
+✅ سجلات الحضور (${attendance.length}):
 ${(attendance as any[])
   .map(
     (a) =>
-      `- ${a.studentName} (كود ${a.studentCode}) حضر بتاريخ ${a.date} الساعة ${a.time}`
+      `${a.studentName} | كود ${a.studentCode} | كروب ${a.group || '-'} | ${a.date} | ${a.time}`
   )
   .join("\n")}
 
-❓ سؤال المستخدم: ${currentInput}
+❓ السؤال: ${currentInput}
 
-أعطني الإجابة مباشرة باللغة العربية:`;
+الجواب (بالتنسيق المطلوب أعلاه):`;
 
       const response = await fetch(
          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${import.meta.env.VITE_GEMINI_KEY}`,
@@ -116,8 +181,6 @@ ${(attendance as any[])
       );
 
       const data = await response.json();
-      console.log("Gemini Response:", data);
-
       let botReply = "لم أفهم السؤال 😅";
 
       if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
@@ -140,7 +203,6 @@ ${(attendance as any[])
 
   return (
     <div>
-      {/* زر فتح الشات */}
       <button
         onClick={() => setOpen(!open)}
         style={{
@@ -162,7 +224,6 @@ ${(attendance as any[])
         💬
       </button>
 
-      {/* نافذة الشات */}
       {open && (
         <div
           style={{
@@ -181,7 +242,6 @@ ${(attendance as any[])
             direction: "rtl",
           }}
         >
-          {/* الهيدر */}
           <div
             style={{
               background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
@@ -208,7 +268,6 @@ ${(attendance as any[])
             </button>
           </div>
 
-          {/* الرسائل */}
           <div
             style={{
               flex: 1,
@@ -252,7 +311,6 @@ ${(attendance as any[])
             )}
           </div>
 
-          {/* الإدخال */}
           <div style={{ display: "flex", borderTop: "1px solid #e5e7eb" }}>
             <input
               value={input}

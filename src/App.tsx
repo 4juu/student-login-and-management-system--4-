@@ -26,6 +26,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false); // ✅ منع الحفظ قبل التحميل
 
   const [students, setStudents] = useState<Student[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -37,7 +38,6 @@ function App() {
 useEffect(() => {
   const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
     if (firebaseUser) {
-      // User is signed in - Load full user data from database
       try {
         const { ref: dbRef, get } = await import('firebase/database');
         const { database } = await import('./firebase/config');
@@ -48,11 +48,9 @@ useEffect(() => {
         let userData: User;
         
         if (snapshot.exists()) {
-          // User data exists in database - use it
           userData = snapshot.val();
           console.log('✅ Loaded user data from Firebase:', userData);
         } else {
-          // First time user - create basic data
           userData = {
             uid: firebaseUser.uid,
             email: firebaseUser.email || '',
@@ -62,22 +60,18 @@ useEffect(() => {
             lastLogin: new Date().toISOString()
           };
           
-          // Save to database
           const { set } = await import('firebase/database');
           await set(userRef, userData);
           console.log('✅ Created new user data in Firebase:', userData);
         }
         
         setCurrentUser(userData);
-        
-        // Load user data from Firebase
         await loadUserData(firebaseUser.uid);
       } catch (error) {
         console.error('❌ Error loading user:', error);
         setCurrentUser(null);
       }
     } else {
-      // User is signed out
       setCurrentUser(null);
       resetData();
     }
@@ -89,6 +83,7 @@ useEffect(() => {
   // Load user data from Firebase
   const loadUserData = async (uid: string) => {
     setDataLoading(true);
+    setDataLoaded(false); // ✅ إيقاف الحفظ أثناء التحميل
     try {
       console.log('Loading data for user:', uid);
       const data = await loadAllData(uid);
@@ -101,11 +96,14 @@ useEffect(() => {
       console.error('Error loading user data:', error);
     } finally {
       setDataLoading(false);
+      // ✅ تأخير بسيط للتأكد إن state تحدث قبل تفعيل الحفظ
+      setTimeout(() => setDataLoaded(true), 500);
     }
   };
 
   // Reset data on logout
   const resetData = () => {
+    setDataLoaded(false); // ✅ إيقاف الحفظ
     setStudents([]);
     setAttendanceRecords([]);
     setSessions([]);
@@ -113,35 +111,59 @@ useEffect(() => {
     setActiveTab('sessions');
   };
 
-  // Auto-save to Firebase
+  // ✅ مراقبة رجوع النت للمزامنة التلقائية
   useEffect(() => {
-    if (currentUser) {
+    const handleOnline = async () => {
+      if (currentUser && dataLoaded) {
+        console.log('🟢 رجع النت - مزامنة...');
+        try {
+          const dataService = await import('./firebase/dataService') as any;
+
+          if (typeof dataService.syncPendingChanges === 'function') {
+            await dataService.syncPendingChanges(currentUser.uid);
+          } else {
+            console.log('ℹ️ syncPendingChanges غير موجودة حالياً - تم تخطي المزامنة المعلقة');
+          }
+        } catch (e) {
+          console.warn('Sync function not available:', e);
+        }
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [currentUser, dataLoaded]);
+
+  // Auto-save to Firebase - ✅ كلها تشترط dataLoaded
+  useEffect(() => {
+    if (currentUser && dataLoaded) {
       saveStudents(currentUser.uid, students);
     }
-  }, [students, currentUser]);
-  useEffect(() => {
-  if (currentUser) {
-    saveUserData(currentUser.uid, currentUser);
-  }
-}, [currentUser]);
+  }, [students, currentUser, dataLoaded]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && dataLoaded) {
+      saveUserData(currentUser.uid, currentUser);
+    }
+  }, [currentUser, dataLoaded]);
+
+  useEffect(() => {
+    if (currentUser && dataLoaded) {
       saveAttendanceRecords(currentUser.uid, attendanceRecords);
     }
-  }, [attendanceRecords, currentUser]);
+  }, [attendanceRecords, currentUser, dataLoaded]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && dataLoaded) {
       saveSessions(currentUser.uid, sessions);
     }
-  }, [sessions, currentUser]);
+  }, [sessions, currentUser, dataLoaded]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && dataLoaded) {
       saveActiveSession(currentUser.uid, activeSessionId);
     }
-  }, [activeSessionId, currentUser]);
+  }, [activeSessionId, currentUser, dataLoaded]);
 
   // Handlers
   const handleLogin = async (email: string, password: string) => {
@@ -157,18 +179,20 @@ useEffect(() => {
     }
   };
 
+  // ✅ استخدام prev لمنع ضياع البيانات
   const handleAddStudent = (student: Student) => {
-    setStudents([...students, student]);
+    setStudents(prev => [...prev, student]);
   };
 
   const handleDeleteStudent = (id: string) => {
     if (window.confirm('هل أنت متأكد من حذف هذا الطالب؟')) {
-      setStudents(students.filter(s => s.id !== id));
+      setStudents(prev => prev.filter(s => s.id !== id));
     }
   };
 
+  // ✅ استخدام prev
   const handleAttendanceRecord = (record: AttendanceRecord) => {
-    setAttendanceRecords([...attendanceRecords, record]);
+    setAttendanceRecords(prev => [...prev, record]);
   };
 
   const handleClearRecords = () => {
@@ -185,27 +209,26 @@ useEffect(() => {
     setCurrentUser(updatedUser);
   };
 
+  // ✅ استخدام prev
   const handleCreateSession = (session: AttendanceSession) => {
-    const updatedSessions = sessions.map(s => ({ ...s, isActive: false }));
-    setSessions([...updatedSessions, session]);
+    setSessions(prev => {
+      const updated = prev.map(s => ({ ...s, isActive: false }));
+      return [...updated, session];
+    });
     setActiveSessionId(session.id);
   };
 
   const handleSelectSession = (sessionId: string) => {
-    const updatedSessions = sessions.map(s => ({
+    setSessions(prev => prev.map(s => ({
       ...s,
       isActive: s.id === sessionId,
-    }));
-    setSessions(updatedSessions);
+    })));
     setActiveSessionId(sessionId);
   };
 
   const handleDeleteSession = (sessionId: string) => {
-    const updatedSessions = sessions.filter(s => s.id !== sessionId);
-    setSessions(updatedSessions);
-    
-    const updatedRecords = attendanceRecords.filter(r => r.sessionId !== sessionId);
-    setAttendanceRecords(updatedRecords);
+    setSessions(prev => prev.filter(s => s.id !== sessionId));
+    setAttendanceRecords(prev => prev.filter(r => r.sessionId !== sessionId));
     
     if (activeSessionId === sessionId) {
       setActiveSessionId(null);
