@@ -26,7 +26,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
-  const [dataLoaded, setDataLoaded] = useState(false); // ✅ منع الحفظ قبل التحميل
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   const [students, setStudents] = useState<Student[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -34,7 +34,6 @@ function App() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'login' | 'manage' | 'records' | 'settings' | 'sessions' | 'teachers' | 'profile'>('sessions');
 
- // Check auth state
 useEffect(() => {
   const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
     if (firebaseUser) {
@@ -80,10 +79,9 @@ useEffect(() => {
   return () => unsubscribe();
 }, []);
   
-  // Load user data from Firebase
   const loadUserData = async (uid: string) => {
     setDataLoading(true);
-    setDataLoaded(false); // ✅ إيقاف الحفظ أثناء التحميل
+    setDataLoaded(false);
     try {
       console.log('Loading data for user:', uid);
       const data = await loadAllData(uid);
@@ -96,14 +94,12 @@ useEffect(() => {
       console.error('Error loading user data:', error);
     } finally {
       setDataLoading(false);
-      // ✅ تأخير بسيط للتأكد إن state تحدث قبل تفعيل الحفظ
       setTimeout(() => setDataLoaded(true), 500);
     }
   };
 
-  // Reset data on logout
   const resetData = () => {
-    setDataLoaded(false); // ✅ إيقاف الحفظ
+    setDataLoaded(false);
     setStudents([]);
     setAttendanceRecords([]);
     setSessions([]);
@@ -111,7 +107,6 @@ useEffect(() => {
     setActiveTab('sessions');
   };
 
-  // ✅ مراقبة رجوع النت للمزامنة التلقائية
   useEffect(() => {
     const handleOnline = async () => {
       if (currentUser && dataLoaded) {
@@ -134,7 +129,6 @@ useEffect(() => {
     return () => window.removeEventListener('online', handleOnline);
   }, [currentUser, dataLoaded]);
 
-  // Auto-save to Firebase - ✅ كلها تشترط dataLoaded
   useEffect(() => {
     if (currentUser && dataLoaded) {
       saveStudents(currentUser.uid, students);
@@ -179,7 +173,6 @@ useEffect(() => {
     }
   };
 
-  // ✅ استخدام prev لمنع ضياع البيانات
   const handleAddStudent = (student: Student) => {
     setStudents(prev => [...prev, student]);
   };
@@ -190,7 +183,19 @@ useEffect(() => {
     }
   };
 
-  // ✅ استخدام prev
+  // ✅ حذف الطلاب المحددين (مع forceDelete للتجاوز الحماية)
+  const handleDeleteSelectedStudents = async (ids: string[]) => {
+    const newStudents = students.filter(s => !ids.includes(s.id));
+    setStudents(newStudents);
+    
+    // نحفظ يدوياً بـ forceDelete=true عشان ما تتعارض مع الحماية
+    if (currentUser) {
+      setTimeout(async () => {
+        await saveStudents(currentUser.uid, newStudents, true);
+      }, 100);
+    }
+  };
+
   const handleAttendanceRecord = (record: AttendanceRecord) => {
     setAttendanceRecords(prev => [...prev, record]);
   };
@@ -209,7 +214,6 @@ useEffect(() => {
     setCurrentUser(updatedUser);
   };
 
-  // ✅ استخدام prev
   const handleCreateSession = (session: AttendanceSession) => {
     setSessions(prev => {
       const updated = prev.map(s => ({ ...s, isActive: false }));
@@ -235,7 +239,6 @@ useEffect(() => {
     }
   };
 
-  // Show loading spinner
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
@@ -250,16 +253,13 @@ useEffect(() => {
     );
   }
 
-  // Show login page if not authenticated
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
   }
 
-  // Main app
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100" dir="rtl">
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
           <div className="text-center mb-8">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-3">
@@ -321,7 +321,6 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* Navigation Tabs */}
         <div className="flex flex-wrap justify-center gap-4 mb-8">
           <button
             onClick={() => setActiveTab('sessions')}
@@ -397,14 +396,12 @@ useEffect(() => {
           </button>
         </div>
 
-        {/* Loading indicator */}
         {dataLoading && (
           <div className="text-center py-4">
             <p className="text-gray-600">جارٍ تحميل البيانات...</p>
           </div>
         )}
 
-        {/* Content */}
         <div className="max-w-6xl mx-auto">
           {activeTab === 'sessions' && (
             <SessionManager
@@ -463,6 +460,7 @@ useEffect(() => {
               students={students}
               onAddStudent={handleAddStudent}
               onDeleteStudent={handleDeleteStudent}
+              onDeleteSelectedStudents={handleDeleteSelectedStudents}
             />
           )}
 
@@ -495,7 +493,6 @@ useEffect(() => {
           )}
         </div>
 
-                {/* Footer */}
         <div className="mt-12 text-center text-gray-600">
           <p className="text-sm">
             نظام تسجيل الحضور الإلكتروني - {new Date().getFullYear()}
@@ -503,7 +500,6 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* 🤖 المساعد الذكي */}
       <ChatBot userId={currentUser.uid} />
     </div>
   );
