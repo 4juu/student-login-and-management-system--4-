@@ -15,7 +15,9 @@ const firebaseConfig = {
   measurementId: "G-NZNKFS0K7Q"
 };
 
-// Initialize Firebase
+// ============================================================
+// 🔥 التطبيق الرئيسي (للأدمن والتدريسي العادي)
+// ============================================================
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const database = getDatabase(app);
@@ -23,10 +25,15 @@ export const storage = getStorage(app);
 export const analytics = getAnalytics(app);
 
 // ============================================================
+// 🔥 التطبيق الثانوي (لإنشاء حسابات التدريسيين بدون التأثير على جلسة الأدمن)
+// ============================================================
+const secondaryApp = initializeApp(firebaseConfig, "Secondary");
+export const secondaryAuth = getAuth(secondaryApp);
+
+// ============================================================
 // 🌐 مراقبة حالة الاتصال بالإنترنت
 // ============================================================
 if (typeof window !== 'undefined') {
-  // عند رجوع النت → فعّل اتصال Firebase
   window.addEventListener('online', () => {
     console.log('🟢 رجع الاتصال - تفعيل Firebase');
     try {
@@ -36,12 +43,10 @@ if (typeof window !== 'undefined') {
     }
   });
 
-  // عند انقطاع النت → خلي Firebase يعرف (يمنع المحاولات الفاشلة)
   window.addEventListener('offline', () => {
     console.log('🔴 انقطع الاتصال - وضع offline');
     try {
       goOffline(database);
-      // ⏰ بعد ثانيتين رجّعه online حتى لما يرجع النت يزامن
       setTimeout(() => {
         goOnline(database);
       }, 2000);
@@ -50,7 +55,6 @@ if (typeof window !== 'undefined') {
     }
   });
 
-  // 🔄 تأكد إن Firebase online من البداية
   if (navigator.onLine) {
     try {
       goOnline(database);

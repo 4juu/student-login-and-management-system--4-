@@ -7,6 +7,8 @@ interface StudentManagerProps {
   onAddStudent: (student: Student) => void;
   onDeleteStudent: (id: string) => void;
   onDeleteSelectedStudents: (ids: string[]) => void;
+  onSortByName?: () => void;      // ✅ جديد
+  onSortByGroup?: () => void;     // ✅ جديد
 }
 
 export const StudentManager: React.FC<StudentManagerProps> = ({
@@ -14,6 +16,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   onAddStudent,
   onDeleteStudent,
   onDeleteSelectedStudents,
+  onSortByName,
+  onSortByGroup,
 }) => {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -179,20 +183,15 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     }
   };
 
-  // ✅ تحديد طالب واحد
   const toggleSelectStudent = (id: string) => {
     setSelectedIds(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
       return newSet;
     });
   };
 
-  // ✅ تحديد الكل / إلغاء الكل
   const toggleSelectAll = () => {
     if (selectedIds.size === students.length) {
       setSelectedIds(new Set());
@@ -201,7 +200,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     }
   };
 
-  // ✅ حذف الطلاب المحددين
   const handleDeleteSelected = () => {
     if (selectedIds.size === 0) return;
 
@@ -245,9 +243,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               value={code}
               onChange={(e) => {
                 const value = e.target.value.replace(/\D/g, '');
-                if (value.length <= 4) {
-                  setCode(value);
-                }
+                if (value.length <= 4) setCode(value);
               }}
               maxLength={4}
               className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-lg font-bold"
@@ -276,7 +272,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         )}
       </form>
 
-      {/* قسم الاستيراد من ملف Excel */}
+      {/* قسم الاستيراد من Excel */}
       <div className="mb-6 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg">
         <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
           📂 استيراد الطلاب من ملف Excel
@@ -322,7 +318,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
           />
           <label
             htmlFor="excel-upload"
-            className={`flex-1 text-center cursor-pointer bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium py-3 px-6 rounded-md transition duration-200 shadow-md ${
+            className={`flex-1 text-center cursor-pointer bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium py-3 px-6 rounded-md transition duration: 200 shadow-md ${
               importLoading ? 'opacity-50 cursor-not-allowed' : ''
             }`}
           >
@@ -337,7 +333,42 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         )}
       </div>
 
-      {/* ✅ شريط الحذف الجماعي - يظهر فقط عند التحديد */}
+      {/* ✅ أزرار الترتيب الجديدة */}
+      {students.length > 1 && (onSortByName || onSortByGroup) && (
+        <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg">
+          <h3 className="text-sm font-bold text-purple-800 mb-3 flex items-center gap-2">
+            🔄 إعادة ترتيب الطلاب
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {onSortByName && (
+              <button
+                onClick={() => {
+                  if (window.confirm('هل تريد ترتيب الطلاب أبجدياً حسب الأسماء؟')) {
+                    onSortByName();
+                  }
+                }}
+                className="flex-1 min-w-[200px] px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-medium rounded-md transition duration-200 shadow-md flex items-center justify-center gap-2"
+              >
+                🔤 ترتيب أبجدي حسب الاسم
+              </button>
+            )}
+            {onSortByGroup && (
+              <button
+                onClick={() => {
+                  if (window.confirm('هل تريد ترتيب الطلاب حسب الكروب ثم الاسم؟')) {
+                    onSortByGroup();
+                  }
+                }}
+                className="flex-1 min-w-[200px] px-4 py-2 bg-gradient-to-r from-pink-600 to-pink-700 hover:from-pink-700 hover:to-pink-800 text-white font-medium rounded-md transition duration-200 shadow-md flex items-center justify-center gap-2"
+              >
+                👥 ترتيب حسب الكروب + الاسم
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* شريط الحذف الجماعي */}
       {selectedIds.size > 0 && (
         <div className="mb-4 p-4 bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-300 rounded-lg flex items-center justify-between flex-wrap gap-3">
           <div className="text-orange-800 font-medium">
@@ -367,7 +398,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              {/* ✅ checkbox الكل */}
               <th className="px-4 py-3 text-center">
                 {students.length > 0 && (
                   <input
@@ -379,18 +409,10 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                   />
                 )}
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                الرمز
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                الاسم
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                الكروب
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                إجراءات
-              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الرمز</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الاسم</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الكروب</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">إجراءات</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -398,9 +420,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               <tr>
                 <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
                   <div className="flex flex-col items-center gap-2">
-                    <svg className="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
                     <p className="font-medium">لا توجد طلاب مسجلين</p>
                     <p className="text-sm">ابدأ بإضافة الطلاب باستخدام النموذج أعلاه أو ارفع ملف Excel</p>
                   </div>
@@ -412,7 +431,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                   key={student.id} 
                   className={`hover:bg-gray-50 transition ${selectedIds.has(student.id) ? 'bg-blue-50' : ''}`}
                 >
-                  {/* ✅ checkbox للطالب */}
                   <td className="px-4 py-4 text-center">
                     <input
                       type="checkbox"
@@ -422,13 +440,9 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                     />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-lg font-bold text-blue-600">
-                      {student.code}
-                    </span>
+                    <span className="text-lg font-bold text-blue-600">{student.code}</span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    {student.name}
-                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right">{student.name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     {student.group ? (
                       <span className="inline-block px-3 py-1 bg-indigo-100 text-indigo-800 text-sm font-medium rounded-full">

@@ -8,7 +8,7 @@ import {
 } from "firebase/auth";
 import { ref, set, get, update, remove } from "firebase/database";
 import { auth, database } from "./config";
-import { User } from "../types/user";
+import { User, TeacherPermissions } from "../types/user";
 
 // Admin email
 const ADMIN_EMAIL = "mujtabahaitham@gmail.com";
@@ -94,7 +94,8 @@ export const signIn = async (email: string, password: string): Promise<User> => 
         email: user.email,
         role: user.role,
         hasPhoto: !!user.photoURL,
-        hasBio: !!user.bio
+        hasBio: !!user.bio,
+        hasPermissions: !!user.permissions
       });
     } else {
       // Create new user data
@@ -143,7 +144,8 @@ export const signOut = async (): Promise<void> => {
   }
 };
 
-// Create teacher account (admin only)
+// ✅ Create teacher account WITHOUT logging out admin permanently
+// ✅ Create teacher account using SECONDARY app (no logout for admin)
 export const createTeacherAccount = async (
   email: string,
   password: string,
@@ -151,51 +153,79 @@ export const createTeacherAccount = async (
   adminUid: string
 ): Promise<void> => {
   try {
-    console.log('👨‍🏫 Creating teacher account...');
+    console.log('👨‍🏫 Creating teacher account using secondary app...');
     
-    // Create user account
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    // ✅ استخدم التطبيق الثانوي عشان ما نأثر على جلسة الأدمن
+    const { secondaryAuth } = await import('./config');
+    const { signOut: secondarySignOut } = await import('firebase/auth');
+    
+    // إنشاء الحساب في التطبيق الثانوي
+    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
     const user = userCredential.user;
     
-    console.log('✅ Firebase Auth account created');
+    console.log('✅ Firebase Auth account created (in secondary app)');
     
-    // Update profile
+    // تحديث الاسم
     await updateProfile(user, { displayName });
     
-    // Save teacher data
+    // حفظ بيانات التدريسي
     const teacherData: User = {
       uid: user.uid,
       email,
       displayName,
       role: 'teacher',
+      adminId: adminUid,
+      permissions: {
+        allowedStages: {},
+        canViewRecords: true,
+        canTakeAttendance: true,
+      },
       createdAt: new Date().toISOString(),
       lastLogin: new Date().toISOString()
     };
     
     await set(ref(database, `users/${user.uid}`), teacherData);
+    console.log('✅ Teacher user data saved');
     
-    console.log('✅ Teacher user data saved to Firebase');
-    
-    // Save password info for admin reset feature
+    // حفظ معلومات الحساب
     await set(ref(database, `teacherAccounts/${user.uid}`), {
       email,
       displayName,
       createdBy: adminUid,
       createdAt: new Date().toISOString(),
-      storedPassword: password, // Store initial password
+      storedPassword: password,
       passwordLastReset: new Date().toISOString()
     });
     
     console.log('✅ Teacher account info saved');
     
-    // Sign out the newly created user and sign back in as admin
-    await firebaseSignOut(auth);
-    
-    console.log('✅ Teacher account created successfully');
+    // ✅ تسجيل خروج من التطبيق الثانوي فقط (الأدمن يبقى مسجل دخول في التطبيق الرئيسي)
+    await secondarySignOut(secondaryAuth);
+    console.log('✅ Signed out from secondary app, admin session intact');
     
   } catch (error: any) {
     console.error("❌ Create teacher error:", error);
-    throw new Error(getErrorMessage(error.code));
+    throw new Error(getErrorMessage(error.code) || error.message);
+  }
+};
+// ✅ Update teacher permissions (admin only)
+export const updateTeacherPermissions = async (
+  teacherUid: string,
+  permissions: TeacherPermissions
+): Promise<void> => {
+  try {
+    console.log('🔐 Updating teacher permissions for:', teacherUid);
+    console.log('📋 New permissions:', permissions);
+    
+    await update(ref(database, `users/${teacherUid}`), {
+      permissions,
+      lastUpdated: new Date().toISOString()
+    });
+    
+    console.log('✅ Teacher permissions updated successfully');
+  } catch (error: any) {
+    console.error('❌ Update permissions error:', error);
+    throw new Error('فشل تحديث الصلاحيات');
   }
 };
 

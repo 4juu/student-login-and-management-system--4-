@@ -1,139 +1,333 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Student, AttendanceRecord, AttendanceSession } from './types/student';
+import { Student, AttendanceRecord, AttendanceSession, College, Stage } from './types/student';
 import { User } from './types/user';
 import { StudentManager } from './components/StudentManager';
+import { StudentsViewer } from './components/StudentsViewer';
 import { AttendanceLogin } from './components/AttendanceLogin';
 import { AttendanceRecords } from './components/AttendanceRecords';
-import { Settings } from './components/Settings';
 import { SessionManager } from './components/SessionManager';
 import { Login } from './components/Login';
 import { TeacherManagement } from './components/TeacherManagement';
 import { ProfileSettings } from './components/ProfileSettings';
-import ChatBot from './components/ChatBot';
+import { CollegeManager } from './components/CollegeManager';
+import { StageSelector } from './components/StageSelector';
+import { ChatBot } from './components/ChatBot';
 import { auth } from './firebase/config';
 import { signIn, signOut } from './firebase/authService';
 import {
-  loadAllData,
+  loadColleges,
+  saveColleges,
+  loadStages,
+  saveStages,
+  loadStageData,
   saveStudents,
   saveAttendanceRecords,
   saveSessions,
   saveActiveSession,
   saveUserData,
+  deleteStageData,
 } from './firebase/dataService';
+
+type Tab = 'stage-selector' | 'colleges' | 'login' | 'manage' | 'records' | 'settings' | 'sessions' | 'teachers' | 'profile';
+
+// ✅ نوع بيانات المراحل الكاملة (للأدمن)
+interface AllStagesData {
+  [stageId: string]: {
+    students: Student[];
+    records: AttendanceRecord[];
+    sessions: AttendanceSession[];
+  };
+}
 
 function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dataLoading, setDataLoading] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
 
+  // ✅ بيانات الكليات والمراحل
+  const [colleges, setColleges] = useState<College[]>([]);
+  const [stages, setStages] = useState<Stage[]>([]);
+
+  // ✅ المرحلة المحددة حالياً
+  const [selectedCollegeId, setSelectedCollegeId] = useState<string | null>(null);
+  const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
+
+  // ✅ بيانات المرحلة الحالية
   const [students, setStudents] = useState<Student[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [sessions, setSessions] = useState<AttendanceSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'login' | 'manage' | 'records' | 'settings' | 'sessions' | 'teachers' | 'profile'>('sessions');
 
-useEffect(() => {
-  const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-    if (firebaseUser) {
-      try {
-        const { ref: dbRef, get } = await import('firebase/database');
-        const { database } = await import('./firebase/config');
-        
-        const userRef = dbRef(database, `users/${firebaseUser.uid}`);
-        const snapshot = await get(userRef);
-        
-        let userData: User;
-        
-        if (snapshot.exists()) {
-          userData = snapshot.val();
-          console.log('✅ Loaded user data from Firebase:', userData);
-        } else {
-          userData = {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email || '',
-            displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-            role: firebaseUser.email?.toLowerCase() === 'mujtabahaitham@gmail.com' ? 'admin' : 'teacher',
-            createdAt: firebaseUser.metadata.creationTime || new Date().toISOString(),
-            lastLogin: new Date().toISOString()
-          };
-          
-          const { set } = await import('firebase/database');
-          await set(userRef, userData);
-          console.log('✅ Created new user data in Firebase:', userData);
-        }
-        
-        setCurrentUser(userData);
-        await loadUserData(firebaseUser.uid);
-      } catch (error) {
-        console.error('❌ Error loading user:', error);
-        setCurrentUser(null);
-      }
-    } else {
-      setCurrentUser(null);
-      resetData();
-    }
-    setLoading(false);
+  // ✅ جديد: بيانات شاملة للأدمن (للـ ChatBot)
+  const [allTeachers, setAllTeachers] = useState<User[]>([]);
+  const [allStagesData, setAllStagesData] = useState<AllStagesData>({});
+
+  const [activeTab, setActiveTab] = useState<Tab>('stage-selector');
+
+  const intentionalDeleteRef = useRef({
+    students: false,
+    records: false,
+    sessions: false,
+    colleges: false,
+    stages: false,
   });
-  return () => unsubscribe();
-}, []);
-  
-  const loadUserData = async (uid: string) => {
-    setDataLoading(true);
+
+  const getAdminUid = (): string => {
+    if (!currentUser) return '';
+    if (currentUser.role === 'admin') return currentUser.uid;
+    return currentUser.adminId || currentUser.uid;
+  };
+
+  // ============================================================
+  // 🔐 AUTH
+  // ============================================================
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const { ref: dbRef, get, set } = await import('firebase/database');
+          const { database } = await import('./firebase/config');
+          const userRef = dbRef(database, `users/${firebaseUser.uid}`);
+          const snapshot = await get(userRef);
+          
+          let userData: User;
+          if (snapshot.exists()) {
+            userData = snapshot.val();
+          } else {
+            userData = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+              role: firebaseUser.email?.toLowerCase() === 'mujtabahaitham@gmail.com' ? 'admin' : 'teacher',
+              createdAt: firebaseUser.metadata.creationTime || new Date().toISOString(),
+              lastLogin: new Date().toISOString()
+            };
+            await set(userRef, userData);
+          }
+          
+          setCurrentUser(userData);
+          await loadInitialData(userData);
+        } catch (error) {
+          console.error('❌ Error loading user:', error);
+          setCurrentUser(null);
+        }
+      } else {
+        setCurrentUser(null);
+        resetData();
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // ============================================================
+  // 📥 تحميل البيانات الأولية
+  // ============================================================
+  const loadInitialData = async (user: User) => {
     setDataLoaded(false);
     try {
-      console.log('Loading data for user:', uid);
-      const data = await loadAllData(uid);
-      console.log('Loaded data:', data);
-      setStudents(data.students || []);
-      setAttendanceRecords(data.attendanceRecords || []);
-      setSessions(data.sessions || []);
-      setActiveSessionId(data.activeSessionId || null);
+      const adminUid = user.role === 'admin' ? user.uid : (user.adminId || user.uid);
+      
+      const [collegesData, stagesData] = await Promise.all([
+        loadColleges(adminUid),
+        loadStages(adminUid),
+      ]);
+      
+      setColleges(collegesData);
+      setStages(stagesData);
+      setActiveTab('stage-selector');
+
+      // ✅ للأدمن: حمّل كل التدريسيين وكل بيانات المراحل
+      if (user.role === 'admin') {
+        await loadAllAdminData(user.uid, stagesData);
+      }
     } catch (error) {
-      console.error('Error loading user data:', error);
+      console.error('Error loading initial data:', error);
     } finally {
-      setDataLoading(false);
       setTimeout(() => setDataLoaded(true), 500);
     }
   };
 
-  const resetData = () => {
+  // ============================================================
+  // 🆕 تحميل كل البيانات للأدمن (للـ ChatBot)
+  // ============================================================
+  const loadAllAdminData = async (adminUid: string, allStages: Stage[]) => {
+    try {
+      // 1️⃣ تحميل كل التدريسيين
+      const { ref: dbRef, get } = await import('firebase/database');
+      const { database } = await import('./firebase/config');
+      
+      const usersSnap = await get(dbRef(database, 'users'));
+      if (usersSnap.exists()) {
+        const teachersList = (Object.values(usersSnap.val()) as User[]).filter(u => u.role === 'teacher');
+        setAllTeachers(teachersList);
+        console.log(`✅ تم تحميل ${teachersList.length} تدريسي للأدمن`);
+      }
+
+      // 2️⃣ تحميل بيانات كل المراحل
+      const stagesDataMap: AllStagesData = {};
+      
+      await Promise.all(
+        allStages.map(async (stage) => {
+          try {
+            const data = await loadStageData(adminUid, stage.id);
+            stagesDataMap[stage.id] = {
+              students: data.students,
+              records: data.records,
+              sessions: data.sessions,
+            };
+          } catch (e) {
+            console.warn(`فشل تحميل بيانات المرحلة ${stage.id}:`, e);
+          }
+        })
+      );
+      
+      setAllStagesData(stagesDataMap);
+      console.log(`✅ تم تحميل بيانات ${Object.keys(stagesDataMap).length} مرحلة للأدمن`);
+    } catch (error) {
+      console.error('❌ خطأ في تحميل بيانات الأدمن الشاملة:', error);
+    }
+  };
+
+  // ✅ إعادة تحميل بيانات الأدمن الشاملة (عند الحاجة)
+  const refreshAdminData = async () => {
+    if (currentUser?.role === 'admin') {
+      await loadAllAdminData(currentUser.uid, stages);
+    }
+  };
+
+  // ============================================================
+  // 📥 تحميل بيانات المرحلة
+  // ============================================================
+  const handleSelectStage = async (collegeId: string, stageId: string) => {
+    setSelectedCollegeId(collegeId);
+    setSelectedStageId(stageId);
     setDataLoaded(false);
+    
+    try {
+      const adminUid = getAdminUid();
+      const data = await loadStageData(adminUid, stageId);
+      setStudents(data.students);
+      setAttendanceRecords(data.records);
+      setSessions(data.sessions);
+      setActiveSessionId(data.activeSessionId);
+      setActiveTab('sessions');
+    } catch (e) {
+      console.error('Error loading stage:', e);
+    } finally {
+      setTimeout(() => setDataLoaded(true), 300);
+    }
+  };
+
+  const handleBackToStages = () => {
+    setSelectedCollegeId(null);
+    setSelectedStageId(null);
     setStudents([]);
     setAttendanceRecords([]);
     setSessions([]);
     setActiveSessionId(null);
-    setActiveTab('sessions');
+    setActiveTab('stage-selector');
+
+    // ✅ تحديث بيانات الأدمن الشاملة
+    refreshAdminData();
   };
 
+  const resetData = () => {
+    setDataLoaded(false);
+    setColleges([]);
+    setStages([]);
+    setStudents([]);
+    setAttendanceRecords([]);
+    setSessions([]);
+    setActiveSessionId(null);
+    setSelectedCollegeId(null);
+    setSelectedStageId(null);
+    setAllTeachers([]);
+    setAllStagesData({});
+    setActiveTab('stage-selector');
+  };
+
+  // ============================================================
+  // 💾 الحفظ التلقائي
+  // ============================================================
+  
   useEffect(() => {
-    const handleOnline = async () => {
-      if (currentUser && dataLoaded) {
-        console.log('🟢 رجع النت - مزامنة...');
-        try {
-          const dataService = await import('./firebase/dataService') as any;
-
-          if (typeof dataService.syncPendingChanges === 'function') {
-            await dataService.syncPendingChanges(currentUser.uid);
-          } else {
-            console.log('ℹ️ syncPendingChanges غير موجودة حالياً - تم تخطي المزامنة المعلقة');
-          }
-        } catch (e) {
-          console.warn('Sync function not available:', e);
-        }
-      }
-    };
-
-    window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
-  }, [currentUser, dataLoaded]);
-
-  useEffect(() => {
-    if (currentUser && dataLoaded) {
-      saveStudents(currentUser.uid, students);
+    if (currentUser?.role === 'admin' && dataLoaded) {
+      const force = intentionalDeleteRef.current.colleges;
+      saveColleges(currentUser.uid, colleges, force);
+      if (force) intentionalDeleteRef.current.colleges = false;
     }
-  }, [students, currentUser, dataLoaded]);
+  }, [colleges, currentUser, dataLoaded]);
+
+  useEffect(() => {
+    if (currentUser?.role === 'admin' && dataLoaded) {
+      const force = intentionalDeleteRef.current.stages;
+      saveStages(currentUser.uid, stages, force);
+      if (force) intentionalDeleteRef.current.stages = false;
+    }
+  }, [stages, currentUser, dataLoaded]);
+
+  useEffect(() => {
+    if (currentUser && dataLoaded && selectedStageId && currentUser.role === 'admin') {
+      const force = intentionalDeleteRef.current.students;
+      saveStudents(getAdminUid(), selectedStageId, students, force);
+      if (force) intentionalDeleteRef.current.students = false;
+
+      // ✅ تحديث allStagesData
+      setAllStagesData(prev => ({
+        ...prev,
+        [selectedStageId]: {
+          ...(prev[selectedStageId] || { records: [], sessions: [] }),
+          students,
+        },
+      }));
+    }
+  }, [students, currentUser, dataLoaded, selectedStageId]);
+
+  useEffect(() => {
+    if (currentUser && dataLoaded && selectedStageId) {
+      const force = intentionalDeleteRef.current.records;
+      saveAttendanceRecords(getAdminUid(), selectedStageId, attendanceRecords, force);
+      if (force) intentionalDeleteRef.current.records = false;
+
+      // ✅ تحديث allStagesData للأدمن
+      if (currentUser.role === 'admin') {
+        setAllStagesData(prev => ({
+          ...prev,
+          [selectedStageId]: {
+            ...(prev[selectedStageId] || { students: [], sessions: [] }),
+            records: attendanceRecords,
+          },
+        }));
+      }
+    }
+  }, [attendanceRecords, currentUser, dataLoaded, selectedStageId]);
+
+  useEffect(() => {
+    if (currentUser && dataLoaded && selectedStageId) {
+      const force = intentionalDeleteRef.current.sessions;
+      saveSessions(getAdminUid(), selectedStageId, sessions, force);
+      if (force) intentionalDeleteRef.current.sessions = false;
+
+      // ✅ تحديث allStagesData للأدمن
+      if (currentUser.role === 'admin') {
+        setAllStagesData(prev => ({
+          ...prev,
+          [selectedStageId]: {
+            ...(prev[selectedStageId] || { students: [], records: [] }),
+            sessions,
+          },
+        }));
+      }
+    }
+  }, [sessions, currentUser, dataLoaded, selectedStageId]);
+
+  useEffect(() => {
+    if (currentUser && dataLoaded && selectedStageId) {
+      saveActiveSession(getAdminUid(), selectedStageId, activeSessionId);
+    }
+  }, [activeSessionId, currentUser, dataLoaded, selectedStageId]);
 
   useEffect(() => {
     if (currentUser && dataLoaded) {
@@ -141,25 +335,9 @@ useEffect(() => {
     }
   }, [currentUser, dataLoaded]);
 
-  useEffect(() => {
-    if (currentUser && dataLoaded) {
-      saveAttendanceRecords(currentUser.uid, attendanceRecords);
-    }
-  }, [attendanceRecords, currentUser, dataLoaded]);
-
-  useEffect(() => {
-    if (currentUser && dataLoaded) {
-      saveSessions(currentUser.uid, sessions);
-    }
-  }, [sessions, currentUser, dataLoaded]);
-
-  useEffect(() => {
-    if (currentUser && dataLoaded) {
-      saveActiveSession(currentUser.uid, activeSessionId);
-    }
-  }, [activeSessionId, currentUser, dataLoaded]);
-
-  // Handlers
+  // ============================================================
+  // 🎬 Handlers - Auth
+  // ============================================================
   const handleLogin = async (email: string, password: string) => {
     const user = await signIn(email, password);
     setCurrentUser(user);
@@ -173,79 +351,141 @@ useEffect(() => {
     }
   };
 
+  // ============================================================
+  // 🏛️ Handlers - Colleges & Stages
+  // ============================================================
+  const handleAddCollege = (college: College) => {
+    setColleges(prev => [...prev, college]);
+  };
+
+  const handleDeleteCollege = (collegeId: string) => {
+    intentionalDeleteRef.current.colleges = true;
+    intentionalDeleteRef.current.stages = true;
+    
+    setColleges(prev => prev.filter(c => c.id !== collegeId));
+    
+    const stagesToDelete = stages.filter(s => s.collegeId === collegeId);
+    setStages(prev => prev.filter(s => s.collegeId !== collegeId));
+    
+    stagesToDelete.forEach(stage => {
+      deleteStageData(currentUser!.uid, stage.id);
+      // ✅ حذف من allStagesData
+      setAllStagesData(prev => {
+        const updated = { ...prev };
+        delete updated[stage.id];
+        return updated;
+      });
+    });
+  };
+
+  const handleAddStage = (stage: Stage) => {
+    setStages(prev => [...prev, stage]);
+  };
+
+  const handleDeleteStage = (stageId: string) => {
+    intentionalDeleteRef.current.stages = true;
+    setStages(prev => prev.filter(s => s.id !== stageId));
+    deleteStageData(currentUser!.uid, stageId);
+    
+    // ✅ حذف من allStagesData
+    setAllStagesData(prev => {
+      const updated = { ...prev };
+      delete updated[stageId];
+      return updated;
+    });
+  };
+
+  // ============================================================
+  // 👥 Handlers - Students
+  // ============================================================
   const handleAddStudent = (student: Student) => {
     setStudents(prev => [...prev, student]);
   };
 
   const handleDeleteStudent = (id: string) => {
     if (window.confirm('هل أنت متأكد من حذف هذا الطالب؟')) {
+      intentionalDeleteRef.current.students = true;
       setStudents(prev => prev.filter(s => s.id !== id));
     }
   };
 
-  // ✅ حذف الطلاب المحددين (مع forceDelete للتجاوز الحماية)
-  const handleDeleteSelectedStudents = async (ids: string[]) => {
-    const newStudents = students.filter(s => !ids.includes(s.id));
-    setStudents(newStudents);
-    
-    // نحفظ يدوياً بـ forceDelete=true عشان ما تتعارض مع الحماية
-    if (currentUser) {
-      setTimeout(async () => {
-        await saveStudents(currentUser.uid, newStudents, true);
-      }, 100);
-    }
+  const handleDeleteSelectedStudents = (ids: string[]) => {
+    intentionalDeleteRef.current.students = true;
+    setStudents(prev => prev.filter(s => !ids.includes(s.id)));
   };
 
+  const handleSortByName = () => {
+    setStudents(prev => [...prev].sort((a, b) => a.name.localeCompare(b.name, 'ar')));
+  };
+
+  const handleSortByGroup = () => {
+    setStudents(prev => [...prev].sort((a, b) => {
+      const ga = a.group || 'ZZZ';
+      const gb = b.group || 'ZZZ';
+      const la = ga.charAt(0).toUpperCase();
+      const lb = gb.charAt(0).toUpperCase();
+      if (la !== lb) return la.localeCompare(lb);
+      const na = parseInt(ga.slice(1)) || 0;
+      const nb = parseInt(gb.slice(1)) || 0;
+      if (na !== nb) return na - nb;
+      return a.name.localeCompare(b.name, 'ar');
+    }));
+  };
+
+  // ============================================================
+  // 📝 Handlers - Attendance
+  // ============================================================
   const handleAttendanceRecord = (record: AttendanceRecord) => {
     setAttendanceRecords(prev => [...prev, record]);
   };
 
   const handleClearRecords = () => {
+    intentionalDeleteRef.current.records = true;
     setAttendanceRecords([]);
   };
 
-  const handleDataRestored = () => {
-    if (currentUser) {
-      loadUserData(currentUser.uid);
-    }
-  };
-
-  const handleUpdateProfile = (updatedUser: User) => {
-    setCurrentUser(updatedUser);
-  };
-
+  // ============================================================
+  // 📅 Handlers - Sessions
+  // ============================================================
   const handleCreateSession = (session: AttendanceSession) => {
-    setSessions(prev => {
-      const updated = prev.map(s => ({ ...s, isActive: false }));
-      return [...updated, session];
-    });
+    setSessions(prev => [...prev.map(s => ({ ...s, isActive: false })), session]);
     setActiveSessionId(session.id);
   };
 
   const handleSelectSession = (sessionId: string) => {
-    setSessions(prev => prev.map(s => ({
-      ...s,
-      isActive: s.id === sessionId,
-    })));
+    setSessions(prev => prev.map(s => ({ ...s, isActive: s.id === sessionId })));
     setActiveSessionId(sessionId);
   };
 
   const handleDeleteSession = (sessionId: string) => {
+    intentionalDeleteRef.current.sessions = true;
+    intentionalDeleteRef.current.records = true;
     setSessions(prev => prev.filter(s => s.id !== sessionId));
     setAttendanceRecords(prev => prev.filter(r => r.sessionId !== sessionId));
-    
-    if (activeSessionId === sessionId) {
-      setActiveSessionId(null);
-    }
+    if (activeSessionId === sessionId) setActiveSessionId(null);
   };
 
+  // ============================================================
+  // 👤 Handlers - Profile
+  // ============================================================
+  const handleUpdateProfile = (updatedUser: User) => setCurrentUser(updatedUser);
+
+  // ============================================================
+  // ✅ Permissions
+  // ============================================================
+  const canEditStudents = currentUser?.role === 'admin';
+  const isAdmin = currentUser?.role === 'admin';
+
+  // ============================================================
+  // 🎨 RENDER
+  // ============================================================
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
-          <svg className="animate-spin h-12 w-12 text-blue-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <svg className="animate-spin h-12 w-12 text-blue-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
           </svg>
           <p className="text-gray-600">جارٍ التحميل...</p>
         </div>
@@ -257,250 +497,233 @@ useEffect(() => {
     return <Login onLogin={handleLogin} />;
   }
 
+  const selectedStage = stages.find(s => s.id === selectedStageId);
+  const selectedCollege = colleges.find(c => c.id === selectedCollegeId);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100" dir="rtl">
       <div className="container mx-auto px-4 py-8">
-          <div className="text-center mb-8">
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center gap-3">
-                <div 
-                  className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center overflow-hidden border-2 border-white shadow-lg cursor-pointer hover:scale-105 transition-transform"
-                  onClick={() => setActiveTab('profile')}
-                  title="إعدادات الملف الشخصي"
-                >
-                  {currentUser.photoURL ? (
-                    <img
-                      src={currentUser.photoURL}
-                      alt={currentUser.displayName}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-white font-bold text-lg">
-                      {currentUser.displayName.charAt(0)}
-                    </span>
-                  )}
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-gray-600">مرحباً،</p>
-                  <p className="font-bold text-gray-800">{currentUser.displayName}</p>
-                  {currentUser.bio && (
-                    <p className="text-xs text-gray-500 mt-1 max-w-xs truncate">
-                      {currentUser.bio}
-                    </p>
-                  )}
-                  {currentUser.role === 'admin' && (
-                    <span className="inline-block mt-1 px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">
-                      👑 أدمن
-                    </span>
-                  )}
-                </div>
+        {/* الهيدر */}
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <div 
+                className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center overflow-hidden border-2 border-white shadow-lg cursor-pointer"
+                onClick={() => setActiveTab('profile')}
+              >
+                {currentUser.photoURL ? (
+                  <img src={currentUser.photoURL} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-white font-bold text-lg">{currentUser.displayName.charAt(0)}</span>
+                )}
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-600">مرحباً،</p>
+                <p className="font-bold text-gray-800">{currentUser.displayName}</p>
+                {isAdmin && (
+                  <span className="inline-block mt-1 px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">
+                    👑 أدمن
+                  </span>
+                )}
+                {!isAdmin && (
+                  <span className="inline-block mt-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+                    👨‍🏫 تدريسي
+                  </span>
+                )}
+              </div>
             </div>
             
-            <button
-              onClick={handleLogout}
-              className="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md transition duration-200 flex items-center gap-2"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
+            <button onClick={handleLogout} className="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md flex items-center gap-2">
               تسجيل الخروج
             </button>
           </div>
 
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-800 mb-2">
-            نظام تسجيل حضور الطلاب
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2 text-center">
+            نظام إدارة الحضور
           </h1>
-          <p className="text-gray-600 text-lg">
-            نظام متكامل لإدارة حضور الطلاب بسهولة وفعالية
-          </p>
-          <div className="mt-4 inline-flex items-center gap-2 bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            <span>متصل بـ Firebase - البيانات محفوظة في السحابة ✓</span>
-          </div>
-        </div>
 
-        <div className="flex flex-wrap justify-center gap-4 mb-8">
-          <button
-            onClick={() => setActiveTab('sessions')}
-            className={`px-6 py-3 rounded-lg font-medium transition duration-200 ${
-              activeTab === 'sessions'
-                ? 'bg-blue-600 text-white shadow-lg'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            📋 السجلات ({sessions.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('login')}
-            className={`px-6 py-3 rounded-lg font-medium transition duration-200 ${
-              activeTab === 'login'
-                ? 'bg-blue-600 text-white shadow-lg'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            📝 تسجيل الحضور
-          </button>
-          <button
-            onClick={() => setActiveTab('manage')}
-            className={`px-6 py-3 rounded-lg font-medium transition duration-200 ${
-              activeTab === 'manage'
-                ? 'bg-blue-600 text-white shadow-lg'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            👥 إدارة الطلاب ({students.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('records')}
-            className={`px-6 py-3 rounded-lg font-medium transition duration-200 ${
-              activeTab === 'records'
-                ? 'bg-blue-600 text-white shadow-lg'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            📊 سجل الحضور ({attendanceRecords.length})
-          </button>
-          {currentUser.role === 'admin' && (
-            <button
-              onClick={() => setActiveTab('teachers')}
-              className={`px-6 py-3 rounded-lg font-medium transition duration-200 ${
-                activeTab === 'teachers'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              👨‍🏫 إدارة التدريسيين
-            </button>
+          {selectedStage && (
+            <div className="bg-white rounded-lg shadow-sm p-3 flex items-center gap-2 text-sm flex-wrap mt-4">
+              <button onClick={handleBackToStages} className="text-blue-600 hover:underline font-medium">
+                🏠 جميع المراحل
+              </button>
+              <span className="text-gray-400">›</span>
+              <span className="font-bold text-gray-700">{selectedCollege?.icon} {selectedCollege?.name}</span>
+              <span className="text-gray-400">›</span>
+              <span className="font-bold text-blue-700">📖 {selectedStage.name}</span>
+            </div>
           )}
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`px-6 py-3 rounded-lg font-medium transition duration-200 ${
-              activeTab === 'profile'
-                ? 'bg-blue-600 text-white shadow-lg'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            👤 الملف الشخصي
-          </button>
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`px-6 py-3 rounded-lg font-medium transition duration-200 ${
-              activeTab === 'settings'
-                ? 'bg-blue-600 text-white shadow-lg'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            ⚙️ الإعدادات
-          </button>
         </div>
 
-        {dataLoading && (
-          <div className="text-center py-4">
-            <p className="text-gray-600">جارٍ تحميل البيانات...</p>
+        {/* العرض الرئيسي */}
+        {!selectedStageId && (
+          <div className="max-w-6xl mx-auto">
+            <div className="flex flex-wrap justify-center gap-3 mb-6">
+              <button
+                onClick={() => setActiveTab('stage-selector')}
+                className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'stage-selector' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+              >
+                🎯 اختيار المرحلة
+              </button>
+              {isAdmin && (
+                <>
+                  <button
+                    onClick={() => setActiveTab('colleges')}
+                    className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'colleges' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                  >
+                    🏛️ إدارة الكليات
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('teachers')}
+                    className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'teachers' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                  >
+                    👨‍🏫 التدريسيين
+                  </button>
+                </>
+              )}
+              <button
+                onClick={() => setActiveTab('profile')}
+                className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'profile' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+              >
+                👤 الملف الشخصي
+              </button>
+            </div>
+
+            {activeTab === 'stage-selector' && (
+              <StageSelector user={currentUser} colleges={colleges} stages={stages} onSelect={handleSelectStage} />
+            )}
+
+            {activeTab === 'colleges' && isAdmin && (
+              <CollegeManager
+                colleges={colleges}
+                stages={stages}
+                adminUid={currentUser.uid}
+                onAddCollege={handleAddCollege}
+                onDeleteCollege={handleDeleteCollege}
+                onAddStage={handleAddStage}
+                onDeleteStage={handleDeleteStage}
+                onSelectStage={handleSelectStage}
+              />
+            )}
+
+            {activeTab === 'teachers' && isAdmin && (
+              <TeacherManagement currentUser={currentUser} colleges={colleges} stages={stages} />
+            )}
+
+            {activeTab === 'profile' && (
+              <ProfileSettings currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />
+            )}
           </div>
         )}
 
-        <div className="max-w-6xl mx-auto">
-          {activeTab === 'sessions' && (
-            <SessionManager
-              sessions={sessions}
-              activeSessionId={activeSessionId}
-              onCreateSession={handleCreateSession}
-              onSelectSession={handleSelectSession}
-              onDeleteSession={handleDeleteSession}
-            />
-          )}
-
-          {activeTab === 'login' && (
-            <div className="max-w-lg mx-auto">
-              {!activeSessionId ? (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-                  <svg className="w-16 h-16 text-yellow-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  <p className="text-yellow-800 font-medium mb-4">
-                    لا يوجد سجل نشط!
-                  </p>
-                  <p className="text-yellow-700 mb-4">
-                    يجب تفعيل سجل حضور أولاً قبل البدء بتسجيل حضور الطلاب
-                  </p>
-                  <button
-                    onClick={() => setActiveTab('sessions')}
-                    className="bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-2 px-6 rounded-md transition duration-200"
-                  >
-                    انتقل لإدارة السجلات
-                  </button>
-                </div>
-              ) : students.length === 0 ? (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-                  <p className="text-yellow-800 font-medium mb-4">
-                    لا يوجد طلاب مسجلين في النظام
-                  </p>
-                  <button
-                    onClick={() => setActiveTab('manage')}
-                    className="bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-2 px-6 rounded-md transition duration-200"
-                  >
-                    انتقل لإضافة الطلاب
-                  </button>
-                </div>
-              ) : (
-                <AttendanceLogin
-                  students={students}
-                  activeSessionId={activeSessionId}
-                  onAttendanceRecord={handleAttendanceRecord}
-                />
-              )}
+        {selectedStageId && (
+          <div className="max-w-6xl mx-auto">
+            <div className="flex flex-wrap justify-center gap-3 mb-6">
+              <button 
+                onClick={() => setActiveTab('sessions')} 
+                className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'sessions' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+              >
+                📋 السجلات ({sessions.length})
+              </button>
+              <button 
+                onClick={() => setActiveTab('login')} 
+                className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'login' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+              >
+                📝 تسجيل الحضور
+              </button>
+              <button 
+                onClick={() => setActiveTab('manage')} 
+                className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'manage' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+              >
+                👥 {canEditStudents ? `إدارة الطلاب (${students.length})` : `الطلاب (${students.length})`}
+              </button>
+              <button 
+                onClick={() => setActiveTab('records')} 
+                className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'records' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+              >
+                📊 سجل الحضور ({attendanceRecords.length})
+              </button>
             </div>
-          )}
 
-          {activeTab === 'manage' && (
-            <StudentManager
-              students={students}
-              onAddStudent={handleAddStudent}
-              onDeleteStudent={handleDeleteStudent}
-              onDeleteSelectedStudents={handleDeleteSelectedStudents}
-            />
-          )}
+            {activeTab === 'sessions' && (
+              <SessionManager
+                sessions={sessions}
+                activeSessionId={activeSessionId}
+                onCreateSession={handleCreateSession}
+                onSelectSession={handleSelectSession}
+                onDeleteSession={handleDeleteSession}
+              />
+            )}
 
-          {activeTab === 'records' && (
-            <AttendanceRecords
-              records={attendanceRecords}
-              sessions={sessions}
-              activeSessionId={activeSessionId}
-              onClearRecords={handleClearRecords}
-            />
-          )}
+            {activeTab === 'login' && (
+              <div className="max-w-lg mx-auto">
+                {!activeSessionId ? (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+                    <p className="text-yellow-800 font-medium mb-4">لا يوجد سجل نشط!</p>
+                    <button onClick={() => setActiveTab('sessions')} className="bg-yellow-600 text-white py-2 px-6 rounded-md">
+                      انتقل لإدارة السجلات
+                    </button>
+                  </div>
+                ) : students.length === 0 ? (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+                    <p className="text-yellow-800 font-medium">لا يوجد طلاب في هذه المرحلة</p>
+                  </div>
+                ) : (
+                  <AttendanceLogin
+                    students={students}
+                    activeSessionId={activeSessionId}
+                    onAttendanceRecord={handleAttendanceRecord}
+                  />
+                )}
+              </div>
+            )}
 
-          {activeTab === 'teachers' && currentUser.role === 'admin' && (
-            <TeacherManagement currentUser={currentUser} />
-          )}
+            {activeTab === 'manage' && (
+              canEditStudents ? (
+                <StudentManager
+                  students={students}
+                  onAddStudent={handleAddStudent}
+                  onDeleteStudent={handleDeleteStudent}
+                  onDeleteSelectedStudents={handleDeleteSelectedStudents}
+                  onSortByName={handleSortByName}
+                  onSortByGroup={handleSortByGroup}
+                />
+              ) : (
+                <StudentsViewer students={students} />
+              )
+            )}
 
-          {activeTab === 'profile' && (
-            <ProfileSettings
-              currentUser={currentUser}
-              onUpdateProfile={handleUpdateProfile}
-            />
-          )}
-
-          {activeTab === 'settings' && (
-            <Settings
-              students={students}
-              attendanceRecords={attendanceRecords}
-              onDataRestored={handleDataRestored}
-            />
-          )}
-        </div>
+            {activeTab === 'records' && (
+              <AttendanceRecords
+                records={attendanceRecords}
+                sessions={sessions}
+                students={students}
+                activeSessionId={activeSessionId}
+                onClearRecords={handleClearRecords}
+              />
+            )}
+          </div>
+        )}
 
         <div className="mt-12 text-center text-gray-600">
-          <p className="text-sm">
-            نظام تسجيل الحضور الإلكتروني - {new Date().getFullYear()}
-          </p>
+          <p className="text-sm">نظام تسجيل الحضور الإلكتروني - {new Date().getFullYear()}</p>
         </div>
       </div>
 
-      <ChatBot userId={currentUser.uid} />
+      {/* ✅ ChatBot ذكي - يستقبل كل البيانات حسب الصلاحيات */}
+      <ChatBot
+        user={currentUser}
+        colleges={colleges}
+        stages={stages}
+        currentCollegeId={selectedCollegeId}
+        currentStageId={selectedStageId}
+        students={students}
+        records={attendanceRecords}
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        allTeachers={allTeachers}
+        allStagesData={allStagesData}
+      />
     </div>
   );
 }

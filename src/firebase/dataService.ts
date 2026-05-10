@@ -1,130 +1,174 @@
 import { ref, set, get, remove, update } from "firebase/database";
 import { database } from "./config";
-import { Student, AttendanceRecord, AttendanceSession } from "../types/student";
+import { Student, AttendanceRecord, AttendanceSession, Stage, College } from "../types/student";
 import { User } from "../types/user";
 
-const getUserPath = (uid: string, path: string) => `userData/${uid}/${path}`;
+// ============================================================
+// 🔑 المسارات الجديدة
+// ============================================================
+// userData/{adminUid}/colleges/{collegeId} → بيانات الكلية
+// userData/{adminUid}/stages/{stageId} → بيانات المرحلة
+// userData/{adminUid}/stageData/{stageId}/students → طلاب المرحلة
+// userData/{adminUid}/stageData/{stageId}/records → سجلات
+// userData/{adminUid}/stageData/{stageId}/sessions → جلسات
+
+const getStagePath = (adminUid: string, stageId: string, sub: string) => 
+  `userData/${adminUid}/stageData/${stageId}/${sub}`;
+
+const getCollegesPath = (adminUid: string) => 
+  `userData/${adminUid}/colleges`;
+
+const getStagesPath = (adminUid: string) => 
+  `userData/${adminUid}/stages`;
 
 // ============================================================
-// 🔒 نظام التخزين المحلي والحماية من فقدان البيانات
+// 💾 LOCAL STORAGE
 // ============================================================
-
-const LS_KEYS = {
-  students: (uid: string) => `students_${uid}`,
-  records: (uid: string) => `records_${uid}`,
-  sessions: (uid: string) => `sessions_${uid}`,
-  activeSession: (uid: string) => `activeSession_${uid}`,
-  pending: (uid: string) => `pending_${uid}`,
-  lastSync: (uid: string) => `lastSync_${uid}`,
+const LS = {
+  colleges: (uid: string) => `colleges_${uid}`,
+  stages: (uid: string) => `stages_${uid}`,
+  students: (uid: string, sid: string) => `students_${uid}_${sid}`,
+  records: (uid: string, sid: string) => `records_${uid}_${sid}`,
+  sessions: (uid: string, sid: string) => `sessions_${uid}_${sid}`,
+  activeSession: (uid: string, sid: string) => `activeSession_${uid}_${sid}`,
 };
 
 const saveLocal = (key: string, data: unknown): void => {
-  try {
-    localStorage.setItem(key, JSON.stringify(data));
-  } catch (e) {
-    console.warn('⚠️ فشل الحفظ المحلي:', e);
-  }
+  try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
 };
 
 const loadLocal = <T,>(key: string, fallback: T): T => {
   try {
     const data = localStorage.getItem(key);
     return data ? JSON.parse(data) : fallback;
-  } catch {
-    return fallback;
-  }
+  } catch { return fallback; }
 };
 
-const addPending = (uid: string, type: string, data: unknown): void => {
-  const pending = loadLocal<Record<string, unknown>>(LS_KEYS.pending(uid), {});
-  pending[type] = data;
-  pending.timestamp = Date.now();
-  saveLocal(LS_KEYS.pending(uid), pending);
-};
-
-// 🛑 الحماية الذهبية: منع حفظ array فاضي إذا المحلي فيه بيانات
 const isDangerousEmpty = (newData: unknown[], localData: unknown[]): boolean => {
-  return Array.isArray(newData) && newData.length === 0 && Array.isArray(localData) && localData.length > 0;
-};
-
-// 📦 نسخة احتياطية تلقائية
-const createAutoBackup = (uid: string): void => {
-  try {
-    const backup = {
-      students: loadLocal(LS_KEYS.students(uid), []),
-      records: loadLocal(LS_KEYS.records(uid), []),
-      sessions: loadLocal(LS_KEYS.sessions(uid), []),
-      activeSession: loadLocal(LS_KEYS.activeSession(uid), null),
-      timestamp: new Date().toISOString(),
-    };
-    const backupKey = `backup_${uid}_${Date.now()}`;
-    saveLocal(backupKey, backup);
-
-    // الاحتفاظ بآخر 5 نسخ فقط
-    const allBackups = Object.keys(localStorage)
-      .filter(k => k.startsWith(`backup_${uid}_`))
-      .sort();
-    if (allBackups.length > 5) {
-      allBackups.slice(0, allBackups.length - 5).forEach(k => localStorage.removeItem(k));
-    }
-  } catch (e) {
-    console.warn('فشل النسخ الاحتياطي:', e);
-  }
+  return Array.isArray(newData) && newData.length === 0 && 
+         Array.isArray(localData) && localData.length > 0;
 };
 
 // ============================================================
-// 📚 STUDENTS
+// 🏛️ COLLEGES (الكليات)
 // ============================================================
 
-export const saveStudents = async (
-  uid: string, 
-  students: Student[],
-  forceDelete: boolean = false // ✅ هذا اللي كان يسبب الخطأ عندك، تم إضافته
+export const saveColleges = async (
+  adminUid: string,
+  colleges: College[],
+  forceDelete: boolean = false
 ): Promise<void> => {
-  // 🛑 الحماية تتفعل فقط إذا لم يكن الحذف متعمداً
   if (!forceDelete) {
-    const local = loadLocal<Student[]>(LS_KEYS.students(uid), []);
-    if (isDangerousEmpty(students, local)) {
-      console.warn('🛑 تم منع حفظ قائمة طلاب فارغة - يوجد بيانات محلية!');
+    const local = loadLocal<College[]>(LS.colleges(adminUid), []);
+    if (isDangerousEmpty(colleges, local)) {
+      console.warn('🛑 منع حفظ كليات فارغة');
       return;
     }
   }
-
-  // 1️⃣ حفظ محلي فوري
-  saveLocal(LS_KEYS.students(uid), students);
-  createAutoBackup(uid);
-
-  // 2️⃣ Firebase
+  saveLocal(LS.colleges(adminUid), colleges);
   try {
-    await set(ref(database, getUserPath(uid, 'students')), students);
-    saveLocal(LS_KEYS.lastSync(uid), Date.now());
-    console.log('✅ Students saved to Firebase');
-  } catch (error) {
-    console.warn("⚠️ فشل الحفظ في Firebase - محفوظ محلياً:", error);
-    addPending(uid, 'students', students);
+    await set(ref(database, getCollegesPath(adminUid)), colleges);
+    console.log('✅ Colleges saved');
+  } catch (e) {
+    console.warn('⚠️ فشل حفظ الكليات:', e);
   }
 };
 
-export const loadStudents = async (uid: string): Promise<Student[]> => {
-  const local = loadLocal<Student[]>(LS_KEYS.students(uid), []);
-  
+export const loadColleges = async (adminUid: string): Promise<College[]> => {
+  const local = loadLocal<College[]>(LS.colleges(adminUid), []);
   try {
-    const snapshot = await get(ref(database, getUserPath(uid, 'students')));
-    if (snapshot.exists()) {
-      const fbData = snapshot.val();
-      const fbArray: Student[] = Array.isArray(fbData) ? fbData : Object.values(fbData);
-      const result = fbArray.length >= local.length ? fbArray : local;
-      saveLocal(LS_KEYS.students(uid), result);
-      console.log('✅ Students loaded from Firebase');
-      return result;
+    const snap = await get(ref(database, getCollegesPath(adminUid)));
+    if (snap.exists()) {
+      const data = snap.val();
+      const arr: College[] = Array.isArray(data) ? data : Object.values(data);
+      saveLocal(LS.colleges(adminUid), arr);
+      return arr;
     }
-    if (local.length > 0) {
-      console.log('📦 Students loaded from local cache');
-      return local;
+    return local;
+  } catch {
+    return local;
+  }
+};
+
+// ============================================================
+// 📖 STAGES (المراحل)
+// ============================================================
+
+export const saveStages = async (
+  adminUid: string,
+  stages: Stage[],
+  forceDelete: boolean = false
+): Promise<void> => {
+  if (!forceDelete) {
+    const local = loadLocal<Stage[]>(LS.stages(adminUid), []);
+    if (isDangerousEmpty(stages, local)) {
+      console.warn('🛑 منع حفظ مراحل فارغة');
+      return;
     }
-    return [];
-  } catch (error) {
-    console.warn("⚠️ فشل التحميل من Firebase - استخدام المحلي:", error);
+  }
+  saveLocal(LS.stages(adminUid), stages);
+  try {
+    await set(ref(database, getStagesPath(adminUid)), stages);
+    console.log('✅ Stages saved');
+  } catch (e) {
+    console.warn('⚠️ فشل حفظ المراحل:', e);
+  }
+};
+
+export const loadStages = async (adminUid: string): Promise<Stage[]> => {
+  const local = loadLocal<Stage[]>(LS.stages(adminUid), []);
+  try {
+    const snap = await get(ref(database, getStagesPath(adminUid)));
+    if (snap.exists()) {
+      const data = snap.val();
+      const arr: Stage[] = Array.isArray(data) ? data : Object.values(data);
+      saveLocal(LS.stages(adminUid), arr);
+      return arr;
+    }
+    return local;
+  } catch {
+    return local;
+  }
+};
+
+// ============================================================
+// 👥 STUDENTS (طلاب المرحلة)
+// ============================================================
+
+export const saveStudents = async (
+  adminUid: string,
+  stageId: string,
+  students: Student[],
+  forceDelete: boolean = false
+): Promise<void> => {
+  if (!forceDelete) {
+    const local = loadLocal<Student[]>(LS.students(adminUid, stageId), []);
+    if (isDangerousEmpty(students, local)) {
+      console.warn('🛑 منع حفظ طلاب فارغين');
+      return;
+    }
+  }
+  saveLocal(LS.students(adminUid, stageId), students);
+  try {
+    await set(ref(database, getStagePath(adminUid, stageId, 'students')), students);
+    console.log('✅ Students saved for stage:', stageId);
+  } catch (e) {
+    console.warn('⚠️ فشل حفظ الطلاب:', e);
+  }
+};
+
+export const loadStudents = async (adminUid: string, stageId: string): Promise<Student[]> => {
+  const local = loadLocal<Student[]>(LS.students(adminUid, stageId), []);
+  try {
+    const snap = await get(ref(database, getStagePath(adminUid, stageId, 'students')));
+    if (snap.exists()) {
+      const data = snap.val();
+      const arr: Student[] = Array.isArray(data) ? data : Object.values(data);
+      saveLocal(LS.students(adminUid, stageId), arr);
+      return arr;
+    }
+    return local;
+  } catch {
     return local;
   }
 };
@@ -134,51 +178,42 @@ export const loadStudents = async (uid: string): Promise<Student[]> => {
 // ============================================================
 
 export const saveAttendanceRecords = async (
-  uid: string, 
+  adminUid: string,
+  stageId: string,
   records: AttendanceRecord[],
   forceDelete: boolean = false
 ): Promise<void> => {
   if (!forceDelete) {
-    const local = loadLocal<AttendanceRecord[]>(LS_KEYS.records(uid), []);
+    const local = loadLocal<AttendanceRecord[]>(LS.records(adminUid, stageId), []);
     if (isDangerousEmpty(records, local)) {
-      console.warn('🛑 تم منع حفظ سجل حضور فارغ - يوجد بيانات محلية!');
+      console.warn('🛑 منع حفظ سجلات فارغة');
       return;
     }
   }
-
-  saveLocal(LS_KEYS.records(uid), records);
-  createAutoBackup(uid);
-
+  saveLocal(LS.records(adminUid, stageId), records);
   try {
-    await set(ref(database, getUserPath(uid, 'attendanceRecords')), records);
-    saveLocal(LS_KEYS.lastSync(uid), Date.now());
-    console.log('✅ Attendance records saved to Firebase');
-  } catch (error) {
-    console.warn("⚠️ فشل حفظ الحضور - محفوظ محلياً:", error);
-    addPending(uid, 'attendanceRecords', records);
+    await set(ref(database, getStagePath(adminUid, stageId, 'records')), records);
+    console.log('✅ Records saved');
+  } catch (e) {
+    console.warn('⚠️ فشل حفظ السجلات:', e);
   }
 };
 
-export const loadAttendanceRecords = async (uid: string): Promise<AttendanceRecord[]> => {
-  const local = loadLocal<AttendanceRecord[]>(LS_KEYS.records(uid), []);
-
+export const loadAttendanceRecords = async (
+  adminUid: string,
+  stageId: string
+): Promise<AttendanceRecord[]> => {
+  const local = loadLocal<AttendanceRecord[]>(LS.records(adminUid, stageId), []);
   try {
-    const snapshot = await get(ref(database, getUserPath(uid, 'attendanceRecords')));
-    if (snapshot.exists()) {
-      const fbData = snapshot.val();
-      const fbArray: AttendanceRecord[] = Array.isArray(fbData) ? fbData : Object.values(fbData);
-      const result = fbArray.length >= local.length ? fbArray : local;
-      saveLocal(LS_KEYS.records(uid), result);
-      console.log('✅ Attendance records loaded from Firebase');
-      return result;
+    const snap = await get(ref(database, getStagePath(adminUid, stageId, 'records')));
+    if (snap.exists()) {
+      const data = snap.val();
+      const arr: AttendanceRecord[] = Array.isArray(data) ? data : Object.values(data);
+      saveLocal(LS.records(adminUid, stageId), arr);
+      return arr;
     }
-    if (local.length > 0) {
-      console.log('📦 Records loaded from local cache');
-      return local;
-    }
-    return [];
-  } catch (error) {
-    console.warn("⚠️ فشل تحميل الحضور - استخدام المحلي:", error);
+    return local;
+  } catch {
     return local;
   }
 };
@@ -188,51 +223,42 @@ export const loadAttendanceRecords = async (uid: string): Promise<AttendanceReco
 // ============================================================
 
 export const saveSessions = async (
-  uid: string, 
+  adminUid: string,
+  stageId: string,
   sessions: AttendanceSession[],
   forceDelete: boolean = false
 ): Promise<void> => {
   if (!forceDelete) {
-    const local = loadLocal<AttendanceSession[]>(LS_KEYS.sessions(uid), []);
+    const local = loadLocal<AttendanceSession[]>(LS.sessions(adminUid, stageId), []);
     if (isDangerousEmpty(sessions, local)) {
-      console.warn('🛑 تم منع حفظ سجلات فارغة - يوجد بيانات محلية!');
+      console.warn('🛑 منع حفظ جلسات فارغة');
       return;
     }
   }
-
-  saveLocal(LS_KEYS.sessions(uid), sessions);
-  createAutoBackup(uid);
-
+  saveLocal(LS.sessions(adminUid, stageId), sessions);
   try {
-    await set(ref(database, getUserPath(uid, 'sessions')), sessions);
-    saveLocal(LS_KEYS.lastSync(uid), Date.now());
-    console.log('✅ Sessions saved to Firebase');
-  } catch (error) {
-    console.warn("⚠️ فشل حفظ السجلات - محفوظة محلياً:", error);
-    addPending(uid, 'sessions', sessions);
+    await set(ref(database, getStagePath(adminUid, stageId, 'sessions')), sessions);
+    console.log('✅ Sessions saved');
+  } catch (e) {
+    console.warn('⚠️ فشل حفظ الجلسات:', e);
   }
 };
 
-export const loadSessions = async (uid: string): Promise<AttendanceSession[]> => {
-  const local = loadLocal<AttendanceSession[]>(LS_KEYS.sessions(uid), []);
-
+export const loadSessions = async (
+  adminUid: string,
+  stageId: string
+): Promise<AttendanceSession[]> => {
+  const local = loadLocal<AttendanceSession[]>(LS.sessions(adminUid, stageId), []);
   try {
-    const snapshot = await get(ref(database, getUserPath(uid, 'sessions')));
-    if (snapshot.exists()) {
-      const fbData = snapshot.val();
-      const fbArray: AttendanceSession[] = Array.isArray(fbData) ? fbData : Object.values(fbData);
-      const result = fbArray.length >= local.length ? fbArray : local;
-      saveLocal(LS_KEYS.sessions(uid), result);
-      console.log('✅ Sessions loaded from Firebase');
-      return result;
+    const snap = await get(ref(database, getStagePath(adminUid, stageId, 'sessions')));
+    if (snap.exists()) {
+      const data = snap.val();
+      const arr: AttendanceSession[] = Array.isArray(data) ? data : Object.values(data);
+      saveLocal(LS.sessions(adminUid, stageId), arr);
+      return arr;
     }
-    if (local.length > 0) {
-      console.log('📦 Sessions loaded from local cache');
-      return local;
-    }
-    return [];
-  } catch (error) {
-    console.warn("⚠️ فشل تحميل السجلات - استخدام المحلي:", error);
+    return local;
+  } catch {
     return local;
   }
 };
@@ -241,39 +267,69 @@ export const loadSessions = async (uid: string): Promise<AttendanceSession[]> =>
 // 🎯 ACTIVE SESSION
 // ============================================================
 
-export const saveActiveSession = async (uid: string, sessionId: string | null): Promise<void> => {
-  saveLocal(LS_KEYS.activeSession(uid), sessionId);
-
+export const saveActiveSession = async (
+  adminUid: string,
+  stageId: string,
+  sessionId: string | null
+): Promise<void> => {
+  saveLocal(LS.activeSession(adminUid, stageId), sessionId);
   try {
     if (sessionId) {
-      await set(ref(database, getUserPath(uid, 'activeSession')), sessionId);
-      console.log('✅ Active session saved to Firebase');
+      await set(ref(database, getStagePath(adminUid, stageId, 'activeSession')), sessionId);
     } else {
-      await remove(ref(database, getUserPath(uid, 'activeSession')));
-      console.log('✅ Active session removed from Firebase');
+      await remove(ref(database, getStagePath(adminUid, stageId, 'activeSession')));
     }
-    saveLocal(LS_KEYS.lastSync(uid), Date.now());
-  } catch (error) {
-    console.warn("⚠️ فشل حفظ الجلسة النشطة - محفوظة محلياً:", error);
-    addPending(uid, 'activeSession', sessionId);
+  } catch (e) {
+    console.warn('⚠️ فشل حفظ الجلسة النشطة:', e);
   }
 };
 
-export const loadActiveSession = async (uid: string): Promise<string | null> => {
-  const local = loadLocal<string | null>(LS_KEYS.activeSession(uid), null);
-
+export const loadActiveSession = async (
+  adminUid: string,
+  stageId: string
+): Promise<string | null> => {
+  const local = loadLocal<string | null>(LS.activeSession(adminUid, stageId), null);
   try {
-    const snapshot = await get(ref(database, getUserPath(uid, 'activeSession')));
-    if (snapshot.exists()) {
-      const value = snapshot.val();
-      saveLocal(LS_KEYS.activeSession(uid), value);
-      console.log('✅ Active session loaded from Firebase');
+    const snap = await get(ref(database, getStagePath(adminUid, stageId, 'activeSession')));
+    if (snap.exists()) {
+      const value = snap.val();
+      saveLocal(LS.activeSession(adminUid, stageId), value);
       return value;
     }
     return local;
-  } catch (error) {
-    console.warn("⚠️ فشل تحميل الجلسة النشطة - استخدام المحلي:", error);
+  } catch {
     return local;
+  }
+};
+
+// ============================================================
+// 📦 LOAD ALL STAGE DATA
+// ============================================================
+
+export const loadStageData = async (adminUid: string, stageId: string) => {
+  const [students, records, sessions, activeSessionId] = await Promise.all([
+    loadStudents(adminUid, stageId),
+    loadAttendanceRecords(adminUid, stageId),
+    loadSessions(adminUid, stageId),
+    loadActiveSession(adminUid, stageId),
+  ]);
+  return { students, records, sessions, activeSessionId };
+};
+
+// ============================================================
+// 🗑️ DELETE STAGE (يحذف كل بيانات المرحلة)
+// ============================================================
+
+export const deleteStageData = async (adminUid: string, stageId: string): Promise<void> => {
+  try {
+    await remove(ref(database, `userData/${adminUid}/stageData/${stageId}`));
+    localStorage.removeItem(LS.students(adminUid, stageId));
+    localStorage.removeItem(LS.records(adminUid, stageId));
+    localStorage.removeItem(LS.sessions(adminUid, stageId));
+    localStorage.removeItem(LS.activeSession(adminUid, stageId));
+    console.log('✅ Stage data deleted:', stageId);
+  } catch (e) {
+    console.error('❌ فشل حذف بيانات المرحلة:', e);
   }
 };
 
@@ -281,35 +337,23 @@ export const loadActiveSession = async (uid: string): Promise<string | null> => 
 // 👤 USER PROFILE
 // ============================================================
 
-export const saveUserProfile = async (
-  uid: string,
-  profileData: Partial<User>
-): Promise<void> => {
+export const saveUserProfile = async (uid: string, profileData: Partial<User>): Promise<void> => {
   try {
-    const userRef = ref(database, `users/${uid}`);
-    await update(userRef, {
+    await update(ref(database, `users/${uid}`), {
       ...profileData,
       lastUpdated: new Date().toISOString()
     });
-    console.log('✅ User profile saved to Firebase');
-  } catch (error) {
-    console.error('❌ Error saving user profile:', error);
-    throw error;
+  } catch (e) {
+    console.error('❌ Error saving user profile:', e);
+    throw e;
   }
 };
 
 export const loadUserProfile = async (uid: string): Promise<User | null> => {
   try {
-    const userRef = ref(database, `users/${uid}`);
-    const snapshot = await get(userRef);
-    if (snapshot.exists()) {
-      console.log('✅ User profile loaded from Firebase');
-      return snapshot.val();
-    }
-    console.log('⚠️ No user profile found in Firebase');
-    return null;
-  } catch (error) {
-    console.error('❌ Error loading user profile:', error);
+    const snap = await get(ref(database, `users/${uid}`));
+    return snap.exists() ? snap.val() : null;
+  } catch {
     return null;
   }
 };
@@ -320,214 +364,16 @@ export const saveUserData = async (uid: string, userData: User): Promise<void> =
       ...userData,
       lastUpdated: new Date().toISOString()
     });
-    console.log('✅ Complete user data saved to Firebase');
-  } catch (error) {
-    console.error('❌ Error saving user data:', error);
-    throw error;
+  } catch (e) {
+    console.error('❌ Error saving user data:', e);
+    throw e;
   }
 };
 
 // ============================================================
-// 🔄 SYNC ALL
+// 🔁 SYNC PENDING (للمستقبل)
 // ============================================================
 
-export const syncAllData = async (
-  uid: string,
-  students: Student[],
-  records: AttendanceRecord[],
-  sessions: AttendanceSession[],
-  activeSessionId: string | null
-): Promise<void> => {
-  try {
-    const updates: Record<string, unknown> = {};
-    updates[getUserPath(uid, 'students')] = students;
-    updates[getUserPath(uid, 'attendanceRecords')] = records;
-    updates[getUserPath(uid, 'sessions')] = sessions;
-    if (activeSessionId) {
-      updates[getUserPath(uid, 'activeSession')] = activeSessionId;
-    }
-    await update(ref(database), updates);
-
-    saveLocal(LS_KEYS.students(uid), students);
-    saveLocal(LS_KEYS.records(uid), records);
-    saveLocal(LS_KEYS.sessions(uid), sessions);
-    saveLocal(LS_KEYS.activeSession(uid), activeSessionId);
-    saveLocal(LS_KEYS.lastSync(uid), Date.now());
-
-    console.log('✅ All data synced to Firebase');
-  } catch (error) {
-    console.error("❌ Error syncing data:", error);
-    throw error;
-  }
+export const syncPendingChanges = async (_uid: string): Promise<void> => {
+  console.log('ℹ️ No pending changes to sync');
 };
-
-export const loadAllData = async (uid: string): Promise<{
-  students: Student[];
-  attendanceRecords: AttendanceRecord[];
-  sessions: AttendanceSession[];
-  activeSessionId: string | null;
-}> => {
-  try {
-    console.log('📥 Loading all data for user:', uid);
-    const [students, attendanceRecords, sessions, activeSessionId] = await Promise.all([
-      loadStudents(uid),
-      loadAttendanceRecords(uid),
-      loadSessions(uid),
-      loadActiveSession(uid)
-    ]);
-    console.log('✅ All data loaded successfully');
-    return { students, attendanceRecords, sessions, activeSessionId };
-  } catch (error) {
-    console.error("❌ Error loading all data:", error);
-    return {
-      students: loadLocal<Student[]>(LS_KEYS.students(uid), []),
-      attendanceRecords: loadLocal<AttendanceRecord[]>(LS_KEYS.records(uid), []),
-      sessions: loadLocal<AttendanceSession[]>(LS_KEYS.sessions(uid), []),
-      activeSessionId: loadLocal<string | null>(LS_KEYS.activeSession(uid), null),
-    };
-  }
-};
-
-// ============================================================
-// 🔁 PENDING SYNC (مزامنة التغييرات المعلقة عند رجوع النت)
-// ============================================================
-
-export const syncPendingChanges = async (uid: string): Promise<void> => {
-  const pending = loadLocal<Record<string, unknown>>(LS_KEYS.pending(uid), {});
-  const keys = Object.keys(pending).filter(k => k !== 'timestamp');
-  
-  if (keys.length === 0) {
-    console.log('ℹ️ لا توجد تغييرات معلقة');
-    return;
-  }
-
-  console.log(`🔄 مزامنة ${keys.length} تغيير معلق...`);
-
-  try {
-    const updates: Record<string, unknown> = {};
-    
-    if (pending.students) {
-      updates[getUserPath(uid, 'students')] = pending.students;
-    }
-    if (pending.attendanceRecords) {
-      updates[getUserPath(uid, 'attendanceRecords')] = pending.attendanceRecords;
-    }
-    if (pending.sessions) {
-      updates[getUserPath(uid, 'sessions')] = pending.sessions;
-    }
-    if (pending.activeSession !== undefined) {
-      if (pending.activeSession) {
-        updates[getUserPath(uid, 'activeSession')] = pending.activeSession;
-      }
-    }
-
-    if (Object.keys(updates).length > 0) {
-      await update(ref(database), updates);
-      localStorage.removeItem(LS_KEYS.pending(uid));
-      saveLocal(LS_KEYS.lastSync(uid), Date.now());
-      console.log('✅ تمت مزامنة جميع التغييرات المعلقة');
-    }
-  } catch (error) {
-    console.error('❌ فشلت مزامنة التغييرات المعلقة:', error);
-  }
-};
-
-export const syncLocalDataToFirebase = async (uid: string): Promise<void> => {
-  try {
-    console.log('🔄 Syncing data to Firebase for user:', uid);
-    const data = await loadAllData(uid);
-    await syncAllData(
-      uid,
-      data.students,
-      data.attendanceRecords,
-      data.sessions,
-      data.activeSessionId
-    );
-    await syncPendingChanges(uid);
-    console.log('✅ Data synced to Firebase');
-  } catch (error) {
-    console.error('❌ Error syncing local data:', error);
-  }
-};
-
-// ============================================================
-// 🗑️ DELETE & BACKUP
-// ============================================================
-
-export const deleteAllUserData = async (uid: string): Promise<void> => {
-  try {
-    await remove(ref(database, `userData/${uid}`));
-    await remove(ref(database, `users/${uid}`));
-    
-    Object.values(LS_KEYS).forEach(keyFn => {
-      localStorage.removeItem(keyFn(uid));
-    });
-    Object.keys(localStorage)
-      .filter(k => k.startsWith(`backup_${uid}_`))
-      .forEach(k => localStorage.removeItem(k));
-    
-    console.log('✅ All user data deleted from Firebase');
-  } catch (error) {
-    console.error('❌ Error deleting user data:', error);
-    throw error;
-  }
-};
-
-export const backupAllData = async (uid: string): Promise<unknown> => {
-  try {
-    const allData = await loadAllData(uid);
-    const userProfile = await loadUserProfile(uid);
-    return {
-      userData: allData,
-      userProfile,
-      timestamp: new Date().toISOString(),
-      version: '2.0'
-    };
-  } catch (error) {
-    console.error('❌ Error creating backup:', error);
-    throw error;
-  }
-};
-
-export const restoreFromBackup = async (uid: string, backup: {
-  userData?: {
-    students?: Student[];
-    attendanceRecords?: AttendanceRecord[];
-    sessions?: AttendanceSession[];
-    activeSessionId?: string | null;
-  };
-  userProfile?: User;
-}): Promise<void> => {
-  try {
-    if (backup.userData) {
-      await syncAllData(
-        uid,
-        backup.userData.students || [],
-        backup.userData.attendanceRecords || [],
-        backup.userData.sessions || [],
-        backup.userData.activeSessionId || null
-      );
-    }
-    if (backup.userProfile) {
-      await saveUserData(uid, backup.userProfile);
-    }
-    console.log('✅ Data restored from backup successfully');
-  } catch (error) {
-    console.error('❌ Error restoring from backup:', error);
-    throw error;
-  }
-};
-
-// ============================================================
-// 🌐 مراقبة حالة النت
-// ============================================================
-
-if (typeof window !== 'undefined') {
-  window.addEventListener('online', () => {
-    console.log('🟢 رجع الاتصال بالإنترنت');
-  });
-
-  window.addEventListener('offline', () => {
-    console.log('🔴 انقطع الاتصال بالإنترنت - الوضع المحلي');
-  });
-}
