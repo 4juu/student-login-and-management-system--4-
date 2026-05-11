@@ -33,10 +33,11 @@ type Intent =
   | 'who_present_today' | 'who_absent_today' | 'who_present_date' | 'who_absent_date'
   | 'count_present_today' | 'count_absent_today' | 'count_present_date' | 'count_absent_date'
   | 'student_info' | 'student_attendance' | 'student_absence_count' | 'student_attendance_count'
-  | 'student_full_record'
+  | 'student_full_record' | 'student_full_attendance' | 'student_full_absence'
   | 'top_absent' | 'top_present' | 'worst_students' | 'best_students'
   | 'students_count' | 'students_list' | 'students_by_group'
   | 'group_info' | 'group_count' | 'group_attendance' | 'groups_list'
+  | 'group_cumulative_present' | 'group_cumulative_absent'
   | 'session_count' | 'session_list' | 'session_today' | 'last_session' | 'first_session'
   | 'attendance_rate' | 'absence_rate' | 'average_attendance'
   | 'colleges_count' | 'colleges_list' | 'college_info'
@@ -51,6 +52,13 @@ type Intent =
   | 'compare_students' | 'attendance_today_specific_group'
   | 'current_time' | 'current_date'
   | 'advanced_search_absent' | 'advanced_search_present'
+  | 'cumulative_present' | 'cumulative_absent'
+  | 'total_attendance_sum' | 'total_absence_sum'
+  | 'last_week_present' | 'last_week_absent'
+  | 'last_month_present' | 'last_month_absent'
+  | 'this_week_present' | 'this_week_absent'
+  | 'this_month_present' | 'this_month_absent'
+  | 'day_of_month_present' | 'day_of_month_absent'
   | 'unknown';
 
 interface ParsedQuery {
@@ -60,6 +68,7 @@ interface ParsedQuery {
   groupName?: string;
   date?: string;
   number?: number;
+  dayOfMonth?: number;
 }
 
 // ============================================================
@@ -68,38 +77,27 @@ interface ParsedQuery {
 const ARABIC_DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 const ARABIC_MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 
-// 🔧 تحويل أي صيغة تاريخ (عربية/إنجليزية) لصيغة موحدة YYYY-MM-DD
 const normalizeDate = (dateStr: string): string => {
   if (!dateStr) return '';
-  
-  // تحويل الأرقام العربية لإنجليزية
   const arabicNumbers = '٠١٢٣٤٥٦٧٨٩';
   const englishNumbers = '0123456789';
   let normalized = dateStr.replace(/[٠-٩]/g, (d) => englishNumbers[arabicNumbers.indexOf(d)]);
-  
-  // إزالة الفواصل غير المرئية والمسافات الزائدة
   normalized = normalized.replace(/[‏‎\u200E\u200F]/g, '').trim();
   
-  // إذا كان بصيغة YYYY-MM-DD مباشرة
-  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
-    return normalized;
-  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
   
-  // إذا كان بصيغة DD/MM/YYYY أو D/M/YYYY
   const slashMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (slashMatch) {
     const [, day, month, year] = slashMatch;
     return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
   }
   
-  // إذا كان بصيغة YYYY/MM/DD
   const slashMatchYMD = normalized.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
   if (slashMatchYMD) {
     const [, year, month, day] = slashMatchYMD;
     return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
   }
   
-  // إذا كان بصيغة DD-MM-YYYY
   const dashMatch = normalized.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
   if (dashMatch) {
     const [, day, month, year] = dashMatch;
@@ -135,23 +133,42 @@ const getCurrentDateTimeHeader = (): string => {
   return `📅 ${formatArabicDate()}\n🕐 ${formatArabicTime(now)}`;
 };
 
-// 🆕 الحصول على تاريخ اليوم بصيغة محلية YYYY-MM-DD
 const getLocalToday = (): string => {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 };
 
-// 🆕 تحويل createdAt لتاريخ محلي YYYY-MM-DD
 const getLocalDateFromTimestamp = (timestamp: string): string => {
   const d = new Date(timestamp);
   if (isNaN(d.getTime())) return '';
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// 🆕 حساب نطاق الأسبوع/الشهر
+const getDateRange = (period: 'this_week' | 'last_week' | 'this_month' | 'last_month'): { start: string; end: string } => {
+  const now = new Date();
+  let start = new Date(now);
+  let end = new Date(now);
+
+  if (period === 'this_week') {
+    const day = now.getDay();
+    start.setDate(now.getDate() - day);
+    end = new Date(now);
+  } else if (period === 'last_week') {
+    const day = now.getDay();
+    start.setDate(now.getDate() - day - 7);
+    end = new Date(start);
+    end.setDate(start.getDate() + 6);
+  } else if (period === 'this_month') {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+    end = new Date(now);
+  } else if (period === 'last_month') {
+    start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    end = new Date(now.getFullYear(), now.getMonth(), 0);
+  }
+
+  const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return { start: fmt(start), end: fmt(end) };
 };
 
 export const ChatBot: React.FC<ChatBotProps> = ({
@@ -173,9 +190,6 @@ export const ChatBot: React.FC<ChatBotProps> = ({
 
   const STORAGE_KEY = `chatbot_messages_${user.uid}`;
 
-  // ============================================================
-  // 📦 State
-  // ============================================================
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>(() => {
     try {
@@ -193,9 +207,6 @@ export const ChatBot: React.FC<ChatBotProps> = ({
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // ============================================================
-  // 💾 حفظ تلقائي
-  // ============================================================
   useEffect(() => {
     if (messages.length > 0) {
       try {
@@ -206,9 +217,6 @@ export const ChatBot: React.FC<ChatBotProps> = ({
     }
   }, [messages, STORAGE_KEY]);
 
-  // ============================================================
-  // 🎯 البيانات المتاحة حسب الصلاحيات
-  // ============================================================
   const accessibleData = useMemo(() => {
     if (isAdmin) {
       const allStudents: Student[] = [];
@@ -246,9 +254,6 @@ export const ChatBot: React.FC<ChatBotProps> = ({
 
   const { accessibleColleges, accessibleStages, allStudents, allRecords, allSessions } = accessibleData;
 
-  // ============================================================
-  // 💬 رسالة الترحيب
-  // ============================================================
   useEffect(() => {
     if (isOpen && messages.length === 0) {
       const hour = new Date().getHours();
@@ -262,9 +267,12 @@ export const ChatBot: React.FC<ChatBotProps> = ({
           `${greeting} ${user.displayName} ${roleLabel} 👋\n\n` +
           `${getCurrentDateTimeHeader()}\n\n` +
           `أنا مساعدك الذكي ✨\n` +
-          (isAdmin 
-            ? `تكدر تسألني عن أي شي بالنظام:\n• كل الطلاب والتدريسيين\n• الحضور والغياب لأي مرحلة\n• الإحصائيات الشاملة` 
-            : `تكدر تسألني عن:\n• طلابك وحضورهم\n• الغياب والإحصائيات\n• تصدير السجلات`),
+          `تكدر تسألني بأي طريقة تحبها:\n` +
+          `• منو حاضر اليوم؟\n` +
+          `• منو غاب الاسبوع الماضي؟\n` +
+          `• حضور احمد لكل الايام\n` +
+          `• مجموع حضور كروب A1\n` +
+          `• منو حضر يوم 10`,
         timestamp: new Date(),
       }]);
     }
@@ -274,9 +282,6 @@ export const ChatBot: React.FC<ChatBotProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // ============================================================
-  // 🛠️ دوال مساعدة
-  // ============================================================
   const matchesAny = useCallback((text: string, keywords: string[]): boolean => {
     return keywords.some(kw => text.includes(kw));
   }, []);
@@ -302,6 +307,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({
       'منتظم', 'منتظمين', 'مثالي', 'مثاليين',
       'شنو', 'كيف', 'متى', 'اين', 'أين', 'منو', 'من',
       'كم', 'عدد', 'قائمة', 'اسماء', 'أسماء',
+      'مجموع', 'اجمالي', 'كل', 'الايام', 'الفترة', 'البداية',
     ]);
 
     const sortedStudents = [...allStudents].sort((a, b) => b.name.length - a.name.length);
@@ -329,14 +335,11 @@ export const ChatBot: React.FC<ChatBotProps> = ({
     return undefined;
   }, [allStudents]);
 
-  // ✅ محسّن: يدعم كل الصيغ
   const findDateInQuery = useCallback((_query: string, lowercaseQuery: string): string | undefined => {
-    // صيغة YYYY-MM-DD
     const dateRegex = /\d{4}-\d{2}-\d{2}/;
     const match = lowercaseQuery.match(dateRegex);
     if (match) return match[0];
     
-    // صيغة DD/MM/YYYY
     const slashRegex = /(\d{1,2})\/(\d{1,2})\/(\d{4})/;
     const slashMatch = lowercaseQuery.match(slashRegex);
     if (slashMatch) {
@@ -347,86 +350,113 @@ export const ChatBot: React.FC<ChatBotProps> = ({
     if (matchesAny(lowercaseQuery, ['امس', 'أمس', 'البارحة', 'yesterday'])) {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
-      const y = yesterday.getFullYear();
-      const m = String(yesterday.getMonth() + 1).padStart(2, '0');
-      const d = String(yesterday.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
+      return `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+    }
+    
+    const dayNames: { [key: string]: number } = {
+      'الاحد': 0, 'احد': 0, 'الأحد': 0, 'sunday': 0,
+      'الاثنين': 1, 'اثنين': 1, 'الإثنين': 1, 'الاتنين': 1, 'monday': 1,
+      'الثلاثاء': 2, 'ثلاثاء': 2, 'الثلثاء': 2, 'tuesday': 2,
+      'الاربعاء': 3, 'اربعاء': 3, 'الأربعاء': 3, 'wednesday': 3,
+      'الخميس': 4, 'خميس': 4, 'thursday': 4,
+      'الجمعة': 5, 'جمعة': 5, 'الجمعه': 5, 'friday': 5,
+      'السبت': 6, 'سبت': 6, 'saturday': 6,
+    };
+    
+    let targetDayOfWeek: number | undefined;
+    let isPastWeek = false;
+    
+    if (lowercaseQuery.includes('الفائت') || lowercaseQuery.includes('الماضي') || lowercaseQuery.includes('السابق') || lowercaseQuery.includes('last')) {
+      isPastWeek = true;
+    }
+    
+    for (const dayKey of Object.keys(dayNames)) {
+      if (lowercaseQuery.includes(dayKey)) {
+        targetDayOfWeek = dayNames[dayKey];
+        break;
+      }
+    }
+    
+    if (targetDayOfWeek !== undefined) {
+      const matchingSessions = sessions
+        .filter(s => {
+          const normalized = normalizeDate(s.date);
+          const sessionDate = new Date(normalized);
+          if (isNaN(sessionDate.getTime())) return false;
+          return sessionDate.getDay() === targetDayOfWeek;
+        })
+        .sort((a, b) => normalizeDate(b.date).localeCompare(normalizeDate(a.date)));
+      
+      if (matchingSessions.length > 0) {
+        if (isPastWeek && matchingSessions.length > 1) {
+          return normalizeDate(matchingSessions[1].date);
+        }
+        return normalizeDate(matchingSessions[0].date);
+      }
+      
+      const today = new Date();
+      const todayDay = today.getDay();
+      let diff = todayDay - targetDayOfWeek;
+      if (diff < 0) diff += 7;
+      if (isPastWeek) diff += 7;
+      
+      const targetDate = new Date(today);
+      targetDate.setDate(today.getDate() - diff);
+      
+      return `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+    }
+    
+    return undefined;
+  }, [matchesAny, sessions]);
+
+  // 🆕 إيجاد رقم اليوم في الشهر (مثل: يوم 10، يوم 15)
+  const findDayOfMonthInQuery = useCallback((lowercaseQuery: string): number | undefined => {
+    const dayMatch = lowercaseQuery.match(/يوم\s+(\d{1,2})(?:\s|$)/);
+    if (dayMatch) {
+      const day = parseInt(dayMatch[1]);
+      if (day >= 1 && day <= 31) return day;
+    }
+    const inMonthMatch = lowercaseQuery.match(/(\d{1,2})\s*(?:بالشهر|من الشهر|في الشهر)/);
+    if (inMonthMatch) {
+      const day = parseInt(inMonthMatch[1]);
+      if (day >= 1 && day <= 31) return day;
     }
     return undefined;
-  }, [matchesAny]);
+  }, []);
 
   const getTodayDate = useCallback((): string => getLocalToday(), []);
 
-  // ✅ محسّن: يدعم كل صيغ التاريخ + الجلسة النشطة + createdAt
   const getTodaySession = useCallback((): AttendanceSession | undefined => {
     const today = getTodayDate();
     
-    console.log('🔍 [ChatBot] البحث عن جلسة اليوم:', today);
-    console.log('   📊 عدد الجلسات:', sessions.length);
-    console.log('   🎯 activeSessionId:', activeSessionId);
-    
-    // محاولة 1: الجلسة النشطة لها أولوية إذا كانت لليوم
     if (activeSessionId) {
       const active = sessions.find(s => s.id === activeSessionId);
       if (active) {
         const activeDateNormalized = normalizeDate(active.date);
-        console.log('   🟢 الجلسة النشطة:', active.name, '| date:', active.date, '| normalized:', activeDateNormalized);
-        
-        // مطابقة التاريخ المطبّع
-        if (activeDateNormalized === today) {
-          console.log('   ✅ الجلسة النشطة لليوم (مطابقة date)');
-          return active;
-        }
-        
-        // مطابقة بـ createdAt
+        if (activeDateNormalized === today) return active;
         if (active.createdAt) {
           const createdLocal = getLocalDateFromTimestamp(active.createdAt);
-          if (createdLocal === today) {
-            console.log('   ✅ الجلسة النشطة منشأة اليوم (مطابقة createdAt)');
-            return active;
-          }
+          if (createdLocal === today) return active;
         }
       }
     }
     
-    // محاولة 2: مطابقة بعد التطبيع
     let found = sessions.find(s => normalizeDate(s.date) === today);
-    if (found) {
-      console.log('   ✅ تم إيجاد جلسة بـ normalize date:', found.name);
-      return found;
-    }
+    if (found) return found;
     
-    // محاولة 3: شوف إذا انشأت اليوم (createdAt)
     found = sessions.find(s => {
       if (!s.createdAt) return false;
       return getLocalDateFromTimestamp(s.createdAt) === today;
     });
     
-    if (found) {
-      console.log('   ✅ تم إيجاد جلسة بـ createdAt:', found.name);
-    } else {
-      console.warn('   ❌ ما لكينا أي جلسة لليوم');
-      console.log('   📋 الجلسات الموجودة:', sessions.map(s => ({
-        name: s.name,
-        date: s.date,
-        normalized: normalizeDate(s.date),
-        createdAt: s.createdAt,
-        createdLocal: s.createdAt ? getLocalDateFromTimestamp(s.createdAt) : 'N/A',
-      })));
-    }
-    
     return found;
   }, [sessions, activeSessionId, getTodayDate]);
 
-  // 🆕 البحث عن جلسة بتاريخ محدد (مع التطبيع)
   const findSessionByDate = useCallback((targetDate: string): AttendanceSession | undefined => {
     const normalized = normalizeDate(targetDate);
-    
-    // محاولة 1: مطابقة date بعد التطبيع
     let found = sessions.find(s => normalizeDate(s.date) === normalized);
     if (found) return found;
     
-    // محاولة 2: مطابقة بـ createdAt
     found = sessions.find(s => {
       if (!s.createdAt) return false;
       return getLocalDateFromTimestamp(s.createdAt) === normalized;
@@ -435,34 +465,38 @@ export const ChatBot: React.FC<ChatBotProps> = ({
     return found;
   }, [sessions]);
 
+  // 🆕 إيجاد جلسات في نطاق تاريخ
+  const findSessionsInRange = useCallback((startDate: string, endDate: string): AttendanceSession[] => {
+    return sessions.filter(s => {
+      const normalized = normalizeDate(s.date);
+      return normalized >= startDate && normalized <= endDate;
+    }).sort((a, b) => normalizeDate(a.date).localeCompare(normalizeDate(b.date)));
+  }, [sessions]);
+
   const needStageMessage = useCallback((): string => {
     if (isAdmin) {
-      return `📍 لازم تختار مرحلة أولاً دكتور.\nروح للواجهة الرئيسية واختر كلية ومرحلة.\n\n💡 أو اسألني سؤال عام مثل:\n• "كم عدد الطلاب الكلي؟"\n• "كم كلية عدنا؟"`;
+      return `📍 لازم تختار مرحلة أولاً دكتور.\nروح للواجهة الرئيسية واختر كلية ومرحلة.`;
     }
     return `📍 اختر مرحلة من المراحل المتاحة لك دكتور`;
   }, [isAdmin]);
 
   const formatStudentInfo = useCallback((student: Student): string => {
     const studentRecords = allRecords.filter(r => r.studentId === student.id);
-    const studentSessions = allSessions;
-    
     const attendedSessionIds = new Set(studentRecords.map(r => r.sessionId));
     const attended = attendedSessionIds.size;
-    const totalSessions = studentSessions.length;
+    const totalSessions = allSessions.length;
     const absent = totalSessions - attended;
     const percentage = totalSessions > 0 ? ((attended / totalSessions) * 100).toFixed(1) : '0';
 
     const pct = parseFloat(percentage);
-    let status = '';
-    let statusEmoji = '';
+    let status = '', statusEmoji = '';
     if (pct >= 90) { status = 'ممتاز - منتظم جداً'; statusEmoji = '🌟'; }
     else if (pct >= 75) { status = 'جيد'; statusEmoji = '✅'; }
     else if (pct >= 50) { status = 'متوسط - يحتاج متابعة'; statusEmoji = '⚠️'; }
     else { status = 'ضعيف - غياب كثير'; statusEmoji = '🚨'; }
 
     return (
-      `👤 ${student.name}\n` +
-      `${'─'.repeat(25)}\n\n` +
+      `👤 ${student.name}\n${'─'.repeat(25)}\n\n` +
       `🔢 الرمز: ${student.code}\n` +
       `👥 الكروب: ${student.group || '-'}\n\n` +
       `📊 السجل الكامل:\n` +
@@ -476,213 +510,242 @@ export const ChatBot: React.FC<ChatBotProps> = ({
   const formatStudentFullRecord = useCallback((student: Student): string => {
     const studentRecords = allRecords.filter(r => r.studentId === student.id);
     const attendedSessionIds = new Set(studentRecords.map(r => r.sessionId));
+    const sortedSessions = [...allSessions].sort((a, b) => normalizeDate(b.date).localeCompare(normalizeDate(a.date)));
     
-    const sortedSessions = [...allSessions].sort((a, b) => {
-      const dateA = normalizeDate(a.date);
-      const dateB = normalizeDate(b.date);
-      return dateB.localeCompare(dateA);
-    });
-    
-    if (sortedSessions.length === 0) {
-      return `📋 ${student.name}\n\nما عدنا أيام مسجلة بعد`;
-    }
+    if (sortedSessions.length === 0) return `📋 ${student.name}\n\nما عدنا أيام مسجلة بعد`;
 
     let msg = `📋 السجل الكامل - ${student.name}\n`;
-    msg += `🔢 ${student.code}${student.group ? ` | 👥 ${student.group}` : ''}\n`;
-    msg += `${'─'.repeat(30)}\n\n`;
+    msg += `🔢 ${student.code}${student.group ? ` | 👥 ${student.group}` : ''}\n${'─'.repeat(30)}\n\n`;
 
-    const recent = sortedSessions.slice(0, 15);
-    recent.forEach((session) => {
+    sortedSessions.slice(0, 20).forEach((session) => {
       const isPresent = attendedSessionIds.has(session.id);
       const record = studentRecords.find(r => r.sessionId === session.id);
       const icon = isPresent ? '✅' : '❌';
       const status = isPresent ? 'حاضر' : 'غائب';
-      const dateFormatted = formatArabicDate(session.date);
-      
-      msg += `${icon} ${dateFormatted}\n`;
-      msg += `   ${status}`;
+      msg += `${icon} ${formatArabicDate(session.date)}\n   ${status}`;
       if (isPresent && record) msg += ` | ⏰ ${record.time}`;
       msg += `\n\n`;
     });
 
-    if (sortedSessions.length > 15) {
-      msg += `... و ${sortedSessions.length - 15} يوم آخر\n\n`;
-    }
+    if (sortedSessions.length > 20) msg += `... و ${sortedSessions.length - 20} يوم آخر\n\n`;
 
     const attended = attendedSessionIds.size;
     const total = sortedSessions.length;
     const pct = total > 0 ? ((attended / total) * 100).toFixed(1) : '0';
-    msg += `${'─'.repeat(30)}\n`;
-    msg += `📊 الإجمالي: ✅ ${attended} | ❌ ${total - attended} | 📈 ${pct}%`;
-
+    msg += `${'─'.repeat(30)}\n📊 الإجمالي: ✅ ${attended} | ❌ ${total - attended} | 📈 ${pct}%`;
     return msg;
   }, [allRecords, allSessions]);
 
   const getHelpMessage = useCallback((): string => {
-    if (isAdmin) {
-      return (
-        `❓ تكدر تسألني دكتور:\n\n` +
-        `📊 الحضور والغياب:\n` +
-        `• "من حضر اليوم؟"\n` +
-        `• "من غاب اليوم؟"\n` +
-        `• "كم عدد الحضور اليوم؟"\n` +
-        `• "حضور كروب A1 اليوم"\n\n` +
-        `🔍 البحث المتقدم:\n` +
-        `• "طلاب غابوا أكثر من 3 أيام"\n` +
-        `• "طلاب كروب A1 غابوا أكثر من 5"\n` +
-        `• "طلاب حضروا أقل من 5 أيام"\n` +
-        `• "طلاب كروب B2 حضروا أكثر من 10"\n\n` +
-        `👥 الطلاب:\n` +
-        `• "كم عدد الطلاب الكلي؟"\n` +
-        `• "من أكثر طالب غياب؟"\n` +
-        `• اكتب اسم طالب للبحث الكامل\n` +
-        `• "سجل أحمد محمد الكامل"\n\n` +
-        `🏛️ الإدارة:\n` +
-        `• "كم كلية عدنا؟"\n` +
-        `• "كم تدريسي عدنا؟"\n` +
-        `• "قائمة التدريسيين"\n` +
-        `• "شلون أضيف تدريسي؟"\n\n` +
-        `📈 الإحصائيات:\n` +
-        `• "إحصائيات شاملة"\n` +
-        `• "نسبة الحضور"`
-      );
-    }
     return (
-      `❓ تكدر تسألني دكتور:\n\n` +
-      `📊 طلابك:\n` +
-      `• "من حضر اليوم؟"\n` +
-      `• "من غاب اليوم؟"\n` +
-      `• "كم عدد طلابي؟"\n` +
-      `• "من أكثر طالب غياب؟"\n\n` +
-      `🔍 البحث المتقدم:\n` +
-      `• "طلاب غابوا أكثر من 3 أيام"\n` +
-      `• "طلاب كروب A1 غابوا أكثر من 5"\n` +
-      `• "طلاب حضروا أقل من 5 أيام"\n\n` +
+      `❓ تكدر تسألني دكتور بأي طريقة:\n\n` +
+      `📊 الحضور والغياب اليوم:\n` +
+      `• منو حاضر اليوم\n• منو غايب اليوم\n• كم حضر اليوم\n\n` +
+      `📅 حضور بأيام معينة:\n` +
+      `• منو حضر الاحد الفائت\n` +
+      `• منو حضر يوم 10\n` +
+      `• حضور الاسبوع الماضي\n` +
+      `• حضور الشهر الماضي\n\n` +
+      `📋 السجل التراكمي:\n` +
+      `• حضور كل الايام\n` +
+      `• مجموع الحضور\n` +
+      `• حضور كروب A1 من اول يوم\n\n` +
       `👤 طالب معين:\n` +
-      `• اكتب اسم الطالب\n` +
-      `• "سجل أحمد الكامل"\n` +
-      `• "كم غاب علي؟"\n\n` +
-      `🏷️ الكروبات:\n` +
-      `• "حضور كروب A1"\n` +
-      `• "غياب كروب B2 اليوم"\n\n` +
-      `📥 "شلون أصدر السجلات؟"`
+      `• حضور احمد لكل الايام\n` +
+      `• مجموع غياب علي\n` +
+      `• كم غاب محمد\n\n` +
+      `🔍 البحث المتقدم:\n` +
+      `• طلاب غابوا اكثر من 3\n` +
+      `• اعرض كروب A1`
     );
-  }, [isAdmin]);
-
-  const getSmartFallback = useCallback((query: string): string => {
-    const suggestions: string[] = [];
-    const q = query.toLowerCase();
-
-    if (q.includes('طالب') || q.includes('طلاب')) {
-      suggestions.push('• "كم عدد الطلاب؟"', '• "من أكثر طالب غياب؟"', '• اكتب اسم الطالب');
-    }
-    if (q.includes('حضور') || q.includes('غياب')) {
-      suggestions.push('• "من حضر اليوم؟"', '• "كم غاب اليوم؟"', '• "نسبة الحضور"');
-    }
-    if (q.includes('كروب') || q.includes('مجموعة')) {
-      suggestions.push('• "شنو الكروبات؟"', '• "حضور كروب A1"');
-    }
-
-    let msg = `🤔 ما فهمت سؤالك بالضبط دكتور...\n\n`;
-    if (suggestions.length > 0) {
-      msg += `💡 جرب:\n${suggestions.join('\n')}`;
-    } else {
-      msg += (
-        `💡 جرّب تسأل:\n` +
-        `• "من حضر اليوم؟"\n` +
-        `• "من غاب اليوم؟"\n` +
-        `• "كم عدد الطلاب؟"\n` +
-        `• "إحصائيات"\n\n` +
-        `أو اكتب "مساعدة" لشرح كامل`
-      );
-    }
-    return msg;
   }, []);
 
+  const SMART_PATTERNS = {
+    greetings: ['hi', 'hello', 'السلام عليكم', 'شلونك', 'هاي', 'اهلا', 'مرحبا', 'هلا', 'سلام'],
+    attendanceWords: ['present', 'موجود', 'دخل', 'سجل', 'دوام', 'داوم', 'حضر', 'حاضر', 'حضور', 'حضوره', 'حضرت', 'حضورهم'],
+    absenceWords: ['absent', 'منقطع', 'ما حضر', 'ماحضر', 'غاب', 'غايب', 'غياب', 'غيابه', 'غيابهم', 'غايبين'],
+    todayWords: ['today', 'now', 'الان', 'هسه', 'هسة', 'الحين', 'اليوم'],
+    countWords: ['how many', 'count', 'شكد', 'عدد', 'كم'],
+    studentWords: ['الطلبه', 'الطلبة', 'student', 'students', 'طالب', 'طلاب'],
+    groupWords: ['group', 'groups', 'section', 'شعبه', 'شعبة', 'مجموعه', 'مجموعة', 'كروب', 'كروبات'],
+    helpWords: ['help', 'how', 'طريقه', 'طريقة', 'كيف', 'شلون', 'ساعدني', 'مساعده', 'مساعدة'],
+    cumulativeWords: [
+      'من اول', 'من اول يوم', 'من البداية', 'كل الفترة', 'كل المدة', 'كل الايام',
+      'كل الجلسات', 'تراكمي', 'الى الان', 'الى الحين', 'لحد الان', 'لحد الحين',
+      'منذ البداية', 'منذ اول يوم', 'كل السنة', 'كل الشهر', 'بكل الايام',
+      'بكل الفترة', 'مجموع', 'اجمالي', 'بشكل عام', 'بشكل كلي', 'كلش',
+      'all time', 'cumulative', 'total', 'overall', 'كل ايام', 'لكل الايام', 'لكل الفترة',
+    ],
+    sumWords: ['مجموع', 'اجمالي', 'كلي', 'كامل', 'total', 'sum'],
+    lastWeekWords: ['الاسبوع الماضي', 'الاسبوع الفائت', 'اسبوع الماضي', 'الاسبوع السابق', 'last week'],
+    thisWeekWords: ['هذا الاسبوع', 'الاسبوع الحالي', 'بهالاسبوع', 'this week'],
+    lastMonthWords: ['الشهر الماضي', 'الشهر الفائت', 'شهر الماضي', 'الشهر السابق', 'last month'],
+    thisMonthWords: ['هذا الشهر', 'الشهر الحالي', 'بهالشهر', 'this month'],
+  };
+
   // ============================================================
-  // 🧠 محرك تحليل النية
+  // 🧠 محرك تحليل النية المتطور
   // ============================================================
   const parseQuery = useCallback((query: string): ParsedQuery => {
-    const q = query.toLowerCase().trim().replace(/[؟?.,!]/g, '').replace(/\s+/g, ' ');
+    const q = query
+      .toLowerCase()
+      .trim()
+      .replace(/[؟?.,!]/g, '')
+      .replace(/\s+/g, ' ')
+      .replace(/أ|إ|آ/g, 'ا')
+      .replace(/ة/g, 'ه')
+      .replace(/ى/g, 'ي')
+      .replace(/گ/g, 'ك')
+      .replace(/چ/g, 'ج');
 
     const studentMatch = findStudentInQuery(query);
     const groupMatch = findGroupInQuery(query);
     const dateMatch = findDateInQuery(query, q);
+    const dayOfMonthMatch = findDayOfMonthInQuery(q);
     const numberMatch = q.match(/\d+/);
     const number = numberMatch ? parseInt(numberMatch[0]) : undefined;
 
-    if (matchesAny(q, ['سلام', 'مرحب', 'هلا', 'اهلا', 'أهلا', 'هاي', 'صباح الخير', 'مساء الخير', 'صباح', 'مساء', 'hi', 'hello', 'hey', 'يا هلا', 'حياك', 'مرحبا', 'السلام عليكم', 'وعليكم السلام', 'يا مرحبا', 'اهلين'])) return { intent: 'greeting' };
-    if (matchesAny(q, ['شكر', 'مشكور', 'تسلم', 'يعطيك العافية', 'ممنون', 'جزاك الله', 'thanks', 'thank you', 'thx', 'احسنت', 'برافو'])) return { intent: 'thanks' };
-    if (matchesAny(q, ['وداع', 'مع السلامة', 'باي', 'الى اللقاء', 'تصبح على خير', 'bye', 'goodbye', 'see you', 'الله معك'])) return { intent: 'farewell' };
-    if (matchesAny(q, ['من انت', 'منو انت', 'شنو انت', 'عرف نفسك', 'who are you', 'what are you'])) return { intent: 'about' };
+    if (matchesAny(q, SMART_PATTERNS.greetings)) return { intent: 'greeting' };
+    if (matchesAny(q, ['شكر', 'مشكور', 'تسلم', 'يعطيك العافية', 'ممنون', 'thanks', 'thank you'])) return { intent: 'thanks' };
+    if (matchesAny(q, ['وداع', 'مع السلامة', 'باي', 'bye', 'goodbye'])) return { intent: 'farewell' };
+    if (matchesAny(q, ['من انت', 'منو انت', 'شنو انت', 'who are you'])) return { intent: 'about' };
+    if (matchesAny(q, ['كم الساعة', 'الوقت', 'time'])) return { intent: 'current_time' };
+    if (matchesAny(q, ['شنو التاريخ', 'التاريخ', 'date'])) return { intent: 'current_date' };
 
-    if (matchesAny(q, ['كم الساعة', 'الوقت', 'الساعة كم', 'time'])) return { intent: 'current_time' };
-    if (matchesAny(q, ['شنو التاريخ', 'التاريخ', 'اي يوم', 'date', 'today date'])) return { intent: 'current_date' };
+    const isAbsent = matchesAny(q, SMART_PATTERNS.absenceWords);
+    const isPresent = matchesAny(q, SMART_PATTERNS.attendanceWords);
+    const isToday = matchesAny(q, SMART_PATTERNS.todayWords);
+    const wantsCount = matchesAny(q, SMART_PATTERNS.countWords);
+    const isCumulative = matchesAny(q, SMART_PATTERNS.cumulativeWords);
+    const isSum = matchesAny(q, SMART_PATTERNS.sumWords);
+    const isLastWeek = matchesAny(q, SMART_PATTERNS.lastWeekWords);
+    const isThisWeek = matchesAny(q, SMART_PATTERNS.thisWeekWords);
+    const isLastMonth = matchesAny(q, SMART_PATTERNS.lastMonthWords);
+    const isThisMonth = matchesAny(q, SMART_PATTERNS.thisMonthWords);
+    const wantsFullRecord = matchesAny(q, ['سجل كامل', 'كل السجل', 'تفاصيل', 'تواريخ', 'report', 'history']);
 
-    const isToday = matchesAny(q, ['اليوم', 'هسة', 'هسه', 'الحين', 'today', 'now']);
-    const isAbsent = matchesAny(q, ['غاب', 'غايب', 'غايبين', 'ما حضر', 'ماحضر', 'ما جا', 'لم يحضر', 'غياب', 'absent']);
-    const isPresent = matchesAny(q, ['حضر', 'حاضر', 'حاضرين', 'دوم', 'دوام', 'يحضر', 'حضوره', 'present']);
-    const wantsCount = matchesAny(q, ['كم', 'عدد', 'كم واحد', 'كم طالب', 'how many', 'count']);
-    const wantsFullRecord = matchesAny(q, ['سجل كامل', 'كل السجل', 'السجل الكامل', 'تفاصيل', 'كل التواريخ', 'تواريخ']);
+    // ============================= 🆕 الأسبوع الماضي / هذا الأسبوع =============================
+    if (isLastWeek) {
+      if (isAbsent) return { intent: 'last_week_absent', groupName: groupMatch };
+      if (isPresent) return { intent: 'last_week_present', groupName: groupMatch };
+      return { intent: 'last_week_present', groupName: groupMatch };
+    }
+    if (isThisWeek) {
+      if (isAbsent) return { intent: 'this_week_absent', groupName: groupMatch };
+      if (isPresent) return { intent: 'this_week_present', groupName: groupMatch };
+      return { intent: 'this_week_present', groupName: groupMatch };
+    }
+    if (isLastMonth) {
+      if (isAbsent) return { intent: 'last_month_absent', groupName: groupMatch };
+      if (isPresent) return { intent: 'last_month_present', groupName: groupMatch };
+      return { intent: 'last_month_present', groupName: groupMatch };
+    }
+    if (isThisMonth) {
+      if (isAbsent) return { intent: 'this_month_absent', groupName: groupMatch };
+      if (isPresent) return { intent: 'this_month_present', groupName: groupMatch };
+      return { intent: 'this_month_present', groupName: groupMatch };
+    }
+
+    // ============================= 🆕 يوم رقم X من الشهر =============================
+    if (dayOfMonthMatch !== undefined && !dateMatch) {
+      if (isAbsent) return { intent: 'day_of_month_absent', dayOfMonth: dayOfMonthMatch, groupName: groupMatch };
+      return { intent: 'day_of_month_present', dayOfMonth: dayOfMonthMatch, groupName: groupMatch };
+    }
+
+    // ============================= 🆕 طالب معين - سجل كامل =============================
+    if (studentMatch) {
+      if (isCumulative || wantsFullRecord) {
+        if (isSum && isAbsent) return { intent: 'student_full_absence', studentName: studentMatch.name };
+        if (isSum && isPresent) return { intent: 'student_full_attendance', studentName: studentMatch.name };
+        if (isAbsent) return { intent: 'student_full_absence', studentName: studentMatch.name };
+        if (isPresent) return { intent: 'student_full_attendance', studentName: studentMatch.name };
+        return { intent: 'student_full_record', studentName: studentMatch.name };
+      }
+      
+      if (isSum) {
+        if (isAbsent) return { intent: 'student_absence_count', studentName: studentMatch.name };
+        if (isPresent) return { intent: 'student_attendance_count', studentName: studentMatch.name };
+        return { intent: 'student_full_record', studentName: studentMatch.name };
+      }
+      
+      if (isAbsent && matchesAny(q, ['كم'])) return { intent: 'student_absence_count', studentName: studentMatch.name };
+      if (isPresent && matchesAny(q, ['كم'])) return { intent: 'student_attendance_count', studentName: studentMatch.name };
+      if (isPresent || isAbsent) return { intent: 'student_attendance', studentName: studentMatch.name };
+      return { intent: 'student_info', studentName: studentMatch.name };
+    }
+
+    // ============================= 🆕 الحضور التراكمي للكروب =============================
+    if (groupMatch && isCumulative) {
+      if (isAbsent) return { intent: 'group_cumulative_absent', groupName: groupMatch };
+      return { intent: 'group_cumulative_present', groupName: groupMatch };
+    }
+
+    // ============================= 🆕 المجموع الكلي =============================
+    if (isCumulative || isSum) {
+      if (isAbsent) {
+        if (isSum && !groupMatch) return { intent: 'total_absence_sum', groupName: groupMatch };
+        return { intent: 'cumulative_absent', groupName: groupMatch };
+      }
+      if (isPresent) {
+        if (isSum && !groupMatch) return { intent: 'total_attendance_sum', groupName: groupMatch };
+        return { intent: 'cumulative_present', groupName: groupMatch };
+      }
+      return { intent: 'general_stats' };
+    }
 
     if (isPresent && isToday) return wantsCount ? { intent: 'count_present_today' } : { intent: 'who_present_today' };
     if (isAbsent && isToday) return wantsCount ? { intent: 'count_absent_today' } : { intent: 'who_absent_today' };
     if (isPresent && dateMatch) return wantsCount ? { intent: 'count_present_date', date: dateMatch } : { intent: 'who_present_date', date: dateMatch };
     if (isAbsent && dateMatch) return wantsCount ? { intent: 'count_absent_date', date: dateMatch } : { intent: 'who_absent_date', date: dateMatch };
 
-    if (studentMatch) {
-      if (wantsFullRecord) return { intent: 'student_full_record', studentName: studentMatch.name };
-      if (isAbsent && matchesAny(q, ['كم مرة', 'كم يوم', 'كم مره', 'كم'])) return { intent: 'student_absence_count', studentName: studentMatch.name };
-      if (isPresent && matchesAny(q, ['كم مرة', 'كم يوم', 'كم مره', 'كم'])) return { intent: 'student_attendance_count', studentName: studentMatch.name };
-      if (isPresent || isAbsent || matchesAny(q, ['حضور', 'سجل', 'نسبة'])) return { intent: 'student_attendance', studentName: studentMatch.name };
-      return { intent: 'student_info', studentName: studentMatch.name };
+    if (q.includes('منو غايب') || q.includes('من الغايبين') || q.includes('الغياب اليوم') || q.includes('جيب الغياب')) {
+      return { intent: 'who_absent_today' };
+    }
+    if (q.includes('منو حاضر') || q.includes('الحضور اليوم') || q.includes('جيب الحضور') || q.includes('منو داوم')) {
+      return { intent: 'who_present_today' };
+    }
+    if (q.includes('شكد غياب') || q.includes('كم غياب') || q.includes('عدد الغياب')) {
+      return { intent: 'count_absent_today' };
+    }
+    if (q.includes('شكد حضور') || q.includes('كم حضور') || q.includes('عدد الحضور')) {
+      return { intent: 'count_present_today' };
+    }
+    if (q.includes('احصائيات') || q.includes('ملخص النظام') || q.includes('وضع الموقع') || q.includes('كلشي')) {
+      return { intent: 'general_stats' };
     }
 
-    const topWords = ['اكثر', 'أكثر', 'افضل', 'أفضل', 'احسن', 'أحسن', 'top', 'best'];
-    const worstWords = ['اسوء', 'أسوء', 'اقل', 'أقل', 'اضعف', 'أضعف', 'worst'];
+    const topWords = ['اكثر', 'أكثر', 'افضل', 'احسن', 'top', 'best'];
+    const worstWords = ['اسوء', 'اقل', 'اضعف', 'worst'];
     if (matchesAny(q, topWords)) {
       if (isAbsent) return { intent: 'top_absent', number };
-      if (isPresent || matchesAny(q, ['انتظام', 'منتظم', 'دوام'])) return { intent: 'top_present', number };
+      if (isPresent || matchesAny(q, ['انتظام', 'منتظم'])) return { intent: 'top_present', number };
     }
     if (matchesAny(q, worstWords)) {
-      if (isPresent || matchesAny(q, ['حضور'])) return { intent: 'worst_students', number };
+      if (isPresent) return { intent: 'worst_students', number };
       return { intent: 'top_absent', number };
     }
-    if (matchesAny(q, ['ترتيب', 'رتب', 'مرتب'])) {
-      if (isAbsent) return { intent: 'top_absent', number };
-      if (isPresent) return { intent: 'top_present', number };
-    }
 
+    if (matchesAny(q, ['ما غاب', 'منتظمين', 'كامل الحضور', 'مثاليين'])) return { intent: 'never_absent' };
+    if (matchesAny(q, ['ما حضر ولا مرة', 'صفر حضور', 'منقطعين'])) return { intent: 'students_with_zero_attendance' };
 
-    if (matchesAny(q, ['ما غاب', 'ماغاب', 'ما غابوا', 'لم يغب', 'منتظمين', 'كامل الحضور', 'حضور كامل', 'ما عندهم غياب', 'طلاب مثاليين', 'الممتازين'])) return { intent: 'never_absent' };
-    if (matchesAny(q, ['ما حضر ولا مرة', 'ماحضر ولا', 'لم يحضر ابدا', 'صفر حضور', 'منقطعين', 'مغايبين'])) return { intent: 'students_with_zero_attendance' };
+    const advancedAbsentMatch = q.match(/(?:غابوا?|غياب)\s*(?:اكثر|اكبر|فوق)\s*(?:من\s*)?(\d+)/);
+    const advancedAbsentLessMatch = q.match(/(?:غابوا?|غياب)\s*(?:اقل|تحت)\s*(?:من\s*)?(\d+)/);
+    const advancedPresentMatch = q.match(/(?:حضروا?|حضور)\s*(?:اكثر|اكبر|فوق)\s*(?:من\s*)?(\d+)/);
+    const advancedPresentLessMatch = q.match(/(?:حضروا?|حضور)\s*(?:اقل|تحت)\s*(?:من\s*)?(\d+)/);
 
-    // 🆕 البحث المتقدم: "طلاب كروب A1 اللي غابوا أكثر من 3 أيام"
-    const advancedAbsentMatch = q.match(/(?:غابوا?|غياب|غايبين)\s*(?:اكثر|أكثر|اكبر|أكبر|فوق|بيش|اعلى|أعلى)\s*(?:من\s*)?(\d+)/);
-    const advancedAbsentLessMatch = q.match(/(?:غابوا?|غياب|غايبين)\s*(?:اقل|أقل|اصغر|أصغر|تحت|دون)\s*(?:من\s*)?(\d+)/);
-    const advancedPresentMatch = q.match(/(?:حضروا?|حضور|حاضرين)\s*(?:اكثر|أكثر|اكبر|أكبر|فوق|بيش|اعلى|أعلى)\s*(?:من\s*)?(\d+)/);
-    const advancedPresentLessMatch = q.match(/(?:حضروا?|حضور|حاضرين)\s*(?:اقل|أقل|اصغر|أصغر|تحت|دون)\s*(?:من\s*)?(\d+)/);
+    if (advancedAbsentMatch) return { intent: 'advanced_search_absent', number: parseInt(advancedAbsentMatch[1]), groupName: groupMatch, studentCode: 'more' };
+    if (advancedAbsentLessMatch) return { intent: 'advanced_search_absent', number: parseInt(advancedAbsentLessMatch[1]), groupName: groupMatch, studentCode: 'less' };
+    if (advancedPresentMatch) return { intent: 'advanced_search_present', number: parseInt(advancedPresentMatch[1]), groupName: groupMatch, studentCode: 'more' };
+    if (advancedPresentLessMatch) return { intent: 'advanced_search_present', number: parseInt(advancedPresentLessMatch[1]), groupName: groupMatch, studentCode: 'less' };
 
-    if (advancedAbsentMatch) {
-      return { intent: 'advanced_search_absent', number: parseInt(advancedAbsentMatch[1]), groupName: groupMatch, studentCode: 'more' };
-    }
-    if (advancedAbsentLessMatch) {
-      return { intent: 'advanced_search_absent', number: parseInt(advancedAbsentLessMatch[1]), groupName: groupMatch, studentCode: 'less' };
-    }
-    if (advancedPresentMatch) {
-      return { intent: 'advanced_search_present', number: parseInt(advancedPresentMatch[1]), groupName: groupMatch, studentCode: 'more' };
-    }
-    if (advancedPresentLessMatch) {
-      return { intent: 'advanced_search_present', number: parseInt(advancedPresentLessMatch[1]), groupName: groupMatch, studentCode: 'less' };
-    }
-    if (matchesAny(q, ['طالب', 'طلاب', 'الطلبة', 'student', 'students'])) {
+    if (matchesAny(q, SMART_PATTERNS.studentWords)) {
       if (wantsCount) return { intent: 'students_count' };
-      if (matchesAny(q, ['اسماء', 'أسماء', 'قائمة', 'عرض', 'list'])) return { intent: 'students_list' };
+      if (matchesAny(q, ['اسماء', 'قائمة', 'list'])) return { intent: 'students_list' };
       if (groupMatch) return { intent: 'students_by_group', groupName: groupMatch };
       return { intent: 'students_count' };
     }
 
-    if (matchesAny(q, ['كروب', 'كروبات', 'مجموعة', 'مجاميع', 'شعبة', 'شعب', 'group', 'groups'])) {
+    if (matchesAny(q, SMART_PATTERNS.groupWords)) {
       if (groupMatch) {
         if (isAbsent && isToday) return { intent: 'specific_group_absent', groupName: groupMatch };
         if (isPresent && isToday) return { intent: 'specific_group_present', groupName: groupMatch };
@@ -700,62 +763,58 @@ export const ChatBot: React.FC<ChatBotProps> = ({
       return { intent: 'group_info', groupName: groupMatch };
     }
 
-    if (matchesAny(q, ['يوم', 'أيام', 'ايام', 'جلسة', 'جلسات', 'محاضرة', 'محاضرات', 'تاريخ', 'session', 'lecture'])) {
+    if (matchesAny(q, ['يوم', 'جلسة', 'جلسات', 'محاضرة', 'session'])) {
       if (matchesAny(q, ['اخر', 'آخر', 'last'])) return { intent: 'last_session' };
-      if (matchesAny(q, ['اول', 'أول', 'first'])) return { intent: 'first_session' };
+      if (matchesAny(q, ['اول', 'first'])) return { intent: 'first_session' };
       if (isToday) return { intent: 'session_today' };
       if (wantsCount) return { intent: 'session_count' };
       return { intent: 'session_list' };
     }
 
-    if (matchesAny(q, ['نسبة', 'معدل', 'rate', 'percentage', '%'])) {
+    if (matchesAny(q, ['نسبة', 'معدل', 'rate', '%'])) {
       if (isAbsent) return { intent: 'absence_rate' };
       return { intent: 'attendance_rate' };
     }
-    if (matchesAny(q, ['متوسط', 'average', 'mean'])) return { intent: 'average_attendance' };
+    if (matchesAny(q, ['متوسط', 'average'])) return { intent: 'average_attendance' };
 
-    if (matchesAny(q, ['كلية', 'كليات', 'قسم', 'اقسام', 'college', 'department'])) {
+    if (matchesAny(q, ['كلية', 'كليات', 'قسم', 'college'])) {
       if (wantsCount) return { intent: 'colleges_count' };
       return { intent: 'colleges_list' };
     }
-    if (matchesAny(q, ['مرحلة', 'مراحل', 'صف', 'صفوف', 'سنة', 'stage', 'year'])) {
+    if (matchesAny(q, ['مرحلة', 'مراحل', 'stage'])) {
       if (wantsCount) return { intent: 'stages_count' };
       return { intent: 'stages_list' };
     }
 
-    if (matchesAny(q, ['تدريسي', 'تدريسيين', 'استاذ', 'أستاذ', 'اساتذة', 'معلم', 'معلمين', 'دكتور', 'دكاترة', 'مدرس', 'teacher', 'teachers'])) {
+    if (matchesAny(q, ['تدريسي', 'استاذ', 'دكتور', 'مدرس', 'teacher'])) {
       if (wantsCount) return { intent: 'teachers_count' };
       if (matchesAny(q, ['قائمة', 'اسماء', 'list'])) return { intent: 'teachers_list' };
       return { intent: 'teachers_info' };
     }
 
-    if (matchesAny(q, ['تصدير', 'صدر', 'حمل', 'تحميل', 'اكسل', 'excel', 'export', 'download', 'pdf', 'طباعة'])) return { intent: 'how_to_export' };
+    if (matchesAny(q, ['تصدير', 'صدر', 'حمل', 'اكسل', 'excel', 'export'])) return { intent: 'how_to_export' };
     if (matchesAny(q, ['سجل', 'سجلات', 'records'])) {
       if (wantsCount) return { intent: 'records_count' };
       return { intent: 'records_list' };
     }
 
-    if (matchesAny(q, ['شلون', 'كيف', 'طريقة', 'how', 'how to'])) {
-      if (matchesAny(q, ['اضيف', 'أضيف', 'اضافة', 'إضافة', 'add', 'create'])) {
-        if (matchesAny(q, ['طالب', 'طلاب'])) return { intent: 'how_to_add_student' };
-        if (matchesAny(q, ['كلية', 'قسم'])) return { intent: 'how_to_add_college' };
-        if (matchesAny(q, ['تدريسي', 'استاذ', 'معلم'])) return { intent: 'how_to_add_teacher' };
-        if (matchesAny(q, ['مرحلة', 'صف'])) return { intent: 'how_to_add_stage' };
+    if (matchesAny(q, SMART_PATTERNS.helpWords)) {
+      if (matchesAny(q, ['اضيف', 'اضافة', 'add'])) {
+        if (matchesAny(q, ['طالب'])) return { intent: 'how_to_add_student' };
+        if (matchesAny(q, ['كلية'])) return { intent: 'how_to_add_college' };
+        if (matchesAny(q, ['تدريسي', 'استاذ'])) return { intent: 'how_to_add_teacher' };
+        if (matchesAny(q, ['مرحلة'])) return { intent: 'how_to_add_stage' };
       }
-      if (matchesAny(q, ['سجل حضور', 'تسجيل', 'attendance'])) return { intent: 'how_to_take_attendance' };
-      if (matchesAny(q, ['صدر', 'تصدير', 'حمل', 'export'])) return { intent: 'how_to_export' };
-      if (matchesAny(q, ['احذف', 'حذف', 'delete'])) return { intent: 'how_to_delete' };
+      if (matchesAny(q, ['تسجيل', 'attendance'])) return { intent: 'how_to_take_attendance' };
+      if (matchesAny(q, ['صدر', 'تصدير', 'export'])) return { intent: 'how_to_export' };
+      if (matchesAny(q, ['حذف', 'delete'])) return { intent: 'how_to_delete' };
       if (matchesAny(q, ['دخول', 'login'])) return { intent: 'how_to_login' };
       return { intent: 'help' };
     }
 
-    if (matchesAny(q, ['احصائ', 'إحصائ', 'ملخص', 'تقرير', 'وضع', 'حالة', 'كل شي', 'كلشي', 'overview', 'summary', 'stats'])) return { intent: 'general_stats' };
-    if (matchesAny(q, ['ساعد', 'مساعدة', 'help', 'تكدر تساعدني', 'شنو اكدر اسالك'])) return { intent: 'help' };
-
     return { intent: 'unknown' };
-  }, [matchesAny, findStudentInQuery, findGroupInQuery, findDateInQuery]);
-
-  // ============================================================
+  }, [matchesAny, findStudentInQuery, findGroupInQuery, findDateInQuery, findDayOfMonthInQuery, SMART_PATTERNS]);
+    // ============================================================
   // 🎯 معالج الـ Intents
   // ============================================================
   const handleIntent = useCallback((parsed: ParsedQuery, originalQuery: string): string => {
@@ -767,22 +826,9 @@ export const ChatBot: React.FC<ChatBotProps> = ({
     }
     if (parsed.intent === 'thanks') return `العفو! 😊\nأي وقت تحتاج، أنا موجود!`;
     if (parsed.intent === 'farewell') return `مع السلامة دكتور! 👋\nبالتوفيق!`;
-    if (parsed.intent === 'about') {
-      return (
-        `أنا المساعد الذكي للنظام 🤖\n\n` +
-        (isAdmin
-          ? '👑 أنت أدمن، معاك صلاحيات كاملة على كل شي بالنظام.\nأكدر أساعدك في إدارة الكليات، التدريسيين، الطلاب، الحضور، والإحصائيات.'
-          : '👨‍🏫 أنت تدريسي، أكدر أساعدك في متابعة طلابك، حضورهم، غيابهم، وإحصائياتهم.') +
-        `\n\nاسألني أي شي وراح أساعدك! ✨`
-      );
-    }
-
-    if (parsed.intent === 'current_time') {
-      return `🕐 الوقت الحالي:\n${formatArabicTime()}\n\n📅 ${formatArabicDate()}`;
-    }
-    if (parsed.intent === 'current_date') {
-      return `📅 التاريخ:\n${formatArabicDate()}\n\n🕐 الوقت: ${formatArabicTime()}`;
-    }
+    if (parsed.intent === 'about') return `أنا المساعد الذكي 🤖\nأقدر أساعدك بكل شي يخص الحضور والغياب.`;
+    if (parsed.intent === 'current_time') return `🕐 الوقت:\n${formatArabicTime()}\n\n📅 ${formatArabicDate()}`;
+    if (parsed.intent === 'current_date') return `📅 التاريخ:\n${formatArabicDate()}\n\n🕐 ${formatArabicTime()}`;
 
     if (!isAdmin) {
       const restrictedIntents: Intent[] = [
@@ -791,124 +837,440 @@ export const ChatBot: React.FC<ChatBotProps> = ({
         'how_to_add_teacher', 'how_to_add_stage', 'how_to_delete',
       ];
       if (restrictedIntents.includes(parsed.intent)) {
-        return (
-          `🚫 معذرة دكتور، هذي العملية صلاحيات الأدمن فقط.\n\n` +
-          `✅ أنت تكدر تسأل عن:\n• طلابك وحضورهم\n• الغياب والإحصائيات\n• تصدير السجلات\n\n` +
-          `اكتب "مساعدة" للقائمة الكاملة`
-        );
+        return `🚫 صلاحيات الأدمن فقط دكتور.`;
       }
     }
 
-    // ===== الحضور اليوم =====
+    // ===== سجل الطالب الكامل (حضور فقط) =====
+    if (parsed.intent === 'student_full_attendance') {
+      const student = allStudents.find(s => s.name === parsed.studentName);
+      if (!student) return `🔍 ما لكيت الطالب`;
+      
+      const studentRecords = allRecords.filter(r => r.studentId === student.id);
+      const attendedSessionIds = new Set(studentRecords.map(r => r.sessionId));
+      const attendedSessions = allSessions
+        .filter(s => attendedSessionIds.has(s.id))
+        .sort((a, b) => normalizeDate(b.date).localeCompare(normalizeDate(a.date)));
+      
+      if (attendedSessions.length === 0) return `❌ ${student.name}\nما حضر ولا يوم من ${allSessions.length} يوم`;
+      
+      let msg = `✅ كل أيام حضور - ${student.name}\n`;
+      msg += `🔢 ${student.code}${student.group ? ` | 👥 ${student.group}` : ''}\n${'─'.repeat(30)}\n\n`;
+      
+      attendedSessions.forEach((session, i) => {
+        const record = studentRecords.find(r => r.sessionId === session.id);
+        msg += `${i + 1}. ✅ ${formatArabicDate(session.date)}\n`;
+        if (record) msg += `   ⏰ ${record.time}\n`;
+        msg += `\n`;
+      });
+      
+      const pct = allSessions.length > 0 ? ((attendedSessions.length / allSessions.length) * 100).toFixed(1) : '0';
+      msg += `${'─'.repeat(30)}\n📊 الإجمالي: حضر ${attendedSessions.length}/${allSessions.length} (${pct}%)`;
+      return msg;
+    }
+
+    // ===== سجل الطالب الكامل (غياب فقط) =====
+    if (parsed.intent === 'student_full_absence') {
+      const student = allStudents.find(s => s.name === parsed.studentName);
+      if (!student) return `🔍 ما لكيت الطالب`;
+      
+      const studentRecords = allRecords.filter(r => r.studentId === student.id);
+      const attendedSessionIds = new Set(studentRecords.map(r => r.sessionId));
+      const absentSessions = allSessions
+        .filter(s => !attendedSessionIds.has(s.id))
+        .sort((a, b) => normalizeDate(b.date).localeCompare(normalizeDate(a.date)));
+      
+      if (absentSessions.length === 0) return `🌟 ممتاز! ${student.name}\nما غاب ولا يوم!`;
+      
+      let msg = `❌ كل أيام غياب - ${student.name}\n`;
+      msg += `🔢 ${student.code}${student.group ? ` | 👥 ${student.group}` : ''}\n${'─'.repeat(30)}\n\n`;
+      
+      absentSessions.forEach((session, i) => {
+        msg += `${i + 1}. ❌ ${formatArabicDate(session.date)}\n\n`;
+      });
+      
+      const pct = allSessions.length > 0 ? ((absentSessions.length / allSessions.length) * 100).toFixed(1) : '0';
+      msg += `${'─'.repeat(30)}\n📊 الإجمالي: غاب ${absentSessions.length}/${allSessions.length} (${pct}%)`;
+      return msg;
+    }
+
+    // ===== الكروب التراكمي - حضور =====
+    if (parsed.intent === 'group_cumulative_present' && parsed.groupName) {
+      if (!currentStageId) return needStageMessage();
+      if (sessions.length === 0) return `📅 ما عدنا أيام بعد`;
+      
+      const groupStudents = students.filter(s => s.group === parsed.groupName);
+      if (groupStudents.length === 0) return `🔍 ما عدنا كروب ${parsed.groupName}`;
+      
+      const studentsAttendance = groupStudents.map(s => {
+        const attended = new Set(records.filter(r => r.studentId === s.id).map(r => r.sessionId)).size;
+        return { student: s, attended };
+      }).sort((a, b) => b.attended - a.attended);
+      
+      let msg = `📊 سجل حضور كروب ${parsed.groupName} - تراكمي\n`;
+      msg += `📅 من ${sessions.length} يوم\n${getCurrentDateTimeHeader()}\n${'─'.repeat(30)}\n\n`;
+      
+      studentsAttendance.forEach((item, i) => {
+        const pct = ((item.attended / sessions.length) * 100).toFixed(0);
+        const icon = parseFloat(pct) >= 75 ? '✅' : parseFloat(pct) >= 50 ? '⚠️' : '🚨';
+        msg += `${i + 1}. ${icon} ${item.student.name}\n`;
+        msg += `   🔢 ${item.student.code} | 📈 ${item.attended}/${sessions.length} (${pct}%)\n\n`;
+      });
+      
+      const totalAttendance = studentsAttendance.reduce((sum, item) => sum + item.attended, 0);
+      const possible = groupStudents.length * sessions.length;
+      const groupPct = possible > 0 ? ((totalAttendance / possible) * 100).toFixed(1) : '0';
+      msg += `${'─'.repeat(30)}\n📊 إجمالي حضور الكروب: ${totalAttendance}/${possible} (${groupPct}%)`;
+      return msg;
+    }
+
+    // ===== الكروب التراكمي - غياب =====
+    if (parsed.intent === 'group_cumulative_absent' && parsed.groupName) {
+      if (!currentStageId) return needStageMessage();
+      if (sessions.length === 0) return `📅 ما عدنا أيام بعد`;
+      
+      const groupStudents = students.filter(s => s.group === parsed.groupName);
+      if (groupStudents.length === 0) return `🔍 ما عدنا كروب ${parsed.groupName}`;
+      
+      const studentsAbsence = groupStudents.map(s => {
+        const attended = new Set(records.filter(r => r.studentId === s.id).map(r => r.sessionId)).size;
+        return { student: s, absent: sessions.length - attended };
+      }).sort((a, b) => b.absent - a.absent);
+      
+      let msg = `📊 سجل غياب كروب ${parsed.groupName} - تراكمي\n`;
+      msg += `📅 من ${sessions.length} يوم\n${getCurrentDateTimeHeader()}\n${'─'.repeat(30)}\n\n`;
+      
+      studentsAbsence.forEach((item, i) => {
+        const pct = ((item.absent / sessions.length) * 100).toFixed(0);
+        const icon = parseFloat(pct) >= 50 ? '🚨' : parseFloat(pct) >= 25 ? '⚠️' : '❌';
+        msg += `${i + 1}. ${icon} ${item.student.name}\n`;
+        msg += `   🔢 ${item.student.code} | 📉 ${item.absent}/${sessions.length} (${pct}%)\n\n`;
+      });
+      
+      const totalAbsence = studentsAbsence.reduce((sum, item) => sum + item.absent, 0);
+      const possible = groupStudents.length * sessions.length;
+      const groupPct = possible > 0 ? ((totalAbsence / possible) * 100).toFixed(1) : '0';
+      msg += `${'─'.repeat(30)}\n📉 إجمالي غياب الكروب: ${totalAbsence}/${possible} (${groupPct}%)`;
+      return msg;
+    }
+
+    // ===== المجموع الكلي - حضور =====
+    if (parsed.intent === 'total_attendance_sum') {
+      if (!currentStageId) return needStageMessage();
+      if (sessions.length === 0) return `📅 ما عدنا أيام بعد`;
+      
+      const totalAttendance = records.length;
+      const possible = students.length * sessions.length;
+      const pct = possible > 0 ? ((totalAttendance / possible) * 100).toFixed(2) : '0';
+      const groups = Array.from(new Set(students.map(s => s.group).filter(Boolean))) as string[];
+      
+      let msg = `📊 المجموع الكلي للحضور\n${getCurrentDateTimeHeader()}\n${'─'.repeat(30)}\n\n`;
+      msg += `✅ إجمالي الحضور: ${totalAttendance}\n`;
+      msg += `📅 عدد الأيام: ${sessions.length}\n`;
+      msg += `👥 عدد الطلاب: ${students.length}\n`;
+      msg += `📈 الحد الأقصى: ${possible}\n`;
+      msg += `📊 النسبة: ${pct}%\n\n`;
+      
+      if (groups.length > 0) {
+        msg += `🏷️ تفصيل حسب الكروبات:\n`;
+        groups.sort().forEach(g => {
+          const gStudents = students.filter(s => s.group === g);
+          const gAttended = records.filter(r => r.studentGroup === g).length;
+          const gPossible = gStudents.length * sessions.length;
+          const gPct = gPossible > 0 ? ((gAttended / gPossible) * 100).toFixed(1) : '0';
+          msg += `   • ${g}: ${gAttended}/${gPossible} (${gPct}%)\n`;
+        });
+      }
+      return msg;
+    }
+
+    // ===== المجموع الكلي - غياب =====
+    if (parsed.intent === 'total_absence_sum') {
+      if (!currentStageId) return needStageMessage();
+      if (sessions.length === 0) return `📅 ما عدنا أيام بعد`;
+      
+      const totalAttendance = records.length;
+      const possible = students.length * sessions.length;
+      const totalAbsence = possible - totalAttendance;
+      const pct = possible > 0 ? ((totalAbsence / possible) * 100).toFixed(2) : '0';
+      const groups = Array.from(new Set(students.map(s => s.group).filter(Boolean))) as string[];
+      
+      let msg = `📊 المجموع الكلي للغياب\n${getCurrentDateTimeHeader()}\n${'─'.repeat(30)}\n\n`;
+      msg += `❌ إجمالي الغياب: ${totalAbsence}\n`;
+      msg += `📅 عدد الأيام: ${sessions.length}\n`;
+      msg += `👥 عدد الطلاب: ${students.length}\n`;
+      msg += `📉 النسبة: ${pct}%\n\n`;
+      
+      if (groups.length > 0) {
+        msg += `🏷️ تفصيل حسب الكروبات:\n`;
+        groups.sort().forEach(g => {
+          const gStudents = students.filter(s => s.group === g);
+          const gAttended = records.filter(r => r.studentGroup === g).length;
+          const gPossible = gStudents.length * sessions.length;
+          const gAbsent = gPossible - gAttended;
+          const gPct = gPossible > 0 ? ((gAbsent / gPossible) * 100).toFixed(1) : '0';
+          msg += `   • ${g}: ${gAbsent}/${gPossible} (${gPct}%)\n`;
+        });
+      }
+      return msg;
+    }
+
+    // ===== الفترات الزمنية (أسبوع/شهر) =====
+    const handlePeriodQuery = (period: 'this_week' | 'last_week' | 'this_month' | 'last_month', isAbsentQuery: boolean, groupFilter?: string): string => {
+      if (!currentStageId) return needStageMessage();
+      
+      const range = getDateRange(period);
+      const periodSessions = findSessionsInRange(range.start, range.end);
+      
+      const periodNames: { [key: string]: string } = {
+        'this_week': 'هذا الأسبوع',
+        'last_week': 'الأسبوع الماضي',
+        'this_month': 'هذا الشهر',
+        'last_month': 'الشهر الماضي',
+      };
+      const periodName = periodNames[period];
+      
+      if (periodSessions.length === 0) {
+        return `📅 ${periodName}\n\n❗ ما عدنا جلسات\n📌 من ${formatArabicDate(range.start)}\n📌 إلى ${formatArabicDate(range.end)}`;
+      }
+      
+      let targetStudents = groupFilter ? students.filter(s => s.group === groupFilter) : students;
+      if (groupFilter && targetStudents.length === 0) return `🔍 ما عدنا كروب ${groupFilter}`;
+      
+      const periodSessionIds = new Set(periodSessions.map(s => s.id));
+      const periodRecords = records.filter(r => periodSessionIds.has(r.sessionId));
+      
+      const studentsStats = targetStudents.map(s => {
+        const attended = new Set(periodRecords.filter(r => r.studentId === s.id).map(r => r.sessionId)).size;
+        return { student: s, attended, absent: periodSessions.length - attended };
+      });
+      
+      const groupText = groupFilter ? ` - كروب ${groupFilter}` : '';
+      let msg = `📅 ${isAbsentQuery ? 'غياب' : 'حضور'} ${periodName}${groupText}\n`;
+      msg += `📌 ${formatArabicDate(range.start)} → ${formatArabicDate(range.end)}\n`;
+      msg += `📋 الجلسات: ${periodSessions.length}\n${'─'.repeat(30)}\n\n`;
+      
+      if (isAbsentQuery) {
+        const absentees = studentsStats.filter(s => s.absent > 0).sort((a, b) => b.absent - a.absent);
+        if (absentees.length === 0) return msg + `🎉 كل الطلاب حضروا!`;
+        
+        absentees.slice(0, 50).forEach((item, i) => {
+          const pct = ((item.absent / periodSessions.length) * 100).toFixed(0);
+          msg += `${i + 1}. ❌ ${item.student.name}`;
+          if (item.student.group) msg += ` (${item.student.group})`;
+          msg += `\n   🔢 ${item.student.code} | 📉 ${item.absent}/${periodSessions.length} (${pct}%)\n\n`;
+        });
+        if (absentees.length > 50) msg += `... و ${absentees.length - 50} آخرين\n`;
+      } else {
+        const presentees = studentsStats.filter(s => s.attended > 0).sort((a, b) => b.attended - a.attended);
+        if (presentees.length === 0) return msg + `❌ ما حضر ولا طالب`;
+        
+        presentees.slice(0, 50).forEach((item, i) => {
+          const pct = ((item.attended / periodSessions.length) * 100).toFixed(0);
+          const icon = parseFloat(pct) >= 75 ? '✅' : parseFloat(pct) >= 50 ? '⚠️' : '🚨';
+          msg += `${i + 1}. ${icon} ${item.student.name}`;
+          if (item.student.group) msg += ` (${item.student.group})`;
+          msg += `\n   🔢 ${item.student.code} | 📈 ${item.attended}/${periodSessions.length} (${pct}%)\n\n`;
+        });
+        if (presentees.length > 50) msg += `... و ${presentees.length - 50} آخرين\n`;
+      }
+      return msg;
+    };
+
+    if (parsed.intent === 'this_week_present') return handlePeriodQuery('this_week', false, parsed.groupName);
+    if (parsed.intent === 'this_week_absent') return handlePeriodQuery('this_week', true, parsed.groupName);
+    if (parsed.intent === 'last_week_present') return handlePeriodQuery('last_week', false, parsed.groupName);
+    if (parsed.intent === 'last_week_absent') return handlePeriodQuery('last_week', true, parsed.groupName);
+    if (parsed.intent === 'this_month_present') return handlePeriodQuery('this_month', false, parsed.groupName);
+    if (parsed.intent === 'this_month_absent') return handlePeriodQuery('this_month', true, parsed.groupName);
+    if (parsed.intent === 'last_month_present') return handlePeriodQuery('last_month', false, parsed.groupName);
+    if (parsed.intent === 'last_month_absent') return handlePeriodQuery('last_month', true, parsed.groupName);
+
+    // ===== يوم رقم X =====
+    if ((parsed.intent === 'day_of_month_present' || parsed.intent === 'day_of_month_absent') && parsed.dayOfMonth !== undefined) {
+      if (!currentStageId) return needStageMessage();
+      
+      const targetDay = parsed.dayOfMonth;
+      const matchingSessions = sessions.filter(s => {
+        const normalized = normalizeDate(s.date);
+        const d = new Date(normalized);
+        if (isNaN(d.getTime())) return false;
+        return d.getDate() === targetDay;
+      }).sort((a, b) => normalizeDate(b.date).localeCompare(normalizeDate(a.date)));
+      
+      if (matchingSessions.length === 0) return `📅 ما عدنا جلسة في يوم ${targetDay} من الشهر`;
+      
+      const session = matchingSessions[0];
+      const isAbsentQuery = parsed.intent === 'day_of_month_absent';
+      const presentIds = new Set(records.filter(r => r.sessionId === session.id).map(r => r.studentId));
+      
+      let targetStudents = parsed.groupName ? students.filter(s => s.group === parsed.groupName) : students;
+      if (parsed.groupName && targetStudents.length === 0) return `🔍 ما عدنا كروب ${parsed.groupName}`;
+      
+      const dateFormatted = formatArabicDate(session.date);
+      const groupText = parsed.groupName ? ` - كروب ${parsed.groupName}` : '';
+      
+      if (isAbsentQuery) {
+        const absent = targetStudents.filter(s => !presentIds.has(s.id));
+        if (absent.length === 0) return `🎉 ${dateFormatted}${groupText}\n\nكل الطلاب حضروا!`;
+        
+        let msg = `❌ الغائبين يوم ${targetDay} - ${dateFormatted}${groupText}\n`;
+        msg += `📋 ${session.name}\nالعدد: ${absent.length}/${targetStudents.length}\n${'─'.repeat(30)}\n\n`;
+        absent.sort((a, b) => a.name.localeCompare(b.name, 'ar')).forEach((s, i) => {
+          msg += `${i + 1}. ❌ ${s.name}${s.group ? ` (${s.group})` : ''}\n`;
+        });
+        return msg;
+      } else {
+        const present = targetStudents.filter(s => presentIds.has(s.id));
+        if (present.length === 0) return `❌ ${dateFormatted}${groupText}\n\nما حضر ولا طالب`;
+        
+        let msg = `✅ الحاضرين يوم ${targetDay} - ${dateFormatted}${groupText}\n`;
+        msg += `📋 ${session.name}\nالعدد: ${present.length}/${targetStudents.length}\n${'─'.repeat(30)}\n\n`;
+        present.sort((a, b) => a.name.localeCompare(b.name, 'ar')).forEach((s, i) => {
+          const record = records.find(r => r.sessionId === session.id && r.studentId === s.id);
+          msg += `${i + 1}. ✅ ${s.name}${s.group ? ` (${s.group})` : ''}\n`;
+          if (record) msg += `   ⏰ ${record.time}\n`;
+        });
+        return msg;
+      }
+    }
+
+    // ===== الحضور التراكمي العام =====
+    if (parsed.intent === 'cumulative_present') {
+      if (!currentStageId) return needStageMessage();
+      if (sessions.length === 0) return `📅 ما عدنا أيام بعد`;
+      
+      const groupFilter = parsed.groupName;
+      let targetStudents = groupFilter ? students.filter(s => s.group === groupFilter) : students;
+      if (groupFilter && targetStudents.length === 0) return `🔍 ما عدنا كروب ${groupFilter}`;
+      
+      const studentsAttendance = targetStudents.map(s => {
+        const attended = new Set(records.filter(r => r.studentId === s.id).map(r => r.sessionId)).size;
+        return { student: s, attended };
+      }).filter(item => item.attended > 0).sort((a, b) => b.attended - a.attended);
+      
+      if (studentsAttendance.length === 0) return `❌ ما حضر ولا طالب ولا مرة`;
+      
+      const groupText = groupFilter ? ` - كروب ${groupFilter}` : '';
+      let msg = `📊 سجل الحضور التراكمي${groupText}\n📅 من ${sessions.length} يوم\n${getCurrentDateTimeHeader()}\n${'─'.repeat(30)}\n\n`;
+      
+      const sortedAlpha = [...studentsAttendance].sort((a, b) => a.student.name.localeCompare(b.student.name, 'ar'));
+      
+      sortedAlpha.slice(0, 50).forEach((item, i) => {
+        const pct = ((item.attended / sessions.length) * 100).toFixed(0);
+        const icon = parseFloat(pct) >= 75 ? '✅' : parseFloat(pct) >= 50 ? '⚠️' : '🚨';
+        msg += `${i + 1}. ${icon} ${item.student.name}`;
+        if (item.student.group) msg += ` (${item.student.group})`;
+        msg += `\n   🔢 ${item.student.code} | 📈 ${item.attended}/${sessions.length} (${pct}%)\n\n`;
+      });
+      
+      if (sortedAlpha.length > 50) msg += `... و ${sortedAlpha.length - 50} آخرين\n\n`;
+      msg += `${'─'.repeat(30)}\n📊 الإجمالي: ${sortedAlpha.length} من ${targetStudents.length}`;
+      return msg;
+    }
+
+    if (parsed.intent === 'cumulative_absent') {
+      if (!currentStageId) return needStageMessage();
+      if (sessions.length === 0) return `📅 ما عدنا أيام بعد`;
+      
+      const groupFilter = parsed.groupName;
+      let targetStudents = groupFilter ? students.filter(s => s.group === groupFilter) : students;
+      if (groupFilter && targetStudents.length === 0) return `🔍 ما عدنا كروب ${groupFilter}`;
+      
+      const studentsAbsence = targetStudents.map(s => {
+        const attended = new Set(records.filter(r => r.studentId === s.id).map(r => r.sessionId)).size;
+        return { student: s, absent: sessions.length - attended };
+      }).filter(item => item.absent > 0).sort((a, b) => b.absent - a.absent);
+      
+      if (studentsAbsence.length === 0) return `🎉 ممتاز! ما عدنا طالب غاب`;
+      
+      const groupText = groupFilter ? ` - كروب ${groupFilter}` : '';
+      let msg = `📊 سجل الغياب التراكمي${groupText}\n📅 من ${sessions.length} يوم\n${getCurrentDateTimeHeader()}\n${'─'.repeat(30)}\n\n`;
+      
+      studentsAbsence.slice(0, 50).forEach((item, i) => {
+        const pct = ((item.absent / sessions.length) * 100).toFixed(0);
+        const icon = parseFloat(pct) >= 50 ? '🚨' : parseFloat(pct) >= 25 ? '⚠️' : '❌';
+        msg += `${i + 1}. ${icon} ${item.student.name}`;
+        if (item.student.group) msg += ` (${item.student.group})`;
+        msg += `\n   🔢 ${item.student.code} | 📉 ${item.absent}/${sessions.length} (${pct}%)\n\n`;
+      });
+      
+      if (studentsAbsence.length > 50) msg += `... و ${studentsAbsence.length - 50} آخرين\n\n`;
+      msg += `${'─'.repeat(30)}\n📊 الإجمالي: ${studentsAbsence.length} من ${targetStudents.length}`;
+      return msg;
+    }
+
+    // ===== حضور وغياب اليوم =====
     if (parsed.intent === 'who_present_today' || parsed.intent === 'count_present_today') {
       if (!currentStageId) return needStageMessage();
       const todaySession = getTodaySession();
-      if (!todaySession) {
-        return (
-          `📅 ${formatArabicDate()}\n\n` +
-          `❗ ما عدنا جلسة مسجلة لليوم بعد.\n\n` +
-          `💡 لازم تسجل جلسة جديدة أولاً من تبويب "السجلات"`
-        );
-      }
+      if (!todaySession) return `📅 ${formatArabicDate()}\n\n❗ ما عدنا جلسة لليوم بعد`;
+      
       const presentRecords = records.filter(r => r.sessionId === todaySession.id);
 
       if (parsed.intent === 'count_present_today') {
         const total = students.length;
         const present = presentRecords.length;
         const percent = total > 0 ? ((present / total) * 100).toFixed(1) : '0';
-        return (
-          `📊 إحصائيات حضور اليوم\n` +
-          `${getCurrentDateTimeHeader()}\n` +
-          `📋 الجلسة: ${todaySession.name}\n` +
-          `${'─'.repeat(25)}\n\n` +
-          `✅ الحاضرين: ${present} طالب\n` +
-          `❌ الغائبين: ${total - present} طالب\n` +
-          `👥 إجمالي الطلاب: ${total}\n` +
-          `📈 نسبة الحضور: ${percent}%`
-        );
+        return `📊 إحصائيات الحضور اليوم\n${getCurrentDateTimeHeader()}\n📋 ${todaySession.name}\n${'─'.repeat(25)}\n\n✅ الحاضرين: ${present}\n❌ الغائبين: ${total - present}\n👥 الإجمالي: ${total}\n📈 النسبة: ${percent}%`;
       }
 
-      if (presentRecords.length === 0) {
-        return `📅 ${formatArabicDate()}\n📋 ${todaySession.name}\n\n😕 ما حضر ولا طالب لحد الحين`;
-      }
+      if (presentRecords.length === 0) return `📅 ${formatArabicDate()}\n📋 ${todaySession.name}\n\n😕 ما حضر ولا طالب لحد الحين`;
 
-      let msg = `✅ الحاضرين اليوم (${presentRecords.length} طالب)\n`;
-      msg += `${getCurrentDateTimeHeader()}\n`;
-      msg += `📋 ${todaySession.name}\n`;
-      msg += `${'─'.repeat(25)}\n\n`;
-      
+      let msg = `✅ الحاضرين اليوم (${presentRecords.length} طالب)\n${getCurrentDateTimeHeader()}\n📋 ${todaySession.name}\n${'─'.repeat(25)}\n\n`;
       const sorted = [...presentRecords].sort((a, b) => a.studentName.localeCompare(b.studentName, 'ar'));
       sorted.slice(0, 30).forEach((r, i) => {
         msg += `${i + 1}. ✅ ${r.studentName}`;
         if (r.studentGroup) msg += ` (${r.studentGroup})`;
         msg += `\n   🔢 ${r.studentCode} | ⏰ ${r.time}\n\n`;
       });
-      if (sorted.length > 30) msg += `... و ${sorted.length - 30} طالب آخرين`;
+      if (sorted.length > 30) msg += `... و ${sorted.length - 30} آخرين`;
       return msg;
     }
 
-    // ===== الغياب اليوم =====
     if (parsed.intent === 'who_absent_today' || parsed.intent === 'count_absent_today') {
       if (!currentStageId) return needStageMessage();
       const todaySession = getTodaySession();
-      if (!todaySession) {
-        return `📅 ${formatArabicDate()}\n\n❗ ما عدنا جلسة مسجلة لليوم بعد`;
-      }
+      if (!todaySession) return `📅 ${formatArabicDate()}\n\n❗ ما عدنا جلسة لليوم بعد`;
 
       const presentIds = new Set(records.filter(r => r.sessionId === todaySession.id).map(r => r.studentId));
       const absentStudents = students.filter(s => !presentIds.has(s.id));
 
       if (parsed.intent === 'count_absent_today') {
         const percent = students.length > 0 ? ((absentStudents.length / students.length) * 100).toFixed(1) : '0';
-        return (
-          `📊 إحصائيات الغياب اليوم\n` +
-          `${getCurrentDateTimeHeader()}\n` +
-          `📋 ${todaySession.name}\n` +
-          `${'─'.repeat(25)}\n\n` +
-          `❌ عدد الغائبين: ${absentStudents.length} طالب\n` +
-          `✅ الحاضرين: ${students.length - absentStudents.length} طالب\n` +
-          `📉 نسبة الغياب: ${percent}%`
-        );
+        return `📊 إحصائيات الغياب اليوم\n${getCurrentDateTimeHeader()}\n📋 ${todaySession.name}\n${'─'.repeat(25)}\n\n❌ الغائبين: ${absentStudents.length}\n✅ الحاضرين: ${students.length - absentStudents.length}\n📉 نسبة الغياب: ${percent}%`;
       }
 
-      if (absentStudents.length === 0) {
-        return `🎉 ممتاز!\n${getCurrentDateTimeHeader()}\n📋 ${todaySession.name}\n\nكل الطلاب حاضرين اليوم! ✅`;
-      }
+      if (absentStudents.length === 0) return `🎉 ممتاز!\n${getCurrentDateTimeHeader()}\n📋 ${todaySession.name}\n\nكل الطلاب حاضرين! ✅`;
 
-      let msg = `❌ الغائبين اليوم (${absentStudents.length} طالب)\n`;
-      msg += `${getCurrentDateTimeHeader()}\n`;
-      msg += `📋 ${todaySession.name}\n`;
-      msg += `${'─'.repeat(25)}\n\n`;
-      
+      let msg = `❌ الغائبين اليوم (${absentStudents.length} طالب)\n${getCurrentDateTimeHeader()}\n📋 ${todaySession.name}\n${'─'.repeat(25)}\n\n`;
       const sorted = [...absentStudents].sort((a, b) => a.name.localeCompare(b.name, 'ar'));
       sorted.slice(0, 30).forEach((s, i) => {
         msg += `${i + 1}. ❌ ${s.name}`;
         if (s.group) msg += ` (${s.group})`;
         msg += `\n   🔢 ${s.code}\n\n`;
       });
-      if (sorted.length > 30) msg += `... و ${sorted.length - 30} طالب آخرين`;
+      if (sorted.length > 30) msg += `... و ${sorted.length - 30} آخرين`;
       return msg;
     }
 
-    // ===== حضور / غياب بتاريخ معين =====
+    // ===== حضور وغياب بتاريخ معين =====
     if ((parsed.intent === 'who_present_date' || parsed.intent === 'count_present_date') && parsed.date) {
       if (!currentStageId) return needStageMessage();
       const session = findSessionByDate(parsed.date);
-      if (!session) return `📅 ما عدنا جلسة مسجلة بتاريخ ${parsed.date}\n\n💡 الجلسات المتاحة: ${sessions.length}`;
+      if (!session) return `📅 ما عدنا جلسة بتاريخ ${parsed.date}`;
 
       const presentRecords = records.filter(r => r.sessionId === session.id);
       const dateFormatted = formatArabicDate(parsed.date);
       
       if (parsed.intent === 'count_present_date') {
         const percent = students.length > 0 ? ((presentRecords.length / students.length) * 100).toFixed(1) : '0';
-        return `📊 ${dateFormatted}\n📋 ${session.name}\n${'─'.repeat(25)}\n\n✅ الحاضرين: ${presentRecords.length} من ${students.length}\n📈 النسبة: ${percent}%`;
+        return `📊 ${dateFormatted}\n📋 ${session.name}\n${'─'.repeat(25)}\n\n✅ الحاضرين: ${presentRecords.length}/${students.length}\n📈 النسبة: ${percent}%`;
       }
       
       if (presentRecords.length === 0) return `❌ ${dateFormatted}\n\nما حضر ولا طالب`;
 
-      let msg = `✅ الحاضرين - ${dateFormatted}\n`;
-      msg += `📋 ${session.name}\n`;
-      msg += `العدد: ${presentRecords.length} طالب\n${'─'.repeat(25)}\n\n`;
+      let msg = `✅ الحاضرين - ${dateFormatted}\n📋 ${session.name}\nالعدد: ${presentRecords.length} طالب\n${'─'.repeat(25)}\n\n`;
       [...presentRecords].sort((a, b) => a.studentName.localeCompare(b.studentName, 'ar')).slice(0, 30).forEach((r, i) => {
         msg += `${i + 1}. ✅ ${r.studentName}${r.studentGroup ? ` (${r.studentGroup})` : ''}\n`;
       });
@@ -927,13 +1289,11 @@ export const ChatBot: React.FC<ChatBotProps> = ({
 
       if (parsed.intent === 'count_absent_date') {
         const percent = students.length > 0 ? ((absentStudents.length / students.length) * 100).toFixed(1) : '0';
-        return `📊 ${dateFormatted}\n📋 ${session.name}\n${'─'.repeat(25)}\n\n❌ الغائبين: ${absentStudents.length} من ${students.length}\n📉 النسبة: ${percent}%`;
+        return `📊 ${dateFormatted}\n📋 ${session.name}\n${'─'.repeat(25)}\n\n❌ الغائبين: ${absentStudents.length}/${students.length}\n📉 النسبة: ${percent}%`;
       }
       if (absentStudents.length === 0) return `🎉 ${dateFormatted}\n\nكل الطلاب حضروا!`;
 
-      let msg = `❌ الغائبين - ${dateFormatted}\n`;
-      msg += `📋 ${session.name}\n`;
-      msg += `العدد: ${absentStudents.length} طالب\n${'─'.repeat(25)}\n\n`;
+      let msg = `❌ الغائبين - ${dateFormatted}\n📋 ${session.name}\nالعدد: ${absentStudents.length} طالب\n${'─'.repeat(25)}\n\n`;
       [...absentStudents].sort((a, b) => a.name.localeCompare(b.name, 'ar')).slice(0, 30).forEach((s, i) => {
         msg += `${i + 1}. ❌ ${s.name}${s.group ? ` (${s.group})` : ''}\n`;
       });
@@ -961,12 +1321,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({
       const total = allSessions.length;
       const absent = total - attended;
       const pct = total > 0 ? ((absent / total) * 100).toFixed(1) : '0';
-      return (
-        `❌ ${student.name}\n${'─'.repeat(25)}\n\n` +
-        `🔢 الرمز: ${student.code}\n` +
-        `📊 الغياب: ${absent} يوم من ${total}\n` +
-        `📉 نسبة الغياب: ${pct}%`
-      );
+      return `❌ ${student.name}\n${'─'.repeat(25)}\n\n🔢 ${student.code}\n📊 الغياب: ${absent}/${total}\n📉 النسبة: ${pct}%`;
     }
 
     if (parsed.intent === 'student_attendance_count') {
@@ -975,18 +1330,13 @@ export const ChatBot: React.FC<ChatBotProps> = ({
       const attended = new Set(allRecords.filter(r => r.studentId === student.id).map(r => r.sessionId)).size;
       const total = allSessions.length;
       const pct = total > 0 ? ((attended / total) * 100).toFixed(1) : '0';
-      return (
-        `✅ ${student.name}\n${'─'.repeat(25)}\n\n` +
-        `🔢 الرمز: ${student.code}\n` +
-        `📊 الحضور: ${attended} يوم من ${total}\n` +
-        `📈 نسبة الحضور: ${pct}%`
-      );
+      return `✅ ${student.name}\n${'─'.repeat(25)}\n\n🔢 ${student.code}\n📊 الحضور: ${attended}/${total}\n📈 النسبة: ${pct}%`;
     }
 
     // ===== الترتيب =====
     if (parsed.intent === 'top_absent') {
       if (!currentStageId) return needStageMessage();
-      if (sessions.length === 0) return `📅 ما عدنا أيام حضور بعد`;
+      if (sessions.length === 0) return `📅 ما عدنا أيام بعد`;
       const limit = parsed.number || 5;
       const ranking = students.map(s => {
         const attended = new Set(records.filter(r => r.studentId === s.id).map(r => r.sessionId)).size;
@@ -997,16 +1347,14 @@ export const ChatBot: React.FC<ChatBotProps> = ({
       let msg = `📊 أكثر ${ranking.length} طلاب غياباً:\n${'─'.repeat(25)}\n\n`;
       ranking.forEach((item, i) => {
         const pct = ((item.absent / sessions.length) * 100).toFixed(0);
-        msg += `${i + 1}. ❌ ${item.student.name}\n`;
-        msg += `   🔢 ${item.student.code} | 👥 ${item.student.group || '-'}\n`;
-        msg += `   📉 غاب: ${item.absent}/${sessions.length} (${pct}%)\n\n`;
+        msg += `${i + 1}. ❌ ${item.student.name}\n   🔢 ${item.student.code} | 👥 ${item.student.group || '-'}\n   📉 ${item.absent}/${sessions.length} (${pct}%)\n\n`;
       });
       return msg;
     }
 
     if (parsed.intent === 'top_present' || parsed.intent === 'best_students') {
       if (!currentStageId) return needStageMessage();
-      if (sessions.length === 0) return `📅 ما عدنا أيام حضور بعد`;
+      if (sessions.length === 0) return `📅 ما عدنا أيام بعد`;
       const limit = parsed.number || 5;
       const ranking = students.map(s => ({
         student: s,
@@ -1016,16 +1364,14 @@ export const ChatBot: React.FC<ChatBotProps> = ({
       let msg = `🏆 أكثر ${ranking.length} طلاب انتظاماً:\n${'─'.repeat(25)}\n\n`;
       ranking.forEach((item, i) => {
         const pct = ((item.attended / sessions.length) * 100).toFixed(0);
-        msg += `${i + 1}. ✅ ${item.student.name}\n`;
-        msg += `   🔢 ${item.student.code} | 👥 ${item.student.group || '-'}\n`;
-        msg += `   📈 حضر: ${item.attended}/${sessions.length} (${pct}%)\n\n`;
+        msg += `${i + 1}. ✅ ${item.student.name}\n   🔢 ${item.student.code} | 👥 ${item.student.group || '-'}\n   📈 ${item.attended}/${sessions.length} (${pct}%)\n\n`;
       });
       return msg;
     }
 
     if (parsed.intent === 'worst_students') {
       if (!currentStageId) return needStageMessage();
-      if (sessions.length === 0) return `📅 ما عدنا أيام حضور بعد`;
+      if (sessions.length === 0) return `📅 ما عدنا أيام بعد`;
       const limit = parsed.number || 5;
       const ranking = students.map(s => ({
         student: s,
@@ -1035,9 +1381,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({
       let msg = `📉 أقل ${ranking.length} طلاب حضوراً:\n${'─'.repeat(25)}\n\n`;
       ranking.forEach((item, i) => {
         const pct = ((item.attended / sessions.length) * 100).toFixed(0);
-        msg += `${i + 1}. ❌ ${item.student.name}\n`;
-        msg += `   🔢 ${item.student.code} | 👥 ${item.student.group || '-'}\n`;
-        msg += `   📉 حضر: ${item.attended}/${sessions.length} (${pct}%)\n\n`;
+        msg += `${i + 1}. ❌ ${item.student.name}\n   🔢 ${item.student.code} | 👥 ${item.student.group || '-'}\n   📉 ${item.attended}/${sessions.length} (${pct}%)\n\n`;
       });
       return msg;
     }
@@ -1048,7 +1392,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({
       const perfect = students.filter(s =>
         new Set(records.filter(r => r.studentId === s.id).map(r => r.sessionId)).size === sessions.length
       );
-      if (perfect.length === 0) return `😕 ما عدنا طالب بحضور كامل (${sessions.length} يوم)`;
+      if (perfect.length === 0) return `😕 ما عدنا طالب بحضور كامل`;
 
       let msg = `🌟 الطلاب المثاليين (حضور كامل ${sessions.length}/${sessions.length})\n${'─'.repeat(25)}\n\n`;
       perfect.sort((a, b) => a.name.localeCompare(b.name, 'ar')).slice(0, 30).forEach((s, i) => {
@@ -1062,7 +1406,7 @@ export const ChatBot: React.FC<ChatBotProps> = ({
     if (parsed.intent === 'students_with_zero_attendance') {
       if (!currentStageId) return needStageMessage();
       const noAttendance = students.filter(s => !records.some(r => r.studentId === s.id));
-      if (noAttendance.length === 0) return `✅ كل الطلاب حضروا على الأقل مرة وحدة`;
+      if (noAttendance.length === 0) return `✅ كل الطلاب حضروا على الأقل مرة`;
 
       let msg = `🚨 طلاب ما حضروا ولا مرة (${noAttendance.length})\n${'─'.repeat(25)}\n\n`;
       noAttendance.sort((a, b) => a.name.localeCompare(b.name, 'ar')).slice(0, 30).forEach((s, i) => {
@@ -1072,91 +1416,61 @@ export const ChatBot: React.FC<ChatBotProps> = ({
       return msg;
     }
 
-    // 🆕 البحث المتقدم - الغياب
+    // ===== البحث المتقدم =====
     if (parsed.intent === 'advanced_search_absent' && parsed.number !== undefined) {
       if (!currentStageId) return needStageMessage();
-      if (sessions.length === 0) return `📅 ما عدنا أيام حضور بعد`;
+      if (sessions.length === 0) return `📅 ما عدنا أيام بعد`;
       
       const threshold = parsed.number;
       const isMore = parsed.studentCode === 'more';
       const groupFilter = parsed.groupName;
       
-      // فلترة الطلاب حسب الكروب إذا تم تحديده
-      let targetStudents = groupFilter 
-        ? students.filter(s => s.group === groupFilter)
-        : students;
+      let targetStudents = groupFilter ? students.filter(s => s.group === groupFilter) : students;
+      if (groupFilter && targetStudents.length === 0) return `🔍 ما عدنا كروب ${groupFilter}`;
       
-      if (groupFilter && targetStudents.length === 0) {
-        return `🔍 ما عدنا طلاب في كروب ${groupFilter}`;
-      }
-      
-      // حساب الغياب لكل طالب
       const results = targetStudents.map(s => {
         const attended = new Set(records.filter(r => r.studentId === s.id).map(r => r.sessionId)).size;
         return { student: s, absent: sessions.length - attended, attended };
       });
       
-      // فلترة حسب الشرط
       const filtered = isMore 
         ? results.filter(r => r.absent > threshold)
         : results.filter(r => r.absent < threshold && r.absent > 0);
       
       if (filtered.length === 0) {
         const condition = isMore ? `أكثر من ${threshold}` : `أقل من ${threshold}`;
-        const groupText = groupFilter ? ` في كروب ${groupFilter}` : '';
-        return `✅ ما عدنا طلاب${groupText} غابوا ${condition} يوم`;
+        return `✅ ما عدنا طلاب غابوا ${condition} يوم`;
       }
       
-      // ترتيب من الأكثر غياب للأقل
       filtered.sort((a, b) => b.absent - a.absent);
-      
       const condition = isMore ? `أكثر من ${threshold}` : `أقل من ${threshold}`;
       const groupText = groupFilter ? ` - كروب ${groupFilter}` : '';
       
-      let msg = `🔍 بحث متقدم${groupText}\n`;
-      msg += `📊 طلاب غابوا ${condition} يوم (${filtered.length})\n`;
-      msg += `${'─'.repeat(30)}\n\n`;
-      
+      let msg = `🔍 بحث متقدم${groupText}\n📊 طلاب غابوا ${condition} يوم (${filtered.length})\n${'─'.repeat(30)}\n\n`;
       filtered.slice(0, 30).forEach((item, i) => {
         const pct = ((item.absent / sessions.length) * 100).toFixed(0);
-        msg += `${i + 1}. ❌ ${item.student.name}\n`;
-        msg += `   🔢 ${item.student.code}`;
+        msg += `${i + 1}. ❌ ${item.student.name}\n   🔢 ${item.student.code}`;
         if (item.student.group) msg += ` | 👥 ${item.student.group}`;
-        msg += `\n`;
-        msg += `   📉 غاب: ${item.absent}/${sessions.length} يوم (${pct}%)\n`;
-        msg += `   ✅ حضر: ${item.attended} يوم\n\n`;
+        msg += `\n   📉 ${item.absent}/${sessions.length} (${pct}%)\n\n`;
       });
-      
-      if (filtered.length > 30) {
-        msg += `... و ${filtered.length - 30} طالب آخرين\n\n`;
-      }
-      
-      msg += `${'─'.repeat(30)}\n`;
-      msg += `📊 الإجمالي: ${filtered.length} طالب من ${targetStudents.length}`;
-      
+      if (filtered.length > 30) msg += `... و ${filtered.length - 30} آخرين\n`;
       return msg;
     }
 
-    // 🆕 البحث المتقدم - الحضور
     if (parsed.intent === 'advanced_search_present' && parsed.number !== undefined) {
       if (!currentStageId) return needStageMessage();
-      if (sessions.length === 0) return `📅 ما عدنا أيام حضور بعد`;
+      if (sessions.length === 0) return `📅 ما عدنا أيام بعد`;
       
       const threshold = parsed.number;
       const isMore = parsed.studentCode === 'more';
       const groupFilter = parsed.groupName;
       
-      let targetStudents = groupFilter 
-        ? students.filter(s => s.group === groupFilter)
-        : students;
-      
-      if (groupFilter && targetStudents.length === 0) {
-        return `🔍 ما عدنا طلاب في كروب ${groupFilter}`;
-      }
+      let targetStudents = groupFilter ? students.filter(s => s.group === groupFilter) : students;
+      if (groupFilter && targetStudents.length === 0) return `🔍 ما عدنا كروب ${groupFilter}`;
       
       const results = targetStudents.map(s => {
         const attended = new Set(records.filter(r => r.studentId === s.id).map(r => r.sessionId)).size;
-        return { student: s, attended, absent: sessions.length - attended };
+        return { student: s, attended };
       });
       
       const filtered = isMore 
@@ -1165,67 +1479,29 @@ export const ChatBot: React.FC<ChatBotProps> = ({
       
       if (filtered.length === 0) {
         const condition = isMore ? `أكثر من ${threshold}` : `أقل من ${threshold}`;
-        const groupText = groupFilter ? ` في كروب ${groupFilter}` : '';
-        return `🔍 ما عدنا طلاب${groupText} حضروا ${condition} يوم`;
+        return `🔍 ما عدنا طلاب حضروا ${condition} يوم`;
       }
       
-      // ترتيب: للحضور الأكثر من الأكثر للأقل، للحضور الأقل من الأقل للأكثر
       filtered.sort((a, b) => isMore ? b.attended - a.attended : a.attended - b.attended);
-      
       const condition = isMore ? `أكثر من ${threshold}` : `أقل من ${threshold}`;
       const groupText = groupFilter ? ` - كروب ${groupFilter}` : '';
-      const icon = isMore ? '🏆' : '⚠️';
       
-      let msg = `🔍 بحث متقدم${groupText}\n`;
-      msg += `${icon} طلاب حضروا ${condition} يوم (${filtered.length})\n`;
-      msg += `${'─'.repeat(30)}\n\n`;
-      
+      let msg = `🔍 بحث متقدم${groupText}\n${isMore ? '🏆' : '⚠️'} طلاب حضروا ${condition} يوم (${filtered.length})\n${'─'.repeat(30)}\n\n`;
       filtered.slice(0, 30).forEach((item, i) => {
         const pct = ((item.attended / sessions.length) * 100).toFixed(0);
-        const itemIcon = isMore ? '✅' : '❌';
-        msg += `${i + 1}. ${itemIcon} ${item.student.name}\n`;
-        msg += `   🔢 ${item.student.code}`;
+        msg += `${i + 1}. ${isMore ? '✅' : '❌'} ${item.student.name}\n   🔢 ${item.student.code}`;
         if (item.student.group) msg += ` | 👥 ${item.student.group}`;
-        msg += `\n`;
-        msg += `   📈 حضر: ${item.attended}/${sessions.length} يوم (${pct}%)\n`;
-        msg += `   ❌ غاب: ${item.absent} يوم\n\n`;
+        msg += `\n   📈 ${item.attended}/${sessions.length} (${pct}%)\n\n`;
       });
-      
-      if (filtered.length > 30) {
-        msg += `... و ${filtered.length - 30} طالب آخرين\n\n`;
-      }
-      
-      msg += `${'─'.repeat(30)}\n`;
-      msg += `📊 الإجمالي: ${filtered.length} طالب من ${targetStudents.length}`;
-      
+      if (filtered.length > 30) msg += `... و ${filtered.length - 30} آخرين\n`;
       return msg;
     }
 
-    // ===== الطلاب =====
+    // ===== الطلاب والكروبات =====
     if (parsed.intent === 'students_count') {
-      if (isAdmin && !currentStageId) {
-        const totalStudents = allStudents.length;
-        const totalGroups = new Set(allStudents.map(s => s.group).filter(Boolean)).size;
-        return (
-          `📊 الإحصائيات الكلية للنظام\n${'─'.repeat(25)}\n\n` +
-          `🏛️ الكليات: ${colleges.length}\n` +
-          `📖 المراحل: ${stages.length}\n` +
-          `👥 إجمالي الطلاب: ${totalStudents}\n` +
-          `🏷️ إجمالي الكروبات: ${totalGroups}\n` +
-          `📅 إجمالي الأيام: ${allSessions.length}\n` +
-          `📝 إجمالي السجلات: ${allRecords.length}\n\n` +
-          `💡 اختر مرحلة لتفاصيل أكثر`
-        );
-      }
       if (!currentStageId) return needStageMessage();
       const groups = new Set(students.map(s => s.group).filter(Boolean)).size;
-      return (
-        `👥 ${currentStage?.name}\n${'─'.repeat(25)}\n\n` +
-        `📊 عدد الطلاب: ${students.length}\n` +
-        `🏷️ عدد الكروبات: ${groups}\n` +
-        `📅 أيام مسجلة: ${sessions.length}\n` +
-        `📝 سجلات حضور: ${records.length}`
-      );
+      return `👥 ${currentStage?.name}\n${'─'.repeat(25)}\n\n📊 عدد الطلاب: ${students.length}\n🏷️ الكروبات: ${groups}\n📅 أيام مسجلة: ${sessions.length}\n📝 سجلات حضور: ${records.length}`;
     }
 
     if (parsed.intent === 'students_list') {
@@ -1250,15 +1526,11 @@ export const ChatBot: React.FC<ChatBotProps> = ({
       return msg;
     }
 
-    // ===== الكروبات =====
     if (parsed.intent === 'group_count' || parsed.intent === 'groups_list') {
       if (!currentStageId) return needStageMessage();
       const groups = Array.from(new Set(students.map(s => s.group).filter(Boolean))) as string[];
-      if (groups.length === 0) return `🏷️ ما عدنا كروبات محددة`;
-      groups.sort((a, b) => {
-        if (a[0] !== b[0]) return a[0].localeCompare(b[0]);
-        return (parseInt(a.slice(1)) || 0) - (parseInt(b.slice(1)) || 0);
-      });
+      if (groups.length === 0) return `🏷️ ما عدنا كروبات`;
+      groups.sort();
       let msg = `🏷️ الكروبات (${groups.length})\n${'─'.repeat(25)}\n\n`;
       groups.forEach(g => {
         msg += `   • ${g}: ${students.filter(s => s.group === g).length} طالب\n`;
@@ -1274,25 +1546,20 @@ export const ChatBot: React.FC<ChatBotProps> = ({
       const groupRecords = records.filter(r => r.studentGroup === parsed.groupName);
       const possible = groupStudents.length * sessions.length;
       const rate = possible > 0 ? ((groupRecords.length / possible) * 100).toFixed(1) : '0';
-      return (
-        `🏷️ كروب ${parsed.groupName}\n${'─'.repeat(25)}\n\n` +
-        `👥 عدد الطلاب: ${groupStudents.length}\n` +
-        `📝 سجلات الحضور: ${groupRecords.length}\n` +
-        `📈 معدل الحضور: ${rate}%`
-      );
+      return `🏷️ كروب ${parsed.groupName}\n${'─'.repeat(25)}\n\n👥 عدد الطلاب: ${groupStudents.length}\n📝 سجلات: ${groupRecords.length}\n📈 المعدل: ${rate}%`;
     }
 
     if (parsed.intent === 'group_attendance' && parsed.groupName) {
       if (!currentStageId) return needStageMessage();
       const groupStudents = students.filter(s => s.group === parsed.groupName);
       if (groupStudents.length === 0) return `🔍 ما عدنا كروب ${parsed.groupName}`;
-      if (sessions.length === 0) return `📅 ما عدنا أيام مسجلة`;
+      if (sessions.length === 0) return `📅 ما عدنا أيام`;
       let msg = `📊 حضور كروب ${parsed.groupName}\n${'─'.repeat(25)}\n\n`;
       groupStudents.sort((a, b) => a.name.localeCompare(b.name, 'ar')).forEach((s, i) => {
         const attended = new Set(records.filter(r => r.studentId === s.id).map(r => r.sessionId)).size;
         const pct = ((attended / sessions.length) * 100).toFixed(0);
         const icon = parseFloat(pct) >= 75 ? '✅' : parseFloat(pct) >= 50 ? '⚠️' : '❌';
-        msg += `${i + 1}. ${icon} ${s.name}\n   حضر: ${attended} | غاب: ${sessions.length - attended} | ${pct}%\n\n`;
+        msg += `${i + 1}. ${icon} ${s.name}\n   ${attended}/${sessions.length} (${pct}%)\n\n`;
       });
       return msg;
     }
@@ -1300,25 +1567,21 @@ export const ChatBot: React.FC<ChatBotProps> = ({
     if ((parsed.intent === 'specific_group_present' || parsed.intent === 'specific_group_absent') && parsed.groupName) {
       if (!currentStageId) return needStageMessage();
       const todaySession = getTodaySession();
-      if (!todaySession) return `📅 ${formatArabicDate()}\n\n❗ ما عدنا جلسة لليوم بعد`;
+      if (!todaySession) return `📅 ${formatArabicDate()}\n\n❗ ما عدنا جلسة لليوم`;
       const groupStudents = students.filter(s => s.group === parsed.groupName);
       if (groupStudents.length === 0) return `🔍 كروب ${parsed.groupName} ما موجود`;
       const presentIds = new Set(records.filter(r => r.sessionId === todaySession.id).map(r => r.studentId));
 
       if (parsed.intent === 'specific_group_present') {
         const present = groupStudents.filter(s => presentIds.has(s.id));
-        if (present.length === 0) return `❌ ما حضر ولا طالب من كروب ${parsed.groupName} اليوم\n\n${getCurrentDateTimeHeader()}`;
-        let msg = `✅ الحاضرين من كروب ${parsed.groupName}\n`;
-        msg += `العدد: ${present.length}/${groupStudents.length}\n`;
-        msg += `${getCurrentDateTimeHeader()}\n${'─'.repeat(25)}\n\n`;
+        if (present.length === 0) return `❌ ما حضر ولا طالب من كروب ${parsed.groupName} اليوم`;
+        let msg = `✅ الحاضرين من كروب ${parsed.groupName}\nالعدد: ${present.length}/${groupStudents.length}\n${getCurrentDateTimeHeader()}\n${'─'.repeat(25)}\n\n`;
         present.forEach((s, i) => { msg += `${i + 1}. ✅ ${s.name}\n`; });
         return msg;
       } else {
         const absent = groupStudents.filter(s => !presentIds.has(s.id));
-        if (absent.length === 0) return `🎉 كل طلاب كروب ${parsed.groupName} حاضرين اليوم!\n\n${getCurrentDateTimeHeader()}`;
-        let msg = `❌ الغائبين من كروب ${parsed.groupName}\n`;
-        msg += `العدد: ${absent.length}/${groupStudents.length}\n`;
-        msg += `${getCurrentDateTimeHeader()}\n${'─'.repeat(25)}\n\n`;
+        if (absent.length === 0) return `🎉 كل طلاب كروب ${parsed.groupName} حاضرين!`;
+        let msg = `❌ الغائبين من كروب ${parsed.groupName}\nالعدد: ${absent.length}/${groupStudents.length}\n${getCurrentDateTimeHeader()}\n${'─'.repeat(25)}\n\n`;
         absent.forEach((s, i) => { msg += `${i + 1}. ❌ ${s.name}\n`; });
         return msg;
       }
@@ -1327,42 +1590,30 @@ export const ChatBot: React.FC<ChatBotProps> = ({
     // ===== الجلسات =====
     if (parsed.intent === 'session_count' || parsed.intent === 'session_list') {
       if (!currentStageId) return needStageMessage();
-      if (sessions.length === 0) return `📅 ما عدنا أيام حضور مسجلة بعد`;
+      if (sessions.length === 0) return `📅 ما عدنا أيام`;
       const sorted = [...sessions].sort((a, b) => normalizeDate(b.date).localeCompare(normalizeDate(a.date)));
       let msg = `📅 الأيام المسجلة (${sessions.length})\n${'─'.repeat(25)}\n\n`;
       sorted.slice(0, 15).forEach((s, i) => {
         const presentCount = records.filter(r => r.sessionId === s.id).length;
-        msg += `${i + 1}. ${s.name}\n`;
-        msg += `   📌 ${formatArabicDate(s.date)}\n`;
-        msg += `   ✅ ${presentCount} حاضر\n\n`;
+        msg += `${i + 1}. ${s.name}\n   📌 ${formatArabicDate(s.date)}\n   ✅ ${presentCount} حاضر\n\n`;
       });
-      if (sorted.length > 15) msg += `... و ${sorted.length - 15} يوم آخر`;
+      if (sorted.length > 15) msg += `... و ${sorted.length - 15} آخرين`;
       return msg;
     }
 
     if (parsed.intent === 'session_today') {
       if (!currentStageId) return needStageMessage();
       const todaySession = getTodaySession();
-      if (!todaySession) return `📅 ${formatArabicDate()}\n\n❗ ما عدنا جلسة مسجلة لليوم`;
+      if (!todaySession) return `📅 ${formatArabicDate()}\n\n❗ ما عدنا جلسة لليوم`;
       const present = records.filter(r => r.sessionId === todaySession.id).length;
-      return (
-        `📅 جلسة اليوم: ${todaySession.name}\n${getCurrentDateTimeHeader()}\n${'─'.repeat(25)}\n\n` +
-        `✅ الحاضرين: ${present}/${students.length}\n` +
-        `❌ الغائبين: ${students.length - present}\n` +
-        `📈 النسبة: ${students.length > 0 ? ((present / students.length) * 100).toFixed(1) : 0}%`
-      );
+      return `📅 جلسة اليوم: ${todaySession.name}\n${getCurrentDateTimeHeader()}\n${'─'.repeat(25)}\n\n✅ الحاضرين: ${present}/${students.length}\n❌ الغائبين: ${students.length - present}\n📈 النسبة: ${students.length > 0 ? ((present / students.length) * 100).toFixed(1) : 0}%`;
     }
 
     if (parsed.intent === 'last_session') {
       if (sessions.length === 0) return `📅 ما عدنا جلسات`;
       const last = [...sessions].sort((a, b) => normalizeDate(b.date).localeCompare(normalizeDate(a.date)))[0];
       const present = records.filter(r => r.sessionId === last.id).length;
-      return (
-        `📅 آخر جلسة: ${last.name}\n${'─'.repeat(25)}\n\n` +
-        `📌 ${formatArabicDate(last.date)}\n` +
-        `✅ الحاضرين: ${present}/${students.length}\n` +
-        `📈 النسبة: ${students.length > 0 ? ((present / students.length) * 100).toFixed(1) : 0}%`
-      );
+      return `📅 آخر جلسة: ${last.name}\n${'─'.repeat(25)}\n\n📌 ${formatArabicDate(last.date)}\n✅ الحاضرين: ${present}/${students.length}\n📈 النسبة: ${students.length > 0 ? ((present / students.length) * 100).toFixed(1) : 0}%`;
     }
 
     if (parsed.intent === 'first_session') {
@@ -1374,60 +1625,39 @@ export const ChatBot: React.FC<ChatBotProps> = ({
     // ===== النسب =====
     if (parsed.intent === 'attendance_rate') {
       if (!currentStageId) return needStageMessage();
-      if (sessions.length === 0 || students.length === 0) return `📊 ما نكدر نحسب نسبة بدون أيام أو طلاب`;
+      if (sessions.length === 0 || students.length === 0) return `📊 ما نكدر نحسب`;
       const possible = sessions.length * students.length;
       const pct = ((records.length / possible) * 100).toFixed(2);
-      return (
-        `📈 نسبة الحضور العامة\n${'─'.repeat(25)}\n\n` +
-        `✅ ${pct}%\n\n` +
-        `📊 ${records.length} حضور من أصل ${possible} ممكن\n` +
-        `👥 ${students.length} طالب × ${sessions.length} يوم`
-      );
+      return `📈 نسبة الحضور العامة\n${'─'.repeat(25)}\n\n✅ ${pct}%\n\n📊 ${records.length}/${possible}\n👥 ${students.length} × ${sessions.length}`;
     }
 
     if (parsed.intent === 'absence_rate') {
       if (!currentStageId) return needStageMessage();
-      if (sessions.length === 0 || students.length === 0) return `📊 ما نكدر نحسب نسبة بدون بيانات`;
+      if (sessions.length === 0 || students.length === 0) return `📊 ما نكدر نحسب`;
       const possible = sessions.length * students.length;
       const absent = possible - records.length;
       const pct = ((absent / possible) * 100).toFixed(2);
-      return (
-        `📉 نسبة الغياب العامة\n${'─'.repeat(25)}\n\n` +
-        `❌ ${pct}%\n\n` +
-        `📊 ${absent} غياب من أصل ${possible}`
-      );
+      return `📉 نسبة الغياب العامة\n${'─'.repeat(25)}\n\n❌ ${pct}%\n\n📊 ${absent}/${possible}`;
     }
 
     if (parsed.intent === 'average_attendance') {
       if (!currentStageId) return needStageMessage();
       if (sessions.length === 0) return `📊 ما عدنا أيام`;
-      return (
-        `📊 المتوسطات\n${'─'.repeat(25)}\n\n` +
-        `📅 متوسط حضور الطالب: ${students.length > 0 ? (records.length / students.length).toFixed(1) : '0'} يوم\n` +
-        `👥 متوسط الحاضرين باليوم: ${(records.length / sessions.length).toFixed(1)} طالب`
-      );
+      return `📊 المتوسطات\n${'─'.repeat(25)}\n\n📅 متوسط الطالب: ${students.length > 0 ? (records.length / students.length).toFixed(1) : '0'} يوم\n👥 متوسط اليوم: ${(records.length / sessions.length).toFixed(1)} طالب`;
     }
 
-    // ===== الكليات =====
+    // ===== الكليات والمراحل =====
     if (parsed.intent === 'colleges_count' || parsed.intent === 'colleges_list') {
       const list = isAdmin ? colleges : accessibleColleges;
-      if (list.length === 0) return isAdmin ? `🏛️ ما عدنا كليات بعد` : `🔒 ما عندك صلاحيات لأي كلية`;
-      let msg = `🏛️ ${isAdmin ? 'الكليات' : 'الكليات المتاحة لك'}: ${list.length}\n${'─'.repeat(25)}\n\n`;
+      if (list.length === 0) return `🏛️ ما عدنا كليات`;
+      let msg = `🏛️ الكليات: ${list.length}\n${'─'.repeat(25)}\n\n`;
       list.forEach((c, i) => {
         const sCount = (isAdmin ? stages : accessibleStages).filter(s => s.collegeId === c.id).length;
         msg += `${i + 1}. ${c.icon || '🏛️'} ${c.name} (${sCount} مرحلة)\n`;
-        if (parsed.intent === 'colleges_list') {
-          (isAdmin ? stages : accessibleStages)
-            .filter(s => s.collegeId === c.id)
-            .slice(0, 5)
-            .forEach(s => { msg += `   • ${s.name}\n`; });
-          msg += '\n';
-        }
       });
       return msg;
     }
 
-    // ===== المراحل =====
     if (parsed.intent === 'stages_count' || parsed.intent === 'stages_list') {
       const list = isAdmin ? stages : accessibleStages;
       if (list.length === 0) return `📖 ما عدنا مراحل`;
@@ -1445,62 +1675,39 @@ export const ChatBot: React.FC<ChatBotProps> = ({
 
     // ===== التدريسيين =====
     if (parsed.intent === 'teachers_count') {
-      if (allTeachers.length === 0) {
-        return (
-          `👨‍🏫 التدريسيين\n${'─'.repeat(25)}\n\n` +
-          `لإدارة التدريسيين روح لتبويب "إدارة التدريسيين"\n\n` +
-          `هناك تكدر:\n• إضافة حسابات جديدة\n• تحديد الصلاحيات\n• تغيير كلمات المرور`
-        );
-      }
+      if (allTeachers.length === 0) return `👨‍🏫 لإدارة التدريسيين، روح لتبويب "إدارة التدريسيين"`;
       return `👨‍🏫 عدد التدريسيين: ${allTeachers.length}`;
     }
 
     if (parsed.intent === 'teachers_list' || parsed.intent === 'teachers_info') {
-      if (allTeachers.length === 0) {
-        return (
-          `👨‍🏫 إدارة التدريسيين\n${'─'.repeat(25)}\n\n` +
-          `روح لتبويب "إدارة التدريسيين" حيث تكدر:\n` +
-          `• إضافة حسابات تدريسيين جدد\n` +
-          `• تحديد الصلاحيات والمراحل لكل تدريسي\n` +
-          `• تغيير كلمات المرور\n` +
-          `• حذف الحسابات\n\n` +
-          `💡 كل تدريسي يشوف فقط المراحل المسموحة له`
-        );
-      }
+      if (allTeachers.length === 0) return `👨‍🏫 روح لتبويب "إدارة التدريسيين"`;
       let msg = `👨‍🏫 قائمة التدريسيين (${allTeachers.length})\n${'─'.repeat(25)}\n\n`;
       allTeachers.forEach((t, i) => {
         const allowedCount = Object.values(t.permissions?.allowedStages || {}).flat().length;
-        msg += `${i + 1}. ${t.displayName}\n`;
-        msg += `   📧 ${t.email}\n`;
-        msg += `   📖 ${allowedCount} مرحلة مسموحة\n\n`;
+        msg += `${i + 1}. ${t.displayName}\n   📧 ${t.email}\n   📖 ${allowedCount} مرحلة\n\n`;
       });
       return msg;
     }
 
     // ===== الإرشادات =====
-    if (parsed.intent === 'how_to_add_student') return `➕ إضافة طالب\n${'─'.repeat(25)}\n\n1️⃣ افتح المرحلة\n2️⃣ تبويب "إدارة الطلاب"\n3️⃣ إما يدوياً (اسم + رمز 4 أرقام)\n   أو ارفع ملف Excel\n\n💡 الرمز من 1000 إلى 9999`;
-    if (parsed.intent === 'how_to_add_college') return `🏛️ إضافة كلية\n${'─'.repeat(25)}\n\n1️⃣ تبويب "إدارة الكليات"\n2️⃣ "إضافة كلية / قسم جديد"\n3️⃣ اختر اسم وأيقونة ولون\n4️⃣ أضف المراحل`;
-    if (parsed.intent === 'how_to_add_teacher') return `👨‍🏫 إضافة تدريسي\n${'─'.repeat(25)}\n\n1️⃣ تبويب "إدارة التدريسيين"\n2️⃣ "إضافة تدريسي جديد"\n3️⃣ أدخل: الاسم + الإيميل + كلمة المرور\n4️⃣ اضغط "⚙️ الصلاحيات" وحدد المراحل`;
-    if (parsed.intent === 'how_to_add_stage') return `📖 إضافة مرحلة\n${'─'.repeat(25)}\n\n1️⃣ تبويب "إدارة الكليات"\n2️⃣ افتح الكلية المطلوبة\n3️⃣ اضغط "إضافة مرحلة"\n4️⃣ سمها (مثل: المرحلة الأولى)`;
-    if (parsed.intent === 'how_to_take_attendance') return `📝 تسجيل الحضور\n${'─'.repeat(25)}\n\n1️⃣ افتح المرحلة\n2️⃣ تبويب "السجلات" → ابدأ جلسة جديدة\n3️⃣ تبويب "تسجيل الحضور"\n4️⃣ ادخل رموز الطلاب الحاضرين`;
-    if (parsed.intent === 'how_to_export') return `📥 تصدير السجلات\n${'─'.repeat(25)}\n\n1️⃣ تبويب "سجل الحضور"\n2️⃣ اختر المدة (يوم أو فترة)\n3️⃣ اضغط "تحميل كشف الحضور والغياب"\n\n📊 يطلع ملف Excel فيه:\n✓ تبويب أبجدي + تبويب كروبات\n✓ ✅ حضور / ❌ غياب\n✓ حساب الغيابات تلقائياً`;
-    if (parsed.intent === 'how_to_delete') return `🗑️ الحذف\n${'─'.repeat(25)}\n\n• طالب: في "إدارة الطلاب"\n• كلية: في "إدارة الكليات" - زر 🗑️\n• تدريسي: في "إدارة التدريسيين" - زر 🗑️\n\n⚠️ الحذف نهائي!`;
-    if (parsed.intent === 'how_to_login') return `🔐 تسجيل الدخول\n${'─'.repeat(25)}\n\nاستخدم بريدك الإلكتروني وكلمة المرور.\nإذا نسيت كلمة المرور، تواصل مع الأدمن.`;
+    if (parsed.intent === 'how_to_add_student') return `➕ إضافة طالب\n${'─'.repeat(25)}\n\n1️⃣ افتح المرحلة\n2️⃣ تبويب "إدارة الطلاب"\n3️⃣ يدوياً أو من Excel`;
+    if (parsed.intent === 'how_to_add_college') return `🏛️ إضافة كلية\n${'─'.repeat(25)}\n\n1️⃣ تبويب "إدارة الكليات"\n2️⃣ "إضافة كلية"`;
+    if (parsed.intent === 'how_to_add_teacher') return `👨‍🏫 إضافة تدريسي\n${'─'.repeat(25)}\n\n1️⃣ تبويب "إدارة التدريسيين"\n2️⃣ "إضافة تدريسي جديد"`;
+    if (parsed.intent === 'how_to_add_stage') return `📖 إضافة مرحلة\n${'─'.repeat(25)}\n\n1️⃣ تبويب "إدارة الكليات"\n2️⃣ افتح الكلية\n3️⃣ "إضافة مرحلة"`;
+    if (parsed.intent === 'how_to_take_attendance') return `📝 تسجيل الحضور\n${'─'.repeat(25)}\n\n1️⃣ افتح المرحلة\n2️⃣ "السجلات" → جلسة جديدة\n3️⃣ "تسجيل الحضور"`;
+    if (parsed.intent === 'how_to_export') return `📥 تصدير السجلات\n${'─'.repeat(25)}\n\n1️⃣ تبويب "سجل الحضور"\n2️⃣ اختر المدة\n3️⃣ "تحميل كشف الحضور"`;
+    if (parsed.intent === 'how_to_delete') return `🗑️ الحذف\n${'─'.repeat(25)}\n\n• طالب: "إدارة الطلاب"\n• كلية: زر 🗑️\n⚠️ نهائي!`;
+    if (parsed.intent === 'how_to_login') return `🔐 الدخول\n${'─'.repeat(25)}\n\nبريد إلكتروني + كلمة مرور`;
 
     if (parsed.intent === 'records_count') {
       if (!currentStageId) return needStageMessage();
-      return `📝 السجلات\n${'─'.repeat(25)}\n\n📊 ${records.length} سجل حضور\n📅 ${sessions.length} يوم\n👥 ${students.length} طالب`;
-    }
-    if (parsed.intent === 'export_records' || parsed.intent === 'records_list') {
-      return handleIntent({ intent: 'how_to_export' }, originalQuery);
+      return `📝 السجلات\n${'─'.repeat(25)}\n\n📊 ${records.length} سجل\n📅 ${sessions.length} يوم\n👥 ${students.length} طالب`;
     }
 
-    // ===== إحصائيات شاملة =====
     if (parsed.intent === 'general_stats') {
       let msg = `📊 ملخص شامل\n${getCurrentDateTimeHeader()}\n${'─'.repeat(25)}\n\n`;
-      
       msg += isAdmin
-        ? `🏛️ الكليات: ${colleges.length}\n📖 المراحل: ${stages.length}\n👨‍🏫 التدريسيين: ${allTeachers.length}\n👥 إجمالي الطلاب: ${allStudents.length}\n`
+        ? `🏛️ الكليات: ${colleges.length}\n📖 المراحل: ${stages.length}\n👨‍🏫 التدريسيين: ${allTeachers.length}\n👥 الطلاب: ${allStudents.length}\n`
         : `🏛️ كلياتك: ${accessibleColleges.length}\n📖 مراحلك: ${accessibleStages.length}\n`;
 
       if (currentStage) {
@@ -1518,32 +1725,43 @@ export const ChatBot: React.FC<ChatBotProps> = ({
         const todaySession = getTodaySession();
         if (todaySession) {
           const presentToday = records.filter(r => r.sessionId === todaySession.id).length;
-          msg += `\n\n📅 اليوم:\n`;
-          msg += `   📋 ${todaySession.name}\n`;
-          msg += `   ✅ حاضر: ${presentToday}\n`;
-          msg += `   ❌ غائب: ${students.length - presentToday}`;
+          msg += `\n\n📅 اليوم:\n   📋 ${todaySession.name}\n   ✅ ${presentToday}\n   ❌ ${students.length - presentToday}`;
         }
-      } else {
-        msg += `\n💡 اختر مرحلة لرؤية تفاصيلها`;
       }
       return msg;
     }
 
     if (parsed.intent === 'help') return getHelpMessage();
-    return getSmartFallback(originalQuery);
 
+    if (parsed.intent === 'unknown') {
+      return (
+        '🤖 ما فهمت السؤال بالضبط، بس أكدر أساعدك بهذي:\n\n' +
+        '📊 الحضور والغياب:\n' +
+        '• منو حاضر اليوم\n' +
+        '• منو غاب الاسبوع الماضي\n' +
+        '• منو حضر يوم 10\n\n' +
+        '👤 طلاب:\n' +
+        '• حضور احمد لكل الايام\n' +
+        '• مجموع غياب علي\n\n' +
+        '🏷️ كروبات:\n' +
+        '• حضور كروب A1 من اول يوم\n' +
+        '• مجموع حضور كروب B2\n\n' +
+        '📊 المجاميع:\n' +
+        '• مجموع الحضور الكلي\n' +
+        '• الحضور من اول يوم'
+      );
+    }
+
+    return getHelpMessage();
   }, [
     isAdmin, user.displayName, currentStageId, currentStage,
     students, records, sessions, colleges, stages,
     accessibleColleges, accessibleStages,
     allStudents, allRecords, allSessions, allTeachers,
-    getTodaySession, findSessionByDate, needStageMessage,
-    formatStudentInfo, formatStudentFullRecord, getHelpMessage, getSmartFallback,
+    getTodaySession, findSessionByDate, findSessionsInRange, needStageMessage,
+    formatStudentInfo, formatStudentFullRecord, getHelpMessage,
   ]);
 
-  // ============================================================
-  // 📤 إرسال
-  // ============================================================
   const sendMessage = useCallback((text: string) => {
     if (!text.trim()) return;
     const userMessage: Message = {
@@ -1585,12 +1803,9 @@ export const ChatBot: React.FC<ChatBotProps> = ({
     }, 100);
   }, [STORAGE_KEY, user.displayName]);
 
-  // ============================================================
-  // 🎨 الواجهة
-  // ============================================================
   const quickQuestions = isAdmin
-    ? ['من حضر اليوم؟', 'من غاب اليوم؟', 'إحصائيات شاملة', 'قائمة التدريسيين']
-    : ['من حضر اليوم؟', 'من غاب اليوم؟', 'كم عدد طلابي؟', 'أكثر طالب غياب'];
+    ? ['منو غايب اليوم', 'الحاضرين من اول يوم', 'مجموع الحضور', 'حضور الاسبوع الماضي']
+    : ['منو غايب اليوم', 'الحاضرين من اول يوم', 'كم طالب موجود', 'منو اكثر طالب غياب'];
 
   return (
     <>
