@@ -120,7 +120,6 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       };
     }
 
-    // 🔒 التدريسي يشوف بس المراحل المسموحة له
     const allowedStagesMap = user.permissions?.allowedStages ?? {};
     const accessibleColleges = colleges.filter(
       c => !!allowedStagesMap[c.id] && allowedStagesMap[c.id].length > 0
@@ -138,7 +137,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     };
   }, [isAdmin, colleges, stages, user.permissions, students, records, sessions, allStagesData]);
 
-  // 🎬 رسالة الترحيب البسيطة
+  // 🎬 رسالة الترحيب
   useEffect(() => {
     if (isOpen && messages.length === 0) {
       setMessages([
@@ -166,6 +165,28 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   const buildDataContext = useCallback((): string => {
     const { accessibleColleges, accessibleStages, allStudents, allRecords, allSessions } = accessibleData;
 
+    // 📅 دالة تنسيق التاريخ بالعربي مع اليوم
+    const formatDateWithDay = (dateStr: string): string => {
+      const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+      const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+      try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+      } catch {
+        return dateStr;
+      }
+    };
+
+    // 📅 تاريخ اليوم بصيغة YYYY-MM-DD
+    const todayDate = (() => {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    })();
+
     let context = `# قاعدة بيانات نظام الحضور\n\n`;
 
     context += `## معلومات المستخدم الحالي:\n`;
@@ -173,12 +194,10 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     context += `- الدور: ${isAdmin ? 'أدمن (يشوف كل البيانات)' : 'تدريسي (يشوف بياناته فقط)'}\n\n`;
 
     const now = new Date();
-    context += `## التاريخ الحالي: ${now.toLocaleDateString('ar-EG', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })}\n\n`;
+    context += `## ⚠️ التاريخ الحالي (مهم جداً!):\n`;
+    context += `- اليوم: ${formatDateWithDay(todayDate)}\n`;
+    context += `- التاريخ بصيغة ISO: ${todayDate}\n`;
+    context += `- الوقت: ${now.toLocaleTimeString('ar-EG')}\n\n`;
 
     if (currentCollege && currentStage) {
       context += `## الموقع الحالي: ${currentCollege.name} > ${currentStage.name}\n\n`;
@@ -187,12 +206,57 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     if (currentStageId && students.length > 0) {
       context += `## 📍 بيانات المرحلة الحالية بالتفصيل\n\n`;
 
-      // الجلسات
-      context += `### 📅 الجلسات (${sessions.length}):\n`;
+      // 🎯 فحص جلسة اليوم بناءً على التاريخ الفعلي
+      const todaySession = sessions.find(s => s.date === todayDate);
+
+      context += `### 🗓️ حالة جلسة اليوم (${todayDate}):\n`;
+      if (todaySession) {
+        const todayPresent = records.filter(r => r.sessionId === todaySession.id);
+        const presentIds = new Set(todayPresent.map(r => r.studentId));
+        const todayAbsent = students.filter(s => !presentIds.has(s.id));
+
+        context += `✅ **يوجد جلسة اليوم**: "${todaySession.name}"\n`;
+        context += `- التاريخ: ${formatDateWithDay(todaySession.date)}\n`;
+        context += `- الحاضرين: ${todayPresent.length}/${students.length}\n`;
+        context += `- الغائبين: ${todayAbsent.length}\n\n`;
+
+        if (todayPresent.length > 0) {
+          context += `**قائمة الحاضرين اليوم:**\n`;
+          todayPresent.forEach(r => {
+            context += `- ✅ ${r.studentName} | كود: ${r.studentCode} | كروب: ${r.studentGroup || '-'}\n`;
+          });
+          context += `\n`;
+        }
+
+        if (todayAbsent.length > 0) {
+          context += `**قائمة الغائبين اليوم:**\n`;
+          todayAbsent.forEach(s => {
+            context += `- ❌ ${s.name} | كود: ${s.code} | كروب: ${s.group || '-'}\n`;
+          });
+          context += `\n`;
+        }
+      } else {
+        context += `❌ **ما اكو جلسة بتاريخ اليوم (${todayDate})**\n\n`;
+        context += `الجلسات الموجودة بالنظام:\n`;
+        const sortedSessionsList = [...sessions].sort((a, b) => b.date.localeCompare(a.date));
+        if (sortedSessionsList.length === 0) {
+          context += `- لا توجد جلسات مسجلة\n`;
+        } else {
+          sortedSessionsList.forEach((s, i) => {
+            const presentCount = records.filter(r => r.sessionId === s.id).length;
+            context += `${i + 1}. **${s.name}** | ${formatDateWithDay(s.date)} | حضر: ${presentCount}/${students.length}\n`;
+          });
+        }
+        context += `\n`;
+      }
+
+      // 📅 كل الجلسات
+      context += `### 📅 كل الجلسات (${sessions.length}):\n`;
       const sortedSessions = [...sessions].sort((a, b) => a.date.localeCompare(b.date));
       sortedSessions.forEach((s, i) => {
         const presentCount = records.filter(r => r.sessionId === s.id).length;
-        context += `${i + 1}. **${s.name}** | التاريخ: ${s.date} | الحاضرين: ${presentCount}/${students.length}\n`;
+        const isToday = s.date === todayDate ? ' 🌟 (اليوم)' : '';
+        context += `${i + 1}. **${s.name}** | ${formatDateWithDay(s.date)} (${s.date}) | حضر: ${presentCount}/${students.length}${isToday}\n`;
       });
       context += `\n`;
 
@@ -200,13 +264,8 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       const groups = Array.from(new Set(students.map(s => s.group).filter(Boolean))) as string[];
       groups.sort();
 
-      // 👥 جدول كامل لكل طالب وحضوره في كل جلسة
-      context += `### 👥 جدول الحضور التفصيلي (كل طالب وحضوره في كل جلسة):\n\n`;
-      context += `| الكود | الاسم | الكروب | `;
-      sortedSessions.forEach(s => {
-        context += `${s.name} | `;
-      });
-      context += `حضر | غاب | النسبة |\n`;
+      // 👥 سجل كل طالب التفصيلي مع التواريخ
+      context += `### 👥 سجل الحضور التفصيلي لكل طالب (مع التواريخ والأيام):\n\n`;
 
       const sortedStudents = [...students].sort((a, b) => {
         const ga = a.group || 'ZZZ';
@@ -222,13 +281,17 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
         const absent = sessions.length - attended;
         const percentage = sessions.length > 0 ? ((attended / sessions.length) * 100).toFixed(1) : '0';
 
-        context += `| ${student.code} | ${student.name} | ${student.group || '-'} | `;
-        sortedSessions.forEach(s => {
-          context += attendedSessionIds.has(s.id) ? '✅ | ' : '❌ | ';
+        context += `**👤 ${student.name}** (كود: ${student.code} | كروب: ${student.group || '-'})\n`;
+        context += `- مجموع الحضور: ${attended} | الغياب: ${absent} | النسبة: ${percentage}%\n`;
+        context += `- التفاصيل حسب التواريخ:\n`;
+
+        sortedSessions.forEach(session => {
+          const isPresent = attendedSessionIds.has(session.id);
+          const icon = isPresent ? '✅ حاضر' : '❌ غائب';
+          context += `  - ${formatDateWithDay(session.date)} (${session.name}): ${icon}\n`;
         });
-        context += `${attended} | ${absent} | ${percentage}% |\n`;
+        context += `\n`;
       });
-      context += `\n`;
 
       // 📊 إحصائيات كل كروب
       if (groups.length > 0) {
@@ -246,14 +309,15 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
         });
       }
 
-      // 📈 إحصائيات كل جلسة
-      context += `### 📈 إحصائيات كل جلسة:\n\n`;
+      // 📈 إحصائيات كل جلسة (مع تفاصيل الكروبات)
+      context += `### 📈 إحصائيات كل جلسة (مع تفاصيل الكروبات):\n\n`;
       sortedSessions.forEach(session => {
         const sessionRecords = records.filter(r => r.sessionId === session.id);
         const presentIds = new Set(sessionRecords.map(r => r.studentId));
         const absentStudents = students.filter(s => !presentIds.has(s.id));
+        const isToday = session.date === todayDate ? ' 🌟 (اليوم)' : '';
 
-        context += `**${session.name}** (${session.date}):\n`;
+        context += `**${session.name}** - ${formatDateWithDay(session.date)}${isToday}:\n`;
         context += `- الحاضرين: ${sessionRecords.length}/${students.length} (${
           students.length > 0 ? ((sessionRecords.length / students.length) * 100).toFixed(1) : 0
         }%)\n`;
@@ -332,31 +396,69 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
 
 ## ⚠️ قواعد صارمة جداً - يجب الالتزام بها 100%:
 
-### 1. استخدم البيانات المرفقة فقط
+### 1. مفهوم "اليوم" - مهم جداً!
+
+- "حضور اليوم" أو "منو حاضر اليوم" أو "غياب اليوم" = الجلسة اللي تاريخها يطابق تاريخ اليوم الفعلي فقط
+- اعتمد دائماً على قسم "🗓️ حالة جلسة اليوم" في البيانات المرفقة
+- ⚠️ **لا تستخدم أبداً الجلسة "المفعّلة" كأنها جلسة اليوم** إذا كان تاريخها مو نفس تاريخ اليوم
+
+**حالة 1: لو يوجد جلسة بتاريخ اليوم:**
+- اعرض اسم الجلسة + التاريخ + الحاضرين + الغائبين
+
+**حالة 2: لو ما اكو جلسة بتاريخ اليوم:**
+- قول صراحة: "❌ ما اكو جلسة مسجلة بتاريخ اليوم (التاريخ)"
+- بعدها اعرض الجلسات الموجودة بتواريخها مرتبة من الأحدث للأقدم
+- مثال:
+  "📋 الجلسات الموجودة:
+  1. **اسم الجلسة** - الإثنين 15 يناير 2025
+  2. **اسم الجلسة** - الأحد 14 يناير 2025"
+
+### 2. عند السؤال عن طالب أو مجموعة طلاب - مهم جداً!
+
+عندما يسأل المستخدم عن طالب معين أو عدة طلاب بأسمائهم:
+- اعرض **كل سجل الطالب التفصيلي** من قسم "👥 سجل الحضور التفصيلي لكل طالب"
+- لكل جلسة اذكر:
+  - **اليوم بالأسبوع** (الأحد، الإثنين، إلخ)
+  - **التاريخ كامل** (15 يناير 2025)
+  - **اسم الجلسة**
+  - **علامة ✅ حاضر** (أخضر) أو **❌ غائب** (أحمر)
+
+**مثال مطلوب:**
+
+\`\`\`
+👤 **أحمد علي** | كود: 4001 | كروب: A1
+
+📅 سجل الحضور التفصيلي:
+- **الأحد 14 يناير 2025** (كوز 1): ✅ حاضر
+- **الإثنين 15 يناير 2025** (كوز 2): ❌ غائب
+- **الثلاثاء 16 يناير 2025** (كوز 3): ✅ حاضر
+
+📊 الإجمالي:
+- ✅ مجموع الحضور: **2 يوم**
+- ❌ مجموع الغياب: **1 يوم**
+- 📈 النسبة: **66.7%**
+\`\`\`
+
+### 3. استخدم البيانات المرفقة فقط
 - لا تخترع أي بيانات أو أسماء أو أرقام
 - كل البيانات اللي تحتاجها موجودة في القسم اللي بالأسفل
 - لو ما لكيت معلومة، قول "ما عندي هذي المعلومة بالبيانات"
 
-### 2. الصلاحيات
+### 4. الصلاحيات
 - المستخدم الحالي: ${user.displayName}
 - الدور: ${isAdmin ? 'أدمن - يكدر يشوف كل البيانات' : 'تدريسي - يشوف بس البيانات المرفقة له'}
 - ${!isAdmin ? '⚠️ لا تذكر أبداً بيانات من مراحل أخرى غير الموجودة بالسياق' : ''}
 
-### 3. تنسيق الإجابات (مهم جداً!)
+### 5. تنسيق الإجابات (مهم جداً!)
 
-**عند عرض الطلاب الحاضرين والغائبين:**
-استخدم هذا التنسيق بالضبط:
-
-للحاضر:
+**عند عرض الطلاب الحاضرين:**
 ✅ **اسم الطالب** | كود: 1234 | كروب: A1
 
-للغائب:
+**عند عرض الطلاب الغائبين:**
 ❌ **اسم الطالب** | كود: 5678 | كروب: B2
 
-أو بشكل قائمة مرقمة:
-
-1. ✅ **اسم الطالب** - كود: 1234 - كروب: A1 - النسبة: 100%
-2. ❌ **اسم الطالب** - كود: 5678 - كروب: B2 - النسبة: 50%
+**ملاحظة مهمة:** الكلمات اللي بين ** ** بعد ✅ راح تطلع باللون الأخضر تلقائياً
+والكلمات اللي بين ** ** بعد ❌ راح تطلع باللون الأحمر تلقائياً
 
 **عند عرض الإحصائيات:**
 📊 **الإحصائيات:**
@@ -364,28 +466,19 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
 - ❌ مجموع الغياب: **5 طلاب**
 - 📈 النسبة المئوية: **75%**
 
-### 4. المعلومات الإلزامية لكل طالب
-عند ذكر أي طالب، يجب أن تذكر:
-- ✅ أو ❌ (حسب الحالة)
-- الاسم الكامل
-- الكود
-- الكروب
-- النسبة المئوية (إذا مناسب)
-
-### 5. عند طلب المجاميع
+### 6. عند طلب المجاميع
 اذكر الرقم بشكل واضح وبارز:
-- "مجموع الحضور: **25**
 - "مجموع الحضور: **25**"
 - "مجموع الغياب: **10**"
 - "النسبة: **71.4%**"
 
-### 6. عند طلب بيانات كروب معين
+### 7. عند طلب بيانات كروب معين
 - اعرض كل طلاب الكروب
 - مع علامة ✅ أو ❌ لكل واحد
 - مع المجاميع والنسب
 - قسّمهم لحاضرين وغائبين
 
-### 7. الشخصية
+### 8. الشخصية
 - ودود ومحترف
 - استخدم اللهجة العراقية أو الفصحى
 - استخدم emojis: ✅ ❌ 📊 📈 📉 🎯 ⚠️ 🌟 👥 📅
@@ -531,11 +624,9 @@ ${dataContext}
   const formatMessage = (content: string): React.ReactNode => {
     const lines = content.split('\n');
     return lines.map((line, i) => {
-      // افحص إذا السطر فيه ✅ (حاضر) أو ❌ (غائب)
       const hasCheckmark = line.includes('✅');
       const hasCross = line.includes('❌');
 
-      // معالجة الـ Bold
       const parts: React.ReactNode[] = [];
       const boldRegex = /\*\*(.+?)\*\*/g;
       let lastIndex = 0;
@@ -547,7 +638,6 @@ ${dataContext}
           parts.push(line.substring(lastIndex, match.index));
         }
 
-        // اختر اللون حسب السياق
         let className = 'font-bold';
         if (hasCheckmark) {
           className = 'font-bold text-green-700';
