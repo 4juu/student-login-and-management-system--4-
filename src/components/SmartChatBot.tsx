@@ -1,5 +1,17 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Student, AttendanceRecord, AttendanceSession, College, Stage } from '../types/student';
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from 'react';
+import {
+  Student,
+  AttendanceRecord,
+  AttendanceSession,
+  College,
+  Stage,
+} from '../types/student';
 import { User } from '../types/user';
 
 interface Message {
@@ -29,11 +41,119 @@ interface SmartChatBotProps {
   };
 }
 
-// 🔑 Gemini API Configuration
-// ⚠️ بدّل XXXX بمفتاحك من: https://aistudio.google.com/apikey
-const GEMINI_API_KEY = '';
-const GEMINI_MODEL = 'gemini-2.5-flash-lite';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+// ✅ خليه بالـ env
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
+
+// ✅ موديلات مستقرة
+const GEMINI_MODELS = [
+  'gemini-flash-latest',
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.5-pro',
+  'gemini-pro-latest',
+  'gemini-2.0-flash-lite',
+];
+
+const getGeminiUrl = (model: string) =>
+  `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+// ✅ توحيد التاريخ حتى ما يصير اختلاف بين 2026-05-13 و ISO
+const normalizeDateKey = (value?: string | Date | null): string => {
+  if (!value) return '';
+
+  if (value instanceof Date) {
+    return `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(
+      value.getDate()
+    )}`;
+  }
+
+  const text = String(value).trim();
+  if (!text) return '';
+
+  // إذا النص بدايته YYYY-MM-DD
+  const directMatch = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (directMatch) return directMatch[1];
+
+  // إذا بصيغة YYYY/MM/DD
+  const slashMatch = text.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+  if (slashMatch) {
+    return `${slashMatch[1]}-${slashMatch[2]}-${slashMatch[3]}`;
+  }
+
+  // fallback parsing
+  const d = new Date(text);
+  if (isNaN(d.getTime())) return text;
+
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+
+const formatDateWithDay = (value?: string | Date | null): string => {
+  const key = normalizeDateKey(value);
+  if (!key) return '-';
+
+  const days = [
+    'الأحد',
+    'الإثنين',
+    'الثلاثاء',
+    'الأربعاء',
+    'الخميس',
+    'الجمعة',
+    'السبت',
+  ];
+
+  const months = [
+    'يناير',
+    'فبراير',
+    'مارس',
+    'أبريل',
+    'مايو',
+    'يونيو',
+    'يوليو',
+    'أغسطس',
+    'سبتمبر',
+    'أكتوبر',
+    'نوفمبر',
+    'ديسمبر',
+  ];
+
+  // نستخدم 12:00 حتى نتفادى مشاكل timezone
+  const d = new Date(`${key}T12:00:00`);
+  if (isNaN(d.getTime())) return key;
+
+  return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+};
+
+const getGeminiText = (data: any): string => {
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return '';
+  return parts.map((p: any) => p?.text || '').join('').trim();
+};
+
+const getErrorMessage = (status: number, errorData: any): string => {
+  const msg = errorData?.error?.message || '';
+
+  switch (status) {
+    case 400:
+      return `طلب غير صحيح: ${msg}`;
+    case 401:
+      return 'API Key غير صحيحة';
+    case 403:
+      return 'API Key ما عندها صلاحية';
+    case 404:
+      return 'الموديل غير موجود';
+    case 429:
+      return 'تم تجاوز الحد المسموح';
+    case 500:
+      return 'خطأ داخلي من السيرفر';
+    case 503:
+      return 'الخدمة مزدحمة حالياً';
+    default:
+      return `خطأ ${status}: ${msg}`;
+  }
+};
 
 export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   user,
@@ -44,8 +164,8 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   students,
   records,
   sessions,
-  activeSessionId,
-  allTeachers = [],
+  activeSessionId: _activeSessionId,
+  allTeachers: _allTeachers = [],
   allStagesData = {},
 }) => {
   const isAdmin = user.role === 'admin';
@@ -57,30 +177,40 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>(() => {
     try {
+      if (typeof window === 'undefined') return [];
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.map((m: Message) => ({ ...m, timestamp: new Date(m.timestamp) }));
-      }
-    } catch {}
-    return [];
+      if (!saved) return [];
+
+      const parsed = JSON.parse(saved) as Array<
+        Omit<Message, 'timestamp'> & { timestamp: string }
+      >;
+
+      return parsed.map(m => ({
+        ...m,
+        timestamp: new Date(m.timestamp),
+      }));
+    } catch {
+      return [];
+    }
   });
+
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentModelIndex, setCurrentModelIndex] = useState(0);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastRequestTime = useRef<number>(0);
 
   useEffect(() => {
-    if (messages.length > 0) {
-      try {
+    try {
+      if (messages.length > 0) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-30)));
-      } catch {}
-    }
+      }
+    } catch {}
   }, [messages, STORAGE_KEY]);
 
-  // 🔐 تحديد البيانات المتاحة حسب الصلاحيات
   const accessibleData = useMemo(() => {
     if (isAdmin) {
       const allStudents: Student[] = [];
@@ -103,6 +233,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
 
         const stage = stages.find(s => s.id === stageId);
         const college = colleges.find(c => c.id === stage?.collegeId);
+
         stagesMap[stageId] = {
           ...stageData,
           stageName: stage?.name || 'غير معروف',
@@ -137,7 +268,6 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     };
   }, [isAdmin, colleges, stages, user.permissions, students, records, sessions, allStagesData]);
 
-  // 🎬 رسالة الترحيب
   useEffect(() => {
     if (isOpen && messages.length === 0) {
       setMessages([
@@ -149,11 +279,11 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
         },
       ]);
     }
-  }, [isOpen]);
+  }, [isOpen, messages.length, user.displayName]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isTyping]);
 
   useEffect(() => {
     if (isOpen) {
@@ -161,424 +291,428 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     }
   }, [isOpen]);
 
-  // 📦 بناء سياق البيانات للـ AI
+  // ✅ بناء السياق بطريقة قوية
   const buildDataContext = useCallback((): string => {
-    const { accessibleColleges, accessibleStages, allStudents, allRecords, allSessions } = accessibleData;
+    const now = new Date();
+    const todayDate = normalizeDateKey(now);
 
-    // 📅 دالة تنسيق التاريخ بالعربي مع اليوم
-    const formatDateWithDay = (dateStr: string): string => {
-      const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-      const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-      try {
-        const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return dateStr;
-        return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-      } catch {
-        return dateStr;
+    const sortedSessions = [...sessions].sort((a, b) => {
+      const da = normalizeDateKey((a as any).date);
+      const db = normalizeDateKey((b as any).date);
+      if (da !== db) return da.localeCompare(db);
+      return String(a.name || '').localeCompare(String(b.name || ''), 'ar');
+    });
+
+    const sessionById = new Map(sortedSessions.map(s => [s.id, s]));
+    const studentById = new Map(students.map(s => [s.id, s]));
+
+    // ✅ دعم أكثر من جلسة بنفس اليوم + حل مشكلة اختلاف صيغة التاريخ
+    const todaySessions = sortedSessions.filter(
+      s => normalizeDateKey((s as any).date) === todayDate
+    );
+    const todaySessionIds = new Set(todaySessions.map(s => s.id));
+
+    const todayRecordsRaw = records.filter(r => todaySessionIds.has(r.sessionId));
+
+    // نضمن عدم تكرار الطالب إذا حضر أكثر من جلسة بنفس اليوم
+    const todayPresentMap = new Map<string, AttendanceRecord>();
+    todayRecordsRaw.forEach(r => {
+      if (!todayPresentMap.has(r.studentId)) {
+        todayPresentMap.set(r.studentId, r);
       }
-    };
+    });
 
-    // 📅 تاريخ اليوم بصيغة YYYY-MM-DD
-    const todayDate = (() => {
-      const now = new Date();
-      const y = now.getFullYear();
-      const m = String(now.getMonth() + 1).padStart(2, '0');
-      const d = String(now.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    })();
+    const todayPresentStudents = students.filter(s => todayPresentMap.has(s.id));
+    const todayAbsentStudents = students.filter(s => !todayPresentMap.has(s.id));
+
+    const groups = Array.from(
+      new Set(students.map(s => s.group).filter(Boolean))
+    ) as string[];
+    groups.sort((a, b) => a.localeCompare(b, 'ar'));
 
     let context = `# قاعدة بيانات نظام الحضور\n\n`;
 
-    context += `## معلومات المستخدم الحالي:\n`;
+    context += `## معلومات المستخدم:\n`;
     context += `- الاسم: ${user.displayName}\n`;
-    context += `- الدور: ${isAdmin ? 'أدمن (يشوف كل البيانات)' : 'تدريسي (يشوف بياناته فقط)'}\n\n`;
+    context += `- الدور: ${isAdmin ? 'أدمن' : 'تدريسي'}\n\n`;
 
-    const now = new Date();
-    context += `## ⚠️ التاريخ الحالي (مهم جداً!):\n`;
+    context += `## التاريخ الحالي:\n`;
     context += `- اليوم: ${formatDateWithDay(todayDate)}\n`;
-    context += `- التاريخ بصيغة ISO: ${todayDate}\n`;
+    context += `- التاريخ: ${todayDate}\n`;
     context += `- الوقت: ${now.toLocaleTimeString('ar-EG')}\n\n`;
 
     if (currentCollege && currentStage) {
-      context += `## الموقع الحالي: ${currentCollege.name} > ${currentStage.name}\n\n`;
+      context += `## الموقع الحالي:\n`;
+      context += `- الكلية: ${currentCollege.name}\n`;
+      context += `- المرحلة: ${currentStage.name}\n\n`;
     }
 
     if (currentStageId && students.length > 0) {
-      context += `## 📍 بيانات المرحلة الحالية بالتفصيل\n\n`;
+      context += `## 🌟 ملخص حضور اليوم:\n\n`;
 
-      // 🎯 فحص جلسة اليوم بناءً على التاريخ الفعلي
-      const todaySession = sessions.find(s => s.date === todayDate);
+      if (todaySessions.length > 0 || todayRecordsRaw.length > 0) {
+        const todaySessionNames =
+          todaySessions.length > 0
+            ? todaySessions.map(s => s.name).join('، ')
+            : 'جلسة اليوم';
 
-      context += `### 🗓️ حالة جلسة اليوم (${todayDate}):\n`;
-      if (todaySession) {
-        const todayPresent = records.filter(r => r.sessionId === todaySession.id);
-        const presentIds = new Set(todayPresent.map(r => r.studentId));
-        const todayAbsent = students.filter(s => !presentIds.has(s.id));
+        const todayRate =
+          students.length > 0
+            ? ((todayPresentStudents.length / students.length) * 100).toFixed(1)
+            : '0';
 
-        context += `✅ **يوجد جلسة اليوم**: "${todaySession.name}"\n`;
-        context += `- التاريخ: ${formatDateWithDay(todaySession.date)}\n`;
-        context += `- الحاضرين: ${todayPresent.length}/${students.length}\n`;
-        context += `- الغائبين: ${todayAbsent.length}\n\n`;
+        context += `- الجلسات اليوم: ${todaySessionNames}\n`;
+        context += `- عدد الجلسات اليوم: ${todaySessions.length}\n`;
+        context += `- الحاضرين اليوم: ${todayPresentStudents.length}/${students.length}\n`;
+        context += `- الغائبين اليوم: ${todayAbsentStudents.length}\n`;
+        context += `- نسبة الحضور اليوم: ${todayRate}%\n\n`;
 
-        if (todayPresent.length > 0) {
-          context += `**قائمة الحاضرين اليوم:**\n`;
-          todayPresent.forEach(r => {
-            context += `- ✅ ${r.studentName} | كود: ${r.studentCode} | كروب: ${r.studentGroup || '-'}\n`;
+        if (todayPresentStudents.length > 0) {
+          context += `### ✅ الحاضرين اليوم:\n`;
+          todayPresentStudents.forEach(student => {
+            const rec = todayPresentMap.get(student.id);
+            context += `- ✅ **${student.name}** | كود: ${student.code} | كروب: ${
+              student.group || rec?.studentGroup || '-'
+            }\n`;
           });
           context += `\n`;
         }
 
-        if (todayAbsent.length > 0) {
-          context += `**قائمة الغائبين اليوم:**\n`;
-          todayAbsent.forEach(s => {
-            context += `- ❌ ${s.name} | كود: ${s.code} | كروب: ${s.group || '-'}\n`;
+        if (todayAbsentStudents.length > 0) {
+          context += `### ❌ الغائبين اليوم:\n`;
+          todayAbsentStudents.forEach(student => {
+            context += `- ❌ **${student.name}** | كود: ${student.code} | كروب: ${
+              student.group || '-'
+            }\n`;
+          });
+          context += `\n`;
+        }
+
+        if (todaySessions.length > 0) {
+          context += `### 📅 تفاصيل جلسات اليوم:\n`;
+          todaySessions.forEach(session => {
+            const sessionRecords = records.filter(r => r.sessionId === session.id);
+            const sessionPresentIds = new Set(sessionRecords.map(r => r.studentId));
+            const sessionAbsent = students.filter(s => !sessionPresentIds.has(s.id));
+
+            context += `- **${session.name}** | ${formatDateWithDay((session as any).date)}\n`;
+            context += `  - حاضر: ${sessionRecords.length}/${students.length}\n`;
+            context += `  - غائب: ${sessionAbsent.length}\n`;
           });
           context += `\n`;
         }
       } else {
-        context += `❌ **ما اكو جلسة بتاريخ اليوم (${todayDate})**\n\n`;
-        context += `الجلسات الموجودة بالنظام:\n`;
-        const sortedSessionsList = [...sessions].sort((a, b) => b.date.localeCompare(a.date));
-        if (sortedSessionsList.length === 0) {
-          context += `- لا توجد جلسات مسجلة\n`;
-        } else {
-          sortedSessionsList.forEach((s, i) => {
-            const presentCount = records.filter(r => r.sessionId === s.id).length;
-            context += `${i + 1}. **${s.name}** | ${formatDateWithDay(s.date)} | حضر: ${presentCount}/${students.length}\n`;
-          });
-        }
-        context += `\n`;
+        context += `- ⚠️ لا توجد جلسة اليوم\n`;
+        context += `- تاريخ اليوم: ${todayDate}\n\n`;
       }
 
-      // 📅 كل الجلسات
-      context += `### 📅 كل الجلسات (${sessions.length}):\n`;
-      const sortedSessions = [...sessions].sort((a, b) => a.date.localeCompare(b.date));
-      sortedSessions.forEach((s, i) => {
-        const presentCount = records.filter(r => r.sessionId === s.id).length;
-        const isToday = s.date === todayDate ? ' 🌟 (اليوم)' : '';
-        context += `${i + 1}. **${s.name}** | ${formatDateWithDay(s.date)} (${s.date}) | حضر: ${presentCount}/${students.length}${isToday}\n`;
+      context += `## 📅 جميع الجلسات (${sortedSessions.length}):\n`;
+      sortedSessions.forEach((session, index) => {
+        const presentCount = records.filter(r => r.sessionId === session.id).length;
+        const isToday = normalizeDateKey((session as any).date) === todayDate ? ' 🌟' : '';
+        context += `${index + 1}. **${session.name}** | ${formatDateWithDay(
+          (session as any).date
+        )} | ${presentCount}/${students.length}${isToday}\n`;
       });
       context += `\n`;
 
-      // الكروبات
-      const groups = Array.from(new Set(students.map(s => s.group).filter(Boolean))) as string[];
-      groups.sort();
-
-      // 👥 سجل كل طالب التفصيلي مع التواريخ
-      context += `### 👥 سجل الحضور التفصيلي لكل طالب (مع التواريخ والأيام):\n\n`;
+      context += `## 👥 تفاصيل الطلاب:\n\n`;
 
       const sortedStudents = [...students].sort((a, b) => {
         const ga = a.group || 'ZZZ';
         const gb = b.group || 'ZZZ';
-        if (ga !== gb) return ga.localeCompare(gb);
+        if (ga !== gb) return ga.localeCompare(gb, 'ar');
         return a.name.localeCompare(b.name, 'ar');
       });
 
       sortedStudents.forEach(student => {
         const studentRecords = records.filter(r => r.studentId === student.id);
         const attendedSessionIds = new Set(studentRecords.map(r => r.sessionId));
-        const attended = attendedSessionIds.size;
-        const absent = sessions.length - attended;
-        const percentage = sessions.length > 0 ? ((attended / sessions.length) * 100).toFixed(1) : '0';
+        const attendedCount = sortedSessions.filter(s =>
+          attendedSessionIds.has(s.id)
+        ).length;
+        const absentCount = sortedSessions.length - attendedCount;
+        const percentage =
+          sortedSessions.length > 0
+            ? ((attendedCount / sortedSessions.length) * 100).toFixed(1)
+            : '0';
 
-        context += `**👤 ${student.name}** (كود: ${student.code} | كروب: ${student.group || '-'})\n`;
-        context += `- مجموع الحضور: ${attended} | الغياب: ${absent} | النسبة: ${percentage}%\n`;
-        context += `- التفاصيل حسب التواريخ:\n`;
+        context += `### 👤 **${student.name}**\n`;
+        context += `- الكود: ${student.code}\n`;
+        context += `- الكروب: ${student.group || '-'}\n`;
+        context += `- الحضور: ${attendedCount}\n`;
+        context += `- الغياب: ${absentCount}\n`;
+        context += `- النسبة: ${percentage}%\n`;
+        context += `- سجل الحضور الكامل:\n`;
 
         sortedSessions.forEach(session => {
           const isPresent = attendedSessionIds.has(session.id);
-          const icon = isPresent ? '✅ حاضر' : '❌ غائب';
-          context += `  - ${formatDateWithDay(session.date)} (${session.name}): ${icon}\n`;
+          const icon = isPresent ? '✅' : '❌';
+          const status = isPresent ? 'حاضر' : 'غائب';
+          const isToday = normalizeDateKey((session as any).date) === todayDate ? ' 🌟' : '';
+          context += `  - ${icon} ${formatDateWithDay((session as any).date)} | ${
+            session.name
+          } | ${status}${isToday}\n`;
         });
+
         context += `\n`;
       });
 
-      // 📊 إحصائيات كل كروب
       if (groups.length > 0) {
-        context += `### 📊 إحصائيات الكروبات:\n\n`;
-        groups.forEach(g => {
-          const gStudents = students.filter(s => s.group === g);
-          const gRecords = records.filter(r => r.studentGroup === g);
-          const gPossible = gStudents.length * sessions.length;
-          const gPct = gPossible > 0 ? ((gRecords.length / gPossible) * 100).toFixed(1) : '0';
-          context += `**كروب ${g}:**\n`;
-          context += `- عدد الطلاب: ${gStudents.length}\n`;
-          context += `- مجموع الحضور: ${gRecords.length}\n`;
-          context += `- مجموع الغياب: ${gPossible - gRecords.length}\n`;
-          context += `- النسبة المئوية: ${gPct}%\n\n`;
+        context += `## 📊 إحصائيات الكروبات:\n`;
+        groups.forEach(group => {
+          const groupStudents = students.filter(s => s.group === group);
+          const groupStudentIds = new Set(groupStudents.map(s => s.id));
+          const groupRecords = records.filter(r => groupStudentIds.has(r.studentId));
+          const possible = groupStudents.length * sortedSessions.length;
+          const groupPercentage =
+            possible > 0 ? ((groupRecords.length / possible) * 100).toFixed(1) : '0';
+
+          context += `- **${group}**: ${groupStudents.length} طالب | نسبة حضور ${groupPercentage}%\n`;
         });
+        context += `\n`;
       }
 
-      // 📈 إحصائيات كل جلسة (مع تفاصيل الكروبات)
-      context += `### 📈 إحصائيات كل جلسة (مع تفاصيل الكروبات):\n\n`;
-      sortedSessions.forEach(session => {
-        const sessionRecords = records.filter(r => r.sessionId === session.id);
-        const presentIds = new Set(sessionRecords.map(r => r.studentId));
-        const absentStudents = students.filter(s => !presentIds.has(s.id));
-        const isToday = session.date === todayDate ? ' 🌟 (اليوم)' : '';
+      const totalPossible = students.length * sortedSessions.length;
+      const overallRate =
+        totalPossible > 0 ? ((records.length / totalPossible) * 100).toFixed(2) : '0';
 
-        context += `**${session.name}** - ${formatDateWithDay(session.date)}${isToday}:\n`;
-        context += `- الحاضرين: ${sessionRecords.length}/${students.length} (${
-          students.length > 0 ? ((sessionRecords.length / students.length) * 100).toFixed(1) : 0
-        }%)\n`;
-        context += `- الغائبين: ${absentStudents.length}\n`;
+      context += `## 📈 الإحصائيات العامة:\n`;
+      context += `- عدد الطلاب: ${students.length}\n`;
+      context += `- عدد الجلسات: ${sortedSessions.length}\n`;
+      context += `- مجموع سجلات الحضور: ${records.length}\n`;
+      context += `- نسبة الحضور العامة: ${overallRate}%\n\n`;
+    } else {
+      context += `## ⚠️ لا توجد مرحلة مختارة حالياً\n`;
+      context += `### الكليات والمراحل المتاحة:\n`;
 
-        if (groups.length > 0) {
-          groups.forEach(g => {
-            const gStudents = students.filter(s => s.group === g);
-            const gPresent = gStudents.filter(s => presentIds.has(s.id));
-            const gAbsent = gStudents.filter(s => !presentIds.has(s.id));
-            context += `  - كروب ${g}: حضر ${gPresent.length}/${gStudents.length} | غاب ${gAbsent.length}\n`;
-            if (gPresent.length > 0) {
-              context += `    ✅ الحاضرين: ${gPresent.map(s => `${s.name} (${s.code})`).join(', ')}\n`;
-            }
-            if (gAbsent.length > 0) {
-              context += `    ❌ الغائبين: ${gAbsent.map(s => `${s.name} (${s.code})`).join(', ')}\n`;
-            }
-          });
-        }
-        context += `\n`;
+      accessibleData.accessibleColleges.forEach(college => {
+        const collegeStages = accessibleData.accessibleStages.filter(
+          stage => stage.collegeId === college.id
+        );
+        context += `- ${college.name}: ${collegeStages.map(s => s.name).join('، ')}\n`;
       });
 
-      // 📊 الإحصائيات العامة
-      const totalPossible = students.length * sessions.length;
-      const overallRate = totalPossible > 0 ? ((records.length / totalPossible) * 100).toFixed(2) : '0';
-      const totalAbsence = totalPossible - records.length;
-
-      context += `### 📊 الإحصائيات العامة للمرحلة:\n`;
-      context += `- إجمالي الطلاب: ${students.length}\n`;
-      context += `- إجمالي الجلسات: ${sessions.length}\n`;
-      context += `- مجموع الحضور الكلي: ${records.length}\n`;
-      context += `- مجموع الغياب الكلي: ${totalAbsence}\n`;
-      context += `- نسبة الحضور العامة: ${overallRate}%\n`;
-      context += `- نسبة الغياب العامة: ${(100 - parseFloat(overallRate)).toFixed(2)}%\n\n`;
-    } else if (!currentStageId) {
-      context += `## ⚠️ المستخدم لم يختر مرحلة بعد\n`;
-      context += `الكليات والمراحل المتاحة:\n`;
-      accessibleColleges.forEach(c => {
-        const cStages = accessibleStages.filter(s => s.collegeId === c.id);
-        context += `- ${c.name}: ${cStages.map(s => s.name).join(', ')}\n`;
-      });
       context += `\n`;
     }
 
-    if (isAdmin && Object.keys(accessibleData.stagesMap).length > 0) {
-      context += `## 🌐 ملخص جميع المراحل (للأدمن):\n\n`;
-      Object.entries(accessibleData.stagesMap).forEach(([_stageId, data]) => {
-        const total = data.students.length * data.sessions.length;
-        const pct = total > 0 ? ((data.records.length / total) * 100).toFixed(1) : '0';
-        context += `- ${data.collegeName} > ${data.stageName}: ${data.students.length} طالب | ${data.sessions.length} جلسة | حضور ${pct}%\n`;
+    // ✅ للأدمن: ملخص سريع للمراحل إذا ماكو مرحلة محددة
+    if (isAdmin && !currentStageId && Object.keys(accessibleData.stagesMap).length > 0) {
+      context += `## 🏛️ ملخص المراحل المتاحة للأدمن:\n`;
+      Object.entries(accessibleData.stagesMap).forEach(([stageId, stageData]) => {
+        const totalPossible = stageData.students.length * stageData.sessions.length;
+        const rate =
+          totalPossible > 0
+            ? ((stageData.records.length / totalPossible) * 100).toFixed(1)
+            : '0';
+
+        context += `- **${stageData.collegeName} / ${stageData.stageName}**: `;
+        context += `${stageData.students.length} طالب | ${stageData.sessions.length} جلسة | ${rate}%\n`;
       });
       context += `\n`;
-
-      if (allTeachers.length > 0) {
-        context += `## 👨‍🏫 التدريسيين (${allTeachers.length}):\n`;
-        allTeachers.forEach(t => {
-          const allowedCount = Object.values(t.permissions?.allowedStages || {}).flat().length;
-          context += `- ${t.displayName} (${t.email}) | ${allowedCount} مرحلة\n`;
-        });
-      }
     }
 
     return context;
-  }, [accessibleData, user, isAdmin, currentCollege, currentStage, currentStageId, students, records, sessions, allTeachers]);
+  }, [
+    sessions,
+    records,
+    students,
+    user.displayName,
+    isAdmin,
+    currentCollege,
+    currentStage,
+    currentStageId,
+    accessibleData,
+  ]);
 
-  // 🤖 استدعاء Gemini API
-  const callGeminiAPI = useCallback(
-    async (userMessage: string, conversationHistory: Message[]): Promise<string> => {
-      if (!GEMINI_API_KEY || GEMINI_API_KEY.includes('XXXX')) {
-        return '⚠️ **خطأ في الإعداد**\n\nلازم تضيف Gemini API Key في ملف SmartChatBot.tsx\n\nاحصل على المفتاح من:\nhttps://aistudio.google.com/apikey';
-      }
+const callGeminiAPI = useCallback(
+  async (userMessage: string, conversationHistory: Message[]): Promise<string> => {
+    if (!GEMINI_API_KEY) {
+      return `⚠️ لازم تضيف Gemini API Key بالـ .env\n\nمثال:\nVITE_GEMINI_API_KEY=YOUR_KEY`;
+    }
 
-      const dataContext = buildDataContext();
+    const dataContext = buildDataContext();
 
-      const systemInstruction = `أنت مساعد ذكي لنظام إدارة حضور الطلاب. اسمك "المساعد الذكي".
+    const systemInstruction = `أنت مساعد ذكي متخصص فقط بنظام حضور الطلاب.
 
-## ⚠️ قواعد صارمة جداً - يجب الالتزام بها 100%:
+## قواعد مهمة جداً:
 
-### 1. مفهوم "اليوم" - مهم جداً!
+1) استخدم فقط البيانات المرفقة، ولا تخمّن.
+2) عند السؤال عن "حضور اليوم" أو "منو حضر اليوم":
+   - اعتمد أولاً على قسم "🌟 ملخص حضور اليوم"
+   - إذا يوجد طلاب حاضرين اليوم، لا تقل "لا توجد جلسة اليوم"
+   - اذكر:
+     - اسم الطالب الكامل
+     - الكود
+     - الكروب
+   - استخدم ✅ للحاضر و ❌ للغائب
 
-- "حضور اليوم" أو "منو حاضر اليوم" أو "غياب اليوم" = الجلسة اللي تاريخها يطابق تاريخ اليوم الفعلي فقط
-- اعتمد دائماً على قسم "🗓️ حالة جلسة اليوم" في البيانات المرفقة
-- ⚠️ **لا تستخدم أبداً الجلسة "المفعّلة" كأنها جلسة اليوم** إذا كان تاريخها مو نفس تاريخ اليوم
+3) عند السؤال عن طالب معيّن:
+   - اعرض معلوماته كاملة:
+     - الاسم
+     - الكود
+     - الكروب
+     - عدد الحضور
+     - عدد الغياب
+     - النسبة
+   - ثم اعرض سجل حضوره الكامل لكل الجلسات مع:
+     - اليوم والتاريخ
+     - اسم الجلسة
+     - ✅ حاضر أو ❌ غائب
+     - وإذا كانت جلسة اليوم ضيف 🌟
 
-**حالة 1: لو يوجد جلسة بتاريخ اليوم:**
-- اعرض اسم الجلسة + التاريخ + الحاضرين + الغائبين
+4) إذا كان بالسياق أكثر من جلسة بنفس اليوم:
+   - اعتبرها كلها "جلسات اليوم"
+   - وإذا الطالب حضر بأي جلسة اليوم، ممكن تذكره ضمن الحاضرين اليوم
 
-**حالة 2: لو ما اكو جلسة بتاريخ اليوم:**
-- قول صراحة: "❌ ما اكو جلسة مسجلة بتاريخ اليوم (التاريخ)"
-- بعدها اعرض الجلسات الموجودة بتواريخها مرتبة من الأحدث للأقدم
-- مثال:
-  "📋 الجلسات الموجودة:
-  1. **اسم الجلسة** - الإثنين 15 يناير 2025
-  2. **اسم الجلسة** - الأحد 14 يناير 2025"
+5) أسلوب الجواب:
+   - بالعربية العراقية
+   - مرتب وواضح
+   - استخدم emojis مثل: 📅 👥 📊 📈 🌟
+   - استخدم **bold** للأسماء والعناوين المهمة
 
-### 2. عند السؤال عن طالب أو مجموعة طلاب - مهم جداً!
+## البيانات:
+${dataContext}`;
 
-عندما يسأل المستخدم عن طالب معين أو عدة طلاب بأسمائهم:
-- اعرض **كل سجل الطالب التفصيلي** من قسم "👥 سجل الحضور التفصيلي لكل طالب"
-- لكل جلسة اذكر:
-  - **اليوم بالأسبوع** (الأحد، الإثنين، إلخ)
-  - **التاريخ كامل** (15 يناير 2025)
-  - **اسم الجلسة**
-  - **علامة ✅ حاضر** (أخضر) أو **❌ غائب** (أحمر)
-
-**مثال مطلوب:**
-
-\`\`\`
-👤 **أحمد علي** | كود: 4001 | كروب: A1
-
-📅 سجل الحضور التفصيلي:
-- **الأحد 14 يناير 2025** (كوز 1): ✅ حاضر
-- **الإثنين 15 يناير 2025** (كوز 2): ❌ غائب
-- **الثلاثاء 16 يناير 2025** (كوز 3): ✅ حاضر
-
-📊 الإجمالي:
-- ✅ مجموع الحضور: **2 يوم**
-- ❌ مجموع الغياب: **1 يوم**
-- 📈 النسبة: **66.7%**
-\`\`\`
-
-### 3. استخدم البيانات المرفقة فقط
-- لا تخترع أي بيانات أو أسماء أو أرقام
-- كل البيانات اللي تحتاجها موجودة في القسم اللي بالأسفل
-- لو ما لكيت معلومة، قول "ما عندي هذي المعلومة بالبيانات"
-
-### 4. الصلاحيات
-- المستخدم الحالي: ${user.displayName}
-- الدور: ${isAdmin ? 'أدمن - يكدر يشوف كل البيانات' : 'تدريسي - يشوف بس البيانات المرفقة له'}
-- ${!isAdmin ? '⚠️ لا تذكر أبداً بيانات من مراحل أخرى غير الموجودة بالسياق' : ''}
-
-### 5. تنسيق الإجابات (مهم جداً!)
-
-**عند عرض الطلاب الحاضرين:**
-✅ **اسم الطالب** | كود: 1234 | كروب: A1
-
-**عند عرض الطلاب الغائبين:**
-❌ **اسم الطالب** | كود: 5678 | كروب: B2
-
-**ملاحظة مهمة:** الكلمات اللي بين ** ** بعد ✅ راح تطلع باللون الأخضر تلقائياً
-والكلمات اللي بين ** ** بعد ❌ راح تطلع باللون الأحمر تلقائياً
-
-**عند عرض الإحصائيات:**
-📊 **الإحصائيات:**
-- ✅ مجموع الحضور: **15 طالب**
-- ❌ مجموع الغياب: **5 طلاب**
-- 📈 النسبة المئوية: **75%**
-
-### 6. عند طلب المجاميع
-اذكر الرقم بشكل واضح وبارز:
-- "مجموع الحضور: **25**"
-- "مجموع الغياب: **10**"
-- "النسبة: **71.4%**"
-
-### 7. عند طلب بيانات كروب معين
-- اعرض كل طلاب الكروب
-- مع علامة ✅ أو ❌ لكل واحد
-- مع المجاميع والنسب
-- قسّمهم لحاضرين وغائبين
-
-### 8. معلومات مدير ومطور الموقع - مهم!
-
-عندما يسأل المستخدم عن:
-- "منو مدير الموقع؟"
-- "منو المسؤول؟"
-- "منو المطور؟"
-- "منو الدعم الفني؟"
-- "منو سوّى الموقع؟"
-- "منو صاحب الموقع؟"
-- "منو المشرف؟"
-- "Who is the admin?"
-- "Who developed this?"
-- "Who is the owner?"
-- أي سؤال مشابه عن المدير/المطور/المسؤول/الدعم
-
-**جاوب بهذا الشكل بالضبط:**
-
-👨‍💼 **مدير ومطور الموقع:**
-
-🎓 **الدكتور الصيدلاني مجتبى هيثم محمد**
-
-للدعم
-
-الآن جاوب على سؤال المستخدم بدقة وحرفية تامة بناءً على هذه البيانات.`;
-
-      const contents: any[] = [];
-      const recentMessages = conversationHistory.slice(-6);
-      recentMessages.forEach(msg => {
-        contents.push({
-          role: msg.type === 'user' ? 'user' : 'model',
-          parts: [{ text: msg.content }],
-        });
-      });
-
-      contents.push({
+    // ✅ نبني المحادثة - نضيف system كأول رسالة من user مع رد من model
+    const contents: any[] = [
+      {
         role: 'user',
-        parts: [{ text: userMessage }],
+        parts: [{ text: systemInstruction }],
+      },
+      {
+        role: 'model',
+        parts: [{ text: 'تمام، فهمت. أنا جاهز للإجابة على أسئلتك حول نظام حضور الطلاب باستخدام البيانات المرفقة فقط.' }],
+      },
+    ];
+
+    // أضف تاريخ المحادثة
+    conversationHistory.slice(-6).forEach(msg => {
+      contents.push({
+        role: msg.type === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content }],
       });
+    });
+
+    // الرسالة الجديدة
+    contents.push({
+      role: 'user',
+      parts: [{ text: userMessage }],
+    });
+
+    const requestBody = {
+      contents,
+      generationConfig: {
+        temperature: 0.25,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 4096,
+      },
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+      ],
+    };
+
+    let lastError = '';
+
+    for (let i = currentModelIndex; i < GEMINI_MODELS.length; i++) {
+      const model = GEMINI_MODELS[i];
 
       try {
-        const response = await fetch(GEMINI_URL, {
+        const response = await fetch(getGeminiUrl(model), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents,
-            systemInstruction: { parts: [{ text: systemInstruction }] },
-            generationConfig: {
-              temperature: 0.3,
-              topK: 40,
-              topP: 0.95,
-              maxOutputTokens: 4096,
-            },
-            safetySettings: [
-              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-            ],
-          }),
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          if (response.status === 429) {
-            return `⏱️ **تجاوزت الحد المسموح**\n\nانتظر دقيقة وحاول مرة ثانية.`;
+          const errMsg = getErrorMessage(response.status, errorData);
+          lastError = errMsg;
+
+          console.warn(`⚠️ ${model}: ${errMsg}`);
+
+          if (response.status === 401 || response.status === 403) {
+            return `🔑 مشكلة بالـ API Key\n\n${errMsg}`;
           }
-          if (response.status === 403) {
-            return `🔒 **خطأ في الصلاحيات**\n\nتأكد من صحة API Key.`;
+
+          if (response.status === 404) {
+            continue;
           }
-          if (response.status === 400) {
-            return `⚠️ **خطأ في الطلب**\n\n${errorData.error?.message || 'الطلب غير صحيح'}`;
+
+          if (response.status === 429 || response.status === 503) {
+            if (i < GEMINI_MODELS.length - 1) {
+              await sleep(1200);
+              continue;
+            }
+            return `⏱️ الخدمة مزدحمة حالياً، حاول بعد شوي`;
           }
-          return `❌ **خطأ من API**\nالكود: ${response.status}\n${errorData.error?.message || ''}`;
+
+          if (i < GEMINI_MODELS.length - 1) {
+            continue;
+          }
+
+          return `❌ ${errMsg}`;
         }
 
         const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) return '⚠️ ما حصلت على رد. حاول مرة ثانية.';
+        const text = getGeminiText(data);
+
+        if (!text) {
+          const finishReason = data?.candidates?.[0]?.finishReason;
+          if (finishReason === 'SAFETY') {
+            return '⚠️ تم حجب الرد بسبب إعدادات الأمان';
+          }
+
+          if (i < GEMINI_MODELS.length - 1) {
+            continue;
+          }
+
+          return '⚠️ ما وصل رد واضح من Gemini';
+        }
+
+        if (i !== currentModelIndex) {
+          setCurrentModelIndex(i);
+          console.log(`✅ تبديل للموديل: ${model}`);
+        }
+
         return text;
       } catch (err: any) {
-        return `🌐 **خطأ في الاتصال**\n${err.message || ''}`;
+        lastError = err?.message || 'خطأ غير معروف';
+        console.error(`❌ ${model}:`, lastError);
+
+        if (i < GEMINI_MODELS.length - 1) {
+          await sleep(500);
+          continue;
+        }
       }
-    },
-    [buildDataContext, user, isAdmin]
-  );
+    }
+
+    return `🌐 فشلت جميع المحاولات\n\nآخر خطأ: ${lastError || 'غير معروف'}`;
+  },
+  [buildDataContext, currentModelIndex]
+);
 
   const sendMessage = useCallback(
     async (text: string) => {
       if (!text.trim() || isTyping) return;
 
       const now = Date.now();
-      const timeSinceLastRequest = now - lastRequestTime.current;
-      if (timeSinceLastRequest < 3000) {
-        const waitTime = Math.ceil((3000 - timeSinceLastRequest) / 1000);
-        setError(`⏱️ انتظر ${waitTime} ثانية`);
+      if (now - lastRequestTime.current < 2000) {
+        const wait = Math.ceil((2000 - (now - lastRequestTime.current)) / 1000);
+        setError(`⏱️ انتظر ${wait} ثانية`);
         setTimeout(() => setError(null), 2000);
         return;
       }
-      lastRequestTime.current = now;
 
+      lastRequestTime.current = now;
       setError(null);
+
       const userMessage: Message = {
         id: Date.now().toString(),
         type: 'user',
@@ -588,21 +722,25 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
 
       setMessages(prev => [...prev, userMessage]);
       setInput('');
+      if (inputRef.current) {
+        inputRef.current.style.height = '40px';
+      }
       setIsTyping(true);
 
       try {
         const response = await callGeminiAPI(text.trim(), messages);
+
         setMessages(prev => [
           ...prev,
           {
-            id: (Date.now() + 1).toString(),
+            id: `${Date.now()}_bot`,
             type: 'bot',
             content: response,
             timestamp: new Date(),
           },
         ]);
       } catch (err: any) {
-        setError(err.message || 'حدث خطأ');
+        setError(err?.message || 'حدث خطأ غير متوقع');
       } finally {
         setIsTyping(false);
       }
@@ -610,7 +748,9 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     [messages, isTyping, callGeminiAPI]
   );
 
-  const handleSend = useCallback(() => sendMessage(input), [input, sendMessage]);
+  const handleSend = useCallback(() => {
+    sendMessage(input);
+  }, [input, sendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -626,15 +766,20 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       } catch {}
       setMessages([]);
       setError(null);
+      setCurrentModelIndex(0);
     }
   }, [STORAGE_KEY]);
 
-  // 🎨 تنسيق الرسائل مع دعم الألوان
   const formatMessage = (content: string): React.ReactNode => {
     const lines = content.split('\n');
+
     return lines.map((line, i) => {
-      const hasCheckmark = line.includes('✅');
-      const hasCross = line.includes('❌');
+      const lineHasCheck = line.includes('✅');
+      const lineHasCross = line.includes('❌');
+
+      let lineClass = 'text-gray-800';
+      if (lineHasCheck) lineClass = 'text-green-700';
+      if (lineHasCross) lineClass = 'text-red-700';
 
       const parts: React.ReactNode[] = [];
       const boldRegex = /\*\*(.+?)\*\*/g;
@@ -644,33 +789,43 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
 
       while ((match = boldRegex.exec(line)) !== null) {
         if (match.index > lastIndex) {
-          parts.push(line.substring(lastIndex, match.index));
+          parts.push(
+            <React.Fragment key={`t-${i}-${key++}`}>
+              {line.substring(lastIndex, match.index)}
+            </React.Fragment>
+          );
         }
 
-        let className = 'font-bold';
-        if (hasCheckmark) {
-          className = 'font-bold text-green-700';
-        } else if (hasCross) {
-          className = 'font-bold text-red-700';
-        } else {
-          className = 'font-bold text-gray-900';
-        }
+        let boldClass = 'font-bold text-gray-900';
+        if (lineHasCheck) boldClass = 'font-bold text-green-800';
+        if (lineHasCross) boldClass = 'font-bold text-red-800';
 
         parts.push(
-          <strong key={`b-${i}-${key++}`} className={className}>
+          <strong key={`b-${i}-${key++}`} className={boldClass}>
             {match[1]}
           </strong>
         );
+
         lastIndex = match.index + match[0].length;
       }
+
       if (lastIndex < line.length) {
-        parts.push(line.substring(lastIndex));
+        parts.push(
+          <React.Fragment key={`e-${i}-${key++}`}>
+            {line.substring(lastIndex)}
+          </React.Fragment>
+        );
       }
-      if (parts.length === 0) parts.push(line);
+
+      if (parts.length === 0) {
+        parts.push(
+          <React.Fragment key={`l-${i}`}>{line}</React.Fragment>
+        );
+      }
 
       return (
         <React.Fragment key={i}>
-          {parts}
+          <span className={lineClass}>{parts}</span>
           {i < lines.length - 1 && <br />}
         </React.Fragment>
       );
@@ -699,19 +854,22 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
               <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-2xl shadow-lg border border-white border-opacity-30">
                 ✨
               </div>
+
               <div>
                 <h3 className="font-bold flex items-center gap-2">
                   المساعد الذكي
                   <span className="text-[10px] bg-white text-orange-600 px-2 py-0.5 rounded-full font-bold">
-                    PRO
+                    AI
                   </span>
                 </h3>
                 <p className="text-xs opacity-95 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 bg-green-300 rounded-full animate-pulse"></span>
-                  Gemini AI {currentStage ? `• ${currentStage.name}` : ''}
+                  {GEMINI_MODELS[currentModelIndex]?.replace('gemini-', '')}
+                  {currentStage && ` • ${currentStage.name}`}
                 </p>
               </div>
             </div>
+
             <div className="flex gap-1 items-center">
               <button
                 onClick={handleReset}
@@ -748,9 +906,11 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
                       <span>المساعد الذكي</span>
                     </div>
                   )}
+
                   <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">
                     {formatMessage(msg.content)}
                   </div>
+
                   <p
                     className={`text-[10px] mt-1.5 ${
                       msg.type === 'user' ? 'text-orange-100' : 'text-gray-400'
@@ -788,6 +948,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
                 </div>
               </div>
             )}
+
             <div ref={messagesEndRef} />
           </div>
 
@@ -804,7 +965,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="اسألني أي شي... (Shift+Enter للسطر الجديد)"
+                placeholder="اسألني أي شي..."
                 rows={1}
                 className="flex-1 px-3 py-2 border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent text-sm resize-none max-h-24"
                 dir="rtl"
@@ -816,6 +977,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
                 }}
                 disabled={isTyping}
               />
+
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || isTyping}
@@ -830,12 +992,12 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
                       r="10"
                       stroke="currentColor"
                       strokeWidth="4"
-                    ></circle>
+                    />
                     <path
                       className="opacity-75"
                       fill="currentColor"
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    ></path>
+                    />
                   </svg>
                 ) : (
                   <svg
@@ -854,8 +1016,9 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
                 )}
               </button>
             </div>
+
             <p className="text-[10px] text-gray-400 mt-1.5 text-center">
-              مدعوم بـ <span className="text-orange-600 font-semibold">Google Gemini AI</span> ✨
+              مدعوم بـ <span className="text-orange-600 font-semibold">Google Gemini</span> ✨
             </p>
           </div>
         </div>
