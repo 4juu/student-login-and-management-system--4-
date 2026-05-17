@@ -471,7 +471,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
             <ul className="list-disc list-inside space-y-1">
               <li>الصورة تُحفظ في قاعدة البيانات مباشرة</li>
               <li>الحد الأقصى للصورة 1MB لأفضل أداء</li>
-              <li>البايو يساعد في تعريف التدريسيين والمواد</li>
+              <li>البايو يستخدم لتعريف التدريسيين والمواد</li>
               <li>جميع التغييرات محفوظة في Firebase بشكل آمن</li>
               <li>
                 <strong>البيانات تُحمّل تلقائياً عند تسجيل الدخول ✓</strong>
