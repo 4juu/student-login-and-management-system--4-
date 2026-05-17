@@ -346,18 +346,8 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   const currentCollege = colleges.find(c => c.id === currentCollegeId);
   const currentStage = stages.find(s => s.id === currentStageId);
 
-  const STORAGE_KEY = `smart_chatbot_${user.uid}`;
-
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>(() => {
-    try {
-      if (typeof window === 'undefined') return [];
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (!saved) return [];
-      const parsed = JSON.parse(saved) as Array<Omit<Message, 'timestamp'> & { timestamp: string }>;
-      return parsed.map(m => ({ ...m, timestamp: new Date(m.timestamp) }));
-    } catch { return []; }
-  });
+  const [messages, setMessages] = useState<Message[]>([]);
 
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -374,13 +364,6 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   const lastRequestTime = useRef<number>(0);
   const modelSelectorRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    try {
-      if (messages.length > 0) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-30)));
-      }
-    } catch {}
-  }, [messages, STORAGE_KEY]);
 
   // ✅ إغلاق قائمة الموديلات عند الضغط خارجها
   useEffect(() => {
@@ -1061,13 +1044,12 @@ ${dataContext}`;
 
   const handleReset = useCallback(() => {
     if (window.confirm('متأكد من مسح المحادثة؟')) {
-      try { localStorage.removeItem(STORAGE_KEY); } catch {}
       setMessages([]);
       setError(null);
       setCurrentModelIndex(0);
       setFailedModels(new Set());
     }
-  }, [STORAGE_KEY]);
+  }, []);
 
   const formatMessage = (content: string): React.ReactNode => {
     const lines = content.split('\n');
