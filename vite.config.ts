@@ -16,8 +16,14 @@ export default defineConfig({
     viteSingleFile(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.ico", "apple-touch-icon.png", "mask-icon.svg"],
+      includeAssets: [
+        "favicon.ico",
+        "apple-touch-icon.png",
+        "pwa-192x192.png",
+        "pwa-512x512.png"
+      ],
       manifest: {
+        id: "/",
         name: "AI Login System",
         short_name: "AI Login",
         description: "نظام تسجيل الحضور الذكي - AI Attendance System",
@@ -27,18 +33,69 @@ export default defineConfig({
         orientation: "portrait",
         scope: "/",
         start_url: "/",
+        lang: "ar",
+        dir: "rtl",
         icons: [
           {
             src: "pwa-192x192.png",
             sizes: "192x192",
             type: "image/png",
-            purpose: "any maskable"
+            purpose: "any"
           },
           {
             src: "pwa-512x512.png",
             sizes: "512x512",
             type: "image/png",
-            purpose: "any maskable"
+            purpose: "any"
+          },
+          {
+            src: "pwa-192x192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable"
+          },
+          {
+            src: "pwa-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable"
+          },
+          {
+            src: "apple-touch-icon.png",
+            sizes: "180x180",
+            type: "image/png",
+            purpose: "any"
+          }
+        ],
+        screenshots: [
+          {
+            src: "pwa-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            form_factor: "wide",
+            label: "AI Login System Desktop"
+          },
+          {
+            src: "pwa-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            form_factor: "narrow",
+            label: "AI Login System Mobile"
+          }
+        ],
+        shortcuts: [
+          {
+            name: "تسجيل الحضور",
+            short_name: "حضور",
+            url: "/",
+            description: "فتح نظام تسجيل الحضور",
+            icons: [
+              {
+                src: "pwa-192x192.png",
+                sizes: "192x192",
+                type: "image/png"
+              }
+            ]
           }
         ]
       },
