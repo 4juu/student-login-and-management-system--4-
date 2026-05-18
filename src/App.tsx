@@ -68,10 +68,16 @@ function App() {
     stages: false,
   });
 
+  // 🔑 معرف الأدمن (للوصول للبيانات المشتركة: كليات، مراحل، طلاب)
   const getAdminUid = (): string => {
     if (!currentUser) return '';
     if (currentUser.role === 'admin') return currentUser.uid;
     return currentUser.adminId || currentUser.uid;
+  };
+
+  // 🆕 معرف التدريسي = uid المستخدم الحالي (للسجلات والجلسات الخاصة)
+  const getTeacherId = (): string => {
+    return currentUser?.uid || '';
   };
 
   useEffect(() => {
@@ -142,22 +148,81 @@ function App() {
       const { ref: dbRef, get } = await import('firebase/database');
       const { database } = await import('./firebase/config');
 
+      // 1️⃣ جلب كل التدريسيين الذين يتبعون هذا الأدمن
       const usersSnap = await get(dbRef(database, 'users'));
+      let teachersList: User[] = [];
       if (usersSnap.exists()) {
-        const teachersList = (Object.values(usersSnap.val()) as User[]).filter(u => u.role === 'teacher');
+        teachersList = (Object.values(usersSnap.val()) as User[]).filter(
+          u => u.role === 'teacher' && u.adminId === adminUid
+        );
         setAllTeachers(teachersList);
       }
 
+      // 2️⃣ قائمة كل من له بيانات (الأدمن + كل تدريسييه)
+      const allUserIds = [adminUid, ...teachersList.map(t => t.uid)];
+
       const stagesDataMap: AllStagesData = {};
 
+      // 3️⃣ لكل مرحلة، نجمع بيانات كل التدريسيين + الأدمن
       await Promise.all(
         allStages.map(async (stage) => {
           try {
-            const data = await loadStageData(adminUid, stage.id);
+            // الطلاب مشتركون - نحملهم مرة وحدة
+            const studentsSnap = await get(
+              dbRef(database, `userData/${adminUid}/stageData/${stage.id}/students`)
+            );
+            let stageStudents: Student[] = [];
+            if (studentsSnap.exists()) {
+              const data = studentsSnap.val();
+              stageStudents = Array.isArray(data) ? data : Object.values(data);
+            }
+
+            // 4️⃣ السجلات والجلسات: نجمعها من كل التدريسيين + الأدمن
+            const allRecords: AttendanceRecord[] = [];
+            const allSessions: AttendanceSession[] = [];
+
+            await Promise.all(
+              allUserIds.map(async (userId) => {
+                try {
+                  // سجلات هذا المستخدم
+                  const recSnap = await get(
+                    dbRef(
+                      database,
+                      `userData/${adminUid}/stageData/${stage.id}/teacherRecords/${userId}/records`
+                    )
+                  );
+                  if (recSnap.exists()) {
+                    const data = recSnap.val();
+                    const arr: AttendanceRecord[] = Array.isArray(data)
+                      ? data
+                      : Object.values(data);
+                    allRecords.push(...arr);
+                  }
+
+                  // جلسات هذا المستخدم
+                  const sesSnap = await get(
+                    dbRef(
+                      database,
+                      `userData/${adminUid}/stageData/${stage.id}/teacherRecords/${userId}/sessions`
+                    )
+                  );
+                  if (sesSnap.exists()) {
+                    const data = sesSnap.val();
+                    const arr: AttendanceSession[] = Array.isArray(data)
+                      ? data
+                      : Object.values(data);
+                    allSessions.push(...arr);
+                  }
+                } catch (e) {
+                  console.warn(`فشل جلب بيانات المستخدم ${userId} للمرحلة ${stage.id}`);
+                }
+              })
+            );
+
             stagesDataMap[stage.id] = {
-              students: data.students,
-              records: data.records,
-              sessions: data.sessions,
+              students: stageStudents,
+              records: allRecords,
+              sessions: allSessions,
             };
           } catch (e) {
             console.warn(`فشل تحميل بيانات المرحلة ${stage.id}:`, e);
@@ -184,7 +249,9 @@ function App() {
 
     try {
       const adminUid = getAdminUid();
-      const data = await loadStageData(adminUid, stageId);
+      const teacherId = getTeacherId();
+      // 🆕 كل تدريسي (أو الأدمن) يحمل سجله الخاص
+      const data = await loadStageData(adminUid, stageId, teacherId);
       setStudents(data.students);
       setAttendanceRecords(data.records);
       setSessions(data.sessions);
@@ -223,6 +290,7 @@ function App() {
     setActiveTab('stage-selector');
   };
 
+  // ✅ مشترك - الأدمن فقط يحفظ الكليات
   useEffect(() => {
     if (currentUser?.role === 'admin' && dataLoaded) {
       const force = intentionalDeleteRef.current.colleges;
@@ -231,6 +299,7 @@ function App() {
     }
   }, [colleges, currentUser, dataLoaded]);
 
+  // ✅ مشترك - الأدمن فقط يحفظ المراحل
   useEffect(() => {
     if (currentUser?.role === 'admin' && dataLoaded) {
       const force = intentionalDeleteRef.current.stages;
@@ -239,6 +308,7 @@ function App() {
     }
   }, [stages, currentUser, dataLoaded]);
 
+  // ✅ مشترك - الأدمن فقط يحفظ الطلاب
   useEffect(() => {
     if (currentUser && dataLoaded && selectedStageId && currentUser.role === 'admin') {
       const force = intentionalDeleteRef.current.students;
@@ -255,10 +325,17 @@ function App() {
     }
   }, [students, currentUser, dataLoaded, selectedStageId]);
 
+  // 🆕 منفصل - كل تدريسي يحفظ سجلاته الخاصة
   useEffect(() => {
     if (currentUser && dataLoaded && selectedStageId) {
       const force = intentionalDeleteRef.current.records;
-      saveAttendanceRecords(getAdminUid(), selectedStageId, attendanceRecords, force);
+      saveAttendanceRecords(
+        getAdminUid(),
+        selectedStageId,
+        getTeacherId(), // 🆕
+        attendanceRecords,
+        force
+      );
       if (force) intentionalDeleteRef.current.records = false;
 
       if (currentUser.role === 'admin') {
@@ -273,10 +350,17 @@ function App() {
     }
   }, [attendanceRecords, currentUser, dataLoaded, selectedStageId]);
 
+  // 🆕 منفصل - كل تدريسي يحفظ جلساته الخاصة
   useEffect(() => {
     if (currentUser && dataLoaded && selectedStageId) {
       const force = intentionalDeleteRef.current.sessions;
-      saveSessions(getAdminUid(), selectedStageId, sessions, force);
+      saveSessions(
+        getAdminUid(),
+        selectedStageId,
+        getTeacherId(), // 🆕
+        sessions,
+        force
+      );
       if (force) intentionalDeleteRef.current.sessions = false;
 
       if (currentUser.role === 'admin') {
@@ -291,9 +375,15 @@ function App() {
     }
   }, [sessions, currentUser, dataLoaded, selectedStageId]);
 
+  // 🆕 منفصل - كل تدريسي يحفظ جلسته النشطة الخاصة
   useEffect(() => {
     if (currentUser && dataLoaded && selectedStageId) {
-      saveActiveSession(getAdminUid(), selectedStageId, activeSessionId);
+      saveActiveSession(
+        getAdminUid(),
+        selectedStageId,
+        getTeacherId(), // 🆕
+        activeSessionId
+      );
     }
   }, [activeSessionId, currentUser, dataLoaded, selectedStageId]);
 
@@ -642,7 +732,7 @@ function App() {
         </div>
       </div>
 
-      {/* ✨ الشات بوت الذكي الوحيد */}
+      {/* ✨ الشات بوت الذكي */}
       <SmartChatBot
         user={currentUser}
         colleges={colleges}
@@ -653,8 +743,8 @@ function App() {
         records={attendanceRecords}
         sessions={sessions}
         activeSessionId={activeSessionId}
-        allTeachers={allTeachers}
-        allStagesData={allStagesData}
+        allTeachers={isAdmin ? allTeachers : []}
+        allStagesData={isAdmin ? allStagesData : {}}
       />
     </div>
   );

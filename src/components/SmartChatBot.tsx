@@ -641,32 +641,48 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       context += `\n`;
 
       if (hasActivity) {
-        context += `### ✅ الحاضرين اليوم (${presentStudents.length} طالب):\n`;
-        if (presentStudents.length > 0) {
-          presentStudents.forEach((student, idx) => {
-            context += `${idx + 1}. ✅ **${student.name}** | كود: ${student.code} | كروب: ${student.group || '-'}\n`;
-          });
-        } else {
-          context += `- لا يوجد حاضرين\n`;
-        }
-        context += `\n`;
+        // ✅ تفصيل كل جلسة/سجل اليوم على حدة
+        context += `### 📋 تفصيل كل سجل اليوم على حدة:\n\n`;
+        
+        finalTodaySessions.forEach((session, sIdx) => {
+          const sessionRecs = fixedRecords.filter(r => r.sessionId === session.id);
+          const sessionPresentIds = new Set(sessionRecs.map(r => r.studentId));
+          const sessionPresent = students.filter(s => sessionPresentIds.has(s.id));
+          const sessionAbsent = students.filter(s => !sessionPresentIds.has(s.id));
+          const sessionRate = students.length > 0 
+            ? ((sessionPresent.length / students.length) * 100).toFixed(1) 
+            : '0';
 
-        context += `### ❌ الغائبين اليوم (${absentStudents.length} طالب):\n`;
-        if (absentStudents.length > 0) {
-          absentStudents.forEach((student, idx) => {
-            context += `${idx + 1}. ❌ **${student.name}** | كود: ${student.code} | كروب: ${student.group || '-'}\n`;
-          });
-        } else {
-          context += `- الكل حاضر! 🎉\n`;
-        }
-        context += `\n`;
+          context += `#### 🔵 السجل ${sIdx + 1}: **${session.name}**\n`;
+          context += `- 📅 التاريخ: ${formatDateWithDay(session.date)}\n`;
+          context += `- 📊 الإحصائيات: ✅ ${sessionPresent.length} حاضر | ❌ ${sessionAbsent.length} غائب | نسبة ${sessionRate}%\n\n`;
 
-        context += `### 📅 جلسات اليوم:\n`;
-        finalTodaySessions.forEach(session => {
-          const sessionRecords = fixedRecords.filter(r => r.sessionId === session.id);
-          context += `- **${session.name}** | حاضر: ${sessionRecords.length}/${students.length}\n`;
+          context += `**✅ حاضرين سجل "${session.name}" (${sessionPresent.length}):**\n`;
+          if (sessionPresent.length > 0) {
+            sessionPresent.forEach((st, i) => {
+              context += `${i + 1}. ✅ **${st.name}** | كود: ${st.code} | كروب: ${st.group || '-'}\n`;
+            });
+          } else {
+            context += `- لا يوجد حاضرين بهذا السجل\n`;
+          }
+          context += `\n`;
+
+          context += `**❌ غائبين سجل "${session.name}" (${sessionAbsent.length}):**\n`;
+          if (sessionAbsent.length > 0) {
+            sessionAbsent.forEach((st, i) => {
+              context += `${i + 1}. ❌ **${st.name}** | كود: ${st.code} | كروب: ${st.group || '-'}\n`;
+            });
+          } else {
+            context += `- الكل حاضر بهذا السجل! 🎉\n`;
+          }
+          context += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
         });
-        context += `\n`;
+
+        // ✅ ملخص إجمالي (اختياري للأسئلة العامة)
+        context += `### 📌 ملخص اليوم الإجمالي (للأسئلة العامة فقط):\n`;
+        context += `- عدد السجلات اليوم: **${finalTodaySessions.length}**\n`;
+        context += `- طلاب حضروا بأي سجل: **${presentStudents.length}**\n`;
+        context += `- طلاب لم يحضروا أي سجل: **${absentStudents.length}**\n\n`;
       } else {
         context += `### ⚠️ لا يوجد جلسة بتاريخ اليوم\n\n`;
       }
@@ -822,15 +838,47 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       return hint;
     }
 
-    if (asksToday || (asksPresent && asksAbsent)) {
+    if (asksToday || asksPresent || asksAbsent) {
       const total = students.length;
-      if (present.length === 0 && absent.length === 0) {
+      
+      // ✅ نجمع كل جلسات اليوم منفصلة
+      const todaySessionsList = fixedSessions.filter(s => todaySessionIdsSet.has(s.id));
+      
+      if (todaySessionsList.length === 0) {
         hint += `\n\n[🚨 لا توجد بيانات حضور لليوم (${todayKey})]`;
-      } else if (total > THRESHOLD) {
-        hint += `\n\n[🚨 حضور اليوم: ✅${present.length} ❌${absent.length} (أكثر من 50). اذكر الأعداد والنسبة فقط]`;
-      } else {
-        hint += `\n\n[🚨 حضور اليوم الكامل:\n✅ الحاضرين (${present.length}): ${present.map(s => `${s.name} (${s.code}, ${s.group || '-'})`).join(' | ')}\n❌ الغائبين (${absent.length}): ${absent.map(s => `${s.name} (${s.code}, ${s.group || '-'})`).join(' | ')}]`;
+        return hint;
       }
+
+      if (total > THRESHOLD) {
+        let perSessionSummary = '';
+        todaySessionsList.forEach(sess => {
+          const sRecs = records.filter(r => r.sessionId === sess.id);
+          perSessionSummary += `\n• سجل "${sess.name}": ${sRecs.length}/${total} حاضر`;
+        });
+        hint += `\n\n[🚨 عدد كبير من الطلاب (${total}). فصّل كل سجل لحاله:${perSessionSummary}\n\nاطلب تصدير اكسل للتفاصيل]`;
+        return hint;
+      }
+
+      // ✅ بناء تلميح مفصّل لكل سجل
+      let sessionsBreakdown = `\n\n[🚨🚨🚨 إلزامي: فصّل كل سجل لحاله، لا تجمعهم!\n`;
+      sessionsBreakdown += `عدد سجلات اليوم: ${todaySessionsList.length}\n\n`;
+      
+      todaySessionsList.forEach((sess, idx) => {
+        const sRecs = records.filter(r => r.sessionId === sess.id);
+        const sPresentIds = new Set(sRecs.map(r => r.studentId));
+        const sPresent = students.filter(s => sPresentIds.has(s.id));
+        const sAbsent = students.filter(s => !sPresentIds.has(s.id));
+        
+        sessionsBreakdown += `━━━ السجل ${idx + 1}: "${sess.name}" ━━━\n`;
+        sessionsBreakdown += `✅ حاضرين (${sPresent.length}): ${sPresent.map(s => `${s.name} (${s.code}, ${s.group || '-'})`).join(' | ') || 'لا أحد'}\n`;
+        sessionsBreakdown += `❌ غائبين (${sAbsent.length}): ${sAbsent.map(s => `${s.name} (${s.code}, ${s.group || '-'})`).join(' | ') || 'لا أحد'}\n\n`;
+      });
+      
+      sessionsBreakdown += `\n⛔ ممنوع تجمع السجلات سوا!\n`;
+      sessionsBreakdown += `⛔ ممنوع تقول "الحاضرين اليوم" بشكل عام!\n`;
+      sessionsBreakdown += `✅ اعرض كل سجل لحاله بعنوان واضح!]`;
+      
+      hint += sessionsBreakdown;
       return hint;
     }
 
@@ -876,6 +924,15 @@ if (!GEMINI_API_KEY && !OPENROUTER_API_KEY && !GROQ_API_KEY) {
 - ❌ ممنوع تذكر الغائبين إذا السؤال عن الحاضرين فقط
 - ❌ ممنوع تذكر الحاضرين إذا السؤال عن الغائبين فقط
 - ❌ ممنوع تخمين أي شي
+- ❌ 🚨🚨 ممنوع تجمع سجلات اليوم سوا! كل سجل لحاله!
+- ❌ ممنوع تقول "الحاضرين اليوم: X, Y, Z" كقائمة موحّدة
+- ❌ ممنوع تحسب طالب حاضر بكل السجلات لو هو حضر بسجل واحد فقط
+
+## 📋 لما يكون فيه أكثر من سجل (جلسة) باليوم:
+1. ✅ افصل كل سجل لحاله بعنوان واضح: "السجل 1: اسم السجل"
+2. ✅ لكل سجل اعرض الحاضرين والغائبين الخاصين فيه فقط
+3. ✅ استخدم فاصل واضح بين السجلات: ━━━━━━━━━
+4. ✅ لو الطالب حاضر بسجل وغائب بثاني → اعرضه ✅ بسجل و ❌ بالثاني
 
 ## 🔍 لأي سؤال عن اليوم:
 1. افحص "🚨🚨🚨 أرقام مؤكدة 100%"

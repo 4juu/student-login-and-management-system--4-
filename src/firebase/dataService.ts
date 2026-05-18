@@ -4,22 +4,32 @@ import { Student, AttendanceRecord, AttendanceSession, Stage, College } from "..
 import { User } from "../types/user";
 
 // ============================================================
-// 🔑 المسارات الجديدة
+// 🔑 المسارات
 // ============================================================
-// userData/{adminUid}/colleges/{collegeId} → بيانات الكلية
-// userData/{adminUid}/stages/{stageId} → بيانات المرحلة
-// userData/{adminUid}/stageData/{stageId}/students → طلاب المرحلة
-// userData/{adminUid}/stageData/{stageId}/records → سجلات
-// userData/{adminUid}/stageData/{stageId}/sessions → جلسات
+// مشترك بين الأدمن وكل تدريسييه:
+// userData/{adminUid}/colleges
+// userData/{adminUid}/stages
+// userData/{adminUid}/stageData/{stageId}/students
+//
+// 🆕 منفصل لكل تدريسي (والأدمن نفسه يعتبر تدريسي بسجله الخاص):
+// userData/{adminUid}/stageData/{stageId}/teacherRecords/{teacherId}/records
+// userData/{adminUid}/stageData/{stageId}/teacherRecords/{teacherId}/sessions
+// userData/{adminUid}/stageData/{stageId}/teacherRecords/{teacherId}/activeSession
+// ============================================================
 
-const getStagePath = (adminUid: string, stageId: string, sub: string) => 
+const getStagePath = (adminUid: string, stageId: string, sub: string) =>
   `userData/${adminUid}/stageData/${stageId}/${sub}`;
 
-const getCollegesPath = (adminUid: string) => 
-  `userData/${adminUid}/colleges`;
+// 🆕 مسار خاص بكل تدريسي
+const getTeacherDataPath = (
+  adminUid: string,
+  stageId: string,
+  teacherId: string,
+  sub: string
+) => `userData/${adminUid}/stageData/${stageId}/teacherRecords/${teacherId}/${sub}`;
 
-const getStagesPath = (adminUid: string) => 
-  `userData/${adminUid}/stages`;
+const getCollegesPath = (adminUid: string) => `userData/${adminUid}/colleges`;
+const getStagesPath = (adminUid: string) => `userData/${adminUid}/stages`;
 
 // ============================================================
 // 💾 LOCAL STORAGE
@@ -28,9 +38,10 @@ const LS = {
   colleges: (uid: string) => `colleges_${uid}`,
   stages: (uid: string) => `stages_${uid}`,
   students: (uid: string, sid: string) => `students_${uid}_${sid}`,
-  records: (uid: string, sid: string) => `records_${uid}_${sid}`,
-  sessions: (uid: string, sid: string) => `sessions_${uid}_${sid}`,
-  activeSession: (uid: string, sid: string) => `activeSession_${uid}_${sid}`,
+  // 🆕 السجلات والجلسات تتضمن teacherId
+  records: (uid: string, sid: string, tid: string) => `records_${uid}_${sid}_${tid}`,
+  sessions: (uid: string, sid: string, tid: string) => `sessions_${uid}_${sid}_${tid}`,
+  activeSession: (uid: string, sid: string, tid: string) => `activeSession_${uid}_${sid}_${tid}`,
 };
 
 const saveLocal = (key: string, data: unknown): void => {
@@ -45,12 +56,12 @@ const loadLocal = <T,>(key: string, fallback: T): T => {
 };
 
 const isDangerousEmpty = (newData: unknown[], localData: unknown[]): boolean => {
-  return Array.isArray(newData) && newData.length === 0 && 
+  return Array.isArray(newData) && newData.length === 0 &&
          Array.isArray(localData) && localData.length > 0;
 };
 
 // ============================================================
-// 🏛️ COLLEGES (الكليات)
+// 🏛️ COLLEGES (مشترك)
 // ============================================================
 
 export const saveColleges = async (
@@ -68,7 +79,6 @@ export const saveColleges = async (
   saveLocal(LS.colleges(adminUid), colleges);
   try {
     await set(ref(database, getCollegesPath(adminUid)), colleges);
-    console.log('✅ Colleges saved');
   } catch (e) {
     console.warn('⚠️ فشل حفظ الكليات:', e);
   }
@@ -91,7 +101,7 @@ export const loadColleges = async (adminUid: string): Promise<College[]> => {
 };
 
 // ============================================================
-// 📖 STAGES (المراحل)
+// 📖 STAGES (مشترك)
 // ============================================================
 
 export const saveStages = async (
@@ -109,7 +119,6 @@ export const saveStages = async (
   saveLocal(LS.stages(adminUid), stages);
   try {
     await set(ref(database, getStagesPath(adminUid)), stages);
-    console.log('✅ Stages saved');
   } catch (e) {
     console.warn('⚠️ فشل حفظ المراحل:', e);
   }
@@ -132,7 +141,7 @@ export const loadStages = async (adminUid: string): Promise<Stage[]> => {
 };
 
 // ============================================================
-// 👥 STUDENTS (طلاب المرحلة)
+// 👥 STUDENTS (مشترك بين كل التدريسيين)
 // ============================================================
 
 export const saveStudents = async (
@@ -151,7 +160,6 @@ export const saveStudents = async (
   saveLocal(LS.students(adminUid, stageId), students);
   try {
     await set(ref(database, getStagePath(adminUid, stageId, 'students')), students);
-    console.log('✅ Students saved for stage:', stageId);
   } catch (e) {
     console.warn('⚠️ فشل حفظ الطلاب:', e);
   }
@@ -174,26 +182,30 @@ export const loadStudents = async (adminUid: string, stageId: string): Promise<S
 };
 
 // ============================================================
-// 📝 ATTENDANCE RECORDS
+// 📝 ATTENDANCE RECORDS (🆕 منفصل لكل تدريسي)
 // ============================================================
 
 export const saveAttendanceRecords = async (
   adminUid: string,
   stageId: string,
+  teacherId: string,
   records: AttendanceRecord[],
   forceDelete: boolean = false
 ): Promise<void> => {
   if (!forceDelete) {
-    const local = loadLocal<AttendanceRecord[]>(LS.records(adminUid, stageId), []);
+    const local = loadLocal<AttendanceRecord[]>(LS.records(adminUid, stageId, teacherId), []);
     if (isDangerousEmpty(records, local)) {
       console.warn('🛑 منع حفظ سجلات فارغة');
       return;
     }
   }
-  saveLocal(LS.records(adminUid, stageId), records);
+  saveLocal(LS.records(adminUid, stageId, teacherId), records);
   try {
-    await set(ref(database, getStagePath(adminUid, stageId, 'records')), records);
-    console.log('✅ Records saved');
+    await set(
+      ref(database, getTeacherDataPath(adminUid, stageId, teacherId, 'records')),
+      records
+    );
+    console.log('✅ Records saved for teacher:', teacherId);
   } catch (e) {
     console.warn('⚠️ فشل حفظ السجلات:', e);
   }
@@ -201,15 +213,18 @@ export const saveAttendanceRecords = async (
 
 export const loadAttendanceRecords = async (
   adminUid: string,
-  stageId: string
+  stageId: string,
+  teacherId: string
 ): Promise<AttendanceRecord[]> => {
-  const local = loadLocal<AttendanceRecord[]>(LS.records(adminUid, stageId), []);
+  const local = loadLocal<AttendanceRecord[]>(LS.records(adminUid, stageId, teacherId), []);
   try {
-    const snap = await get(ref(database, getStagePath(adminUid, stageId, 'records')));
+    const snap = await get(
+      ref(database, getTeacherDataPath(adminUid, stageId, teacherId, 'records'))
+    );
     if (snap.exists()) {
       const data = snap.val();
       const arr: AttendanceRecord[] = Array.isArray(data) ? data : Object.values(data);
-      saveLocal(LS.records(adminUid, stageId), arr);
+      saveLocal(LS.records(adminUid, stageId, teacherId), arr);
       return arr;
     }
     return local;
@@ -219,26 +234,30 @@ export const loadAttendanceRecords = async (
 };
 
 // ============================================================
-// 📅 SESSIONS
+// 📅 SESSIONS (🆕 منفصل لكل تدريسي)
 // ============================================================
 
 export const saveSessions = async (
   adminUid: string,
   stageId: string,
+  teacherId: string,
   sessions: AttendanceSession[],
   forceDelete: boolean = false
 ): Promise<void> => {
   if (!forceDelete) {
-    const local = loadLocal<AttendanceSession[]>(LS.sessions(adminUid, stageId), []);
+    const local = loadLocal<AttendanceSession[]>(LS.sessions(adminUid, stageId, teacherId), []);
     if (isDangerousEmpty(sessions, local)) {
       console.warn('🛑 منع حفظ جلسات فارغة');
       return;
     }
   }
-  saveLocal(LS.sessions(adminUid, stageId), sessions);
+  saveLocal(LS.sessions(adminUid, stageId, teacherId), sessions);
   try {
-    await set(ref(database, getStagePath(adminUid, stageId, 'sessions')), sessions);
-    console.log('✅ Sessions saved');
+    await set(
+      ref(database, getTeacherDataPath(adminUid, stageId, teacherId, 'sessions')),
+      sessions
+    );
+    console.log('✅ Sessions saved for teacher:', teacherId);
   } catch (e) {
     console.warn('⚠️ فشل حفظ الجلسات:', e);
   }
@@ -246,15 +265,18 @@ export const saveSessions = async (
 
 export const loadSessions = async (
   adminUid: string,
-  stageId: string
+  stageId: string,
+  teacherId: string
 ): Promise<AttendanceSession[]> => {
-  const local = loadLocal<AttendanceSession[]>(LS.sessions(adminUid, stageId), []);
+  const local = loadLocal<AttendanceSession[]>(LS.sessions(adminUid, stageId, teacherId), []);
   try {
-    const snap = await get(ref(database, getStagePath(adminUid, stageId, 'sessions')));
+    const snap = await get(
+      ref(database, getTeacherDataPath(adminUid, stageId, teacherId, 'sessions'))
+    );
     if (snap.exists()) {
       const data = snap.val();
       const arr: AttendanceSession[] = Array.isArray(data) ? data : Object.values(data);
-      saveLocal(LS.sessions(adminUid, stageId), arr);
+      saveLocal(LS.sessions(adminUid, stageId, teacherId), arr);
       return arr;
     }
     return local;
@@ -264,20 +286,26 @@ export const loadSessions = async (
 };
 
 // ============================================================
-// 🎯 ACTIVE SESSION
+// 🎯 ACTIVE SESSION (🆕 منفصل لكل تدريسي)
 // ============================================================
 
 export const saveActiveSession = async (
   adminUid: string,
   stageId: string,
+  teacherId: string,
   sessionId: string | null
 ): Promise<void> => {
-  saveLocal(LS.activeSession(adminUid, stageId), sessionId);
+  saveLocal(LS.activeSession(adminUid, stageId, teacherId), sessionId);
   try {
     if (sessionId) {
-      await set(ref(database, getStagePath(adminUid, stageId, 'activeSession')), sessionId);
+      await set(
+        ref(database, getTeacherDataPath(adminUid, stageId, teacherId, 'activeSession')),
+        sessionId
+      );
     } else {
-      await remove(ref(database, getStagePath(adminUid, stageId, 'activeSession')));
+      await remove(
+        ref(database, getTeacherDataPath(adminUid, stageId, teacherId, 'activeSession'))
+      );
     }
   } catch (e) {
     console.warn('⚠️ فشل حفظ الجلسة النشطة:', e);
@@ -286,14 +314,17 @@ export const saveActiveSession = async (
 
 export const loadActiveSession = async (
   adminUid: string,
-  stageId: string
+  stageId: string,
+  teacherId: string
 ): Promise<string | null> => {
-  const local = loadLocal<string | null>(LS.activeSession(adminUid, stageId), null);
+  const local = loadLocal<string | null>(LS.activeSession(adminUid, stageId, teacherId), null);
   try {
-    const snap = await get(ref(database, getStagePath(adminUid, stageId, 'activeSession')));
+    const snap = await get(
+      ref(database, getTeacherDataPath(adminUid, stageId, teacherId, 'activeSession'))
+    );
     if (snap.exists()) {
       const value = snap.val();
-      saveLocal(LS.activeSession(adminUid, stageId), value);
+      saveLocal(LS.activeSession(adminUid, stageId, teacherId), value);
       return value;
     }
     return local;
@@ -303,30 +334,41 @@ export const loadActiveSession = async (
 };
 
 // ============================================================
-// 📦 LOAD ALL STAGE DATA
+// 📦 LOAD ALL STAGE DATA (🆕 يقبل teacherId)
 // ============================================================
 
-export const loadStageData = async (adminUid: string, stageId: string) => {
+export const loadStageData = async (
+  adminUid: string,
+  stageId: string,
+  teacherId: string
+) => {
   const [students, records, sessions, activeSessionId] = await Promise.all([
     loadStudents(adminUid, stageId),
-    loadAttendanceRecords(adminUid, stageId),
-    loadSessions(adminUid, stageId),
-    loadActiveSession(adminUid, stageId),
+    loadAttendanceRecords(adminUid, stageId, teacherId),
+    loadSessions(adminUid, stageId, teacherId),
+    loadActiveSession(adminUid, stageId, teacherId),
   ]);
   return { students, records, sessions, activeSessionId };
 };
 
 // ============================================================
-// 🗑️ DELETE STAGE (يحذف كل بيانات المرحلة)
+// 🗑️ DELETE STAGE (يحذف كل بيانات المرحلة لجميع التدريسيين)
 // ============================================================
 
 export const deleteStageData = async (adminUid: string, stageId: string): Promise<void> => {
   try {
     await remove(ref(database, `userData/${adminUid}/stageData/${stageId}`));
     localStorage.removeItem(LS.students(adminUid, stageId));
-    localStorage.removeItem(LS.records(adminUid, stageId));
-    localStorage.removeItem(LS.sessions(adminUid, stageId));
-    localStorage.removeItem(LS.activeSession(adminUid, stageId));
+    // امسح كل مفاتيح السجلات/الجلسات لكل التدريسيين من localStorage
+    Object.keys(localStorage).forEach((k) => {
+      if (
+        k.startsWith(`records_${adminUid}_${stageId}_`) ||
+        k.startsWith(`sessions_${adminUid}_${stageId}_`) ||
+        k.startsWith(`activeSession_${adminUid}_${stageId}_`)
+      ) {
+        localStorage.removeItem(k);
+      }
+    });
     console.log('✅ Stage data deleted:', stageId);
   } catch (e) {
     console.error('❌ فشل حذف بيانات المرحلة:', e);
@@ -371,7 +413,7 @@ export const saveUserData = async (uid: string, userData: User): Promise<void> =
 };
 
 // ============================================================
-// 🔁 SYNC PENDING (للمستقبل)
+// 🔁 SYNC PENDING
 // ============================================================
 
 export const syncPendingChanges = async (_uid: string): Promise<void> => {
