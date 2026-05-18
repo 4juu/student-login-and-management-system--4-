@@ -467,7 +467,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
             />
           </svg>
           <div className="text-sm text-blue-800">
-            <p className="font-medium mb-1">  معلومات مفيدة</p>
+            <p className="font-medium mb-1">  معلومات </p>
             <ul className="list-disc list-inside space-y-1">
               <li>الصورة تُحفظ في قاعدة البيانات مباشرة</li>
               <li>الحد الأقصى للصورة 1MB لأفضل أداء</li>
