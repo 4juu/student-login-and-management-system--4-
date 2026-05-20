@@ -27,6 +27,7 @@ import {
   saveActiveSession,
   saveUserData,
   deleteStageData,
+  flushAllPendingSaves,
 } from './firebase/dataService';
 
 type Tab = 'stage-selector' | 'colleges' | 'login' | 'manage' | 'records' | 'settings' | 'sessions' | 'teachers' | 'profile';
@@ -58,6 +59,10 @@ function App() {
   const [allTeachers, setAllTeachers] = useState<User[]>([]);
   const [allStagesData, setAllStagesData] = useState<AllStagesData>({});
 
+  // 🆕 حالة تحميل بيانات الجامعة الشاملة (للأدمن فقط - يدوي)
+  const [universityDataLoading, setUniversityDataLoading] = useState(false);
+  const [universityDataLoaded, setUniversityDataLoaded] = useState(false);
+
   const [activeTab, setActiveTab] = useState<Tab>('stage-selector');
 
   const intentionalDeleteRef = useRef({
@@ -68,17 +73,29 @@ function App() {
     stages: false,
   });
 
-  // 🔑 معرف الأدمن (للوصول للبيانات المشتركة: كليات، مراحل، طلاب)
+  // 🔑 معرف الأدمن
   const getAdminUid = (): string => {
     if (!currentUser) return '';
     if (currentUser.role === 'admin') return currentUser.uid;
     return currentUser.adminId || currentUser.uid;
   };
 
-  // 🆕 معرف التدريسي = uid المستخدم الحالي (للسجلات والجلسات الخاصة)
+  // 🆕 معرف التدريسي
   const getTeacherId = (): string => {
     return currentUser?.uid || '';
   };
+
+  // 🆕 احفظ كل التعديلات المعلقة قبل إغلاق الصفحة
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      flushAllPendingSaves();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      flushAllPendingSaves();
+    };
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -119,6 +136,8 @@ function App() {
     return () => unsubscribe();
   }, []);
 
+  // 🚀 تحميل البيانات الأساسية فقط (كليات + مراحل)
+  // 🚀 لا نحمل بيانات الجامعة الشاملة تلقائياً!
   const loadInitialData = async (user: User) => {
     setDataLoaded(false);
     try {
@@ -133,8 +152,21 @@ function App() {
       setStages(stagesData);
       setActiveTab('stage-selector');
 
+      // ✅ تحميل قائمة التدريسيين فقط (خفيف جداً)
       if (user.role === 'admin') {
-        await loadAllAdminData(user.uid, stagesData);
+        try {
+          const { ref: dbRef, get } = await import('firebase/database');
+          const { database } = await import('./firebase/config');
+          const usersSnap = await get(dbRef(database, 'users'));
+          if (usersSnap.exists()) {
+            const teachersList = (Object.values(usersSnap.val()) as User[]).filter(
+              u => u.role === 'teacher' && u.adminId === user.uid
+            );
+            setAllTeachers(teachersList);
+          }
+        } catch (e) {
+          console.warn('فشل تحميل قائمة التدريسيين:', e);
+        }
       }
     } catch (error) {
       console.error('Error loading initial data:', error);
@@ -143,26 +175,21 @@ function App() {
     }
   };
 
-  const loadAllAdminData = async (adminUid: string, allStages: Stage[]) => {
+  // 🆕 تحميل بيانات الجامعة الشاملة - يدوي فقط عند الطلب
+  const loadAllAdminData = async () => {
+    if (!currentUser || currentUser.role !== 'admin') return;
+
+    setUniversityDataLoading(true);
     try {
       const { ref: dbRef, get } = await import('firebase/database');
       const { database } = await import('./firebase/config');
+      const adminUid = currentUser.uid;
 
-      const usersSnap = await get(dbRef(database, 'users'));
-      let teachersList: User[] = [];
-      if (usersSnap.exists()) {
-        teachersList = (Object.values(usersSnap.val()) as User[]).filter(
-          u => u.role === 'teacher' && u.adminId === adminUid
-        );
-        setAllTeachers(teachersList);
-      }
-
-      const allUserIds = [adminUid, ...teachersList.map(t => t.uid)];
-
+      const allUserIds = [adminUid, ...allTeachers.map(t => t.uid)];
       const stagesDataMap: AllStagesData = {};
 
       await Promise.all(
-        allStages.map(async (stage) => {
+        stages.map(async (stage) => {
           try {
             const studentsSnap = await get(
               dbRef(database, `userData/${adminUid}/stageData/${stage.id}/students`)
@@ -224,14 +251,12 @@ function App() {
       );
 
       setAllStagesData(stagesDataMap);
+      setUniversityDataLoaded(true);
     } catch (error) {
       console.error('❌ خطأ في تحميل بيانات الأدمن الشاملة:', error);
-    }
-  };
-
-  const refreshAdminData = async () => {
-    if (currentUser?.role === 'admin') {
-      await loadAllAdminData(currentUser.uid, stages);
+      alert('❌ فشل تحميل بيانات الجامعة. حاول مرة ثانية.');
+    } finally {
+      setUniversityDataLoading(false);
     }
   };
 
@@ -257,6 +282,9 @@ function App() {
   };
 
   const handleBackToStages = () => {
+    // 🆕 احفظ التعديلات المعلقة قبل المغادرة
+    flushAllPendingSaves();
+
     setSelectedCollegeId(null);
     setSelectedStageId(null);
     setStudents([]);
@@ -264,7 +292,6 @@ function App() {
     setSessions([]);
     setActiveSessionId(null);
     setActiveTab('stage-selector');
-    refreshAdminData();
   };
 
   const resetData = () => {
@@ -279,10 +306,11 @@ function App() {
     setSelectedStageId(null);
     setAllTeachers([]);
     setAllStagesData({});
+    setUniversityDataLoaded(false);
     setActiveTab('stage-selector');
   };
 
-  // ✅ مشترك - الأدمن فقط يحفظ الكليات
+  // ✅ مشترك - الأدمن فقط يحفظ الكليات (مع Debounce)
   useEffect(() => {
     if (currentUser?.role === 'admin' && dataLoaded) {
       const force = intentionalDeleteRef.current.colleges;
@@ -291,7 +319,7 @@ function App() {
     }
   }, [colleges, currentUser, dataLoaded]);
 
-  // ✅ مشترك - الأدمن فقط يحفظ المراحل
+  // ✅ مشترك - الأدمن فقط يحفظ المراحل (مع Debounce)
   useEffect(() => {
     if (currentUser?.role === 'admin' && dataLoaded) {
       const force = intentionalDeleteRef.current.stages;
@@ -300,14 +328,14 @@ function App() {
     }
   }, [stages, currentUser, dataLoaded]);
 
-  // ✅ الطلاب مشتركون - يحفظ التدريسي والأدمن (حتى يقدر التدريسي يربط QR)
+  // ✅ الطلاب مشتركون (مع Debounce)
   useEffect(() => {
     if (currentUser && dataLoaded && selectedStageId) {
       const force = intentionalDeleteRef.current.students;
       saveStudents(getAdminUid(), selectedStageId, students, force);
       if (force) intentionalDeleteRef.current.students = false;
 
-      if (currentUser.role === 'admin') {
+      if (currentUser.role === 'admin' && universityDataLoaded) {
         setAllStagesData(prev => ({
           ...prev,
           [selectedStageId]: {
@@ -317,9 +345,9 @@ function App() {
         }));
       }
     }
-  }, [students, currentUser, dataLoaded, selectedStageId]);
+  }, [students, currentUser, dataLoaded, selectedStageId, universityDataLoaded]);
 
-  // 🆕 منفصل - كل تدريسي يحفظ سجلاته الخاصة
+  // 🆕 منفصل لكل تدريسي (مع Debounce)
   useEffect(() => {
     if (currentUser && dataLoaded && selectedStageId) {
       const force = intentionalDeleteRef.current.records;
@@ -332,7 +360,7 @@ function App() {
       );
       if (force) intentionalDeleteRef.current.records = false;
 
-      if (currentUser.role === 'admin') {
+      if (currentUser.role === 'admin' && universityDataLoaded) {
         setAllStagesData(prev => ({
           ...prev,
           [selectedStageId]: {
@@ -342,9 +370,9 @@ function App() {
         }));
       }
     }
-  }, [attendanceRecords, currentUser, dataLoaded, selectedStageId]);
+  }, [attendanceRecords, currentUser, dataLoaded, selectedStageId, universityDataLoaded]);
 
-  // 🆕 منفصل - كل تدريسي يحفظ جلساته الخاصة
+  // 🆕 منفصل لكل تدريسي (مع Debounce)
   useEffect(() => {
     if (currentUser && dataLoaded && selectedStageId) {
       const force = intentionalDeleteRef.current.sessions;
@@ -357,7 +385,7 @@ function App() {
       );
       if (force) intentionalDeleteRef.current.sessions = false;
 
-      if (currentUser.role === 'admin') {
+      if (currentUser.role === 'admin' && universityDataLoaded) {
         setAllStagesData(prev => ({
           ...prev,
           [selectedStageId]: {
@@ -367,9 +395,9 @@ function App() {
         }));
       }
     }
-  }, [sessions, currentUser, dataLoaded, selectedStageId]);
+  }, [sessions, currentUser, dataLoaded, selectedStageId, universityDataLoaded]);
 
-  // 🆕 منفصل - كل تدريسي يحفظ جلسته النشطة الخاصة
+  // 🆕 الجلسة النشطة (فوري - مهم)
   useEffect(() => {
     if (currentUser && dataLoaded && selectedStageId) {
       saveActiveSession(
@@ -394,6 +422,7 @@ function App() {
 
   const handleLogout = async () => {
     if (window.confirm('هل أنت متأكد من تسجيل الخروج؟')) {
+      flushAllPendingSaves();
       await signOut();
       setCurrentUser(null);
       resetData();
@@ -435,27 +464,22 @@ function App() {
 
   const handleAddStudent = (student: Student) => setStudents(prev => [...prev, student]);
 
-// ✅ تحديث طالب (يدعم الحذف الصريح للحقول عند إرسال undefined)
-const handleUpdateStudent = (id: string, updates: Partial<Student>) => {
-  setStudents(prev =>
-    prev.map(student => {
-      if (student.id !== id) return student;
-
-      // ادمج التحديثات
-      const merged: any = { ...student, ...updates };
-
-      // احذف الحقول التي قيمتها undefined أو فارغة (لإزالتها فعلياً من Firebase)
-      Object.keys(updates).forEach(key => {
-        const value = (updates as any)[key];
-        if (value === undefined || value === null || value === '') {
-          delete merged[key];
-        }
-      });
-
-      return merged as Student;
-    })
-  );
-};
+  // ✅ تحديث طالب (يدعم الحذف الصريح للحقول)
+  const handleUpdateStudent = (id: string, updates: Partial<Student>) => {
+    setStudents(prev =>
+      prev.map(student => {
+        if (student.id !== id) return student;
+        const merged: any = { ...student, ...updates };
+        Object.keys(updates).forEach(key => {
+          const value = (updates as any)[key];
+          if (value === undefined || value === null || value === '') {
+            delete merged[key];
+          }
+        });
+        return merged as Student;
+      })
+    );
+  };
 
   const handleDeleteStudent = (id: string) => {
     if (window.confirm('هل أنت متأكد من حذف هذا الطالب؟')) {
@@ -627,6 +651,47 @@ const handleUpdateStudent = (id: string, updates: Partial<Student>) => {
               </button>
             </div>
 
+            {/* 🆕 زر تحميل بيانات الجامعة الشاملة (للأدمن فقط) */}
+            {isAdmin && activeTab === 'stage-selector' && (
+              <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-3xl">📊</span>
+                    <div>
+                      <h3 className="font-bold text-purple-900">بيانات الجامعة الشاملة</h3>
+                      <p className="text-xs text-purple-700">
+                        {universityDataLoaded
+                          ? `✅ تم تحميل بيانات ${Object.keys(allStagesData).length} مرحلة`
+                          : 'حمّل بيانات كل الكليات والمراحل للتحليلات والتقارير الشاملة'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={loadAllAdminData}
+                    disabled={universityDataLoading || stages.length === 0}
+                    className={`px-5 py-2.5 rounded-lg font-bold text-white transition shadow-md ${
+                      universityDataLoading
+                        ? 'bg-gray-400 cursor-wait'
+                        : universityDataLoaded
+                        ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700'
+                        : 'bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700'
+                    } ${stages.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {universityDataLoading
+                      ? '⏳ جاري التحميل...'
+                      : universityDataLoaded
+                      ? '🔄 تحديث البيانات'
+                      : '⚡ تحميل بيانات الجامعة'}
+                  </button>
+                </div>
+                {!universityDataLoaded && (
+                  <p className="text-[11px] text-purple-600 mt-2 bg-white/50 px-2 py-1 rounded">
+                    💡 الميزة موفرة - يتم التحميل فقط عند الحاجة لتقليل استهلاك الإنترنت
+                  </p>
+                )}
+              </div>
+            )}
+
             {activeTab === 'stage-selector' && (
               <StageSelector user={currentUser} colleges={colleges} stages={stages} onSelect={handleSelectStage} />
             )}
@@ -764,7 +829,10 @@ const handleUpdateStudent = (id: string, updates: Partial<Student>) => {
         sessions={sessions}
         activeSessionId={activeSessionId}
         allTeachers={isAdmin ? allTeachers : []}
-        allStagesData={isAdmin ? allStagesData : {}}
+        allStagesData={isAdmin && universityDataLoaded ? allStagesData : {}}
+        onRequestUniversityData={isAdmin ? loadAllAdminData : undefined}
+        universityDataLoaded={universityDataLoaded}
+        universityDataLoading={universityDataLoading}
       />
     </div>
   );

@@ -39,6 +39,10 @@ interface SmartChatBotProps {
       sessions: AttendanceSession[];
     };
   };
+  // 🆕 3 Props جديدة فقط
+  onRequestUniversityData?: () => Promise<void>;
+  universityDataLoaded?: boolean;
+  universityDataLoading?: boolean;
 }
 
 // ✅ API Keys
@@ -255,7 +259,6 @@ const callOpenRouterDirect = async (
   return text;
 };
 
-// ✅ واجهة بطاقة الطالب السريعة
 interface StudentQuickCard {
   student: Student;
   attendedCount: number;
@@ -277,6 +280,10 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   activeSessionId: _activeSessionId,
   allTeachers: _allTeachers = [],
   allStagesData = {},
+  // 🆕 Props جديدة
+  onRequestUniversityData,
+  universityDataLoaded = false,
+  universityDataLoading = false,
 }) => {
   const isAdmin = user.role === 'admin';
   const currentCollege = colleges.find(c => c.id === currentCollegeId);
@@ -292,7 +299,6 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   const [selectedModelId, setSelectedModelId] = useState<string>('auto');
   const [showModelSelector, setShowModelSelector] = useState(false);
 
-  // ✅ حالات البحث عن الطالب
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [studentSuggestions, setStudentSuggestions] = useState<Student[]>([]);
   const [selectedStudentCard, setSelectedStudentCard] = useState<StudentQuickCard | null>(null);
@@ -371,7 +377,6 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     };
   }, [isAdmin, colleges, stages, user.permissions, students, records, sessions, allStagesData]);
 
-  // ✅ دالة إصلاح التاريخ
   const fixDate = useCallback((rawDate: any): string => {
     if (!rawDate) return '';
     if (rawDate instanceof Date) {
@@ -404,7 +409,6 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     return `${year}-${String(parseInt(month)).padStart(2, '0')}-${String(parseInt(day)).padStart(2, '0')}`;
   }, []);
 
-  // ✅ حساب بيانات الطالب السريعة
   const computeStudentCard = useCallback((student: Student): StudentQuickCard => {
     const todayKey = fixDate(new Date());
 
@@ -421,7 +425,6 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     const studentRecords = records.filter(r => r.studentId === student.id);
     const attendedSessionIds = new Set(studentRecords.map(r => r.sessionId));
 
-    // حساب حضور اليوم
     const todaySessionIds = new Set<string>();
     fixedSessions.forEach(s => { if (s._normalizedDate === todayKey) todaySessionIds.add(s.id); });
     records.forEach(r => {
@@ -444,7 +447,6 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     return { student, attendedCount, absentCount, percentage, isPresentToday, attendedSessions };
   }, [sessions, records, fixDate]);
 
-  // ✅ البحث عن الطالب في الوقت الفعلي
   const handleStudentSearch = useCallback((query: string) => {
     setStudentSearchQuery(query);
     setShowStudentCard(false);
@@ -467,7 +469,6 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     setShowSuggestions(matches.length > 0);
   }, [students]);
 
-  // ✅ اختيار طالب من القائمة
   const handleSelectStudent = useCallback((student: Student) => {
     const card = computeStudentCard(student);
     setSelectedStudentCard(card);
@@ -476,7 +477,6 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     setStudentSearchQuery(student.name);
   }, [computeStudentCard]);
 
-  // ✅ إرسال سؤال عن الطالب للشات
   const sendStudentQuestion = useCallback((student: Student) => {
     const question = `أعطني تفاصيل حضور وغياب الطالب ${student.name}`;
     setInput(question);
@@ -488,14 +488,21 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
 
   useEffect(() => {
     if (isOpen && messages.length === 0) {
+      // 🆕 رسالة ترحيب ذكية حسب الحالة
+      let welcomeText = `أهلاً ${user.displayName} ✨\n\nبشنو أكدر أساعدك اليوم؟`;
+
+      if (isAdmin && !universityDataLoaded && !currentStageId) {
+        welcomeText += `\n\n💡 **نصيحة:** إذا تريد تسأل عن الجامعة كاملة (كل الكليات والمراحل)، اضغط على زر **"📊 تحميل بيانات الجامعة"** بالأعلى أولاً.`;
+      }
+
       setMessages([{
         id: Date.now().toString(),
         type: 'bot',
-        content: `أهلاً ${user.displayName} ✨\n\nبشنو أكدر أساعدك اليوم؟`,
+        content: welcomeText,
         timestamp: new Date(),
       }]);
     }
-  }, [isOpen, messages.length, user.displayName]);
+  }, [isOpen, messages.length, user.displayName, isAdmin, universityDataLoaded, currentStageId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -649,17 +656,23 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       context += `## ⚠️ لا توجد مرحلة مختارة حالياً\n`;
     }
 
-    if (isAdmin && !currentStageId && Object.keys(accessibleData.stagesMap).length > 0) {
-      context += `## 🏛️ ملخص المراحل:\n`;
-      Object.entries(accessibleData.stagesMap).forEach(([_stageId, stageData]) => {
-        const totalPossible = stageData.students.length * stageData.sessions.length;
-        const rate = totalPossible > 0 ? ((stageData.records.length / totalPossible) * 100).toFixed(1) : '0';
-        context += `- **${stageData.collegeName} / ${stageData.stageName}**: ${stageData.students.length} طالب | ${stageData.sessions.length} جلسة | ${rate}%\n`;
-      });
+    if (isAdmin && !currentStageId) {
+      // 🆕 رسالة عن بيانات الجامعة
+      if (Object.keys(accessibleData.stagesMap).length > 0) {
+        context += `## 🏛️ ملخص المراحل (بيانات الجامعة محملة):\n`;
+        Object.entries(accessibleData.stagesMap).forEach(([_stageId, stageData]) => {
+          const totalPossible = stageData.students.length * stageData.sessions.length;
+          const rate = totalPossible > 0 ? ((stageData.records.length / totalPossible) * 100).toFixed(1) : '0';
+          context += `- **${stageData.collegeName} / ${stageData.stageName}**: ${stageData.students.length} طالب | ${stageData.sessions.length} جلسة | ${rate}%\n`;
+        });
+      } else if (!universityDataLoaded) {
+        context += `## ⚠️ بيانات الجامعة الشاملة غير محملة\n`;
+        context += `إذا سألك المستخدم عن بيانات الجامعة كاملة (كل الكليات/المراحل)، اطلب منه الضغط على زر "📊 تحميل بيانات الجامعة" بالأعلى أولاً.\n\n`;
+      }
     }
 
     return context;
-  }, [sessions, records, students, user.displayName, isAdmin, currentCollege, currentStage, currentStageId, accessibleData, fixDate]);
+  }, [sessions, records, students, user.displayName, isAdmin, currentCollege, currentStage, currentStageId, accessibleData, fixDate, universityDataLoaded]);
 
   const analyzeQuestion = useCallback((question: string): string => {
     let hint = '';
@@ -669,9 +682,16 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     const asksAbsent = /غاب|غائب|غياب|ماجا|ما حضر|مو موجود|الناقص|ما اجا|ماجو/i.test(question);
     const asksToday = /اليوم|هسه|هسة|الحين|اليومية/i.test(question);
     const asksAdmin = /مدير|مسؤول|الدعم|النظام|الموقع|من سوى|من صمم|من برمج|من المشرف|صاحب|owner|admin|developer/i.test(question);
+    const asksUniversity = /جامعة|كل الكليات|كل المراحل|الجامعة كاملة|الكليات كلها|كل الطلاب/i.test(question);
 
     if (asksAdmin) {
       hint += `\n\n[🚨 الجواب الإلزامي: مدير الموقع/النظام هو "الدكتور الصيدلاني مجتبى هيثم محمد"]`;
+      return hint;
+    }
+
+    // 🆕 تنبيه إذا سأل عن الجامعة كاملة وما حمّل البيانات
+    if (isAdmin && asksUniversity && !universityDataLoaded && !currentStageId) {
+      hint += `\n\n[🚨 المستخدم يسأل عن بيانات الجامعة الشاملة لكنها غير محملة. اطلب منه الضغط على زر "📊 تحميل بيانات الجامعة" بأعلى الشات]`;
       return hint;
     }
 
@@ -759,7 +779,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     }
 
     return hint;
-  }, [students, records, sessions, fixDate]);
+  }, [students, records, sessions, fixDate, isAdmin, universityDataLoaded, currentStageId]);
 
   const callGeminiAPI = useCallback(
     async (userMessage: string, conversationHistory: Message[]): Promise<string> => {
@@ -931,7 +951,6 @@ ${dataContext}`;
     return Object.values(groups).filter(g => g.models.length > 0);
   }, []);
 
-  // ✅ حساب إحصائيات اليوم للطالب
   const getTodayStatus = useCallback((card: StudentQuickCard): { sessions: { name: string; present: boolean }[] } => {
     const todayKey = fixDate(new Date());
     const todaySessions = card.attendedSessions.filter(
@@ -939,6 +958,19 @@ ${dataContext}`;
     );
     return { sessions: todaySessions.map(as_ => ({ name: as_.session.name, present: as_.present })) };
   }, [fixDate]);
+
+  // 🆕 معالج تحميل بيانات الجامعة
+  const handleLoadUniversityData = async () => {
+    if (!onRequestUniversityData || universityDataLoading) return;
+    await onRequestUniversityData();
+    // إضافة رسالة تأكيد
+    setMessages(prev => [...prev, {
+      id: `${Date.now()}_bot`,
+      type: 'bot',
+      content: `✅ **تم تحميل بيانات الجامعة الشاملة!**\n\nالحين أكدر أجاوبك عن:\n• كل الكليات والمراحل\n• إحصائيات شاملة\n• مقارنات بين المراحل\n• تقارير الجامعة كاملة`,
+      timestamp: new Date(),
+    }]);
+  };
 
   return (
     <>
@@ -980,6 +1012,31 @@ ${dataContext}`;
                 <button onClick={() => setIsOpen(false)} className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-1.5 transition text-lg leading-none w-7 h-7 flex items-center justify-center">×</button>
               </div>
             </div>
+
+            {/* 🆕 زر تحميل بيانات الجامعة (للأدمن فقط) */}
+            {isAdmin && onRequestUniversityData && !currentStageId && (
+              <button
+                onClick={handleLoadUniversityData}
+                disabled={universityDataLoading}
+                className={`w-full mt-2 flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs transition font-bold ${
+                  universityDataLoading
+                    ? 'bg-white bg-opacity-10 cursor-wait'
+                    : universityDataLoaded
+                    ? 'bg-green-500 bg-opacity-30 hover:bg-opacity-40'
+                    : 'bg-white bg-opacity-15 hover:bg-opacity-25'
+                }`}
+                title={universityDataLoaded ? 'البيانات محملة - اضغط للتحديث' : 'تحميل بيانات كل الكليات والمراحل'}
+              >
+                <span>📊</span>
+                <span>
+                  {universityDataLoading
+                    ? '⏳ جاري تحميل بيانات الجامعة...'
+                    : universityDataLoaded
+                    ? '✅ بيانات الجامعة محملة - تحديث'
+                    : '📊 تحميل بيانات الجامعة'}
+                </span>
+              </button>
+            )}
 
             {/* اختيار الموديل */}
             <div className="relative mt-2" ref={modelSelectorRef}>
@@ -1066,7 +1123,6 @@ ${dataContext}`;
                 </div>
                 <p className="text-[10px] text-blue-500 mt-1 text-right">اكتب اسم الطالب لعرض سجل الحضور فوراً بدون AI</p>
 
-                {/* قائمة الاقتراحات */}
                 {showSuggestions && studentSuggestions.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-blue-100 z-[70] overflow-hidden">
                     {studentSuggestions.map(student => (
@@ -1092,10 +1148,8 @@ ${dataContext}`;
                 )}
               </div>
 
-              {/* ✅ بطاقة الطالب السريعة */}
               {showStudentCard && selectedStudentCard && (
                 <div className="mt-2 bg-white rounded-xl border border-blue-200 shadow-md overflow-hidden">
-                  {/* رأس البطاقة */}
                   <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -1118,7 +1172,6 @@ ${dataContext}`;
                     </div>
                   </div>
 
-                  {/* إحصائيات سريعة */}
                   <div className="grid grid-cols-3 divide-x divide-x-reverse divide-gray-100 border-b border-gray-100">
                     <div className="text-center py-2.5 px-2">
                       <p className="text-lg font-bold text-green-600">{selectedStudentCard.attendedCount}</p>
@@ -1136,7 +1189,6 @@ ${dataContext}`;
                     </div>
                   </div>
 
-                  {/* حضور اليوم بالتفصيل */}
                   {(() => {
                     const todayStatus = getTodayStatus(selectedStudentCard);
                     if (todayStatus.sessions.length > 0) {
@@ -1161,7 +1213,6 @@ ${dataContext}`;
                     );
                   })()}
 
-                  {/* سجل كامل - قابل للتمرير */}
                   <div className="max-h-[140px] overflow-y-auto">
                     {selectedStudentCard.attendedSessions.length === 0 ? (
                       <div className="text-center py-3 text-gray-400 text-xs">لا توجد جلسات مسجلة</div>
@@ -1180,7 +1231,6 @@ ${dataContext}`;
                     )}
                   </div>
 
-                  {/* أزرار الإجراءات */}
                   <div className="flex gap-2 p-2 bg-gray-50 border-t border-gray-100">
                     <button
                       onClick={() => sendStudentQuestion(selectedStudentCard.student)}
@@ -1235,14 +1285,12 @@ ${dataContext}`;
             <div ref={messagesEndRef} />
           </div>
 
-          {/* خطأ */}
           {error && (
             <div className="px-3 py-2 bg-red-50 border-t border-red-200">
               <p className="text-xs text-red-700">❌ {error}</p>
             </div>
           )}
 
-          {/* حقل الإدخال */}
           <div className="p-3 bg-white border-t border-orange-100">
             <div className="flex gap-2 items-end">
               <textarea

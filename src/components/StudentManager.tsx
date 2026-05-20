@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { Student } from '../types/student';
 import * as XLSX from 'xlsx';
 
@@ -17,18 +17,20 @@ const extractQrCodeId = (raw: string): string => {
   const text = raw.trim();
   if (!text) return '';
 
-  // إذا رابط
   try {
     const url = new URL(text);
     const id = url.searchParams.get('id');
     if (id) return id.trim();
   } catch {
-    // ليس رابط، تجاهل
+    // ليس رابط
   }
 
-  // نص خام
   return text;
 };
+
+// 🆕 عدد الطلاب بكل صفحة
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
+const DEFAULT_PAGE_SIZE = 50;
 
 export const StudentManager: React.FC<StudentManagerProps> = ({
   students,
@@ -50,16 +52,19 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   const [importMessage, setImportMessage] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // تعديل الرقم الجامعي
   const [editingUniIdStudent, setEditingUniIdStudent] = useState<string | null>(null);
   const [editUniversityId, setEditUniversityId] = useState('');
 
-  // تعديل رمز QR
   const [editingQrStudent, setEditingQrStudent] = useState<string | null>(null);
   const [editQrCodeId, setEditQrCodeId] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [groupFilter, setGroupFilter] = useState<string>('all');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 🆕 Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,16 +91,13 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       return;
     }
 
-    // تحقق من تكرار الرقم الجامعي
     if (universityId.trim() && students.some(s => s.universityId === universityId.trim())) {
       setError('هذا الرقم الجامعي مستخدم بالفعل');
       return;
     }
 
-    // ✅ استخراج رمز QR (يدعم اللصق المباشر للرابط)
     const cleanQrCode = qrCodeId.trim() ? extractQrCodeId(qrCodeId) : '';
 
-    // تحقق من تكرار رمز QR
     if (cleanQrCode && students.some(s => s.qrCodeId === cleanQrCode)) {
       setError('رمز QR هذا مستخدم لطالب آخر بالفعل');
       return;
@@ -128,174 +130,167 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     return numA - numB;
   };
 
-const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  setImportLoading(true);
-  setImportMessage('');
-  setError('');
+    setImportLoading(true);
+    setImportMessage('');
+    setError('');
 
-  try {
-    const data = await file.arrayBuffer();
-    const workbook = XLSX.read(data);
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-    const parsed: {
-      name: string;
-      group: string;
-      universityId?: string;
-      qrCodeId?: string;
-    }[] = [];
+      const parsed: {
+        name: string;
+        group: string;
+        universityId?: string;
+        qrCodeId?: string;
+      }[] = [];
 
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      if (!row || row.length === 0) continue;
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
 
-      let studentName = '';
-      let studentGroup = '';
-      let studentUniId = '';
-      let studentQrCode = '';
+        let studentName = '';
+        let studentGroup = '';
+        let studentUniId = '';
+        let studentQrCode = '';
 
-      for (const cell of row) {
-        if (cell === null || cell === undefined) continue;
-        const cellStr = String(cell).trim();
-        if (!cellStr) continue;
+        for (const cell of row) {
+          if (cell === null || cell === undefined) continue;
+          const cellStr = String(cell).trim();
+          if (!cellStr) continue;
 
-        // ✅ كشف رابط الوزارة أو أي رابط فيه ?id=
-        if (cellStr.includes('http') && cellStr.includes('id=')) {
-          const extracted = extractQrCodeId(cellStr);
-          if (extracted && extracted !== cellStr) {
-            studentQrCode = extracted;
-            continue;
+          if (cellStr.includes('http') && cellStr.includes('id=')) {
+            const extracted = extractQrCodeId(cellStr);
+            if (extracted && extracted !== cellStr) {
+              studentQrCode = extracted;
+              continue;
+            }
           }
-        }
 
-        // ✅ كروب (حرف + أرقام)
-        if (/^[A-Za-z]\d+$/.test(cellStr)) {
-          studentGroup = cellStr.toUpperCase();
-        }
-        // ✅ رقم جامعي (8-15 رقم متتالي)
-        else if (/^\d{8,15}$/.test(cellStr)) {
-          studentUniId = cellStr;
-        }
-        // ✅ رمز QR (نص لاتيني/أرقام بطول 10-30 بدون مسافات وليس رقم خالص)
-        else if (
-          /^[A-Za-z0-9_-]{10,40}$/.test(cellStr) &&
-          /[A-Za-z]/.test(cellStr) &&
-          !studentQrCode
-        ) {
-          studentQrCode = cellStr;
-        }
-        // ✅ اسم عربي
-        else if (/[\u0600-\u06FF]/.test(cellStr) && cellStr.length > 2) {
-          if (
-            !cellStr.includes('الاسم') &&
-            !cellStr.includes('الكروب') &&
-            !cellStr.includes('المرحلة') &&
-            !cellStr.includes('العملي') &&
-            !cellStr.includes('الرقم') &&
-            !cellStr.includes('رابط') &&
-            !cellStr.includes('باركود') &&
-            !cellStr.includes('QR')
+          if (/^[A-Za-z]\d+$/.test(cellStr)) {
+            studentGroup = cellStr.toUpperCase();
+          }
+          else if (/^\d{8,15}$/.test(cellStr)) {
+            studentUniId = cellStr;
+          }
+          else if (
+            /^[A-Za-z0-9_-]{10,40}$/.test(cellStr) &&
+            /[A-Za-z]/.test(cellStr) &&
+            !studentQrCode
           ) {
-            studentName = cellStr;
+            studentQrCode = cellStr;
           }
+          else if (/[\u0600-\u06FF]/.test(cellStr) && cellStr.length > 2) {
+            if (
+              !cellStr.includes('الاسم') &&
+              !cellStr.includes('الكروب') &&
+              !cellStr.includes('المرحلة') &&
+              !cellStr.includes('العملي') &&
+              !cellStr.includes('الرقم') &&
+              !cellStr.includes('رابط') &&
+              !cellStr.includes('باركود') &&
+              !cellStr.includes('QR')
+            ) {
+              studentName = cellStr;
+            }
+          }
+        }
+
+        if (studentName && studentGroup) {
+          parsed.push({
+            name: studentName,
+            group: studentGroup,
+            universityId: studentUniId || undefined,
+            qrCodeId: studentQrCode || undefined,
+          });
         }
       }
 
-      if (studentName && studentGroup) {
-        parsed.push({
-          name: studentName,
-          group: studentGroup,
-          universityId: studentUniId || undefined,
-          qrCodeId: studentQrCode || undefined,
-        });
+      if (parsed.length === 0) {
+        setError('❌ لم يتم العثور على طلاب في الملف. تأكد من تنسيق الملف.');
+        setImportLoading(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
       }
-    }
 
-    if (parsed.length === 0) {
-      setError('❌ لم يتم العثور على طلاب في الملف. تأكد من تنسيق الملف.');
+      parsed.sort((a, b) => {
+        const groupCompare = sortGroups(a.group, b.group);
+        if (groupCompare !== 0) return groupCompare;
+        return a.name.localeCompare(b.name, 'ar');
+      });
+
+      const startCode = selectedPrefix * 1000 + 1;
+      const existingCodes = new Set(students.map(s => s.code));
+      const existingUniIds = new Set(students.map(s => s.universityId).filter(Boolean));
+      const existingQrCodes = new Set(students.map(s => s.qrCodeId).filter(Boolean));
+      let currentCode = startCode;
+      let addedCount = 0;
+      let skippedCount = 0;
+      let qrLinkedCount = 0;
+
+      for (const student of parsed) {
+        if (students.some(s => s.name === student.name)) {
+          skippedCount++;
+          continue;
+        }
+
+        while (existingCodes.has(String(currentCode)) && currentCode <= 9999) {
+          currentCode++;
+        }
+
+        if (currentCode > 9999) {
+          setError('⚠️ تم تجاوز الحد الأقصى للأكواد (9999)');
+          break;
+        }
+
+        const uniId = student.universityId && !existingUniIds.has(student.universityId)
+          ? student.universityId
+          : undefined;
+        if (uniId) existingUniIds.add(uniId);
+
+        const qrCode = student.qrCodeId && !existingQrCodes.has(student.qrCodeId)
+          ? student.qrCodeId
+          : undefined;
+        if (qrCode) {
+          existingQrCodes.add(qrCode);
+          qrLinkedCount++;
+        }
+
+        const newStudent: Student = {
+          id: `${Date.now()}_${addedCount}`,
+          name: student.name,
+          code: String(currentCode),
+          group: student.group,
+          universityId: uniId,
+          qrCodeId: qrCode,
+          createdAt: new Date().toISOString(),
+        };
+
+        onAddStudent(newStudent);
+        existingCodes.add(String(currentCode));
+        currentCode++;
+        addedCount++;
+      }
+
+      setImportMessage(
+        `✅ تمت إضافة ${addedCount} طالب بنجاح` +
+        (qrLinkedCount > 0 ? ` (🔳 ${qrLinkedCount} مربوط برمز QR)` : '') +
+        (skippedCount > 0 ? ` (⚠️ تم تجاهل ${skippedCount} طالب مكرر)` : '')
+      );
+    } catch (err) {
+      console.error(err);
+      setError('❌ حدث خطأ أثناء قراءة الملف. تأكد من نوع الملف (xlsx, xls, csv).');
+    } finally {
       setImportLoading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
     }
-
-    parsed.sort((a, b) => {
-      const groupCompare = sortGroups(a.group, b.group);
-      if (groupCompare !== 0) return groupCompare;
-      return a.name.localeCompare(b.name, 'ar');
-    });
-
-    const startCode = selectedPrefix * 1000 + 1;
-    const existingCodes = new Set(students.map(s => s.code));
-    const existingUniIds = new Set(students.map(s => s.universityId).filter(Boolean));
-    const existingQrCodes = new Set(students.map(s => s.qrCodeId).filter(Boolean));
-    let currentCode = startCode;
-    let addedCount = 0;
-    let skippedCount = 0;
-    let qrLinkedCount = 0;
-
-    for (const student of parsed) {
-      if (students.some(s => s.name === student.name)) {
-        skippedCount++;
-        continue;
-      }
-
-      while (existingCodes.has(String(currentCode)) && currentCode <= 9999) {
-        currentCode++;
-      }
-
-      if (currentCode > 9999) {
-        setError('⚠️ تم تجاوز الحد الأقصى للأكواد (9999)');
-        break;
-      }
-
-      // ✅ تجنب تكرار الرقم الجامعي
-      const uniId = student.universityId && !existingUniIds.has(student.universityId)
-        ? student.universityId
-        : undefined;
-      if (uniId) existingUniIds.add(uniId);
-
-      // ✅ تجنب تكرار رمز QR
-      const qrCode = student.qrCodeId && !existingQrCodes.has(student.qrCodeId)
-        ? student.qrCodeId
-        : undefined;
-      if (qrCode) {
-        existingQrCodes.add(qrCode);
-        qrLinkedCount++;
-      }
-
-      const newStudent: Student = {
-        id: `${Date.now()}_${addedCount}`,
-        name: student.name,
-        code: String(currentCode),
-        group: student.group,
-        universityId: uniId,
-        qrCodeId: qrCode,
-        createdAt: new Date().toISOString(),
-      };
-
-      onAddStudent(newStudent);
-      existingCodes.add(String(currentCode));
-      currentCode++;
-      addedCount++;
-    }
-
-    setImportMessage(
-      `✅ تمت إضافة ${addedCount} طالب بنجاح` +
-      (qrLinkedCount > 0 ? ` (🔳 ${qrLinkedCount} مربوط برمز QR)` : '') +
-      (skippedCount > 0 ? ` (⚠️ تم تجاهل ${skippedCount} طالب مكرر)` : '')
-    );
-  } catch (err) {
-    console.error(err);
-    setError('❌ حدث خطأ أثناء قراءة الملف. تأكد من نوع الملف (xlsx, xls, csv).');
-  } finally {
-    setImportLoading(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  }
-};
+  };
 
   const toggleSelectStudent = (id: string) => {
     setSelectedIds(prev => {
@@ -306,11 +301,29 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     });
   };
 
-  const toggleSelectAll = () => {
-    if (selectedIds.size === filteredStudents.length) {
+  // 🆕 تحديد كل طلاب الصفحة الحالية
+  const toggleSelectAllInPage = () => {
+    const pageIds = paginatedStudents.map(s => s.id);
+    const allSelected = pageIds.every(id => selectedIds.has(id));
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (allSelected) {
+        pageIds.forEach(id => newSet.delete(id));
+      } else {
+        pageIds.forEach(id => newSet.add(id));
+      }
+      return newSet;
+    });
+  };
+
+  // 🆕 تحديد كل النتائج (مو بس الصفحة)
+  const toggleSelectAllFiltered = () => {
+    const allFilteredIds = filteredStudents.map(s => s.id);
+    const allSelected = allFilteredIds.every(id => selectedIds.has(id));
+    if (allSelected) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(filteredStudents.map(s => s.id)));
+      setSelectedIds(new Set(allFilteredIds));
     }
   };
 
@@ -386,24 +399,60 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     onUpdateStudent(student.id, { qrCodeId: undefined });
   };
 
-  // فلترة الطلاب
-  const filteredStudents = students.filter(s => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      s.name.toLowerCase().includes(q) ||
-      s.code.toLowerCase().includes(q) ||
-      (s.group && s.group.toLowerCase().includes(q)) ||
-      (s.universityId && s.universityId.toLowerCase().includes(q)) ||
-      (s.qrCodeId && s.qrCodeId.toLowerCase().includes(q))
-    );
-  });
+  // 🆕 استخراج الكروبات الفريدة للفلتر
+  const uniqueGroups = useMemo(() => {
+    const groups = Array.from(new Set(students.map(s => s.group).filter(Boolean))) as string[];
+    groups.sort(sortGroups);
+    return groups;
+  }, [students]);
+
+  // 🆕 فلترة الطلاب (محسّن بـ useMemo)
+  const filteredStudents = useMemo(() => {
+    return students.filter(s => {
+      // فلتر البحث
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchSearch = (
+          s.name.toLowerCase().includes(q) ||
+          s.code.toLowerCase().includes(q) ||
+          (s.group && s.group.toLowerCase().includes(q)) ||
+          (s.universityId && s.universityId.toLowerCase().includes(q)) ||
+          (s.qrCodeId && s.qrCodeId.toLowerCase().includes(q))
+        );
+        if (!matchSearch) return false;
+      }
+
+      // فلتر الكروب
+      if (groupFilter !== 'all' && s.group !== groupFilter) return false;
+
+      return true;
+    });
+  }, [students, searchQuery, groupFilter]);
+
+  // 🆕 Pagination - حساب الصفحات
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  // 🆕 الطلاب في الصفحة الحالية فقط
+  const paginatedStudents = useMemo(() => {
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredStudents.slice(start, start + pageSize);
+  }, [filteredStudents, safeCurrentPage, pageSize]);
+
+  // 🆕 إعادة تعيين الصفحة عند تغيير البحث/الفلتر
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, groupFilter, pageSize]);
 
   // إحصائيات
   const studentsWithUniId = students.filter(s => s.universityId).length;
   const studentsWithoutUniId = students.length - studentsWithUniId;
   const studentsWithQr = students.filter(s => s.qrCodeId).length;
   const studentsWithoutQr = students.length - studentsWithQr;
+
+  // 🆕 حالة التحديد للصفحة الحالية
+  const pageIds = paginatedStudents.map(s => s.id);
+  const allInPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id));
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -440,112 +489,110 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       )}
 
       <form onSubmit={handleSubmit} className="mb-6">
-  {/* الصف الأول: المعلومات الأساسية */}
-  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">
-        اسم الطالب *
-      </label>
-      <input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        placeholder="أدخل اسم الطالب"
-        dir="rtl"
-      />
-    </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              اسم الطالب *
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="أدخل اسم الطالب"
+              dir="rtl"
+            />
+          </div>
 
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">
-        رمز الطالب (4 أرقام) *
-      </label>
-      <input
-        type="text"
-        value={code}
-        onChange={(e) => {
-          const value = e.target.value.replace(/\D/g, '');
-          if (value.length <= 4) setCode(value);
-        }}
-        maxLength={4}
-        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-lg font-bold"
-        placeholder="1001"
-        inputMode="numeric"
-      />
-      <p className="text-xs text-gray-500 mt-1 text-center">من 1000 إلى 9999</p>
-    </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              رمز الطالب (4 أرقام) *
+            </label>
+            <input
+              type="text"
+              value={code}
+              onChange={(e) => {
+                const value = e.target.value.replace(/\D/g, '');
+                if (value.length <= 4) setCode(value);
+              }}
+              maxLength={4}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-lg font-bold"
+              placeholder="1001"
+              inputMode="numeric"
+            />
+            <p className="text-xs text-gray-500 mt-1 text-center">من 1000 إلى 9999</p>
+          </div>
 
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">
-        الكروب (اختياري)
-      </label>
-      <input
-        type="text"
-        value={group}
-        onChange={(e) => setGroup(e.target.value.toUpperCase())}
-        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
-        placeholder="A1"
-      />
-    </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              الكروب (اختياري)
+            </label>
+            <input
+              type="text"
+              value={group}
+              onChange={(e) => setGroup(e.target.value.toUpperCase())}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
+              placeholder="A1"
+            />
+          </div>
 
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-        🪪 الرقم الجامعي
-        <span className="text-xs text-blue-600">(اختياري)</span>
-      </label>
-      <input
-        type="text"
-        value={universityId}
-        onChange={(e) => setUniversityId(e.target.value.replace(/\D/g, ''))}
-        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center font-mono"
-        placeholder="8886736221"
-        inputMode="numeric"
-      />
-      <p className="text-xs text-gray-500 mt-1 text-center">رقم الهوية الجامعية</p>
-    </div>
-  </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+              🪪 الرقم الجامعي
+              <span className="text-xs text-blue-600">(اختياري)</span>
+            </label>
+            <input
+              type="text"
+              value={universityId}
+              onChange={(e) => setUniversityId(e.target.value.replace(/\D/g, ''))}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center font-mono"
+              placeholder="8886736221"
+              inputMode="numeric"
+            />
+            <p className="text-xs text-gray-500 mt-1 text-center">رقم الهوية الجامعية</p>
+          </div>
+        </div>
 
-  {/* الصف الثاني: رمز QR (منفصل لأنه طويل) */}
-  <div className="mt-4 p-4 bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-lg">
-    <label className="block text-sm font-bold text-emerald-800 mb-2 flex items-center gap-2">
-      <span className="text-xl">🔳</span>
-      <span>رمز QR الهوية</span>
-      <span className="text-xs font-normal text-emerald-600 bg-white px-2 py-0.5 rounded-full">
-        اختياري - للمسح السريع
-      </span>
-    </label>
-    <input
-      type="text"
-      value={qrCodeId}
-      onChange={(e) => setQrCodeId(e.target.value)}
-      className="w-full px-4 py-2 border border-emerald-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono text-sm bg-white"
-      placeholder="ألصق هنا: https://sis.mohesr.gov.iq/verify?id=... أو الرمز مباشرة"
-      dir="ltr"
-    />
-    <p className="text-xs text-emerald-700 mt-2 flex items-start gap-1">
-      <span>💡</span>
-      <span>
-        يمكنك لصق <strong>الرابط الكامل</strong> من هوية الوزارة وسيتم استخراج الرمز تلقائياً،
-        أو تركه فارغاً ليتم الربط تلقائياً عند أول مسح للهوية.
-      </span>
-    </p>
-  </div>
+        <div className="mt-4 p-4 bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-lg">
+          <label className="block text-sm font-bold text-emerald-800 mb-2 flex items-center gap-2">
+            <span className="text-xl">🔳</span>
+            <span>رمز QR الهوية</span>
+            <span className="text-xs font-normal text-emerald-600 bg-white px-2 py-0.5 rounded-full">
+              اختياري - للمسح السريع
+            </span>
+          </label>
+          <input
+            type="text"
+            value={qrCodeId}
+            onChange={(e) => setQrCodeId(e.target.value)}
+            className="w-full px-4 py-2 border border-emerald-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono text-sm bg-white"
+            placeholder="ألصق هنا: https://sis.mohesr.gov.iq/verify?id=... أو الرمز مباشرة"
+            dir="ltr"
+          />
+          <p className="text-xs text-emerald-700 mt-2 flex items-start gap-1">
+            <span>💡</span>
+            <span>
+              يمكنك لصق <strong>الرابط الكامل</strong> من هوية الوزارة وسيتم استخراج الرمز تلقائياً،
+              أو تركه فارغاً ليتم الربط تلقائياً عند أول مسح للهوية.
+            </span>
+          </p>
+        </div>
 
-  <div className="mt-4 flex justify-end">
-    <button
-      type="submit"
-      className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-8 rounded-md transition duration-200"
-    >
-      ➕ إضافة طالب
-    </button>
-  </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            type="submit"
+            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-8 rounded-md transition duration-200"
+          >
+            ➕ إضافة طالب
+          </button>
+        </div>
 
-  {error && (
-    <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md" dir="rtl">
-      {error}
-    </div>
-  )}
-</form>
+        {error && (
+          <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md" dir="rtl">
+            {error}
+          </div>
+        )}
+      </form>
 
       {/* قسم الاستيراد من Excel */}
       <div className="mb-6 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg">
@@ -553,27 +600,27 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
           📂 استيراد الطلاب من ملف Excel
         </h3>
         <div className="mb-4 text-sm text-gray-600 space-y-1">
-  <p>
-    اختر بادئة الكود ثم ارفع الملف. سيتم اكتشاف الحقول التالية تلقائياً:
-  </p>
-  <div className="flex flex-wrap gap-2 mt-2">
-    <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
-      📝 الاسم
-    </span>
-    <span className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs font-medium">
-      👥 الكروب (A1, B2, ...)
-    </span>
-    <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-medium">
-      🪪 الرقم الجامعي (8-15 رقم)
-    </span>
-    <span className="px-2 py-1 bg-emerald-100 text-emerald-800 rounded text-xs font-medium">
-      🔳 رمز QR (رابط الوزارة الكامل)
-    </span>
-  </div>
-  <p className="text-xs text-emerald-700 mt-2 bg-emerald-50 p-2 rounded border border-emerald-200">
-    💡 <strong>نصيحة:</strong> الصق الرابط الكامل من هوية الوزارة بأي عمود، وسيتم استخراج رمز QR تلقائياً لكل طالب.
-  </p>
-</div>
+          <p>
+            اختر بادئة الكود ثم ارفع الملف. سيتم اكتشاف الحقول التالية تلقائياً:
+          </p>
+          <div className="flex flex-wrap gap-2 mt-2">
+            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
+              📝 الاسم
+            </span>
+            <span className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs font-medium">
+              👥 الكروب (A1, B2, ...)
+            </span>
+            <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-medium">
+              🪪 الرقم الجامعي (8-15 رقم)
+            </span>
+            <span className="px-2 py-1 bg-emerald-100 text-emerald-800 rounded text-xs font-medium">
+              🔳 رمز QR (رابط الوزارة الكامل)
+            </span>
+          </div>
+          <p className="text-xs text-emerald-700 mt-2 bg-emerald-50 p-2 rounded border border-emerald-200">
+            💡 <strong>نصيحة:</strong> الصق الرابط الكامل من هوية الوزارة بأي عمود، وسيتم استخراج رمز QR تلقائياً لكل طالب.
+          </p>
+        </div>
 
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -662,15 +709,16 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         </div>
       )}
 
-      {/* شريط البحث */}
-      {students.length > 5 && (
-        <div className="mb-4">
-          <div className="relative">
+      {/* 🆕 شريط البحث والفلتر */}
+      {students.length > 0 && (
+        <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* البحث */}
+          <div className="md:col-span-2 relative">
             <input
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="🔍 بحث بالاسم أو الكود أو الكروب أو الرقم الجامعي أو رمز QR..."
+              placeholder="🔍 بحث بالاسم أو الكود أو الكروب أو الرقم الجامعي..."
               className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               dir="rtl"
             />
@@ -683,12 +731,29 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
               </button>
             )}
           </div>
-          {searchQuery && (
-            <p className="text-xs text-gray-500 mt-1">
-              نتائج البحث: {filteredStudents.length} من {students.length}
-            </p>
+
+          {/* فلتر الكروب */}
+          {uniqueGroups.length > 0 && (
+            <select
+              value={groupFilter}
+              onChange={e => setGroupFilter(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">جميع الكروبات</option>
+              {uniqueGroups.map(g => (
+                <option key={g} value={g}>
+                  {g} ({students.filter(s => s.group === g).length})
+                </option>
+              ))}
+            </select>
           )}
         </div>
+      )}
+
+      {(searchQuery || groupFilter !== 'all') && (
+        <p className="text-xs text-gray-500 mb-3">
+          📊 نتائج: <strong>{filteredStudents.length}</strong> من {students.length}
+        </p>
       )}
 
       {/* شريط الحذف الجماعي */}
@@ -697,13 +762,22 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
           <div className="text-orange-800 font-medium">
             ✅ تم تحديد <strong>{selectedIds.size}</strong> من {students.length} طالب
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setSelectedIds(new Set())}
               className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-medium rounded-md transition"
             >
               إلغاء التحديد
             </button>
+            {filteredStudents.length > pageSize && (
+              <button
+                onClick={toggleSelectAllFiltered}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-md transition"
+                title="تحديد جميع نتائج البحث"
+              >
+                تحديد كل النتائج ({filteredStudents.length})
+              </button>
+            )}
             <button
               onClick={handleDeleteSelected}
               className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-medium rounded-md transition shadow-md"
@@ -714,21 +788,79 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         </div>
       )}
 
+      {/* 🆕 شريط Pagination العلوي */}
+      {filteredStudents.length > pageSize && (
+        <div className="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-gray-600">عرض:</span>
+            <select
+              value={pageSize}
+              onChange={e => setPageSize(Number(e.target.value))}
+              className="px-3 py-1 border border-gray-300 rounded-md text-sm bg-white"
+            >
+              {PAGE_SIZE_OPTIONS.map(size => (
+                <option key={size} value={size}>{size} طالب</option>
+              ))}
+            </select>
+            <span className="text-gray-600">
+              ({((safeCurrentPage - 1) * pageSize) + 1} - {Math.min(safeCurrentPage * pageSize, filteredStudents.length)} من {filteredStudents.length})
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={safeCurrentPage === 1}
+              className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+              title="الصفحة الأولى"
+            >
+              ⏮
+            </button>
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={safeCurrentPage === 1}
+              className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+            >
+              ← السابق
+            </button>
+            <span className="px-3 py-1 bg-blue-600 text-white rounded text-sm font-bold">
+              {safeCurrentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={safeCurrentPage === totalPages}
+              className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+            >
+              التالي →
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={safeCurrentPage === totalPages}
+              className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+              title="الصفحة الأخيرة"
+            >
+              ⏭
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
               <th className="px-4 py-3 text-center">
-                {filteredStudents.length > 0 && (
+                {paginatedStudents.length > 0 && (
                   <input
                     type="checkbox"
-                    checked={selectedIds.size === filteredStudents.length && filteredStudents.length > 0}
-                    onChange={toggleSelectAll}
+                    checked={allInPageSelected}
+                    onChange={toggleSelectAllInPage}
                     className="w-5 h-5 cursor-pointer accent-blue-600"
-                    title="تحديد الكل"
+                    title="تحديد طلاب الصفحة الحالية"
                   />
                 )}
               </th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الرمز</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الاسم</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الكروب</th>
@@ -738,186 +870,254 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredStudents.length === 0 ? (
+            {paginatedStudents.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                   <div className="flex flex-col items-center gap-2">
                     <p className="font-medium">
-                      {searchQuery ? '🔍 لا توجد نتائج للبحث' : 'لا توجد طلاب مسجلين'}
+                      {searchQuery || groupFilter !== 'all' ? '🔍 لا توجد نتائج للبحث' : 'لا توجد طلاب مسجلين'}
                     </p>
-                    {!searchQuery && (
+                    {!searchQuery && groupFilter === 'all' && (
                       <p className="text-sm">ابدأ بإضافة الطلاب أو ارفع ملف Excel</p>
                     )}
                   </div>
                 </td>
               </tr>
             ) : (
-              filteredStudents.map((student) => (
-                <tr
-                  key={student.id}
-                  className={`hover:bg-gray-50 transition ${selectedIds.has(student.id) ? 'bg-blue-50' : ''}`}
-                >
-                  <td className="px-4 py-4 text-center">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(student.id)}
-                      onChange={() => toggleSelectStudent(student.id)}
-                      className="w-5 h-5 cursor-pointer accent-blue-600"
-                    />
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <span className="text-lg font-bold text-blue-600">{student.code}</span>
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-right">{student.name}</td>
-                  <td className="px-4 py-4 whitespace-nowrap text-right">
-                    {student.group ? (
-                      <span className="inline-block px-3 py-1 bg-indigo-100 text-indigo-800 text-sm font-medium rounded-full">
-                        {student.group}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400 text-sm">-</span>
-                    )}
-                  </td>
+              paginatedStudents.map((student, index) => {
+                const globalIndex = (safeCurrentPage - 1) * pageSize + index + 1;
+                return (
+                  <tr
+                    key={student.id}
+                    className={`hover:bg-gray-50 transition ${selectedIds.has(student.id) ? 'bg-blue-50' : ''}`}
+                  >
+                    <td className="px-4 py-4 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(student.id)}
+                        onChange={() => toggleSelectStudent(student.id)}
+                        className="w-5 h-5 cursor-pointer accent-blue-600"
+                      />
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {globalIndex}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <span className="text-lg font-bold text-blue-600">{student.code}</span>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-right">{student.name}</td>
+                    <td className="px-4 py-4 whitespace-nowrap text-right">
+                      {student.group ? (
+                        <span className="inline-block px-3 py-1 bg-indigo-100 text-indigo-800 text-sm font-medium rounded-full">
+                          {student.group}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-sm">-</span>
+                      )}
+                    </td>
 
-                  {/* الرقم الجامعي */}
-                  <td className="px-4 py-4 whitespace-nowrap text-right">
-                    {editingUniIdStudent === student.id ? (
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="text"
-                          value={editUniversityId}
-                          onChange={e => setEditUniversityId(e.target.value.replace(/\D/g, ''))}
-                          className="w-32 px-2 py-1 border border-blue-400 rounded text-sm font-mono text-center"
-                          autoFocus
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') saveEditUniId();
-                            if (e.key === 'Escape') cancelEditUniId();
-                          }}
-                        />
-                        <button
-                          onClick={saveEditUniId}
-                          className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs"
-                          title="حفظ"
-                        >
-                          ✓
-                        </button>
-                        <button
-                          onClick={cancelEditUniId}
-                          className="px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-xs"
-                          title="إلغاء"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        {student.universityId ? (
-                          <span className="inline-block px-2 py-1 bg-blue-50 text-blue-700 text-sm font-mono rounded border border-blue-200">
-                            {student.universityId}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400 text-xs italic">غير مضاف</span>
-                        )}
-                        {onUpdateStudent && (
+                    {/* الرقم الجامعي */}
+                    <td className="px-4 py-4 whitespace-nowrap text-right">
+                      {editingUniIdStudent === student.id ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={editUniversityId}
+                            onChange={e => setEditUniversityId(e.target.value.replace(/\D/g, ''))}
+                            className="w-32 px-2 py-1 border border-blue-400 rounded text-sm font-mono text-center"
+                            autoFocus
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') saveEditUniId();
+                              if (e.key === 'Escape') cancelEditUniId();
+                            }}
+                          />
                           <button
-                            onClick={() => startEditUniId(student)}
-                            className="text-blue-500 hover:text-blue-700 text-xs"
-                            title="تعديل الرقم الجامعي"
+                            onClick={saveEditUniId}
+                            className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs"
+                            title="حفظ"
                           >
-                            ✏️
+                            ✓
                           </button>
-                        )}
-                      </div>
-                    )}
-                  </td>
-
-                  {/* رمز QR */}
-                  <td className="px-4 py-4 whitespace-nowrap text-right">
-                    {editingQrStudent === student.id ? (
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="text"
-                          value={editQrCodeId}
-                          onChange={e => setEditQrCodeId(e.target.value)}
-                          className="w-40 px-2 py-1 border border-emerald-400 rounded text-xs font-mono text-center"
-                          dir="ltr"
-                          placeholder="QR ID أو رابط"
-                          autoFocus
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') saveEditQr();
-                            if (e.key === 'Escape') cancelEditQr();
-                          }}
-                        />
-                        <button
-                          onClick={saveEditQr}
-                          className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs"
-                          title="حفظ"
-                        >
-                          ✓
-                        </button>
-                        <button
-                          onClick={cancelEditQr}
-                          className="px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-xs"
-                          title="إلغاء"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        {student.qrCodeId ? (
-                          <span
-                            className="inline-block px-2 py-1 bg-emerald-50 text-emerald-700 text-xs font-mono rounded border border-emerald-200 max-w-[140px] truncate"
-                            dir="ltr"
-                            title={student.qrCodeId}
+                          <button
+                            onClick={cancelEditUniId}
+                            className="px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-xs"
+                            title="إلغاء"
                           >
-                            {student.qrCodeId}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400 text-xs italic">غير مربوط</span>
-                        )}
-                        {onUpdateStudent && (
-                          <>
+                            ×
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          {student.universityId ? (
+                            <span className="inline-block px-2 py-1 bg-blue-50 text-blue-700 text-sm font-mono rounded border border-blue-200">
+                              {student.universityId}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-xs italic">غير مضاف</span>
+                          )}
+                          {onUpdateStudent && (
                             <button
-                              onClick={() => startEditQr(student)}
-                              className="text-emerald-600 hover:text-emerald-800 text-xs"
-                              title="تعديل رمز QR"
+                              onClick={() => startEditUniId(student)}
+                              className="text-blue-500 hover:text-blue-700 text-xs"
+                              title="تعديل الرقم الجامعي"
                             >
                               ✏️
                             </button>
-                            {student.qrCodeId && (
-                              <button
-                                onClick={() => removeQrLink(student)}
-                                className="text-red-500 hover:text-red-700 text-xs"
-                                title="فك ربط QR"
-                              >
-                                🔓
-                              </button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </td>
+                          )}
+                        </div>
+                      )}
+                    </td>
 
-                  <td className="px-4 py-4 whitespace-nowrap text-right">
-                    <button
-                      onClick={() => {
-                        if (window.confirm(`هل أنت متأكد من حذف الطالب ${student.name}؟`)) {
-                          onDeleteStudent(student.id);
-                        }
-                      }}
-                      className="text-red-600 hover:text-red-900 font-medium"
-                    >
-                      حذف
-                    </button>
-                  </td>
-                </tr>
-              ))
+                    {/* رمز QR */}
+                    <td className="px-4 py-4 whitespace-nowrap text-right">
+                      {editingQrStudent === student.id ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={editQrCodeId}
+                            onChange={e => setEditQrCodeId(e.target.value)}
+                            className="w-40 px-2 py-1 border border-emerald-400 rounded text-xs font-mono text-center"
+                            dir="ltr"
+                            placeholder="QR ID أو رابط"
+                            autoFocus
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') saveEditQr();
+                              if (e.key === 'Escape') cancelEditQr();
+                            }}
+                          />
+                          <button
+                            onClick={saveEditQr}
+                            className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs"
+                            title="حفظ"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            onClick={cancelEditQr}
+                            className="px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-xs"
+                            title="إلغاء"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          {student.qrCodeId ? (
+                            <span
+                              className="inline-block px-2 py-1 bg-emerald-50 text-emerald-700 text-xs font-mono rounded border border-emerald-200 max-w-[140px] truncate"
+                              dir="ltr"
+                              title={student.qrCodeId}
+                            >
+                              {student.qrCodeId}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-xs italic">غير مربوط</span>
+                          )}
+                          {onUpdateStudent && (
+                            <>
+                              <button
+                                onClick={() => startEditQr(student)}
+                                className="text-emerald-600 hover:text-emerald-800 text-xs"
+                                title="تعديل رمز QR"
+                              >
+                                ✏️
+                              </button>
+                              {student.qrCodeId && (
+                                <button
+                                  onClick={() => removeQrLink(student)}
+                                  className="text-red-500 hover:text-red-700 text-xs"
+                                  title="فك ربط QR"
+                                >
+                                  🔓
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </td>
+
+                    <td className="px-4 py-4 whitespace-nowrap text-right">
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`هل أنت متأكد من حذف الطالب ${student.name}؟`)) {
+                            onDeleteStudent(student.id);
+                          }
+                        }}
+                        className="text-red-600 hover:text-red-900 font-medium"
+                      >
+                        حذف
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
       </div>
+
+      {/* 🆕 شريط Pagination السفلي */}
+      {filteredStudents.length > pageSize && (
+        <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center gap-1 flex-wrap">
+          <button
+            onClick={() => setCurrentPage(1)}
+            disabled={safeCurrentPage === 1}
+            className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+          >
+            ⏮ الأولى
+          </button>
+          <button
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={safeCurrentPage === 1}
+            className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+          >
+            ← السابق
+          </button>
+
+          {/* أرقام الصفحات */}
+          {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
+            let pageNum: number;
+            if (totalPages <= 7) {
+              pageNum = i + 1;
+            } else if (safeCurrentPage <= 4) {
+              pageNum = i + 1;
+            } else if (safeCurrentPage >= totalPages - 3) {
+              pageNum = totalPages - 6 + i;
+            } else {
+              pageNum = safeCurrentPage - 3 + i;
+            }
+            return (
+              <button
+                key={pageNum}
+                onClick={() => setCurrentPage(pageNum)}
+                className={`px-3 py-1 rounded text-sm font-medium ${
+                  pageNum === safeCurrentPage
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white border border-gray-300 hover:bg-gray-100'
+                }`}
+              >
+                {pageNum}
+              </button>
+            );
+          })}
+
+          <button
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={safeCurrentPage === totalPages}
+            className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+          >
+            التالي →
+          </button>
+          <button
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={safeCurrentPage === totalPages}
+            className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+          >
+            الأخيرة ⏭
+          </button>
+        </div>
+      )}
 
       {students.length > 0 && (
         <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
@@ -933,6 +1133,9 @@ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
             )}
             {selectedIds.size > 0 && (
               <span>| <strong>المحدد:</strong> {selectedIds.size}</span>
+            )}
+            {filteredStudents.length > pageSize && (
+              <span className="text-purple-700">| <strong>الصفحة:</strong> {safeCurrentPage}/{totalPages}</span>
             )}
           </div>
         </div>

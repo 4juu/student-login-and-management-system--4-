@@ -6,21 +6,9 @@ import { User } from "../types/user";
 // ============================================================
 // 🔑 المسارات
 // ============================================================
-// مشترك بين الأدمن وكل تدريسييه:
-// userData/{adminUid}/colleges
-// userData/{adminUid}/stages
-// userData/{adminUid}/stageData/{stageId}/students
-//
-// 🆕 منفصل لكل تدريسي (والأدمن نفسه يعتبر تدريسي بسجله الخاص):
-// userData/{adminUid}/stageData/{stageId}/teacherRecords/{teacherId}/records
-// userData/{adminUid}/stageData/{stageId}/teacherRecords/{teacherId}/sessions
-// userData/{adminUid}/stageData/{stageId}/teacherRecords/{teacherId}/activeSession
-// ============================================================
-
 const getStagePath = (adminUid: string, stageId: string, sub: string) =>
   `userData/${adminUid}/stageData/${stageId}/${sub}`;
 
-// 🆕 مسار خاص بكل تدريسي
 const getTeacherDataPath = (
   adminUid: string,
   stageId: string,
@@ -38,7 +26,6 @@ const LS = {
   colleges: (uid: string) => `colleges_${uid}`,
   stages: (uid: string) => `stages_${uid}`,
   students: (uid: string, sid: string) => `students_${uid}_${sid}`,
-  // 🆕 السجلات والجلسات تتضمن teacherId
   records: (uid: string, sid: string, tid: string) => `records_${uid}_${sid}_${tid}`,
   sessions: (uid: string, sid: string, tid: string) => `sessions_${uid}_${sid}_${tid}`,
   activeSession: (uid: string, sid: string, tid: string) => `activeSession_${uid}_${sid}_${tid}`,
@@ -61,7 +48,90 @@ const isDangerousEmpty = (newData: unknown[], localData: unknown[]): boolean => 
 };
 
 // ============================================================
-// 🏛️ COLLEGES (مشترك)
+// ⏱️ DEBOUNCED SAVES (تقليل عمليات الكتابة بـ 80%)
+// ============================================================
+// الفكرة: بدل ما نرفع كل تعديل صغير لـ Firebase فوراً،
+// ننتظر 2 ثانية، ولو إجى تعديل ثاني نلغي القديم.
+// هذا يقلل كتابات Firebase بشكل كبير ويوفر Bandwidth.
+// ============================================================
+
+const SAVE_DELAY = 2000; // 2 ثانية
+const pendingSaves = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingSaveFunctions = new Map<string, () => Promise<void>>();
+
+const debouncedSave = (key: string, saveFn: () => Promise<void>): void => {
+  // ألغِ الحفظ السابق المعلق
+  const existing = pendingSaves.get(key);
+  if (existing) {
+    clearTimeout(existing);
+  }
+
+  // احفظ الدالة الأحدث
+  pendingSaveFunctions.set(key, saveFn);
+
+  // اجدول حفظ جديد
+  const timeout = setTimeout(async () => {
+    pendingSaves.delete(key);
+    const fn = pendingSaveFunctions.get(key);
+    pendingSaveFunctions.delete(key);
+
+    if (fn) {
+      try {
+        await fn();
+        console.log(`💾 Debounced save: ${key}`);
+      } catch (e) {
+        console.warn(`⚠️ Debounced save failed: ${key}`, e);
+      }
+    }
+  }, SAVE_DELAY);
+
+  pendingSaves.set(key, timeout);
+};
+
+// 🆕 احفظ كل التعديلات المعلقة فوراً (يستدعى قبل المغادرة/تسجيل الخروج)
+export const flushAllPendingSaves = async (): Promise<void> => {
+  const keys = Array.from(pendingSaves.keys());
+  if (keys.length === 0) return;
+
+  console.log(`💾 Flushing ${keys.length} pending saves...`);
+
+  for (const key of keys) {
+    const timeout = pendingSaves.get(key);
+    if (timeout) clearTimeout(timeout);
+    pendingSaves.delete(key);
+
+    const fn = pendingSaveFunctions.get(key);
+    pendingSaveFunctions.delete(key);
+
+    if (fn) {
+      try {
+        await fn();
+      } catch (e) {
+        console.warn(`⚠️ Flush save failed: ${key}`, e);
+      }
+    }
+  }
+};
+
+// 🆕 احفظ كل التعديلات المعلقة قبل إغلاق الصفحة
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    // نلغي الـ timers ونحفظ مباشرة (sync)
+    pendingSaves.forEach((timeout, key) => {
+      clearTimeout(timeout);
+      const fn = pendingSaveFunctions.get(key);
+      if (fn) {
+        // محاولة سريعة للحفظ (قد لا تنجح بسبب إغلاق الصفحة)
+        fn().catch(() => {});
+      }
+    });
+    pendingSaves.clear();
+    pendingSaveFunctions.clear();
+  });
+}
+
+// ============================================================
+// 🏛️ COLLEGES (مشترك - مع Debounce)
 // ============================================================
 
 export const saveColleges = async (
@@ -76,12 +146,19 @@ export const saveColleges = async (
       return;
     }
   }
+
+  // ✅ احفظ محلياً فوراً
   saveLocal(LS.colleges(adminUid), colleges);
-  try {
-    await set(ref(database, getCollegesPath(adminUid)), colleges);
-  } catch (e) {
-    console.warn('⚠️ فشل حفظ الكليات:', e);
-  }
+
+  // ⏱️ ارفع لـ Firebase بتأخير
+  const saveKey = `colleges_${adminUid}`;
+  debouncedSave(saveKey, async () => {
+    try {
+      await set(ref(database, getCollegesPath(adminUid)), colleges);
+    } catch (e) {
+      console.warn('⚠️ فشل حفظ الكليات:', e);
+    }
+  });
 };
 
 export const loadColleges = async (adminUid: string): Promise<College[]> => {
@@ -101,7 +178,7 @@ export const loadColleges = async (adminUid: string): Promise<College[]> => {
 };
 
 // ============================================================
-// 📖 STAGES (مشترك)
+// 📖 STAGES (مشترك - مع Debounce)
 // ============================================================
 
 export const saveStages = async (
@@ -116,12 +193,17 @@ export const saveStages = async (
       return;
     }
   }
+
   saveLocal(LS.stages(adminUid), stages);
-  try {
-    await set(ref(database, getStagesPath(adminUid)), stages);
-  } catch (e) {
-    console.warn('⚠️ فشل حفظ المراحل:', e);
-  }
+
+  const saveKey = `stages_${adminUid}`;
+  debouncedSave(saveKey, async () => {
+    try {
+      await set(ref(database, getStagesPath(adminUid)), stages);
+    } catch (e) {
+      console.warn('⚠️ فشل حفظ المراحل:', e);
+    }
+  });
 };
 
 export const loadStages = async (adminUid: string): Promise<Stage[]> => {
@@ -141,7 +223,7 @@ export const loadStages = async (adminUid: string): Promise<Stage[]> => {
 };
 
 // ============================================================
-// 👥 STUDENTS (مشترك بين كل التدريسيين)
+// 👥 STUDENTS (مشترك - مع Debounce)
 // ============================================================
 
 export const saveStudents = async (
@@ -157,12 +239,17 @@ export const saveStudents = async (
       return;
     }
   }
+
   saveLocal(LS.students(adminUid, stageId), students);
-  try {
-    await set(ref(database, getStagePath(adminUid, stageId, 'students')), students);
-  } catch (e) {
-    console.warn('⚠️ فشل حفظ الطلاب:', e);
-  }
+
+  const saveKey = `students_${adminUid}_${stageId}`;
+  debouncedSave(saveKey, async () => {
+    try {
+      await set(ref(database, getStagePath(adminUid, stageId, 'students')), students);
+    } catch (e) {
+      console.warn('⚠️ فشل حفظ الطلاب:', e);
+    }
+  });
 };
 
 export const loadStudents = async (adminUid: string, stageId: string): Promise<Student[]> => {
@@ -182,7 +269,7 @@ export const loadStudents = async (adminUid: string, stageId: string): Promise<S
 };
 
 // ============================================================
-// 📝 ATTENDANCE RECORDS (🆕 منفصل لكل تدريسي)
+// 📝 ATTENDANCE RECORDS (منفصل لكل تدريسي - مع Debounce)
 // ============================================================
 
 export const saveAttendanceRecords = async (
@@ -199,16 +286,20 @@ export const saveAttendanceRecords = async (
       return;
     }
   }
+
   saveLocal(LS.records(adminUid, stageId, teacherId), records);
-  try {
-    await set(
-      ref(database, getTeacherDataPath(adminUid, stageId, teacherId, 'records')),
-      records
-    );
-    console.log('✅ Records saved for teacher:', teacherId);
-  } catch (e) {
-    console.warn('⚠️ فشل حفظ السجلات:', e);
-  }
+
+  const saveKey = `records_${adminUid}_${stageId}_${teacherId}`;
+  debouncedSave(saveKey, async () => {
+    try {
+      await set(
+        ref(database, getTeacherDataPath(adminUid, stageId, teacherId, 'records')),
+        records
+      );
+    } catch (e) {
+      console.warn('⚠️ فشل حفظ السجلات:', e);
+    }
+  });
 };
 
 export const loadAttendanceRecords = async (
@@ -234,7 +325,7 @@ export const loadAttendanceRecords = async (
 };
 
 // ============================================================
-// 📅 SESSIONS (🆕 منفصل لكل تدريسي)
+// 📅 SESSIONS (منفصل لكل تدريسي - مع Debounce)
 // ============================================================
 
 export const saveSessions = async (
@@ -251,16 +342,20 @@ export const saveSessions = async (
       return;
     }
   }
+
   saveLocal(LS.sessions(adminUid, stageId, teacherId), sessions);
-  try {
-    await set(
-      ref(database, getTeacherDataPath(adminUid, stageId, teacherId, 'sessions')),
-      sessions
-    );
-    console.log('✅ Sessions saved for teacher:', teacherId);
-  } catch (e) {
-    console.warn('⚠️ فشل حفظ الجلسات:', e);
-  }
+
+  const saveKey = `sessions_${adminUid}_${stageId}_${teacherId}`;
+  debouncedSave(saveKey, async () => {
+    try {
+      await set(
+        ref(database, getTeacherDataPath(adminUid, stageId, teacherId, 'sessions')),
+        sessions
+      );
+    } catch (e) {
+      console.warn('⚠️ فشل حفظ الجلسات:', e);
+    }
+  });
 };
 
 export const loadSessions = async (
@@ -286,7 +381,7 @@ export const loadSessions = async (
 };
 
 // ============================================================
-// 🎯 ACTIVE SESSION (🆕 منفصل لكل تدريسي)
+// 🎯 ACTIVE SESSION (فوري - مهم وسريع، بدون Debounce)
 // ============================================================
 
 export const saveActiveSession = async (
@@ -334,7 +429,7 @@ export const loadActiveSession = async (
 };
 
 // ============================================================
-// 📦 LOAD ALL STAGE DATA (🆕 يقبل teacherId)
+// 📦 LOAD ALL STAGE DATA
 // ============================================================
 
 export const loadStageData = async (
@@ -352,14 +447,26 @@ export const loadStageData = async (
 };
 
 // ============================================================
-// 🗑️ DELETE STAGE (يحذف كل بيانات المرحلة لجميع التدريسيين)
+// 🗑️ DELETE STAGE
 // ============================================================
 
 export const deleteStageData = async (adminUid: string, stageId: string): Promise<void> => {
   try {
+    // ألغِ أي حفظ معلق لهذه المرحلة
+    const keysToCancel: string[] = [];
+    pendingSaves.forEach((_, key) => {
+      if (key.includes(stageId)) keysToCancel.push(key);
+    });
+    keysToCancel.forEach(key => {
+      const timeout = pendingSaves.get(key);
+      if (timeout) clearTimeout(timeout);
+      pendingSaves.delete(key);
+      pendingSaveFunctions.delete(key);
+    });
+
     await remove(ref(database, `userData/${adminUid}/stageData/${stageId}`));
     localStorage.removeItem(LS.students(adminUid, stageId));
-    // امسح كل مفاتيح السجلات/الجلسات لكل التدريسيين من localStorage
+
     Object.keys(localStorage).forEach((k) => {
       if (
         k.startsWith(`records_${adminUid}_${stageId}_`) ||
@@ -401,15 +508,31 @@ export const loadUserProfile = async (uid: string): Promise<User | null> => {
 };
 
 export const saveUserData = async (uid: string, userData: User): Promise<void> => {
-  try {
-    await set(ref(database, `users/${uid}`), {
-      ...userData,
-      lastUpdated: new Date().toISOString()
-    });
-  } catch (e) {
-    console.error('❌ Error saving user data:', e);
-    throw e;
-  }
+  // ✅ User data نادراً ما يتغير - استخدم Debounce خفيف (3 ثواني)
+  const saveKey = `user_${uid}`;
+
+  const existing = pendingSaves.get(saveKey);
+  if (existing) clearTimeout(existing);
+
+  pendingSaveFunctions.set(saveKey, async () => {
+    try {
+      await set(ref(database, `users/${uid}`), {
+        ...userData,
+        lastUpdated: new Date().toISOString()
+      });
+    } catch (e) {
+      console.error('❌ Error saving user data:', e);
+    }
+  });
+
+  const timeout = setTimeout(async () => {
+    pendingSaves.delete(saveKey);
+    const fn = pendingSaveFunctions.get(saveKey);
+    pendingSaveFunctions.delete(saveKey);
+    if (fn) await fn();
+  }, 3000);
+
+  pendingSaves.set(saveKey, timeout);
 };
 
 // ============================================================
@@ -417,5 +540,5 @@ export const saveUserData = async (uid: string, userData: User): Promise<void> =
 // ============================================================
 
 export const syncPendingChanges = async (_uid: string): Promise<void> => {
-  console.log('ℹ️ No pending changes to sync');
+  await flushAllPendingSaves();
 };
