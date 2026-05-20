@@ -148,7 +148,6 @@ function App() {
       const { ref: dbRef, get } = await import('firebase/database');
       const { database } = await import('./firebase/config');
 
-      // 1️⃣ جلب كل التدريسيين الذين يتبعون هذا الأدمن
       const usersSnap = await get(dbRef(database, 'users'));
       let teachersList: User[] = [];
       if (usersSnap.exists()) {
@@ -158,16 +157,13 @@ function App() {
         setAllTeachers(teachersList);
       }
 
-      // 2️⃣ قائمة كل من له بيانات (الأدمن + كل تدريسييه)
       const allUserIds = [adminUid, ...teachersList.map(t => t.uid)];
 
       const stagesDataMap: AllStagesData = {};
 
-      // 3️⃣ لكل مرحلة، نجمع بيانات كل التدريسيين + الأدمن
       await Promise.all(
         allStages.map(async (stage) => {
           try {
-            // الطلاب مشتركون - نحملهم مرة وحدة
             const studentsSnap = await get(
               dbRef(database, `userData/${adminUid}/stageData/${stage.id}/students`)
             );
@@ -177,14 +173,12 @@ function App() {
               stageStudents = Array.isArray(data) ? data : Object.values(data);
             }
 
-            // 4️⃣ السجلات والجلسات: نجمعها من كل التدريسيين + الأدمن
             const allRecords: AttendanceRecord[] = [];
             const allSessions: AttendanceSession[] = [];
 
             await Promise.all(
               allUserIds.map(async (userId) => {
                 try {
-                  // سجلات هذا المستخدم
                   const recSnap = await get(
                     dbRef(
                       database,
@@ -199,7 +193,6 @@ function App() {
                     allRecords.push(...arr);
                   }
 
-                  // جلسات هذا المستخدم
                   const sesSnap = await get(
                     dbRef(
                       database,
@@ -250,7 +243,6 @@ function App() {
     try {
       const adminUid = getAdminUid();
       const teacherId = getTeacherId();
-      // 🆕 كل تدريسي (أو الأدمن) يحمل سجله الخاص
       const data = await loadStageData(adminUid, stageId, teacherId);
       setStudents(data.students);
       setAttendanceRecords(data.records);
@@ -308,20 +300,22 @@ function App() {
     }
   }, [stages, currentUser, dataLoaded]);
 
-  // ✅ مشترك - الأدمن فقط يحفظ الطلاب
+  // ✅ الطلاب مشتركون - يحفظ التدريسي والأدمن (حتى يقدر التدريسي يربط QR)
   useEffect(() => {
-    if (currentUser && dataLoaded && selectedStageId && currentUser.role === 'admin') {
+    if (currentUser && dataLoaded && selectedStageId) {
       const force = intentionalDeleteRef.current.students;
       saveStudents(getAdminUid(), selectedStageId, students, force);
       if (force) intentionalDeleteRef.current.students = false;
 
-      setAllStagesData(prev => ({
-        ...prev,
-        [selectedStageId]: {
-          ...(prev[selectedStageId] || { records: [], sessions: [] }),
-          students,
-        },
-      }));
+      if (currentUser.role === 'admin') {
+        setAllStagesData(prev => ({
+          ...prev,
+          [selectedStageId]: {
+            ...(prev[selectedStageId] || { records: [], sessions: [] }),
+            students,
+          },
+        }));
+      }
     }
   }, [students, currentUser, dataLoaded, selectedStageId]);
 
@@ -332,7 +326,7 @@ function App() {
       saveAttendanceRecords(
         getAdminUid(),
         selectedStageId,
-        getTeacherId(), // 🆕
+        getTeacherId(),
         attendanceRecords,
         force
       );
@@ -357,7 +351,7 @@ function App() {
       saveSessions(
         getAdminUid(),
         selectedStageId,
-        getTeacherId(), // 🆕
+        getTeacherId(),
         sessions,
         force
       );
@@ -381,7 +375,7 @@ function App() {
       saveActiveSession(
         getAdminUid(),
         selectedStageId,
-        getTeacherId(), // 🆕
+        getTeacherId(),
         activeSessionId
       );
     }
@@ -440,6 +434,28 @@ function App() {
   };
 
   const handleAddStudent = (student: Student) => setStudents(prev => [...prev, student]);
+
+// ✅ تحديث طالب (يدعم الحذف الصريح للحقول عند إرسال undefined)
+const handleUpdateStudent = (id: string, updates: Partial<Student>) => {
+  setStudents(prev =>
+    prev.map(student => {
+      if (student.id !== id) return student;
+
+      // ادمج التحديثات
+      const merged: any = { ...student, ...updates };
+
+      // احذف الحقول التي قيمتها undefined أو فارغة (لإزالتها فعلياً من Firebase)
+      Object.keys(updates).forEach(key => {
+        const value = (updates as any)[key];
+        if (value === undefined || value === null || value === '') {
+          delete merged[key];
+        }
+      });
+
+      return merged as Student;
+    })
+  );
+};
 
   const handleDeleteStudent = (id: string) => {
     if (window.confirm('هل أنت متأكد من حذف هذا الطالب؟')) {
@@ -694,7 +710,10 @@ function App() {
                   <AttendanceLogin
                     students={students}
                     activeSessionId={activeSessionId}
+                    activeSession={sessions.find(s => s.id === activeSessionId) || null}
+                    records={attendanceRecords}
                     onAttendanceRecord={handleAttendanceRecord}
+                    onUpdateStudent={handleUpdateStudent}
                   />
                 )}
               </div>
@@ -705,6 +724,7 @@ function App() {
                 <StudentManager
                   students={students}
                   onAddStudent={handleAddStudent}
+                  onUpdateStudent={handleUpdateStudent}
                   onDeleteStudent={handleDeleteStudent}
                   onDeleteSelectedStudents={handleDeleteSelectedStudents}
                   onSortByName={handleSortByName}
