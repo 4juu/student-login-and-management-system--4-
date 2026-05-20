@@ -59,19 +59,12 @@ interface AIModel {
 }
 
 const AI_MODELS: AIModel[] = [
-  // ═══════════════════════════════════════
-  // 🟡 Google Gemini (مجاني - دقيق)
-  // ═══════════════════════════════════════
   { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash ⚡', provider: 'gemini', model: 'gemini-2.5-flash', emoji: '🟡' },
   { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'gemini', model: 'gemini-2.0-flash', emoji: '🟡' },
   { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Exp 🧪', provider: 'gemini', model: 'gemini-2.0-flash-exp', emoji: '🟡' },
   { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', provider: 'gemini', model: 'gemini-1.5-flash', emoji: '🟡' },
   { id: 'gemini-1.5-flash-8b', name: 'Gemini 1.5 Flash 8B', provider: 'gemini', model: 'gemini-1.5-flash-8b', emoji: '🟡' },
   { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro 🧠', provider: 'gemini', model: 'gemini-1.5-pro', emoji: '🟡' },
-  
-  // ═══════════════════════════════════════
-  // ⚡ Groq (مجاني - الأسرع بالعالم)
-  // ═══════════════════════════════════════
   { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B ⚡', provider: 'groq', model: 'llama-3.3-70b-versatile', emoji: '⚡' },
   { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B (سريع جداً)', provider: 'groq', model: 'llama-3.1-8b-instant', emoji: '⚡' },
   { id: 'llama3-70b-8192', name: 'Llama 3 70B', provider: 'groq', model: 'llama3-70b-8192', emoji: '⚡' },
@@ -88,72 +81,41 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
-// ✅ تحويل كل أنواع الأرقام (عربي، فارسي، هندي) لإنجليزية
 const toEnglishDigits = (str: string): string => {
   if (!str) return '';
   return String(str).replace(/[\u0660-\u0669\u06F0-\u06F9]/g, (ch) => {
     const code = ch.charCodeAt(0);
-    // أرقام عربية U+0660-U+0669
-    if (code >= 0x0660 && code <= 0x0669) {
-      return String(code - 0x0660);
-    }
-    // أرقام فارسية U+06F0-U+06F9
-    if (code >= 0x06F0 && code <= 0x06F9) {
-      return String(code - 0x06F0);
-    }
+    if (code >= 0x0660 && code <= 0x0669) return String(code - 0x0660);
+    if (code >= 0x06F0 && code <= 0x06F9) return String(code - 0x06F0);
     return ch;
   });
 };
 
-// ✅ توحيد التاريخ - يدعم كل الصيغ
 const normalizeDateKey = (value?: string | Date | null): string => {
   try {
     if (!value) return '';
-
-    // 1. إذا كان Date object
     if (value instanceof Date) {
       if (isNaN(value.getTime())) return '';
       return `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(value.getDate())}`;
     }
-
-    // 2. تحويل النص
     let text = String(value).trim();
     if (!text) return '';
-
-    // ✅ الخطوة الأهم: تحويل الأرقام العربية لإنجليزية أولاً
     text = toEnglishDigits(text);
-
-    // الآن النص صار: "2026/5/15" بدلاً من "٢٠٢٦/٥/١٥"
-
-    // 3. توحيد الفواصل (كل شيء يصير شرطة -)
     text = text.replace(/[/\\.]/g, '-');
-    // الآن النص صار: "2026-5-15"
-
-    // 4. استخراج YYYY-MM-DD
     const ymdMatch = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
     if (ymdMatch) {
-      const y = ymdMatch[1];
-      const m = pad2(parseInt(ymdMatch[2]));
-      const d = pad2(parseInt(ymdMatch[3]));
-      return `${y}-${m}-${d}`;
-      // النتيجة: "2026-05-15" ✅
+      return `${ymdMatch[1]}-${pad2(parseInt(ymdMatch[2]))}-${pad2(parseInt(ymdMatch[3]))}`;
     }
-
-    // 5. صيغة مقلوبة DD-MM-YYYY
     const dmyMatch = text.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
     if (dmyMatch && dmyMatch[3].length === 4) {
       return `${dmyMatch[3]}-${pad2(parseInt(dmyMatch[2]))}-${pad2(parseInt(dmyMatch[1]))}`;
     }
-
-    // 6. Fallback
     const dateObj = new Date(text);
     if (!isNaN(dateObj.getTime())) {
       return `${dateObj.getFullYear()}-${pad2(dateObj.getMonth() + 1)}-${pad2(dateObj.getDate())}`;
     }
-
     return '';
   } catch (e) {
-    console.error('normalizeDateKey error:', value, e);
     return '';
   }
 };
@@ -188,7 +150,6 @@ const getErrorMessage = (status: number, errorData: any): string => {
   }
 };
 
-// ✅ استدعاء Gemini
 const callGeminiDirect = async (model: string, contents: any[]): Promise<string> => {
   const response = await fetch(getGeminiUrl(model), {
     method: 'POST',
@@ -221,7 +182,6 @@ const callGeminiDirect = async (model: string, contents: any[]): Promise<string>
   return text;
 };
 
-// ✅ استدعاء Groq (مجاني وأسرع بالعالم)
 const callGroqDirect = async (
   model: string,
   systemInstruction: string,
@@ -233,50 +193,29 @@ const callGroqDirect = async (
     err.status = 401;
     throw err;
   }
-  
   const messages: any[] = [{ role: 'system', content: systemInstruction }];
   conversationHistory.slice(-6).forEach(msg => {
-    messages.push({
-      role: msg.type === 'user' ? 'user' : 'assistant',
-      content: msg.content,
-    });
+    messages.push({ role: msg.type === 'user' ? 'user' : 'assistant', content: msg.content });
   });
   messages.push({ role: 'user', content: userMessage });
 
   const response = await fetch(GROQ_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${GROQ_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: 0.1,
-      max_tokens: 8192,
-      top_p: 0.85,
-      stream: false,
-    }),
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_API_KEY}` },
+    body: JSON.stringify({ model, messages, temperature: 0.1, max_tokens: 8192, top_p: 0.85, stream: false }),
   });
-  
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     const err: any = new Error(errorData?.error?.message || `Error ${response.status}`);
     err.status = response.status;
     throw err;
   }
-  
   const data = await response.json();
   const text = data?.choices?.[0]?.message?.content?.trim();
-  if (!text) {
-    const err: any = new Error('EMPTY_RESPONSE');
-    err.status = 0;
-    throw err;
-  }
+  if (!text) { const err: any = new Error('EMPTY_RESPONSE'); err.status = 0; throw err; }
   return text;
 };
 
-// ✅ استدعاء OpenRouter
 const callOpenRouterDirect = async (
   model: string,
   systemInstruction: string,
@@ -290,10 +229,7 @@ const callOpenRouterDirect = async (
   }
   const messages: any[] = [{ role: 'system', content: systemInstruction }];
   conversationHistory.slice(-6).forEach(msg => {
-    messages.push({
-      role: msg.type === 'user' ? 'user' : 'assistant',
-      content: msg.content,
-    });
+    messages.push({ role: msg.type === 'user' ? 'user' : 'assistant', content: msg.content });
   });
   messages.push({ role: 'user', content: userMessage });
 
@@ -305,13 +241,7 @@ const callOpenRouterDirect = async (
       'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : '',
       'X-Title': 'Attendance System AI',
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: 0.1,
-      max_tokens: 8192,
-      top_p: 0.85,
-    }),
+    body: JSON.stringify({ model, messages, temperature: 0.1, max_tokens: 8192, top_p: 0.85 }),
   });
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -321,13 +251,19 @@ const callOpenRouterDirect = async (
   }
   const data = await response.json();
   const text = data?.choices?.[0]?.message?.content?.trim();
-  if (!text) {
-    const err: any = new Error('EMPTY_RESPONSE');
-    err.status = 0;
-    throw err;
-  }
+  if (!text) { const err: any = new Error('EMPTY_RESPONSE'); err.status = 0; throw err; }
   return text;
 };
+
+// ✅ واجهة بطاقة الطالب السريعة
+interface StudentQuickCard {
+  student: Student;
+  attendedCount: number;
+  absentCount: number;
+  percentage: string;
+  isPresentToday: boolean;
+  attendedSessions: { session: AttendanceSession & { _normalizedDate: string }; present: boolean }[];
+}
 
 export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   user,
@@ -348,28 +284,34 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
-
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentModelIndex, setCurrentModelIndex] = useState(0);
   const [failedModels, setFailedModels] = useState<Set<string>>(new Set());
-  
-  // ✅ اختيار الموديل يدوي أو تلقائي
   const [selectedModelId, setSelectedModelId] = useState<string>('auto');
   const [showModelSelector, setShowModelSelector] = useState(false);
+
+  // ✅ حالات البحث عن الطالب
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
+  const [studentSuggestions, setStudentSuggestions] = useState<Student[]>([]);
+  const [selectedStudentCard, setSelectedStudentCard] = useState<StudentQuickCard | null>(null);
+  const [showStudentCard, setShowStudentCard] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastRequestTime = useRef<number>(0);
   const modelSelectorRef = useRef<HTMLDivElement>(null);
+  const studentSearchRef = useRef<HTMLDivElement>(null);
 
-
-  // ✅ إغلاق قائمة الموديلات عند الضغط خارجها
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (modelSelectorRef.current && !modelSelectorRef.current.contains(event.target as Node)) {
         setShowModelSelector(false);
+      }
+      if (studentSearchRef.current && !studentSearchRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -429,6 +371,121 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     };
   }, [isAdmin, colleges, stages, user.permissions, students, records, sessions, allStagesData]);
 
+  // ✅ دالة إصلاح التاريخ
+  const fixDate = useCallback((rawDate: any): string => {
+    if (!rawDate) return '';
+    if (rawDate instanceof Date) {
+      const y = rawDate.getFullYear();
+      const m = String(rawDate.getMonth() + 1).padStart(2, '0');
+      const d = String(rawDate.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    let text = String(rawDate).trim();
+    text = text.replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '');
+    let cleaned = '';
+    for (let i = 0; i < text.length; i++) {
+      const code = text.charCodeAt(i);
+      if (code >= 0x0660 && code <= 0x0669) cleaned += String(code - 0x0660);
+      else if (code >= 0x06F0 && code <= 0x06F9) cleaned += String(code - 0x06F0);
+      else cleaned += text[i];
+    }
+    const numbers = cleaned.match(/\d+/g);
+    if (!numbers || numbers.length < 3) return cleaned;
+    let yearIdx = -1;
+    for (let i = 0; i < numbers.length; i++) {
+      if (numbers[i].length === 4) { yearIdx = i; break; }
+    }
+    let year = '', month = '', day = '';
+    if (yearIdx === 0) { year = numbers[0]; month = numbers[1]; day = numbers[2]; }
+    else if (yearIdx === 2) { day = numbers[0]; month = numbers[1]; year = numbers[2]; }
+    else if (yearIdx === 1) { month = numbers[0]; year = numbers[1]; day = numbers[2]; }
+    else { year = numbers[0]; month = numbers[1]; day = numbers[2]; }
+    if (!year || !month || !day) return cleaned;
+    return `${year}-${String(parseInt(month)).padStart(2, '0')}-${String(parseInt(day)).padStart(2, '0')}`;
+  }, []);
+
+  // ✅ حساب بيانات الطالب السريعة
+  const computeStudentCard = useCallback((student: Student): StudentQuickCard => {
+    const todayKey = fixDate(new Date());
+
+    const fixedSessions = sessions.map(s => ({
+      ...s,
+      _normalizedDate: fixDate((s as any).date),
+    }));
+
+    const sortedSessions = [...fixedSessions].sort((a, b) => {
+      if (a._normalizedDate !== b._normalizedDate) return a._normalizedDate.localeCompare(b._normalizedDate);
+      return String(a.name || '').localeCompare(String(b.name || ''), 'ar');
+    });
+
+    const studentRecords = records.filter(r => r.studentId === student.id);
+    const attendedSessionIds = new Set(studentRecords.map(r => r.sessionId));
+
+    // حساب حضور اليوم
+    const todaySessionIds = new Set<string>();
+    fixedSessions.forEach(s => { if (s._normalizedDate === todayKey) todaySessionIds.add(s.id); });
+    records.forEach(r => {
+      const sess = fixedSessions.find(s => s.id === r.sessionId);
+      if (sess && sess._normalizedDate === todayKey) todaySessionIds.add(r.sessionId);
+    });
+    const isPresentToday = studentRecords.some(r => todaySessionIds.has(r.sessionId));
+
+    const attendedCount = sortedSessions.filter(s => attendedSessionIds.has(s.id)).length;
+    const absentCount = sortedSessions.length - attendedCount;
+    const percentage = sortedSessions.length > 0
+      ? ((attendedCount / sortedSessions.length) * 100).toFixed(1)
+      : '0';
+
+    const attendedSessions = sortedSessions.map(s => ({
+      session: s,
+      present: attendedSessionIds.has(s.id),
+    }));
+
+    return { student, attendedCount, absentCount, percentage, isPresentToday, attendedSessions };
+  }, [sessions, records, fixDate]);
+
+  // ✅ البحث عن الطالب في الوقت الفعلي
+  const handleStudentSearch = useCallback((query: string) => {
+    setStudentSearchQuery(query);
+    setShowStudentCard(false);
+    setSelectedStudentCard(null);
+
+    if (query.trim().length < 2) {
+      setStudentSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const q = query.trim().toLowerCase();
+    const matches = students.filter(s =>
+      s.name.toLowerCase().includes(q) ||
+      s.code?.toLowerCase().includes(q) ||
+      s.group?.toLowerCase().includes(q)
+    ).slice(0, 8);
+
+    setStudentSuggestions(matches);
+    setShowSuggestions(matches.length > 0);
+  }, [students]);
+
+  // ✅ اختيار طالب من القائمة
+  const handleSelectStudent = useCallback((student: Student) => {
+    const card = computeStudentCard(student);
+    setSelectedStudentCard(card);
+    setShowStudentCard(true);
+    setShowSuggestions(false);
+    setStudentSearchQuery(student.name);
+  }, [computeStudentCard]);
+
+  // ✅ إرسال سؤال عن الطالب للشات
+  const sendStudentQuestion = useCallback((student: Student) => {
+    const question = `أعطني تفاصيل حضور وغياب الطالب ${student.name}`;
+    setInput(question);
+    setShowStudentCard(false);
+    setShowSuggestions(false);
+    setStudentSearchQuery('');
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }, []);
+
   useEffect(() => {
     if (isOpen && messages.length === 0) {
       setMessages([{
@@ -448,91 +505,15 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 300);
   }, [isOpen]);
 
-  // ✅ الموديل الحالي اللي يظهر بالـ Header
   const activeModel = useMemo(() => {
-    if (selectedModelId === 'auto') {
-      return AI_MODELS[currentModelIndex] || AI_MODELS[0];
-    }
+    if (selectedModelId === 'auto') return AI_MODELS[currentModelIndex] || AI_MODELS[0];
     return AI_MODELS.find(m => m.id === selectedModelId) || AI_MODELS[0];
   }, [selectedModelId, currentModelIndex]);
-
-  // ✅ بناء السياق مع تدقيق محسن لحضور اليوم
-  // ✅ دالة جديدة لإصلاح التواريخ - تشتغل 100%
-  const fixDate = useCallback((rawDate: any): string => {
-    if (!rawDate) return '';
-    
-    if (rawDate instanceof Date) {
-      const y = rawDate.getFullYear();
-      const m = String(rawDate.getMonth() + 1).padStart(2, '0');
-      const d = String(rawDate.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    }
-    
-    let text = String(rawDate).trim();
-    
-    // ✅ حذف الرموز الخفية (RTL/LTR marks)
-    text = text.replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '');
-    
-    // ✅ تحويل الأرقام العربية والفارسية لإنجليزية
-    let cleaned = '';
-    for (let i = 0; i < text.length; i++) {
-      const code = text.charCodeAt(i);
-      if (code >= 0x0660 && code <= 0x0669) {
-        cleaned += String(code - 0x0660);
-      } else if (code >= 0x06F0 && code <= 0x06F9) {
-        cleaned += String(code - 0x06F0);
-      } else {
-        cleaned += text[i];
-      }
-    }
-    
-    // ✅ استخراج كل الأرقام
-    const numbers = cleaned.match(/\d+/g);
-    if (!numbers || numbers.length < 3) return cleaned;
-    
-    // ✅ نلاقي السنة (الرقم بـ 4 خانات)
-    let yearIdx = -1;
-    for (let i = 0; i < numbers.length; i++) {
-      if (numbers[i].length === 4) {
-        yearIdx = i;
-        break;
-      }
-    }
-    
-    let year = '', month = '', day = '';
-    
-    if (yearIdx === 0) {
-      // YYYY-MM-DD (السنة بالأول)
-      year = numbers[0];
-      month = numbers[1];
-      day = numbers[2];
-    } else if (yearIdx === 2) {
-      // DD-MM-YYYY (السنة بالآخر)
-      day = numbers[0];
-      month = numbers[1];
-      year = numbers[2];
-    } else if (yearIdx === 1) {
-      // MM-YYYY-DD (نادر)
-      month = numbers[0];
-      year = numbers[1];
-      day = numbers[2];
-    } else {
-      // ما لقينا سنة، نفترض YYYY-MM-DD
-      year = numbers[0];
-      month = numbers[1];
-      day = numbers[2];
-    }
-    
-    if (!year || !month || !day) return cleaned;
-    
-    return `${year}-${String(parseInt(month)).padStart(2, '0')}-${String(parseInt(day)).padStart(2, '0')}`;
-  }, []);
 
   const buildDataContext = useCallback((): string => {
     const now = new Date();
     const todayDate = fixDate(now);
 
-    // ✅ إصلاح تواريخ كل الجلسات والسجلات
     const fixedSessions = sessions.map(s => ({
       ...s,
       date: fixDate((s as any).date),
@@ -544,147 +525,69 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       date: (r as any).date ? fixDate((r as any).date) : '',
     }));
 
-    // 🔍 DEBUG
-    console.log('=== DEBUG TODAY ===');
-    console.log('todayDate:', todayDate);
-    console.log('sessions count:', fixedSessions.length);
-    fixedSessions.slice(0, 5).forEach((s, i) => {
-      console.log(`session[${i}]:`, {
-        id: s.id,
-        name: s.name,
-        rawDate: (s as any)._originalDate,
-        fixedDate: s.date,
-        matchesToday: s.date === todayDate,
-      });
-    });
-    console.log('=== END DEBUG ===');
-
     const sortedSessions = [...fixedSessions].sort((a, b) => {
       if (a.date !== b.date) return a.date.localeCompare(b.date);
       return String(a.name || '').localeCompare(String(b.name || ''), 'ar');
     });
 
     const sessionById = new Map(sortedSessions.map(s => [s.id, s]));
-
     const groups = Array.from(new Set(students.map(s => s.group).filter(Boolean))) as string[];
     groups.sort((a, b) => a.localeCompare(b, 'ar'));
 
     let context = `# قاعدة بيانات نظام الحضور\n\n`;
-    context += `## معلومات المستخدم:\n`;
-    context += `- الاسم: ${user.displayName}\n`;
-    context += `- الدور: ${isAdmin ? 'أدمن' : 'تدريسي'}\n\n`;
-    context += `## التاريخ الحالي:\n`;
-    context += `- اليوم: ${formatDateWithDay(todayDate)}\n`;
-    context += `- التاريخ: ${todayDate}\n`;
-    context += `- الوقت: ${now.toLocaleTimeString('ar-EG')}\n\n`;
+    context += `## معلومات المستخدم:\n- الاسم: ${user.displayName}\n- الدور: ${isAdmin ? 'أدمن' : 'تدريسي'}\n\n`;
+    context += `## التاريخ الحالي:\n- اليوم: ${formatDateWithDay(todayDate)}\n- التاريخ: ${todayDate}\n- الوقت: ${now.toLocaleTimeString('ar-EG')}\n\n`;
 
     if (currentCollege && currentStage) {
-      context += `## الموقع الحالي:\n`;
-      context += `- الكلية: ${currentCollege.name}\n`;
-      context += `- المرحلة: ${currentStage.name}\n\n`;
+      context += `## الموقع الحالي:\n- الكلية: ${currentCollege.name}\n- المرحلة: ${currentStage.name}\n\n`;
     }
 
     if (currentStageId && students.length > 0) {
       const allTodaySessionIds = new Set<string>();
-      
-      sortedSessions.forEach(s => {
-        if (s.date === todayDate) {
-          allTodaySessionIds.add(s.id);
-        }
-      });
-      
+      sortedSessions.forEach(s => { if (s.date === todayDate) allTodaySessionIds.add(s.id); });
       fixedRecords.forEach(r => {
         const session = sessionById.get(r.sessionId);
-        if (session && session.date === todayDate) {
-          allTodaySessionIds.add(r.sessionId);
-        }
-      });
-
-      fixedRecords.forEach(r => {
-        if (r.date && r.date === todayDate) {
-          allTodaySessionIds.add(r.sessionId);
-        }
+        if (session && session.date === todayDate) allTodaySessionIds.add(r.sessionId);
+        if (r.date && r.date === todayDate) allTodaySessionIds.add(r.sessionId);
       });
 
       const finalTodaySessions = sortedSessions.filter(s => allTodaySessionIds.has(s.id));
       const finalTodayRecords = fixedRecords.filter(r => allTodaySessionIds.has(r.sessionId));
-      
       const presentStudentIds = new Set<string>();
       finalTodayRecords.forEach(r => presentStudentIds.add(r.studentId));
-      
       const presentStudents = students.filter(s => presentStudentIds.has(s.id));
       const absentStudents = students.filter(s => !presentStudentIds.has(s.id));
       const hasActivity = allTodaySessionIds.size > 0;
 
-      console.log('🎯 RESULTS:', {
-        todayDate,
-        todaySessions: finalTodaySessions.length,
-        present: presentStudents.length,
-        absent: absentStudents.length,
-      });
-
-      context += `## ═══════════════════════════════════════\n`;
-      context += `## 🌟 حضور اليوم (${todayDate})\n`;
-      context += `## ═══════════════════════════════════════\n\n`;
-      
+      context += `## ═══════════════════════════════════════\n## 🌟 حضور اليوم (${todayDate})\n## ═══════════════════════════════════════\n\n`;
       context += `### 🚨🚨🚨 أرقام مؤكدة 100% 🚨🚨🚨\n`;
       context += `- يوجد نشاط اليوم: **${hasActivity ? '✅ نعم' : '❌ لا'}**\n`;
       context += `- عدد جلسات اليوم: **${finalTodaySessions.length}**\n`;
-      context += `- عدد سجلات الحضور اليوم: **${finalTodayRecords.length}**\n`;
       context += `- إجمالي الطلاب: **${students.length}**\n`;
       context += `- ✅ عدد الحاضرين اليوم: **${presentStudents.length}**\n`;
       context += `- ❌ عدد الغائبين اليوم: **${absentStudents.length}**\n`;
-      
-      if (students.length > 0) {
-        context += `- 📊 نسبة الحضور: **${((presentStudents.length / students.length) * 100).toFixed(1)}%**\n`;
-      }
+      if (students.length > 0) context += `- 📊 نسبة الحضور: **${((presentStudents.length / students.length) * 100).toFixed(1)}%**\n`;
       context += `\n`;
 
       if (hasActivity) {
-        // ✅ تفصيل كل جلسة/سجل اليوم على حدة
-        context += `### 📋 تفصيل كل سجل اليوم على حدة:\n\n`;
-        
+        context += `### 📋 تفصيل كل سجل اليوم:\n\n`;
         finalTodaySessions.forEach((session, sIdx) => {
           const sessionRecs = fixedRecords.filter(r => r.sessionId === session.id);
           const sessionPresentIds = new Set(sessionRecs.map(r => r.studentId));
           const sessionPresent = students.filter(s => sessionPresentIds.has(s.id));
           const sessionAbsent = students.filter(s => !sessionPresentIds.has(s.id));
-          const sessionRate = students.length > 0 
-            ? ((sessionPresent.length / students.length) * 100).toFixed(1) 
-            : '0';
+          const sessionRate = students.length > 0 ? ((sessionPresent.length / students.length) * 100).toFixed(1) : '0';
 
           context += `#### 🔵 السجل ${sIdx + 1}: **${session.name}**\n`;
           context += `- 📅 التاريخ: ${formatDateWithDay(session.date)}\n`;
           context += `- 📊 الإحصائيات: ✅ ${sessionPresent.length} حاضر | ❌ ${sessionAbsent.length} غائب | نسبة ${sessionRate}%\n\n`;
 
-          context += `**✅ حاضرين سجل "${session.name}" (${sessionPresent.length}):**\n`;
-          if (sessionPresent.length > 0) {
-            sessionPresent.forEach((st, i) => {
-              context += `${i + 1}. ✅ **${st.name}** | كود: ${st.code} | كروب: ${st.group || '-'}\n`;
-            });
-          } else {
-            context += `- لا يوجد حاضرين بهذا السجل\n`;
-          }
-          context += `\n`;
-
-          context += `**❌ غائبين سجل "${session.name}" (${sessionAbsent.length}):**\n`;
-          if (sessionAbsent.length > 0) {
-            sessionAbsent.forEach((st, i) => {
-              context += `${i + 1}. ❌ **${st.name}** | كود: ${st.code} | كروب: ${st.group || '-'}\n`;
-            });
-          } else {
-            context += `- الكل حاضر بهذا السجل! 🎉\n`;
-          }
+          context += `**✅ حاضرين (${sessionPresent.length}):**\n`;
+          sessionPresent.forEach((st, i) => { context += `${i + 1}. ✅ **${st.name}** | كود: ${st.code} | كروب: ${st.group || '-'}\n`; });
+          context += `\n**❌ غائبين (${sessionAbsent.length}):**\n`;
+          sessionAbsent.forEach((st, i) => { context += `${i + 1}. ❌ **${st.name}** | كود: ${st.code} | كروب: ${st.group || '-'}\n`; });
           context += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
         });
-
-        // ✅ ملخص إجمالي (اختياري للأسئلة العامة)
-        context += `### 📌 ملخص اليوم الإجمالي (للأسئلة العامة فقط):\n`;
-        context += `- عدد السجلات اليوم: **${finalTodaySessions.length}**\n`;
-        context += `- طلاب حضروا بأي سجل: **${presentStudents.length}**\n`;
-        context += `- طلاب لم يحضروا أي سجل: **${absentStudents.length}**\n\n`;
-      } else {
-        context += `### ⚠️ لا يوجد جلسة بتاريخ اليوم\n\n`;
       }
 
       context += `## 📅 جميع الجلسات (${sortedSessions.length}):\n`;
@@ -697,8 +600,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
 
       context += `## 👥 تفاصيل الطلاب (${students.length}):\n\n`;
       const sortedStudents = [...students].sort((a, b) => {
-        const ga = a.group || 'ZZZ';
-        const gb = b.group || 'ZZZ';
+        const ga = a.group || 'ZZZ', gb = b.group || 'ZZZ';
         if (ga !== gb) return ga.localeCompare(gb, 'ar');
         return a.name.localeCompare(b.name, 'ar');
       });
@@ -712,16 +614,14 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
         const isPresentToday = presentStudentIds.has(student.id);
 
         context += `### 👤 **${student.name}**\n`;
-        context += `- الكود: ${student.code}\n`;
-        context += `- الكروب: ${student.group || '-'}\n`;
+        context += `- الكود: ${student.code}\n- الكروب: ${student.group || '-'}\n`;
         context += `- حضور اليوم: ${isPresentToday ? '✅ حاضر' : '❌ غائب'}\n`;
         context += `- الحضور: ${attendedCount} | الغياب: ${absentCount} | النسبة: ${percentage}%\n`;
         context += `- سجل كامل:\n`;
         sortedSessions.forEach(session => {
           const isPresent = attendedSessionIds.has(session.id);
-          const icon = isPresent ? '✅' : '❌';
           const isToday = session.date === todayDate ? ' 🌟' : '';
-          context += `  ${icon} ${formatDateWithDay(session.date)} | ${session.name}${isToday}\n`;
+          context += `  ${isPresent ? '✅' : '❌'} ${formatDateWithDay(session.date)} | ${session.name}${isToday}\n`;
         });
         context += `\n`;
       });
@@ -735,8 +635,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
           const possible = groupStudents.length * sortedSessions.length;
           const groupPercentage = possible > 0 ? ((groupRecords.length / possible) * 100).toFixed(1) : '0';
           const groupPresentToday = groupStudents.filter(s => presentStudentIds.has(s.id)).length;
-          const groupAbsentToday = groupStudents.length - groupPresentToday;
-          context += `- **${group}**: ${groupStudents.length} طالب | حضور عام ${groupPercentage}% | اليوم: ✅${groupPresentToday} ❌${groupAbsentToday}\n`;
+          context += `- **${group}**: ${groupStudents.length} طالب | حضور عام ${groupPercentage}% | اليوم: ✅${groupPresentToday} ❌${groupStudents.length - groupPresentToday}\n`;
         });
         context += `\n`;
       }
@@ -744,18 +643,10 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       const totalPossible = students.length * sortedSessions.length;
       const overallRate = totalPossible > 0 ? ((fixedRecords.length / totalPossible) * 100).toFixed(2) : '0';
       context += `## 📈 الإحصائيات العامة:\n`;
-      context += `- عدد الطلاب: ${students.length}\n`;
-      context += `- عدد الجلسات: ${sortedSessions.length}\n`;
-      context += `- مجموع سجلات الحضور: ${fixedRecords.length}\n`;
+      context += `- عدد الطلاب: ${students.length}\n- عدد الجلسات: ${sortedSessions.length}\n`;
       context += `- نسبة الحضور العامة: ${overallRate}%\n\n`;
-
     } else {
       context += `## ⚠️ لا توجد مرحلة مختارة حالياً\n`;
-      accessibleData.accessibleColleges.forEach(college => {
-        const collegeStages = accessibleData.accessibleStages.filter(stage => stage.collegeId === college.id);
-        context += `- ${college.name}: ${collegeStages.map(s => s.name).join('، ')}\n`;
-      });
-      context += `\n`;
     }
 
     if (isAdmin && !currentStageId && Object.keys(accessibleData.stagesMap).length > 0) {
@@ -765,13 +656,11 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
         const rate = totalPossible > 0 ? ((stageData.records.length / totalPossible) * 100).toFixed(1) : '0';
         context += `- **${stageData.collegeName} / ${stageData.stageName}**: ${stageData.students.length} طالب | ${stageData.sessions.length} جلسة | ${rate}%\n`;
       });
-      context += `\n`;
     }
 
     return context;
   }, [sessions, records, students, user.displayName, isAdmin, currentCollege, currentStage, currentStageId, accessibleData, fixDate]);
 
-  // 🧠 تحليل السؤال
   const analyzeQuestion = useCallback((question: string): string => {
     let hint = '';
     const todayKey = fixDate(new Date());
@@ -786,98 +675,68 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       return hint;
     }
 
-    const fixedSessions = sessions.map(s => ({
-      ...s,
-      _normalizedDate: fixDate((s as any).date),
-    }));
-
+    const fixedSessions = sessions.map(s => ({ ...s, _normalizedDate: fixDate((s as any).date) }));
     const sessionsLookup = new Map(fixedSessions.map(s => [s.id, s]));
     const todaySessionIdsSet = new Set<string>();
-    
-    fixedSessions.forEach(s => {
-      if (s._normalizedDate === todayKey) todaySessionIdsSet.add(s.id);
-    });
-    
+    fixedSessions.forEach(s => { if (s._normalizedDate === todayKey) todaySessionIdsSet.add(s.id); });
     records.forEach(r => {
       const sess = sessionsLookup.get(r.sessionId);
       if (sess && sess._normalizedDate === todayKey) todaySessionIdsSet.add(r.sessionId);
     });
-    
     const todayRecords = records.filter(r => todaySessionIdsSet.has(r.sessionId));
     const presentIds = new Set(todayRecords.map(r => r.studentId));
     const present = students.filter(s => presentIds.has(s.id));
     const absent = students.filter(s => !presentIds.has(s.id));
     const THRESHOLD = 50;
 
-    console.log('🧠 analyzeQuestion:', {
-      todayKey,
-      todaySessionsCount: todaySessionIdsSet.size,
-      presentCount: present.length,
-      absentCount: absent.length,
-    });
-
     if (asksPresent && !asksAbsent) {
       if (present.length === 0) {
-        hint += `\n\n[🚨 لا يوجد حاضرين اليوم (${todayKey}). ممنوع تقول فيه حاضرين]`;
+        hint += `\n\n[🚨 لا يوجد حاضرين اليوم]`;
       } else if (present.length > THRESHOLD) {
-        hint += `\n\n[🚨 السؤال عن الحاضرين فقط. العدد: ${present.length} (أكثر من 50). اذكر العدد فقط واطلب تصدير اكسل]`;
+        hint += `\n\n[🚨 الحاضرين ${present.length} (أكثر من 50). اذكر العدد فقط]`;
       } else {
-        hint += `\n\n[🚨 السؤال عن الحاضرين فقط (${present.length} طالب). اعرضهم بـ ✅. ممنوع ذكر الغائبين.\nالأسماء: ${present.map(s => `${s.name} (${s.code}, ${s.group || '-'})`).join(' | ')}]`;
+        hint += `\n\n[🚨 الحاضرين فقط (${present.length}): ${present.map(s => `${s.name} (${s.code}, ${s.group || '-'})`).join(' | ')}]`;
       }
       return hint;
     }
 
     if (asksAbsent && !asksPresent) {
       if (absent.length === 0) {
-        hint += `\n\n[🚨 لا يوجد غائبين اليوم - الكل حاضر]`;
+        hint += `\n\n[🚨 لا يوجد غائبين - الكل حاضر]`;
       } else if (absent.length > THRESHOLD) {
-        hint += `\n\n[🚨 السؤال عن الغائبين فقط. العدد: ${absent.length} (أكثر من 50). اذكر العدد فقط واطلب تصدير اكسل]`;
+        hint += `\n\n[🚨 الغائبين ${absent.length} (أكثر من 50). اذكر العدد فقط]`;
       } else {
-        hint += `\n\n[🚨 السؤال عن الغائبين فقط (${absent.length} طالب). اعرضهم بـ ❌. ممنوع ذكر الحاضرين.\nالأسماء: ${absent.map(s => `${s.name} (${s.code}, ${s.group || '-'})`).join(' | ')}]`;
+        hint += `\n\n[🚨 الغائبين فقط (${absent.length}): ${absent.map(s => `${s.name} (${s.code}, ${s.group || '-'})`).join(' | ')}]`;
       }
       return hint;
     }
 
     if (asksToday || asksPresent || asksAbsent) {
-      const total = students.length;
-      
-      // ✅ نجمع كل جلسات اليوم منفصلة
       const todaySessionsList = fixedSessions.filter(s => todaySessionIdsSet.has(s.id));
-      
       if (todaySessionsList.length === 0) {
         hint += `\n\n[🚨 لا توجد بيانات حضور لليوم (${todayKey})]`;
         return hint;
       }
-
-      if (total > THRESHOLD) {
+      if (students.length > THRESHOLD) {
         let perSessionSummary = '';
         todaySessionsList.forEach(sess => {
           const sRecs = records.filter(r => r.sessionId === sess.id);
-          perSessionSummary += `\n• سجل "${sess.name}": ${sRecs.length}/${total} حاضر`;
+          perSessionSummary += `\n• سجل "${sess.name}": ${sRecs.length}/${students.length} حاضر`;
         });
-        hint += `\n\n[🚨 عدد كبير من الطلاب (${total}). فصّل كل سجل لحاله:${perSessionSummary}\n\nاطلب تصدير اكسل للتفاصيل]`;
+        hint += `\n\n[🚨 عدد كبير (${students.length}). فصّل كل سجل:${perSessionSummary}]`;
         return hint;
       }
-
-      // ✅ بناء تلميح مفصّل لكل سجل
-      let sessionsBreakdown = `\n\n[🚨🚨🚨 إلزامي: فصّل كل سجل لحاله، لا تجمعهم!\n`;
-      sessionsBreakdown += `عدد سجلات اليوم: ${todaySessionsList.length}\n\n`;
-      
+      let sessionsBreakdown = `\n\n[🚨 فصّل كل سجل لحاله:\n`;
       todaySessionsList.forEach((sess, idx) => {
         const sRecs = records.filter(r => r.sessionId === sess.id);
         const sPresentIds = new Set(sRecs.map(r => r.studentId));
         const sPresent = students.filter(s => sPresentIds.has(s.id));
         const sAbsent = students.filter(s => !sPresentIds.has(s.id));
-        
         sessionsBreakdown += `━━━ السجل ${idx + 1}: "${sess.name}" ━━━\n`;
-        sessionsBreakdown += `✅ حاضرين (${sPresent.length}): ${sPresent.map(s => `${s.name} (${s.code}, ${s.group || '-'})`).join(' | ') || 'لا أحد'}\n`;
-        sessionsBreakdown += `❌ غائبين (${sAbsent.length}): ${sAbsent.map(s => `${s.name} (${s.code}, ${s.group || '-'})`).join(' | ') || 'لا أحد'}\n\n`;
+        sessionsBreakdown += `✅ (${sPresent.length}): ${sPresent.map(s => `${s.name}`).join(' | ') || 'لا أحد'}\n`;
+        sessionsBreakdown += `❌ (${sAbsent.length}): ${sAbsent.map(s => `${s.name}`).join(' | ') || 'لا أحد'}\n\n`;
       });
-      
-      sessionsBreakdown += `\n⛔ ممنوع تجمع السجلات سوا!\n`;
-      sessionsBreakdown += `⛔ ممنوع تقول "الحاضرين اليوم" بشكل عام!\n`;
-      sessionsBreakdown += `✅ اعرض كل سجل لحاله بعنوان واضح!]`;
-      
+      sessionsBreakdown += `]`;
       hint += sessionsBreakdown;
       return hint;
     }
@@ -887,7 +746,6 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       const matches = question.includes(student.name) ||
         (firstName.length > 2 && question.includes(firstName)) ||
         question.includes(student.code);
-      
       if (matches) {
         const studentRecords = records.filter(r => r.studentId === student.id);
         const attendedSessionIds = new Set(studentRecords.map(r => r.sessionId));
@@ -903,12 +761,11 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     return hint;
   }, [students, records, sessions, fixDate]);
 
-  // ✅ استدعاء AI مع دعم الاختيار اليدوي
   const callGeminiAPI = useCallback(
     async (userMessage: string, conversationHistory: Message[]): Promise<string> => {
-if (!GEMINI_API_KEY && !OPENROUTER_API_KEY && !GROQ_API_KEY) {
-  return `⚠️ لازم تضيف API Key بالـ .env:\n\nVITE_GEMINI_API_KEY=...\nأو VITE_GROQ_API_KEY=...\nأو VITE_OPENROUTER_API_KEY=...`;
-}
+      if (!GEMINI_API_KEY && !OPENROUTER_API_KEY && !GROQ_API_KEY) {
+        return `⚠️ لازم تضيف API Key بالـ .env`;
+      }
 
       const dataContext = buildDataContext();
       const questionHint = analyzeQuestion(userMessage);
@@ -917,47 +774,17 @@ if (!GEMINI_API_KEY && !OPENROUTER_API_KEY && !GROQ_API_KEY) {
       const systemInstruction = `أنت مساعد ذكي متخصص فقط بنظام حضور الطلاب.
 
 # 🚨 قواعد إلزامية:
-
-## ⛔ ممنوع:
-- ❌ ممنوع تقول "ماكو جلسة اليوم" قبل ما تفحص كل المصادر
-- ❌ ممنوع تتجاهل التلميحات بين [🚨]
-- ❌ ممنوع تذكر الغائبين إذا السؤال عن الحاضرين فقط
-- ❌ ممنوع تذكر الحاضرين إذا السؤال عن الغائبين فقط
+- ❌ ممنوع تجمع سجلات اليوم - كل سجل لحاله
 - ❌ ممنوع تخمين أي شي
-- ❌ 🚨🚨 ممنوع تجمع سجلات اليوم سوا! كل سجل لحاله!
-- ❌ ممنوع تقول "الحاضرين اليوم: X, Y, Z" كقائمة موحّدة
-- ❌ ممنوع تحسب طالب حاضر بكل السجلات لو هو حضر بسجل واحد فقط
-
-## 📋 لما يكون فيه أكثر من سجل (جلسة) باليوم:
-1. ✅ افصل كل سجل لحاله بعنوان واضح: "السجل 1: اسم السجل"
-2. ✅ لكل سجل اعرض الحاضرين والغائبين الخاصين فيه فقط
-3. ✅ استخدم فاصل واضح بين السجلات: ━━━━━━━━━
-4. ✅ لو الطالب حاضر بسجل وغائب بثاني → اعرضه ✅ بسجل و ❌ بالثاني
-
-## 🔍 لأي سؤال عن اليوم:
-1. افحص "🚨🚨🚨 أرقام مؤكدة 100%"
-2. إذا "يوجد نشاط اليوم: ✅ نعم" → فيه حضور أكيد
-3. اقرأ التلميحات بين [🚨] واعتمد عليها حرفياً
-4. فقط إذا كل شي = 0 → قل "ماكو حضور اليوم"
-
-## 👨‍⚕️ مدير الموقع:
-**الدكتور الصيدلاني مجتبى هيثم محمد**
-
-## 📊 أكثر من 50 طالب:
-اذكر العدد فقط + اطلب تصدير اكسل
-
-## ✅ القواعد:
-1. أجب بالعربية العراقية
-2. ✅ للحاضر (أخضر) و ❌ للغائب (أحمر)
-3. استخدم **bold** للأسماء
-4. كن دقيق 100%
-5. خاطب التدريسي بـ "دكتور"
+- ✅ اقرأ التلميحات [🚨] واعتمد عليها
+- ✅ أجب بالعربية العراقية
+- ✅ استخدم ✅ للحاضر و ❌ للغائب
+- ✅ خاطب التدريسي بـ "دكتور"
+- 👨‍⚕️ مدير الموقع: **الدكتور الصيدلاني مجتبى هيثم محمد**
 
 ---
-
 ${dataContext}`;
 
-      // Gemini contents
       const geminiContents = [
         { role: 'user', parts: [{ text: systemInstruction }] },
         { role: 'model', parts: [{ text: 'تمام دكتور، جاهز.' }] },
@@ -970,36 +797,18 @@ ${dataContext}`;
 
       let lastError = '';
 
-      // ✅ إذا اختار موديل معين
       if (selectedModelId !== 'auto') {
         const chosen = AI_MODELS.find(m => m.id === selectedModelId);
         if (!chosen) return '❌ الموديل المختار غير موجود';
-
-        if (chosen.provider === 'gemini' && !GEMINI_API_KEY) {
-          return '🔑 مو متوفر Gemini API Key';
-        }
-        if (chosen.provider === 'openrouter' && !OPENROUTER_API_KEY) {
-          return '🔑 مو متوفر OpenRouter API Key';
-        }
-        if (chosen.provider === 'groq' && !GROQ_API_KEY) {
-          return '🔑 مو متوفر Groq API Key';
-        }
-
         try {
-          console.log(`🎯 موديل مختار: ${chosen.name}`);
-          if (chosen.provider === 'gemini') {
-            return await callGeminiDirect(chosen.model, geminiContents);
-          } else if (chosen.provider === 'groq') {
-            return await callGroqDirect(chosen.model, systemInstruction, conversationHistory, enhancedMessage);
-          } else {
-            return await callOpenRouterDirect(chosen.model, systemInstruction, conversationHistory, enhancedMessage);
-          }
+          if (chosen.provider === 'gemini') return await callGeminiDirect(chosen.model, geminiContents);
+          if (chosen.provider === 'groq') return await callGroqDirect(chosen.model, systemInstruction, conversationHistory, enhancedMessage);
+          return await callOpenRouterDirect(chosen.model, systemInstruction, conversationHistory, enhancedMessage);
         } catch (err: any) {
-          return `❌ ${chosen.name} فشل: ${err?.message || 'خطأ غير معروف'}\n\n💡 جرب موديل ثاني أو خله "تلقائي"`;
+          return `❌ ${chosen.name} فشل: ${err?.message || 'خطأ غير معروف'}`;
         }
       }
 
-      // ✅ الوضع التلقائي - يجرب كل الموديلات
       for (let i = currentModelIndex; i < AI_MODELS.length; i++) {
         const aiModel = AI_MODELS[i];
         if (failedModels.has(aiModel.id)) continue;
@@ -1008,45 +817,25 @@ ${dataContext}`;
         if (aiModel.provider === 'groq' && !GROQ_API_KEY) continue;
 
         try {
-          console.log(`🔄 يجرب: ${aiModel.name}`);
           let text = '';
-          if (aiModel.provider === 'gemini') {
-            text = await callGeminiDirect(aiModel.model, geminiContents);
-          } else if (aiModel.provider === 'groq') {
-            text = await callGroqDirect(aiModel.model, systemInstruction, conversationHistory, enhancedMessage);
-          } else {
-            text = await callOpenRouterDirect(aiModel.model, systemInstruction, conversationHistory, enhancedMessage);
-          }
-
-          if (i !== currentModelIndex) {
-            setCurrentModelIndex(i);
-            console.log(`✅ يشتغل: ${aiModel.name}`);
-          }
+          if (aiModel.provider === 'gemini') text = await callGeminiDirect(aiModel.model, geminiContents);
+          else if (aiModel.provider === 'groq') text = await callGroqDirect(aiModel.model, systemInstruction, conversationHistory, enhancedMessage);
+          else text = await callOpenRouterDirect(aiModel.model, systemInstruction, conversationHistory, enhancedMessage);
+          if (i !== currentModelIndex) setCurrentModelIndex(i);
           return text;
-
         } catch (err: any) {
           const status = err?.status || 0;
-          const message = err?.message || 'خطأ غير معروف';
-          lastError = `${aiModel.name}: ${message}`;
-          console.warn(`❌ ${aiModel.name} (${status}):`, message);
-
+          lastError = `${aiModel.name}: ${err?.message || 'خطأ'}`;
           if (status === 401 || status === 403) {
-            if (aiModel.provider === 'gemini') {
-              setFailedModels(prev => new Set([...prev, aiModel.id]));
-              continue;
-            }
-            return `🔑 مشكلة بـ OpenRouter API Key\n${message}`;
-          }
-
-          setFailedModels(prev => new Set([...prev, aiModel.id]));
-          if (i < AI_MODELS.length - 1) {
-            await sleep([429, 503].includes(status) ? 1200 : 300);
+            setFailedModels(prev => new Set([...prev, aiModel.id]));
             continue;
           }
+          setFailedModels(prev => new Set([...prev, aiModel.id]));
+          if (i < AI_MODELS.length - 1) { await sleep([429, 503].includes(status) ? 1200 : 300); continue; }
         }
       }
 
-      return `🌐 جميع الموديلات توقفت مؤقتاً\n\nآخر خطأ: ${lastError}\n\n💡 اضغط 🔄 وحاول ثاني`;
+      return `🌐 جميع الموديلات توقفت\n\nآخر خطأ: ${lastError}`;
     },
     [buildDataContext, currentModelIndex, analyzeQuestion, failedModels, selectedModelId]
   );
@@ -1063,13 +852,7 @@ ${dataContext}`;
     lastRequestTime.current = now;
     setError(null);
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      type: 'user',
-      content: text.trim(),
-      timestamp: new Date(),
-    };
-
+    const userMessage: Message = { id: Date.now().toString(), type: 'user', content: text.trim(), timestamp: new Date() };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     if (inputRef.current) inputRef.current.style.height = '40px';
@@ -1077,12 +860,7 @@ ${dataContext}`;
 
     try {
       const response = await callGeminiAPI(text.trim(), messages);
-      setMessages(prev => [...prev, {
-        id: `${Date.now()}_bot`,
-        type: 'bot',
-        content: response,
-        timestamp: new Date(),
-      }]);
+      setMessages(prev => [...prev, { id: `${Date.now()}_bot`, type: 'bot', content: response, timestamp: new Date() }]);
     } catch (err: any) {
       setError(err?.message || 'حدث خطأ غير متوقع');
     } finally {
@@ -1093,10 +871,7 @@ ${dataContext}`;
   const handleSend = useCallback(() => sendMessage(input), [input, sendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
   const handleReset = useCallback(() => {
@@ -1105,6 +880,9 @@ ${dataContext}`;
       setError(null);
       setCurrentModelIndex(0);
       setFailedModels(new Set());
+      setShowStudentCard(false);
+      setStudentSearchQuery('');
+      setSelectedStudentCard(null);
     }
   }, []);
 
@@ -1119,26 +897,17 @@ ${dataContext}`;
 
       const parts: React.ReactNode[] = [];
       const boldRegex = /\*\*(.+?)\*\*/g;
-      let lastIndex = 0;
-      let match;
-      let key = 0;
-
+      let lastIndex = 0, match, key = 0;
       while ((match = boldRegex.exec(line)) !== null) {
-        if (match.index > lastIndex) {
-          parts.push(<React.Fragment key={`t-${i}-${key++}`}>{line.substring(lastIndex, match.index)}</React.Fragment>);
-        }
+        if (match.index > lastIndex) parts.push(<React.Fragment key={`t-${i}-${key++}`}>{line.substring(lastIndex, match.index)}</React.Fragment>);
         let boldClass = 'font-bold text-gray-900';
         if (lineHasCheck) boldClass = 'font-bold text-green-800';
         if (lineHasCross) boldClass = 'font-bold text-red-800';
         parts.push(<strong key={`b-${i}-${key++}`} className={boldClass}>{match[1]}</strong>);
         lastIndex = match.index + match[0].length;
       }
-      if (lastIndex < line.length) {
-        parts.push(<React.Fragment key={`e-${i}-${key++}`}>{line.substring(lastIndex)}</React.Fragment>);
-      }
-      if (parts.length === 0) {
-        parts.push(<React.Fragment key={`l-${i}`}>{line}</React.Fragment>);
-      }
+      if (lastIndex < line.length) parts.push(<React.Fragment key={`e-${i}-${key++}`}>{line.substring(lastIndex)}</React.Fragment>);
+      if (parts.length === 0) parts.push(<React.Fragment key={`l-${i}`}>{line}</React.Fragment>);
       return (
         <React.Fragment key={i}>
           <span className={lineClass}>{parts}</span>
@@ -1148,26 +917,32 @@ ${dataContext}`;
     });
   };
 
-  // ✅ تجميع الموديلات حسب المزود للقائمة
   const groupedModels = useMemo(() => {
     const groups: { [key: string]: { label: string; models: AIModel[] } } = {
-      gemini: { label: '🟡 Google Gemini (مجاني - دقيق)', models: [] },
-      groq: { label: '⚡ Groq (مجاني - الأسرع)', models: [] },
-      openrouter: { label: '🌐 OpenRouter (متعدد)', models: [] },
+      gemini: { label: '🟡 Google Gemini', models: [] },
+      groq: { label: '⚡ Groq (الأسرع)', models: [] },
+      openrouter: { label: '🌐 OpenRouter', models: [] },
     };
-
     AI_MODELS.forEach(m => {
       if (m.provider === 'gemini') groups.gemini.models.push(m);
       else if (m.provider === 'groq') groups.groq.models.push(m);
       else groups.openrouter.models.push(m);
     });
-
     return Object.values(groups).filter(g => g.models.length > 0);
   }, []);
 
+  // ✅ حساب إحصائيات اليوم للطالب
+  const getTodayStatus = useCallback((card: StudentQuickCard): { sessions: { name: string; present: boolean }[] } => {
+    const todayKey = fixDate(new Date());
+    const todaySessions = card.attendedSessions.filter(
+      as_ => as_.session._normalizedDate === todayKey
+    );
+    return { sessions: todaySessions.map(as_ => ({ name: as_.session.name, present: as_.present })) };
+  }, [fixDate]);
+
   return (
     <>
-      {/* ✅ زر فتح الشات */}
+      {/* زر فتح الشات */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
@@ -1179,11 +954,11 @@ ${dataContext}`;
         </button>
       )}
 
-      {/* ✅ نافذة الشات */}
+      {/* نافذة الشات */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 w-[450px] max-w-[calc(100vw-3rem)] h-[700px] max-h-[calc(100vh-3rem)] bg-white rounded-2xl shadow-2xl flex flex-col z-50 border-2 border-amber-200 overflow-hidden">
-          
-          {/* ✅ Header */}
+        <div className="fixed bottom-6 right-6 w-[460px] max-w-[calc(100vw-3rem)] h-[750px] max-h-[calc(100vh-3rem)] bg-white rounded-2xl shadow-2xl flex flex-col z-50 border-2 border-amber-200 overflow-hidden">
+
+          {/* Header */}
           <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-pink-600 text-white p-3">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-3">
@@ -1200,14 +975,13 @@ ${dataContext}`;
                   </p>
                 </div>
               </div>
-
               <div className="flex gap-1 items-center">
                 <button onClick={handleReset} className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-1.5 transition text-sm" title="محادثة جديدة">🔄</button>
                 <button onClick={() => setIsOpen(false)} className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-1.5 transition text-lg leading-none w-7 h-7 flex items-center justify-center">×</button>
               </div>
             </div>
 
-            {/* ✅ زر اختيار الموديل */}
+            {/* اختيار الموديل */}
             <div className="relative mt-2" ref={modelSelectorRef}>
               <button
                 onClick={() => setShowModelSelector(!showModelSelector)}
@@ -1215,67 +989,39 @@ ${dataContext}`;
               >
                 <span className="flex items-center gap-1.5">
                   <span>🤖</span>
-                  <span>
-                    {selectedModelId === 'auto'
-                      ? `تلقائي (${activeModel.name})`
-                      : activeModel.name}
-                  </span>
+                  <span>{selectedModelId === 'auto' ? `تلقائي (${activeModel.name})` : activeModel.name}</span>
                 </span>
                 <span className={`transition-transform ${showModelSelector ? 'rotate-180' : ''}`}>▼</span>
               </button>
 
-              {/* ✅ قائمة الموديلات */}
               {showModelSelector && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-200 max-h-[350px] overflow-y-auto z-[60]">
-                  
-                  {/* خيار تلقائي */}
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-200 max-h-[300px] overflow-y-auto z-[60]">
                   <button
                     onClick={() => { setSelectedModelId('auto'); setShowModelSelector(false); }}
-                    className={`w-full text-right px-3 py-2.5 text-sm flex items-center gap-2 transition border-b border-gray-100
-                      ${selectedModelId === 'auto' ? 'bg-orange-50 text-orange-700 font-bold' : 'text-gray-700 hover:bg-gray-50'}`}
+                    className={`w-full text-right px-3 py-2.5 text-sm flex items-center gap-2 transition border-b border-gray-100 ${selectedModelId === 'auto' ? 'bg-orange-50 text-orange-700 font-bold' : 'text-gray-700 hover:bg-gray-50'}`}
                   >
-                    <span className="text-base">🔄</span>
+                    <span>🔄</span>
                     <div className="flex-1">
                       <span className="block font-semibold">تلقائي</span>
                       <span className="block text-[10px] text-gray-400">يختار أفضل موديل متاح</span>
                     </div>
                     {selectedModelId === 'auto' && <span className="text-green-500">✓</span>}
                   </button>
-
-                  {/* مجموعات الموديلات */}
                   {groupedModels.map((group, gi) => (
                     <div key={gi}>
-                      <div className="px-3 py-1.5 bg-gray-50 text-[11px] font-bold text-gray-500 sticky top-0">
-                        {group.label}
-                      </div>
+                      <div className="px-3 py-1.5 bg-gray-50 text-[11px] font-bold text-gray-500 sticky top-0">{group.label}</div>
                       {group.models.map(m => {
                         const isFailed = failedModels.has(m.id);
                         const isSelected = selectedModelId === m.id;
-                        const isAvailable = 
-                          m.provider === 'gemini' ? !!GEMINI_API_KEY :
-                          m.provider === 'groq' ? !!GROQ_API_KEY :
-                          !!OPENROUTER_API_KEY;
-
+                        const isAvailable = m.provider === 'gemini' ? !!GEMINI_API_KEY : m.provider === 'groq' ? !!GROQ_API_KEY : !!OPENROUTER_API_KEY;
                         return (
-                          <button
-                            key={m.id}
-                            onClick={() => {
-                              if (isAvailable) {
-                                setSelectedModelId(m.id);
-                                setShowModelSelector(false);
-                              }
-                            }}
-                            disabled={!isAvailable}
-                            className={`w-full text-right px-3 py-2 text-sm flex items-center gap-2 transition
-                              ${isSelected ? 'bg-orange-50 text-orange-700 font-bold' : ''}
-                              ${isFailed ? 'bg-red-50 text-red-400' : ''}
-                              ${!isAvailable ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50'}
-                              ${!isSelected && !isFailed && isAvailable ? 'text-gray-700' : ''}`}
+                          <button key={m.id} onClick={() => { if (isAvailable) { setSelectedModelId(m.id); setShowModelSelector(false); } }} disabled={!isAvailable}
+                            className={`w-full text-right px-3 py-2 text-sm flex items-center gap-2 transition ${isSelected ? 'bg-orange-50 text-orange-700 font-bold' : ''} ${isFailed ? 'bg-red-50 text-red-400' : ''} ${!isAvailable ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50'} ${!isSelected && !isFailed && isAvailable ? 'text-gray-700' : ''}`}
                           >
-                            <span className="text-sm">{m.emoji}</span>
+                            <span>{m.emoji}</span>
                             <div className="flex-1">
                               <span className="block text-[13px]">{m.name}</span>
-                            <span className="block text-[10px] text-gray-400">
+                              <span className="block text-[10px] text-gray-400">
                                 {m.provider === 'gemini' && 'Google API'}
                                 {m.provider === 'groq' && 'Groq API ⚡'}
                                 {m.provider === 'openrouter' && 'OpenRouter'}
@@ -1294,24 +1040,177 @@ ${dataContext}`;
             </div>
           </div>
 
-          {/* ✅ الرسائل */}
+          {/* ✅ شريط البحث عن الطالب */}
+          {students.length > 0 && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100 px-3 py-2" ref={studentSearchRef}>
+              <div className="relative">
+                <div className="flex items-center gap-2 bg-white rounded-xl border border-blue-200 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition shadow-sm">
+                  <span className="pr-3 text-blue-400 text-sm">🔍</span>
+                  <input
+                    type="text"
+                    value={studentSearchQuery}
+                    onChange={e => handleStudentSearch(e.target.value)}
+                    onFocus={() => { if (studentSuggestions.length > 0) setShowSuggestions(true); }}
+                    placeholder="ابحث عن طالب بالاسم أو الكود..."
+                    className="flex-1 py-2 pl-3 text-sm bg-transparent outline-none text-right text-gray-700 placeholder-gray-400"
+                    dir="rtl"
+                  />
+                  {studentSearchQuery && (
+                    <button
+                      onClick={() => { setStudentSearchQuery(''); setStudentSuggestions([]); setShowSuggestions(false); setShowStudentCard(false); setSelectedStudentCard(null); }}
+                      className="pl-2 pr-1 text-gray-400 hover:text-gray-600 transition"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] text-blue-500 mt-1 text-right">اكتب اسم الطالب لعرض سجل الحضور فوراً بدون AI</p>
+
+                {/* قائمة الاقتراحات */}
+                {showSuggestions && studentSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-blue-100 z-[70] overflow-hidden">
+                    {studentSuggestions.map(student => (
+                      <button
+                        key={student.id}
+                        onClick={() => handleSelectStudent(student)}
+                        className="w-full text-right px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 transition border-b border-gray-50 last:border-0"
+                      >
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                          {student.name.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 truncate">{student.name}</p>
+                          <p className="text-[11px] text-gray-500">
+                            {student.code && `كود: ${student.code}`}
+                            {student.group && ` • كروب: ${student.group}`}
+                          </p>
+                        </div>
+                        <span className="text-blue-400 text-xs">←</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ✅ بطاقة الطالب السريعة */}
+              {showStudentCard && selectedStudentCard && (
+                <div className="mt-2 bg-white rounded-xl border border-blue-200 shadow-md overflow-hidden">
+                  {/* رأس البطاقة */}
+                  <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-lg font-bold border border-white border-opacity-30">
+                          {selectedStudentCard.student.name.charAt(0)}
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-sm">{selectedStudentCard.student.name}</h4>
+                          <p className="text-[11px] opacity-90">
+                            {selectedStudentCard.student.code && `كود: ${selectedStudentCard.student.code}`}
+                            {selectedStudentCard.student.group && ` • كروب: ${selectedStudentCard.student.group}`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-left">
+                        <div className={`text-xs font-bold px-2 py-1 rounded-full ${selectedStudentCard.isPresentToday ? 'bg-green-400 bg-opacity-30 text-green-100' : 'bg-red-400 bg-opacity-30 text-red-100'}`}>
+                          {selectedStudentCard.isPresentToday ? '✅ حاضر اليوم' : '❌ غائب اليوم'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* إحصائيات سريعة */}
+                  <div className="grid grid-cols-3 divide-x divide-x-reverse divide-gray-100 border-b border-gray-100">
+                    <div className="text-center py-2.5 px-2">
+                      <p className="text-lg font-bold text-green-600">{selectedStudentCard.attendedCount}</p>
+                      <p className="text-[10px] text-gray-500">✅ حضور</p>
+                    </div>
+                    <div className="text-center py-2.5 px-2">
+                      <p className="text-lg font-bold text-red-500">{selectedStudentCard.absentCount}</p>
+                      <p className="text-[10px] text-gray-500">❌ غياب</p>
+                    </div>
+                    <div className="text-center py-2.5 px-2">
+                      <p className={`text-lg font-bold ${parseFloat(selectedStudentCard.percentage) >= 75 ? 'text-green-600' : parseFloat(selectedStudentCard.percentage) >= 50 ? 'text-yellow-600' : 'text-red-500'}`}>
+                        {selectedStudentCard.percentage}%
+                      </p>
+                      <p className="text-[10px] text-gray-500">النسبة</p>
+                    </div>
+                  </div>
+
+                  {/* حضور اليوم بالتفصيل */}
+                  {(() => {
+                    const todayStatus = getTodayStatus(selectedStudentCard);
+                    if (todayStatus.sessions.length > 0) {
+                      return (
+                        <div className="px-3 py-2 bg-yellow-50 border-b border-yellow-100">
+                          <p className="text-[11px] font-bold text-yellow-700 mb-1.5">🌟 سجلات اليوم:</p>
+                          <div className="space-y-1">
+                            {todayStatus.sessions.map((s, idx) => (
+                              <div key={idx} className={`flex items-center gap-2 text-[11px] px-2 py-1 rounded-lg ${s.present ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                                <span>{s.present ? '✅' : '❌'}</span>
+                                <span className="font-medium">{s.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
+                        <p className="text-[11px] text-gray-500 text-center">⚠️ لا توجد جلسات اليوم</p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* سجل كامل - قابل للتمرير */}
+                  <div className="max-h-[140px] overflow-y-auto">
+                    {selectedStudentCard.attendedSessions.length === 0 ? (
+                      <div className="text-center py-3 text-gray-400 text-xs">لا توجد جلسات مسجلة</div>
+                    ) : (
+                      <div className="divide-y divide-gray-50">
+                        {selectedStudentCard.attendedSessions.map((as_, idx) => (
+                          <div key={idx} className={`flex items-center gap-2 px-3 py-2 text-[11px] ${as_.present ? 'hover:bg-green-50' : 'hover:bg-red-50'} transition`}>
+                            <span className="flex-shrink-0">{as_.present ? '✅' : '❌'}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className={`font-medium truncate ${as_.present ? 'text-green-700' : 'text-red-600'}`}>{as_.session.name}</p>
+                              <p className="text-gray-400 text-[10px]">{formatDateWithDay(as_.session._normalizedDate)}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* أزرار الإجراءات */}
+                  <div className="flex gap-2 p-2 bg-gray-50 border-t border-gray-100">
+                    <button
+                      onClick={() => sendStudentQuestion(selectedStudentCard.student)}
+                      className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-[11px] py-2 rounded-lg hover:from-blue-600 hover:to-indigo-700 transition font-medium"
+                    >
+                      💬 اسأل AI عنه
+                    </button>
+                    <button
+                      onClick={() => { setShowStudentCard(false); setSelectedStudentCard(null); setStudentSearchQuery(''); }}
+                      className="px-3 bg-gray-200 text-gray-600 text-[11px] py-2 rounded-lg hover:bg-gray-300 transition"
+                    >
+                      إغلاق
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* الرسائل */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-orange-50 via-white to-pink-50">
             {messages.map(msg => (
               <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[90%] rounded-2xl p-3 shadow-sm ${
-                  msg.type === 'user'
-                    ? 'bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-br-sm'
-                    : 'bg-white text-gray-800 border border-orange-100 rounded-bl-sm'
-                }`}>
+                <div className={`max-w-[90%] rounded-2xl p-3 shadow-sm ${msg.type === 'user' ? 'bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-br-sm' : 'bg-white text-gray-800 border border-orange-100 rounded-bl-sm'}`}>
                   {msg.type === 'bot' && (
                     <div className="flex items-center gap-1 mb-1.5 text-[10px] text-orange-600 font-semibold">
-                      <span>✨</span>
-                      <span>المساعد الذكي</span>
+                      <span>✨</span><span>المساعد الذكي</span>
                     </div>
                   )}
-                  <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                    {formatMessage(msg.content)}
-                  </div>
+                  <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">{formatMessage(msg.content)}</div>
                   <p className={`text-[10px] mt-1.5 ${msg.type === 'user' ? 'text-orange-100' : 'text-gray-400'}`}>
                     {msg.timestamp.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
                   </p>
@@ -1328,9 +1227,7 @@ ${dataContext}`;
                       <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                       <span className="w-2 h-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                     </div>
-                    <span className="text-xs text-gray-500">
-                      {activeModel.emoji} {activeModel.name} يفكر...
-                    </span>
+                    <span className="text-xs text-gray-500">{activeModel.emoji} {activeModel.name} يفكر...</span>
                   </div>
                 </div>
               </div>
@@ -1338,14 +1235,14 @@ ${dataContext}`;
             <div ref={messagesEndRef} />
           </div>
 
-          {/* ✅ خطأ */}
+          {/* خطأ */}
           {error && (
             <div className="px-3 py-2 bg-red-50 border-t border-red-200">
               <p className="text-xs text-red-700">❌ {error}</p>
             </div>
           )}
 
-          {/* ✅ حقل الإدخال */}
+          {/* حقل الإدخال */}
           <div className="p-3 bg-white border-t border-orange-100">
             <div className="flex gap-2 items-end">
               <textarea
