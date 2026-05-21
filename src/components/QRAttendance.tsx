@@ -22,7 +22,7 @@ interface ToastMessage {
 
 const QR_REGION_ID = 'qr-reader-fast-attendance';
 const DUPLICATE_BLOCK_MS = 60_000;
-const REFOCUS_INTERVAL_MS = 2000;
+const REFOCUS_INTERVAL_MS = 1500; // 🆕 فوكس أسرع للباركود
 
 const extractQrCodeId = (decodedText: string): string | null => {
   const raw = decodedText.trim();
@@ -134,8 +134,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const lastScanRef = useRef<Record<string, number>>({});
   const videoTrackRef = useRef<MediaStreamTrack | null>(null);
   const refocusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isClosingRef = useRef(false);
 
   const [cameraStarted, setCameraStarted] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [scanCount, setScanCount] = useState(0);
   const [lastStudents, setLastStudents] = useState<Student[]>([]);
@@ -216,7 +218,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   }, [alreadyPresentIds, onMarkAttendance, showToast]);
 
   const handleDecoded = useCallback(async (decodedText: string) => {
-    if (isProcessingRef.current) return;
+    if (isProcessingRef.current || isClosingRef.current) return;
     const qrCodeId = extractQrCodeId(decodedText);
     if (!qrCodeId) {
       playErrorFeedback();
@@ -246,44 +248,119 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     }
   }, [studentsByQr, handleKnownStudent, showToast]);
 
+  // ============================================================
+  // 🎯 الفوكس القوي على وسط المربع - 4 طبقات
+  // ============================================================
   const triggerRefocus = useCallback(async () => {
     const track = videoTrackRef.current;
-    if (!track) return;
+    if (!track || isClosingRef.current) return;
+
     try {
       const capabilities = track.getCapabilities?.() as any;
       if (!capabilities?.focusMode) return;
+
       setFocusStatus('focusing');
-      if (capabilities.focusMode.includes('manual')) {
-        try {
-          await track.applyConstraints({ advanced: [{ focusMode: 'manual' }] as any });
-          await new Promise(r => setTimeout(r, 100));
-        } catch {}
-      }
-      if (capabilities.focusMode.includes('continuous')) {
-        await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] as any });
-      } else if (capabilities.focusMode.includes('auto')) {
-        await track.applyConstraints({ advanced: [{ focusMode: 'auto' }] as any });
-      }
-      if (capabilities.focusDistance) {
-        const { min, max } = capabilities.focusDistance;
-        let targetDistance: number;
-        switch (distanceMode) {
-          case 'near': targetDistance = min + (max - min) * 0.2; break;
-          case 'far':  targetDistance = min + (max - min) * 0.8; break;
-          default:     targetDistance = min + (max - min) * 0.5;
-        }
+
+      // ============================================================
+      // 🎯 الطبقة 1: تركيز الفوكس على وسط المربع (Point of Interest)
+      // ============================================================
+      if (capabilities.pointsOfInterest) {
         try {
           await track.applyConstraints({
-            advanced: [{ focusMode: 'manual', focusDistance: targetDistance }] as any,
+            advanced: [{
+              pointsOfInterest: [{ x: 0.5, y: 0.5 }],
+            }] as any,
           });
-          await new Promise(r => setTimeout(r, 200));
-          if (capabilities.focusMode.includes('continuous')) {
-            await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] as any });
+          console.log('✅ تم تركيز الفوكس على وسط المربع');
+        } catch (e) {
+          console.warn('⚠️ Point of Interest غير مدعوم');
+        }
+      }
+
+      // ============================================================
+      // 🎯 الطبقة 2: تثبيت مسافة الفوكس (Manual Focus Distance)
+      // ============================================================
+      if (capabilities.focusDistance) {
+        const { min, max } = capabilities.focusDistance;
+
+        let targetDistance: number;
+        switch (distanceMode) {
+          case 'near':
+            // قريب جداً 10-15 سم
+            targetDistance = min + (max - min) * 0.15;
+            break;
+          case 'far':
+            // بعيد 50+ سم
+            targetDistance = min + (max - min) * 0.75;
+            break;
+          default:
+            // متوسط 20-40 سم (المثالي للباركود)
+            targetDistance = min + (max - min) * 0.45;
+        }
+
+        try {
+          await track.applyConstraints({
+            advanced: [{
+              focusMode: 'manual',
+              focusDistance: targetDistance,
+            }] as any,
+          });
+
+          await new Promise(r => setTimeout(r, 300));
+          console.log(`✅ تم تثبيت الفوكس على مسافة: ${targetDistance.toFixed(2)}`);
+        } catch (e) {
+          console.warn('⚠️ Manual focus غير مدعوم');
+        }
+      }
+
+      // ============================================================
+      // 🎯 الطبقة 3: الرجوع لـ continuous مع نقطة الاهتمام
+      // ============================================================
+      if (capabilities.focusMode?.includes('continuous')) {
+        try {
+          const constraints: any = {
+            advanced: [{
+              focusMode: 'continuous',
+            }],
+          };
+
+          // دمج نقطة الاهتمام مع continuous
+          if (capabilities.pointsOfInterest) {
+            constraints.advanced[0].pointsOfInterest = [{ x: 0.5, y: 0.5 }];
           }
+
+          await track.applyConstraints(constraints);
+          console.log('✅ Continuous focus على وسط المربع');
+        } catch {}
+      } else if (capabilities.focusMode?.includes('auto')) {
+        try {
+          await track.applyConstraints({
+            advanced: [{ focusMode: 'auto' }] as any,
+          });
         } catch {}
       }
-      setTimeout(() => setFocusStatus('locked'), 500);
-      setTimeout(() => setFocusStatus('idle'), 1500);
+
+      // ============================================================
+      // 🎯 الطبقة 4: تحسين الوضوح للباركود (Sharpness + Exposure)
+      // ============================================================
+      if (capabilities.sharpness) {
+        try {
+          await track.applyConstraints({
+            advanced: [{ sharpness: capabilities.sharpness.max }] as any,
+          });
+        } catch {}
+      }
+
+      if (capabilities.exposureMode?.includes('continuous')) {
+        try {
+          await track.applyConstraints({
+            advanced: [{ exposureMode: 'continuous' }] as any,
+          });
+        } catch {}
+      }
+
+      setTimeout(() => setFocusStatus('locked'), 600);
+      setTimeout(() => setFocusStatus('idle'), 1800);
     } catch (e) {
       console.warn('فشل إعادة الفوكس:', e);
       setFocusStatus('idle');
@@ -306,6 +383,8 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
 
+      if (isClosingRef.current) return;
+
       const videoElement = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement;
       if (!videoElement?.srcObject) return;
 
@@ -325,32 +404,65 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
       const advancedConstraints: any[] = [];
 
+      // ============================================================
+      // 🎯 الفوكس القوي على وسط المربع
+      // ============================================================
+
+      // 1. نقطة الفوكس على وسط الصورة (وسط المربع الأخضر)
+      if (capabilities.pointsOfInterest) {
+        advancedConstraints.push({
+          pointsOfInterest: [{ x: 0.5, y: 0.5 }],
+        });
+        console.log('✅ Point of Interest مدعوم - وسط المربع');
+      }
+
+      // 2. وضع الفوكس المستمر مع نقطة الاهتمام
       if (capabilities.focusMode?.includes('continuous')) {
-        advancedConstraints.push({ focusMode: 'continuous' });
+        const focusConstraint: any = { focusMode: 'continuous' };
+
+        if (capabilities.pointsOfInterest) {
+          focusConstraint.pointsOfInterest = [{ x: 0.5, y: 0.5 }];
+        }
+
+        advancedConstraints.push(focusConstraint);
       } else if (capabilities.focusMode?.includes('auto')) {
         advancedConstraints.push({ focusMode: 'auto' });
       }
 
+      // 3. مسافة فوكس ابتدائية مناسبة للباركود (متوسطة)
+      if (capabilities.focusDistance) {
+        const { min, max } = capabilities.focusDistance;
+        const idealDistance = min + (max - min) * 0.45;
+        advancedConstraints.push({ focusDistance: idealDistance });
+        console.log(`✅ Focus Distance ابتدائي: ${idealDistance.toFixed(2)}`);
+      }
+
+      // ✅ Exposure
       if (capabilities.exposureMode?.includes('continuous')) {
         advancedConstraints.push({ exposureMode: 'continuous' });
       }
 
+      // ✅ White Balance
       if (capabilities.whiteBalanceMode?.includes('continuous')) {
         advancedConstraints.push({ whiteBalanceMode: 'continuous' });
       }
 
+      // ✅ ISO
       if (capabilities.iso) {
         advancedConstraints.push({ iso: Math.min(capabilities.iso.max, 800) });
       }
 
+      // ✅ Exposure Compensation
       if (capabilities.exposureCompensation) {
         advancedConstraints.push({ exposureCompensation: 0 });
       }
 
+      // ✅ Sharpness (للأقصى - حواف الباركود واضحة)
       if (capabilities.sharpness) {
         advancedConstraints.push({ sharpness: capabilities.sharpness.max });
       }
 
+      // ✅ Contrast (عالي - الباركود أوضح)
       if (capabilities.contrast) {
         const highContrast = Math.min(
           capabilities.contrast.max,
@@ -359,6 +471,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         advancedConstraints.push({ contrast: highContrast });
       }
 
+      // ✅ Zoom - يبدأ بـ 2x تلقائياً
       if (capabilities.zoom) {
         const zoomMin = capabilities.zoom.min || 1;
         const zoomMax = capabilities.zoom.max || 1;
@@ -379,6 +492,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         }
       }
 
+      // ✅ Torch - يشتغل تلقائياً
       if (capabilities.torch) {
         setHasTorch(true);
         try {
@@ -392,6 +506,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         }
       }
 
+      // تطبيق كل إعداد على حدة
       for (const constraint of advancedConstraints) {
         try {
           await track.applyConstraints({ advanced: [constraint] } as any);
@@ -416,10 +531,13 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         advanced: [{ zoom: clampedZoom }] as any,
       });
       setZoom(clampedZoom);
+
+      // 🆕 إعادة فوكس بعد تغيير الزووم
+      setTimeout(() => triggerRefocus(), 200);
     } catch (e) {
       console.warn('فشل تطبيق Zoom:', e);
     }
-  }, [supportsZoom, minZoom, maxZoom]);
+  }, [supportsZoom, minZoom, maxZoom, triggerRefocus]);
 
   const toggleTorch = useCallback(async () => {
     if (!videoTrackRef.current || !hasTorch) return;
@@ -447,10 +565,13 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   }, [supportsZoom, minZoom, maxZoom, applyZoom, triggerRefocus]);
 
   const startCamera = useCallback(async () => {
+    if (isClosingRef.current) return;
+
     try {
       setErrorMessage('');
       const maxRes = await getMaxResolution();
       const bestCamera = await selectBestCamera();
+      const qrBox = getOptimalQrBox();
       const cameraConfig = bestCamera?.deviceId
         ? { deviceId: { exact: bestCamera.deviceId } }
         : { facingMode: 'environment' };
@@ -467,7 +588,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         cameraConfig as any,
         {
           fps: 30,
-          qrbox: undefined, // ✅ بدون مربع داخلي - يفحص كامل الصورة
+          qrbox: qrBox,
           aspectRatio: isPortrait ? 9 / 16 : 16 / 9,
           disableFlip: false,
           videoConstraints: {
@@ -505,12 +626,8 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           scannerRef.current = html5QrCode;
           await html5QrCode.start(
             { facingMode: 'environment' },
-            {
-              fps: 25,
-              qrbox: undefined, // ✅
-              aspectRatio: 1.0,
-              videoConstraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } as any
-            },
+            { fps: 25, qrbox: getOptimalQrBox(), aspectRatio: 1.0,
+              videoConstraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } as any },
             handleDecoded, () => {}
           );
           setCameraStarted(true);
@@ -522,7 +639,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             scannerRef.current = html5QrCode;
             await html5QrCode.start(
               { facingMode: 'environment' },
-              { fps: 15, qrbox: undefined }, // ✅
+              { fps: 15, qrbox: getOptimalQrBox() },
               handleDecoded, () => {}
             );
             setCameraStarted(true);
@@ -539,32 +656,83 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     }
   }, [handleDecoded, applyAdvancedCameraSettings, showToast]);
 
-  const stopCamera = useCallback(async () => {
-    try {
-      stopPeriodicRefocus();
-      if (torchOn && videoTrackRef.current) {
-        try {
-          await videoTrackRef.current.applyConstraints({
-            advanced: [{ torch: false }] as any,
-          });
-        } catch {}
-      }
-      if (scannerRef.current) {
-        try {
-          const state = scannerRef.current.getState();
-          if (state) await scannerRef.current.stop();
-          await scannerRef.current.clear();
-        } catch {}
-      }
-    } catch (err) {
-      console.warn('Camera stop error:', err);
-    } finally {
-      scannerRef.current = null;
-      videoTrackRef.current = null;
-      setCameraStarted(false);
-      setTorchOn(false);
+  // ============================================================
+  // 🔥 إيقاف الكاميرا بشكل كامل وشامل
+  // ============================================================
+  const stopCamera = useCallback(async (): Promise<void> => {
+    console.log('🛑 بدء إيقاف الكاميرا...');
+
+    stopPeriodicRefocus();
+
+    if (videoTrackRef.current) {
+      try {
+        await videoTrackRef.current.applyConstraints({
+          advanced: [{ torch: false }] as any,
+        });
+      } catch {}
     }
-  }, [stopPeriodicRefocus, torchOn]);
+
+    if (videoTrackRef.current) {
+      try {
+        videoTrackRef.current.stop();
+        console.log('✅ تم إيقاف video track');
+      } catch (e) {
+        console.warn('فشل إيقاف track:', e);
+      }
+    }
+
+    try {
+      const videoElement = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement;
+      if (videoElement?.srcObject) {
+        const stream = videoElement.srcObject as MediaStream;
+        stream.getTracks().forEach(track => {
+          track.stop();
+          console.log(`✅ تم إيقاف track: ${track.kind}`);
+        });
+        videoElement.srcObject = null;
+        videoElement.pause();
+        videoElement.removeAttribute('src');
+        videoElement.load();
+      }
+    } catch (e) {
+      console.warn('فشل تنظيف video element:', e);
+    }
+
+    if (scannerRef.current) {
+      try {
+        const state = scannerRef.current.getState();
+        if (state === 2) {
+          await scannerRef.current.stop();
+          console.log('✅ تم إيقاف html5-qrcode');
+        }
+      } catch (e) {
+        console.warn('فشل إيقاف html5-qrcode:', e);
+      }
+
+      try {
+        await scannerRef.current.clear();
+        console.log('✅ تم تنظيف html5-qrcode');
+      } catch (e) {
+        console.warn('فشل تنظيف html5-qrcode:', e);
+      }
+    }
+
+    scannerRef.current = null;
+    videoTrackRef.current = null;
+
+    try {
+      const regionElement = document.getElementById(QR_REGION_ID);
+      if (regionElement) {
+        regionElement.innerHTML = '';
+      }
+    } catch {}
+
+    setCameraStarted(false);
+    setTorchOn(false);
+    setFocusStatus('idle');
+
+    console.log('🛑 تم إيقاف الكاميرا بالكامل');
+  }, [stopPeriodicRefocus]);
 
   useEffect(() => {
     const handleResize = () => setCameraHeight(getOptimalCameraHeight());
@@ -577,15 +745,65 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   }, []);
 
   useEffect(() => {
+    isClosingRef.current = false;
     startCamera();
-    return () => { stopCamera(); };
+
+    return () => {
+      isClosingRef.current = true;
+      stopCamera();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleClose = async () => {
-    await stopCamera();
-    onClose();
-  };
+  const handleClose = useCallback(async () => {
+    if (isClosingRef.current) return;
+
+    isClosingRef.current = true;
+    setIsClosing(true);
+
+    console.log('🚪 جاري إغلاق الماسح...');
+
+    try {
+      await stopCamera();
+      await new Promise(resolve => setTimeout(resolve, 200));
+      console.log('✅ تم الإغلاق بنجاح');
+    } catch (e) {
+      console.error('خطأ أثناء الإغلاق:', e);
+    } finally {
+      onClose();
+    }
+  }, [stopCamera, onClose]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && torchOn && videoTrackRef.current) {
+        videoTrackRef.current.applyConstraints({
+          advanced: [{ torch: false }] as any,
+        }).catch(() => {});
+      } else if (!document.hidden && torchOn && videoTrackRef.current) {
+        videoTrackRef.current.applyConstraints({
+          advanced: [{ torch: true }] as any,
+        }).catch(() => {});
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    const handleBeforeUnload = () => {
+      isClosingRef.current = true;
+      if (videoTrackRef.current) {
+        videoTrackRef.current.stop();
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handleBeforeUnload);
+    };
+  }, [torchOn]);
 
   const handleLinkStudent = async (student: Student) => {
     if (!pendingQrCodeId || !onUpdateStudent) return;
@@ -637,9 +855,14 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
         <button
           onClick={handleClose}
-          className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg font-bold text-sm flex-shrink-0 active:scale-95 transition-transform"
+          disabled={isClosing}
+          className={`text-white px-3 py-1.5 rounded-lg font-bold text-sm flex-shrink-0 transition-all ${
+            isClosing
+              ? 'bg-gray-600 cursor-wait opacity-70'
+              : 'bg-red-600 hover:bg-red-700 active:scale-95'
+          }`}
         >
-          إغلاق
+          {isClosing ? '⏳ جاري الإغلاق...' : 'إغلاق'}
         </button>
       </div>
 
@@ -657,14 +880,12 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
       <div className="relative flex-1 flex flex-col items-center justify-start p-3 overflow-y-auto">
 
-        {/* ===== الكاميرا ===== */}
         <div
           className="w-full max-w-2xl rounded-2xl overflow-hidden border-2 border-emerald-500/50 shadow-2xl bg-black relative"
           style={{ minHeight: `${cameraHeight}px` }}
         >
           <div id={QR_REGION_ID} className="w-full" style={{ minHeight: `${cameraHeight}px` }} />
 
-          {/* الإطار الأخضر التوجيهي */}
           {cameraStarted && (
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
               <div className="relative" style={{
@@ -676,6 +897,23 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                 <div className="absolute bottom-0 right-0 w-14 h-14 border-b-[3px] border-r-[3px] border-emerald-400 rounded-br-2xl shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
                 <div className="absolute bottom-0 left-0 w-14 h-14 border-b-[3px] border-l-[3px] border-emerald-400 rounded-bl-2xl shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
                 <div className="absolute inset-x-2 h-[2px] bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_15px_rgba(16,185,129,0.8)] animate-laser-scan" />
+
+                {/* 🆕 نقطة الفوكس في وسط المربع */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className={`w-8 h-8 rounded-full border-2 transition-all duration-300 ${
+                    focusStatus === 'focusing'
+                      ? 'border-yellow-400 scale-110 animate-ping'
+                      : focusStatus === 'locked'
+                      ? 'border-emerald-400 scale-100'
+                      : 'border-emerald-400/30 scale-90'
+                  }`}>
+                    <div className={`w-full h-full rounded-full ${
+                      focusStatus === 'focusing' ? 'bg-yellow-400/20' :
+                      focusStatus === 'locked' ? 'bg-emerald-400/20' : 'bg-transparent'
+                    }`} />
+                  </div>
+                </div>
+
                 <div className="absolute -bottom-8 inset-x-0 text-center">
                   <span className="text-[10px] text-emerald-300/80 bg-black/50 px-2 py-0.5 rounded-full">
                     وجّه الكاميرا نحو رمز QR
@@ -686,7 +924,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           )}
         </div>
 
-        {/* ===== شريط الأدوات ===== */}
         {cameraStarted && (
           <div className="mt-3 w-full max-w-2xl space-y-2">
 
@@ -711,7 +948,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
             <div className="bg-white/5 rounded-xl p-2">
               <div className="flex gap-1.5 flex-wrap">
-
                 <button
                   onClick={() => triggerRefocus()}
                   className={`flex-1 min-w-[80px] py-2 rounded-lg font-bold text-xs transition-all active:scale-95 ${
@@ -848,6 +1084,16 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         )}
       </div>
 
+      {isClosing && (
+        <div className="fixed inset-0 z-[10002] bg-black/90 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-5xl mb-3 animate-spin inline-block">⚙️</div>
+            <p className="text-lg font-bold">جاري إيقاف الكاميرا...</p>
+            <p className="text-xs text-gray-400 mt-2">يرجى الانتظار</p>
+          </div>
+        </div>
+      )}
+
       {pendingQrCodeId && (
         <div className="fixed inset-0 z-[10000] bg-black/80 flex items-center justify-center p-4">
           <div className="bg-white text-gray-900 rounded-2xl p-5 w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -928,46 +1174,20 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           padding-top: max(0.75rem, env(safe-area-inset-top));
         }
 
-        /* ===== فيديو الكاميرا ===== */
         #${QR_REGION_ID} video {
           width: 100% !important;
-          height: 100% !important;
+          height: auto !important;
           min-height: ${cameraHeight}px !important;
           object-fit: cover !important;
-          position: absolute !important;
-          top: 0 !important;
-          left: 0 !important;
         }
-
         #${QR_REGION_ID} {
           border-radius: 1rem;
           overflow: hidden;
           position: relative;
-          min-height: ${cameraHeight}px;
         }
-
-        /* 🔥 إخفاء كل عناصر html5-qrcode الافتراضية البيضاء */
-        #${QR_REGION_ID} img,
-        #${QR_REGION_ID} button,
-        #${QR_REGION_ID} select,
-        #${QR_REGION_ID} > div:not(:first-child),
-        #${QR_REGION_ID} #qr-shaded-region,
-        #${QR_REGION_ID} [id*="qr-shaded"],
-        #${QR_REGION_ID} canvas {
+        #${QR_REGION_ID} img[alt="Info icon"],
+        #${QR_REGION_ID} > div:last-child {
           display: none !important;
-        }
-
-        /* 🔥 إزالة كل الحدود والظلال البيضاء */
-        #${QR_REGION_ID} div[style*="border"],
-        #${QR_REGION_ID} div[style*="box-shadow"] {
-          border: none !important;
-          box-shadow: none !important;
-          background: transparent !important;
-        }
-
-        #${QR_REGION_ID} > div {
-          background: transparent !important;
-          border: none !important;
         }
 
         input[type="range"] {
