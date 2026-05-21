@@ -141,7 +141,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const [lastStudents, setLastStudents] = useState<Student[]>([]);
   const [pendingQrCodeId, setPendingQrCodeId] = useState<string | null>(null);
   const [studentSearch, setStudentSearch] = useState('');
-  const [zoom, setZoom] = useState(2); // 🆕 الافتراضي 2x
+  const [zoom, setZoom] = useState(2);
   const [maxZoom, setMaxZoom] = useState(1);
   const [minZoom, setMinZoom] = useState(1);
   const [zoomStep, setZoomStep] = useState(0.1);
@@ -325,39 +325,32 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
       const advancedConstraints: any[] = [];
 
-      // ✅ Focus
       if (capabilities.focusMode?.includes('continuous')) {
         advancedConstraints.push({ focusMode: 'continuous' });
       } else if (capabilities.focusMode?.includes('auto')) {
         advancedConstraints.push({ focusMode: 'auto' });
       }
 
-      // ✅ Exposure
       if (capabilities.exposureMode?.includes('continuous')) {
         advancedConstraints.push({ exposureMode: 'continuous' });
       }
 
-      // ✅ White Balance
       if (capabilities.whiteBalanceMode?.includes('continuous')) {
         advancedConstraints.push({ whiteBalanceMode: 'continuous' });
       }
 
-      // ✅ ISO
       if (capabilities.iso) {
         advancedConstraints.push({ iso: Math.min(capabilities.iso.max, 800) });
       }
 
-      // ✅ Exposure Compensation
       if (capabilities.exposureCompensation) {
         advancedConstraints.push({ exposureCompensation: 0 });
       }
 
-      // ✅ Sharpness
       if (capabilities.sharpness) {
         advancedConstraints.push({ sharpness: capabilities.sharpness.max });
       }
 
-      // ✅ Contrast
       if (capabilities.contrast) {
         const highContrast = Math.min(
           capabilities.contrast.max,
@@ -366,7 +359,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         advancedConstraints.push({ contrast: highContrast });
       }
 
-      // ✅ Zoom - يبدأ بـ 2x تلقائياً
       if (capabilities.zoom) {
         const zoomMin = capabilities.zoom.min || 1;
         const zoomMax = capabilities.zoom.max || 1;
@@ -376,7 +368,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         setZoomStep(zoomStepVal);
         setSupportsZoom(zoomMax > zoomMin);
 
-        // 🆕 zoom افتراضي 2x
         if (zoomMax >= 2) {
           advancedConstraints.push({ zoom: 2 });
           setZoom(2);
@@ -388,7 +379,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         }
       }
 
-      // ✅ Torch - يشتغل تلقائياً 🆕
       if (capabilities.torch) {
         setHasTorch(true);
         try {
@@ -402,7 +392,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         }
       }
 
-      // تطبيق كل إعداد على حدة
       for (const constraint of advancedConstraints) {
         try {
           await track.applyConstraints({ advanced: [constraint] } as any);
@@ -450,7 +439,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     if (supportsZoom) {
       switch (mode) {
         case 'near':   applyZoom(minZoom); break;
-        case 'medium': applyZoom(Math.min(maxZoom, 2)); break;  // 🆕 medium = 2x
+        case 'medium': applyZoom(Math.min(maxZoom, 2)); break;
         case 'far':    applyZoom(Math.min(maxZoom, 3)); break;
       }
     }
@@ -462,7 +451,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       setErrorMessage('');
       const maxRes = await getMaxResolution();
       const bestCamera = await selectBestCamera();
-      const qrBox = getOptimalQrBox();
       const cameraConfig = bestCamera?.deviceId
         ? { deviceId: { exact: bestCamera.deviceId } }
         : { facingMode: 'environment' };
@@ -479,7 +467,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         cameraConfig as any,
         {
           fps: 30,
-          qrbox: qrBox,
+          qrbox: undefined, // ✅ بدون مربع داخلي - يفحص كامل الصورة
           aspectRatio: isPortrait ? 9 / 16 : 16 / 9,
           disableFlip: false,
           videoConstraints: {
@@ -517,8 +505,12 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           scannerRef.current = html5QrCode;
           await html5QrCode.start(
             { facingMode: 'environment' },
-            { fps: 25, qrbox: getOptimalQrBox(), aspectRatio: 1.0,
-              videoConstraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } as any },
+            {
+              fps: 25,
+              qrbox: undefined, // ✅
+              aspectRatio: 1.0,
+              videoConstraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } as any
+            },
             handleDecoded, () => {}
           );
           setCameraStarted(true);
@@ -530,7 +522,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             scannerRef.current = html5QrCode;
             await html5QrCode.start(
               { facingMode: 'environment' },
-              { fps: 15, qrbox: { width: 200, height: 200 } },
+              { fps: 15, qrbox: undefined }, // ✅
               handleDecoded, () => {}
             );
             setCameraStarted(true);
@@ -631,7 +623,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           </p>
         </div>
 
-        {/* مؤشر الفوكس */}
         {cameraStarted && (
           <div className={`w-3 h-3 rounded-full flex-shrink-0 transition-colors duration-300 ${
             focusStatus === 'focusing' ? 'bg-yellow-400 animate-pulse' :
@@ -639,7 +630,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           }`} title={`Focus: ${focusStatus}`} />
         )}
 
-        {/* مؤشر الفلاش */}
         {torchOn && (
           <div className="w-3 h-3 rounded-full bg-yellow-400 flex-shrink-0 animate-pulse"
                title="الفلاش يعمل" />
@@ -653,7 +643,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         </button>
       </div>
 
-      {/* ===== رسالة خطأ ===== */}
       {errorMessage && !cameraStarted && (
         <div className="m-4 p-4 bg-red-900/50 border border-red-500 rounded-xl text-center">
           <p className="text-red-200 font-bold mb-2">❌ {errorMessage}</p>
@@ -666,7 +655,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         </div>
       )}
 
-      {/* ===== المحتوى الرئيسي ===== */}
       <div className="relative flex-1 flex flex-col items-center justify-start p-3 overflow-y-auto">
 
         {/* ===== الكاميرا ===== */}
@@ -676,7 +664,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         >
           <div id={QR_REGION_ID} className="w-full" style={{ minHeight: `${cameraHeight}px` }} />
 
-          {/* إطار توجيهي */}
+          {/* الإطار الأخضر التوجيهي */}
           {cameraStarted && (
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
               <div className="relative" style={{
@@ -698,11 +686,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           )}
         </div>
 
-        {/* ===== شريط أدوات الكاميرا ===== */}
+        {/* ===== شريط الأدوات ===== */}
         {cameraStarted && (
           <div className="mt-3 w-full max-w-2xl space-y-2">
 
-            {/* صف 1: أزرار المسافة */}
             <div className="bg-white/5 rounded-xl p-2">
               <p className="text-[10px] text-gray-400 mb-1.5 font-bold">📐 وضع المسافة:</p>
               <div className="grid grid-cols-3 gap-1.5">
@@ -722,11 +709,9 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               </div>
             </div>
 
-            {/* صف 2: أدوات */}
             <div className="bg-white/5 rounded-xl p-2">
               <div className="flex gap-1.5 flex-wrap">
 
-                {/* زر إعادة الفوكس */}
                 <button
                   onClick={() => triggerRefocus()}
                   className={`flex-1 min-w-[80px] py-2 rounded-lg font-bold text-xs transition-all active:scale-95 ${
@@ -738,7 +723,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                   {focusStatus === 'focusing' ? '🔄 تركيز...' : '🎯 إعادة فوكس'}
                 </button>
 
-                {/* فلاش - يظهر حالته الحالية */}
                 {hasTorch && (
                   <button
                     onClick={toggleTorch}
@@ -752,7 +736,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                   </button>
                 )}
 
-                {/* أزرار Zoom */}
                 {supportsZoom && (
                   <>
                     <button
@@ -788,7 +771,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               </div>
             </div>
 
-            {/* صف 3: Zoom Slider */}
             {supportsZoom && (
               <div className="bg-white/5 rounded-xl p-2">
                 <div className="flex items-center justify-between mb-1">
@@ -824,7 +806,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           </div>
         )}
 
-        {/* ===== إحصائيات ===== */}
         <div className="mt-3 grid grid-cols-2 gap-2 w-full max-w-2xl">
           <div className="bg-white/5 rounded-xl p-2.5 text-center border border-white/5">
             <div className="text-2xl font-bold text-emerald-400">{scanCount}</div>
@@ -838,7 +819,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           </div>
         </div>
 
-        {/* ===== آخر المسجلين ===== */}
         {lastStudents.length > 0 && (
           <div className="mt-3 w-full max-w-2xl bg-white/5 rounded-xl p-3 border border-white/5">
             <p className="text-xs font-bold mb-2 text-emerald-300">آخر المسجلين:</p>
@@ -853,7 +833,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           </div>
         )}
 
-        {/* ===== Toast ===== */}
         {toast && (
           <div className={`fixed top-16 left-1/2 -translate-x-1/2 ${toastColors[toast.type]} text-white rounded-2xl px-5 py-4 shadow-2xl w-[90%] max-w-md animate-bounce-in z-[10001]`}>
             <div className="flex items-center gap-3">
@@ -869,7 +848,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         )}
       </div>
 
-      {/* ===== نافذة ربط الطالب ===== */}
       {pendingQrCodeId && (
         <div className="fixed inset-0 z-[10000] bg-black/80 flex items-center justify-center p-4">
           <div className="bg-white text-gray-900 rounded-2xl p-5 w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -924,7 +902,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         </div>
       )}
 
-      {/* ===== Styles ===== */}
       <style>{`
         @keyframes bounceIn {
           0%   { opacity: 0; transform: translate(-50%, -20px) scale(0.95); }
@@ -951,20 +928,46 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           padding-top: max(0.75rem, env(safe-area-inset-top));
         }
 
+        /* ===== فيديو الكاميرا ===== */
         #${QR_REGION_ID} video {
           width: 100% !important;
-          height: auto !important;
+          height: 100% !important;
           min-height: ${cameraHeight}px !important;
           object-fit: cover !important;
+          position: absolute !important;
+          top: 0 !important;
+          left: 0 !important;
         }
+
         #${QR_REGION_ID} {
           border-radius: 1rem;
           overflow: hidden;
           position: relative;
+          min-height: ${cameraHeight}px;
         }
-        #${QR_REGION_ID} img[alt="Info icon"],
-        #${QR_REGION_ID} > div:last-child {
+
+        /* 🔥 إخفاء كل عناصر html5-qrcode الافتراضية البيضاء */
+        #${QR_REGION_ID} img,
+        #${QR_REGION_ID} button,
+        #${QR_REGION_ID} select,
+        #${QR_REGION_ID} > div:not(:first-child),
+        #${QR_REGION_ID} #qr-shaded-region,
+        #${QR_REGION_ID} [id*="qr-shaded"],
+        #${QR_REGION_ID} canvas {
           display: none !important;
+        }
+
+        /* 🔥 إزالة كل الحدود والظلال البيضاء */
+        #${QR_REGION_ID} div[style*="border"],
+        #${QR_REGION_ID} div[style*="box-shadow"] {
+          border: none !important;
+          box-shadow: none !important;
+          background: transparent !important;
+        }
+
+        #${QR_REGION_ID} > div {
+          background: transparent !important;
+          border: none !important;
         }
 
         input[type="range"] {
