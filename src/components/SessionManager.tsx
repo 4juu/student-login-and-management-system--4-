@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { AttendanceSession } from '../types/student';
+import { getCurrentAcademicYear } from '../firebase/dataService';
 
 interface SessionManagerProps {
   sessions: AttendanceSession[];
@@ -19,6 +20,9 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [sessionName, setSessionName] = useState('');
 
+  // 🆕 السنة الأكاديمية الحالية
+  const currentAcademicYear = useMemo(() => getCurrentAcademicYear(), []);
+
   const handleQuickCreate = () => {
     const now = new Date();
     const dateStr = now.toLocaleDateString('ar-EG', { 
@@ -35,6 +39,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
       date: now.toLocaleDateString('ar-EG'),
       createdAt: now.toISOString(),
       isActive: true,
+      academicYear: currentAcademicYear, // 🆕 ربط بالسنة الأكاديمية
     };
     
     onCreateSession(newSession);
@@ -55,6 +60,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
       date: now.toLocaleDateString('ar-EG'),
       createdAt: now.toISOString(),
       isActive: true,
+      academicYear: currentAcademicYear, // 🆕 ربط بالسنة الأكاديمية
     };
     
     onCreateSession(newSession);
@@ -70,6 +76,24 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
+      {/* 🆕 شريط السنة الأكاديمية */}
+      <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">🎓</span>
+          <div>
+            <p className="text-sm font-bold text-indigo-800">
+              السنة الأكاديمية: {currentAcademicYear.replace('_', ' - ')}
+            </p>
+            <p className="text-xs text-indigo-600">
+              جميع السجلات تنتمي لهذه السنة
+            </p>
+          </div>
+        </div>
+        <div className="text-xs bg-white px-3 py-1 rounded-full border border-indigo-200 text-indigo-700">
+          📊 {sessions.length} سجل
+        </div>
+      </div>
+
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-800">إدارة السجلات</h2>
         <div className="flex gap-2">
@@ -184,6 +208,9 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
             <div className="text-sm text-yellow-800">
               <p className="font-medium mb-1">💡 ملاحظة</p>
               <p>السجل النشط هو الذي سيتم تسجيل الحضور فيه. يمكنك تبديل السجل في أي وقت.</p>
+              <p className="mt-1 text-xs">
+                🔄 <strong>التصفير السنوي:</strong> عند بداية السنة الأكاديمية الجديدة، يمكن للأدمن تصفير كل السجلات من إعدادات النظام.
+              </p>
             </div>
           </div>
         </div>

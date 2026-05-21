@@ -3,6 +3,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { Student, AttendanceRecord, AttendanceSession, College, Stage } from './types/student';
 import { User } from './types/user';
 import { StudentManager } from './components/StudentManager';
+import { ThemeToggle } from './components/ThemeToggle';
 import { StudentsViewer } from './components/StudentsViewer';
 import { AttendanceLogin } from './components/AttendanceLogin';
 import { AttendanceRecords } from './components/AttendanceRecords';
@@ -10,6 +11,7 @@ import { SessionManager } from './components/SessionManager';
 import { Login } from './components/Login';
 import { TeacherManagement } from './components/TeacherManagement';
 import { ProfileSettings } from './components/ProfileSettings';
+import { Settings } from './components/Settings';
 import { CollegeManager } from './components/CollegeManager';
 import { StageSelector } from './components/StageSelector';
 import { SmartChatBot } from './components/SmartChatBot';
@@ -28,9 +30,10 @@ import {
   saveUserData,
   deleteStageData,
   flushAllPendingSaves,
+  getCurrentAcademicYear,
 } from './firebase/dataService';
 
-type Tab = 'stage-selector' | 'colleges' | 'login' | 'manage' | 'records' | 'settings' | 'sessions' | 'teachers' | 'profile';
+type Tab = 'stage-selector' | 'colleges' | 'login' | 'manage' | 'records' | 'settings' | 'sessions' | 'teachers' | 'profile' | 'system-settings';
 
 interface AllStagesData {
   [stageId: string]: {
@@ -59,11 +62,13 @@ function App() {
   const [allTeachers, setAllTeachers] = useState<User[]>([]);
   const [allStagesData, setAllStagesData] = useState<AllStagesData>({});
 
-  // 🆕 حالة تحميل بيانات الجامعة الشاملة (للأدمن فقط - يدوي)
   const [universityDataLoading, setUniversityDataLoading] = useState(false);
   const [universityDataLoaded, setUniversityDataLoaded] = useState(false);
 
   const [activeTab, setActiveTab] = useState<Tab>('stage-selector');
+
+  // 🆕 السنة الأكاديمية الحالية (للعرض في الـ Header)
+  const currentAcademicYear = getCurrentAcademicYear();
 
   const intentionalDeleteRef = useRef({
     students: false,
@@ -73,19 +78,16 @@ function App() {
     stages: false,
   });
 
-  // 🔑 معرف الأدمن
   const getAdminUid = (): string => {
     if (!currentUser) return '';
     if (currentUser.role === 'admin') return currentUser.uid;
     return currentUser.adminId || currentUser.uid;
   };
 
-  // 🆕 معرف التدريسي
   const getTeacherId = (): string => {
     return currentUser?.uid || '';
   };
 
-  // 🆕 احفظ كل التعديلات المعلقة قبل إغلاق الصفحة
   useEffect(() => {
     const handleBeforeUnload = () => {
       flushAllPendingSaves();
@@ -115,6 +117,7 @@ function App() {
               email: firebaseUser.email || '',
               displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
               role: firebaseUser.email?.toLowerCase() === 'mujtabahaitham@gmail.com' ? 'admin' : 'teacher',
+              active: true, // 🆕
               createdAt: firebaseUser.metadata.creationTime || new Date().toISOString(),
               lastLogin: new Date().toISOString()
             };
@@ -136,8 +139,6 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // 🚀 تحميل البيانات الأساسية فقط (كليات + مراحل)
-  // 🚀 لا نحمل بيانات الجامعة الشاملة تلقائياً!
   const loadInitialData = async (user: User) => {
     setDataLoaded(false);
     try {
@@ -152,7 +153,6 @@ function App() {
       setStages(stagesData);
       setActiveTab('stage-selector');
 
-      // ✅ تحميل قائمة التدريسيين فقط (خفيف جداً)
       if (user.role === 'admin') {
         try {
           const { ref: dbRef, get } = await import('firebase/database');
@@ -175,7 +175,6 @@ function App() {
     }
   };
 
-  // 🆕 تحميل بيانات الجامعة الشاملة - يدوي فقط عند الطلب
   const loadAllAdminData = async () => {
     if (!currentUser || currentUser.role !== 'admin') return;
 
@@ -188,11 +187,14 @@ function App() {
       const allUserIds = [adminUid, ...allTeachers.map(t => t.uid)];
       const stagesDataMap: AllStagesData = {};
 
+      // 🆕 المسار الجديد فيه السنة الأكاديمية
+      const yearPath = `academicYears/${currentAcademicYear}/userData/${adminUid}`;
+
       await Promise.all(
         stages.map(async (stage) => {
           try {
             const studentsSnap = await get(
-              dbRef(database, `userData/${adminUid}/stageData/${stage.id}/students`)
+              dbRef(database, `${yearPath}/stageData/${stage.id}/students`)
             );
             let stageStudents: Student[] = [];
             if (studentsSnap.exists()) {
@@ -207,30 +209,20 @@ function App() {
               allUserIds.map(async (userId) => {
                 try {
                   const recSnap = await get(
-                    dbRef(
-                      database,
-                      `userData/${adminUid}/stageData/${stage.id}/teacherRecords/${userId}/records`
-                    )
+                    dbRef(database, `${yearPath}/stageData/${stage.id}/teacherRecords/${userId}/records`)
                   );
                   if (recSnap.exists()) {
                     const data = recSnap.val();
-                    const arr: AttendanceRecord[] = Array.isArray(data)
-                      ? data
-                      : Object.values(data);
+                    const arr: AttendanceRecord[] = Array.isArray(data) ? data : Object.values(data);
                     allRecords.push(...arr);
                   }
 
                   const sesSnap = await get(
-                    dbRef(
-                      database,
-                      `userData/${adminUid}/stageData/${stage.id}/teacherRecords/${userId}/sessions`
-                    )
+                    dbRef(database, `${yearPath}/stageData/${stage.id}/teacherRecords/${userId}/sessions`)
                   );
                   if (sesSnap.exists()) {
                     const data = sesSnap.val();
-                    const arr: AttendanceSession[] = Array.isArray(data)
-                      ? data
-                      : Object.values(data);
+                    const arr: AttendanceSession[] = Array.isArray(data) ? data : Object.values(data);
                     allSessions.push(...arr);
                   }
                 } catch (e) {
@@ -282,7 +274,6 @@ function App() {
   };
 
   const handleBackToStages = () => {
-    // 🆕 احفظ التعديلات المعلقة قبل المغادرة
     flushAllPendingSaves();
 
     setSelectedCollegeId(null);
@@ -310,7 +301,11 @@ function App() {
     setActiveTab('stage-selector');
   };
 
-  // ✅ مشترك - الأدمن فقط يحفظ الكليات (مع Debounce)
+  // 🆕 callback بعد التصفير السنوي
+  const handleResetComplete = () => {
+    resetData();
+  };
+
   useEffect(() => {
     if (currentUser?.role === 'admin' && dataLoaded) {
       const force = intentionalDeleteRef.current.colleges;
@@ -319,7 +314,6 @@ function App() {
     }
   }, [colleges, currentUser, dataLoaded]);
 
-  // ✅ مشترك - الأدمن فقط يحفظ المراحل (مع Debounce)
   useEffect(() => {
     if (currentUser?.role === 'admin' && dataLoaded) {
       const force = intentionalDeleteRef.current.stages;
@@ -328,7 +322,6 @@ function App() {
     }
   }, [stages, currentUser, dataLoaded]);
 
-  // ✅ الطلاب مشتركون (مع Debounce)
   useEffect(() => {
     if (currentUser && dataLoaded && selectedStageId) {
       const force = intentionalDeleteRef.current.students;
@@ -347,7 +340,6 @@ function App() {
     }
   }, [students, currentUser, dataLoaded, selectedStageId, universityDataLoaded]);
 
-  // 🆕 منفصل لكل تدريسي (مع Debounce)
   useEffect(() => {
     if (currentUser && dataLoaded && selectedStageId) {
       const force = intentionalDeleteRef.current.records;
@@ -372,7 +364,6 @@ function App() {
     }
   }, [attendanceRecords, currentUser, dataLoaded, selectedStageId, universityDataLoaded]);
 
-  // 🆕 منفصل لكل تدريسي (مع Debounce)
   useEffect(() => {
     if (currentUser && dataLoaded && selectedStageId) {
       const force = intentionalDeleteRef.current.sessions;
@@ -397,7 +388,6 @@ function App() {
     }
   }, [sessions, currentUser, dataLoaded, selectedStageId, universityDataLoaded]);
 
-  // 🆕 الجلسة النشطة (فوري - مهم)
   useEffect(() => {
     if (currentUser && dataLoaded && selectedStageId) {
       saveActiveSession(
@@ -464,7 +454,11 @@ function App() {
 
   const handleAddStudent = (student: Student) => setStudents(prev => [...prev, student]);
 
-  // ✅ تحديث طالب (يدعم الحذف الصريح للحقول)
+  // 🆕 إضافة دفعة طلاب (للاستيراد من Excel)
+  const handleAddMultipleStudents = (newStudents: Student[]) => {
+    setStudents(prev => [...prev, ...newStudents]);
+  };
+
   const handleUpdateStudent = (id: string, updates: Partial<Student>) => {
     setStudents(prev =>
       prev.map(student => {
@@ -596,14 +590,41 @@ function App() {
               </div>
             </div>
 
-            <button onClick={handleLogout} className="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md flex items-center gap-2">
-              تسجيل الخروج
-            </button>
+            <div className="flex items-center gap-2">
+              {/* 🆕 شارة السنة الأكاديمية */}
+              <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-indigo-100 text-indigo-800 rounded-lg text-sm font-medium">
+                🎓 {currentAcademicYear.replace('_', ' - ')}
+              </div>
+              
+              <div className="flex items-center gap-3">
+  {/* 🆕 زر الوضع الليلي/النهاري */}
+  <ThemeToggle size="md" />
+  
+  {/* شارة السنة الأكاديمية */}
+  <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-indigo-100 text-indigo-800 rounded-lg text-sm font-medium">
+    🎓 {currentAcademicYear.replace('_', ' - ')}
+  </div>
+  
+  <button 
+    onClick={handleLogout} 
+    className="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md flex items-center gap-2"
+  >
+    تسجيل الخروج
+  </button>
+</div>
+            </div>
           </div>
 
           <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2 text-center">
             نظام إدارة الحضور
           </h1>
+
+          {/* 🆕 السنة الأكاديمية للموبايل */}
+          <div className="md:hidden text-center mb-2">
+            <span className="inline-block px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-xs font-medium">
+              🎓 السنة الأكاديمية: {currentAcademicYear.replace('_', ' - ')}
+            </span>
+          </div>
 
           {selectedStage && (
             <div className="bg-white rounded-lg shadow-sm p-3 flex items-center gap-2 text-sm flex-wrap mt-4">
@@ -641,6 +662,13 @@ function App() {
                   >
                     👨‍🏫 التدريسيين
                   </button>
+                  {/* 🆕 تبويب إعدادات النظام */}
+                  <button
+                    onClick={() => setActiveTab('system-settings')}
+                    className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'system-settings' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                  >
+                    ⚙️ إعدادات النظام
+                  </button>
                 </>
               )}
               <button
@@ -651,7 +679,6 @@ function App() {
               </button>
             </div>
 
-            {/* 🆕 زر تحميل بيانات الجامعة الشاملة (للأدمن فقط) */}
             {isAdmin && activeTab === 'stage-selector' && (
               <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl">
                 <div className="flex items-center justify-between flex-wrap gap-3">
@@ -711,6 +738,17 @@ function App() {
 
             {activeTab === 'teachers' && isAdmin && (
               <TeacherManagement currentUser={currentUser} colleges={colleges} stages={stages} />
+            )}
+
+            {/* 🆕 إعدادات النظام (مع زر التصفير) */}
+            {activeTab === 'system-settings' && isAdmin && (
+              <Settings
+                students={students}
+                attendanceRecords={attendanceRecords}
+                currentUser={currentUser}
+                onDataRestored={() => loadInitialData(currentUser)}
+                onResetComplete={handleResetComplete}
+              />
             )}
 
             {activeTab === 'profile' && (
@@ -789,6 +827,7 @@ function App() {
                 <StudentManager
                   students={students}
                   onAddStudent={handleAddStudent}
+                  onAddMultipleStudents={handleAddMultipleStudents}
                   onUpdateStudent={handleUpdateStudent}
                   onDeleteStudent={handleDeleteStudent}
                   onDeleteSelectedStudents={handleDeleteSelectedStudents}
@@ -814,6 +853,7 @@ function App() {
 
         <div className="mt-12 text-center text-gray-600">
           <p className="text-sm">نظام تسجيل الحضور الإلكتروني - {new Date().getFullYear()}</p>
+          <p className="text-xs mt-1">🎓 السنة الأكاديمية: {currentAcademicYear.replace('_', ' - ')}</p>
         </div>
       </div>
 

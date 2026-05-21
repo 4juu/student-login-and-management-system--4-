@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { AttendanceRecord, AttendanceSession, Student } from '../types/student';
 import * as XLSX from 'xlsx-js-style';
+import { getCurrentAcademicYear } from '../firebase/dataService';
 
 interface AttendanceRecordsProps {
   records: AttendanceRecord[];
@@ -10,7 +11,6 @@ interface AttendanceRecordsProps {
   onClearRecords: () => void;
 }
 
-// 🆕 عدد السجلات بكل صفحة
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
 const DEFAULT_PAGE_SIZE = 100;
 
@@ -21,8 +21,11 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
   activeSessionId,
   onClearRecords,
 }) => {
-  // 🔧 دالة تطبيع التاريخ
-  const normalizeAnyDate = (dateStr: string): string => {
+  // 🆕 السنة الأكاديمية الحالية (للعرض)
+  const currentAcademicYear = useMemo(() => getCurrentAcademicYear(), []);
+
+  // 🎯 useCallback للـ helper function
+  const normalizeAnyDate = useCallback((dateStr: string): string => {
     if (!dateStr) return '';
     const arabicNumbers = '٠١٢٣٤٥٦٧٨٩';
     const englishNumbers = '0123456789';
@@ -38,11 +41,13 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
     }
 
     return normalized;
-  };
+  }, []);
 
-  const sortedSessions = [...sessions].sort((a, b) =>
-    normalizeAnyDate(a.date).localeCompare(normalizeAnyDate(b.date))
-  );
+  const sortedSessions = useMemo(() => 
+    [...sessions].sort((a, b) =>
+      normalizeAnyDate(a.date).localeCompare(normalizeAnyDate(b.date))
+    ), [sessions, normalizeAnyDate]);
+
   const today = new Date().toISOString().split('T')[0];
   const firstDate = sortedSessions.length > 0 ? normalizeAnyDate(sortedSessions[0].date) : today;
   const lastDate = sortedSessions.length > 0 ? normalizeAnyDate(sortedSessions[sortedSessions.length - 1].date) : today;
@@ -54,12 +59,10 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
 
   const [selectedSessionId, setSelectedSessionId] = useState<string | 'all'>(activeSessionId || 'all');
 
-  // 🆕 البحث + Pagination
   const [searchRecord, setSearchRecord] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
-  // 🆕 الفلترة المحسنة بـ useMemo
   const filteredRecords = useMemo(() => {
     let result = selectedSessionId === 'all'
       ? records
@@ -74,11 +77,9 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
       );
     }
 
-    // عرض الأحدث أولاً (الأكثر فائدة)
     return [...result].reverse();
   }, [records, selectedSessionId, searchRecord]);
 
-  // 🆕 Pagination
   const totalPages = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
 
@@ -87,7 +88,6 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
     return filteredRecords.slice(start, start + pageSize);
   }, [filteredRecords, safeCurrentPage, pageSize]);
 
-  // 🆕 إعادة تعيين الصفحة عند تغيير الفلتر/البحث
   React.useEffect(() => {
     setCurrentPage(1);
   }, [selectedSessionId, searchRecord, pageSize]);
@@ -413,7 +413,8 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
     XLSX.utils.book_append_sheet(wb, ws1, 'سجل أبجدي كلي');
     XLSX.utils.book_append_sheet(wb, ws2, 'سجل جميع الكروبات');
 
-    let fileName = 'سجل_الحضور_الرسمي_';
+    // 🆕 اسم الملف يحتوي على السنة الأكاديمية
+    let fileName = `سجل_الحضور_${currentAcademicYear}_`;
     if (exportType === 'single') {
       fileName += singleDate;
     } else {
@@ -431,6 +432,19 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
+      {/* 🆕 شريط السنة الأكاديمية */}
+      <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center gap-2">
+        <span className="text-2xl">🎓</span>
+        <div>
+          <p className="text-sm font-bold text-indigo-800">
+            السنة الأكاديمية الحالية: {currentAcademicYear.replace('_', ' - ')}
+          </p>
+          <p className="text-xs text-indigo-600">
+            جميع البيانات والسجلات تنتمي لهذه السنة
+          </p>
+        </div>
+      </div>
+
       {/* ============================================================ */}
       {/* 📥 لوحة التصدير */}
       {/* ============================================================ */}
@@ -581,7 +595,6 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
           </div>
         </div>
 
-        {/* 🆕 شريط البحث */}
         {records.length > 10 && (
           <div className="mb-3 relative">
             <input
@@ -603,7 +616,6 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
           </div>
         )}
 
-        {/* 🆕 شريط Pagination العلوي */}
         {filteredRecords.length > pageSize && (
           <div className="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 text-sm">
@@ -707,7 +719,6 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
           </table>
         </div>
 
-        {/* 🆕 شريط Pagination السفلي */}
         {filteredRecords.length > pageSize && (
           <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center gap-1 flex-wrap">
             <button

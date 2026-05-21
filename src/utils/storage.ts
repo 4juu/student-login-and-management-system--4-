@@ -1,8 +1,21 @@
-import { Student, AttendanceRecord, AttendanceSession } from '../types/student';
+/**
+ * ⚠️ DEPRECATED - مهجور ⚠️
+ * ============================================
+ * هذا الملف لم يعد مستخدماً في النظام الجديد!
+ * جميع البيانات تُحفظ الآن في Firebase Realtime Database
+ * عبر `src/firebase/dataService.ts`
+ * 
+ * هذا الملف يبقى للتوافق العكسي فقط (Backward Compatibility)
+ * لا تستخدم دواله في أي كود جديد!
+ * 
+ * استخدم بدلاً منه:
+ * - saveStudents, loadStudents من dataService.ts
+ * - saveAttendanceRecords, loadAttendanceRecords من dataService.ts
+ * - downloadBackup, resetAcademicYear من dataService.ts (الجديدة!)
+ * ============================================
+ */
 
-// DEPRECATED: This file is kept for backward compatibility only
-// All data is now stored in Firebase Realtime Database
-// No localStorage limits (5MB) - unlimited storage in Firebase!
+import { Student, AttendanceRecord, AttendanceSession } from '../types/student';
 
 const STORAGE_KEYS = {
   STUDENTS: 'attendance_system_students',
@@ -12,59 +25,47 @@ const STORAGE_KEYS = {
   LAST_BACKUP: 'attendance_system_last_backup',
 };
 
-// Save students to localStorage with error handling
+// @deprecated استخدم saveStudents من dataService.ts
 export const saveStudents = (students: Student[]): void => {
   try {
     localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
-    console.log('✅ تم حفظ بيانات الطلاب بنجاح');
   } catch (error) {
     console.error('❌ خطأ في حفظ بيانات الطلاب:', error);
-    alert('تحذير: لم يتم حفظ البيانات. تأكد من وجود مساحة كافية.');
   }
 };
 
-// Load students from localStorage
+// @deprecated استخدم loadStudents من dataService.ts
 export const loadStudents = (): Student[] => {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.STUDENTS);
-    if (saved) {
-      const students = JSON.parse(saved);
-      console.log(`✅ تم تحميل ${students.length} طالب من الذاكرة`);
-      return students;
-    }
+    if (saved) return JSON.parse(saved);
   } catch (error) {
     console.error('❌ خطأ في تحميل بيانات الطلاب:', error);
   }
   return [];
 };
 
-// Save attendance records to localStorage with error handling
+// @deprecated
 export const saveAttendanceRecords = (records: AttendanceRecord[]): void => {
   try {
     localStorage.setItem(STORAGE_KEYS.ATTENDANCE_RECORDS, JSON.stringify(records));
-    console.log('✅ تم حفظ سجلات الحضور بنجاح');
   } catch (error) {
-    console.error('❌ خطأ في حفظ سجلات الحضور:', error);
-    alert('تحذير: لم يتم حفظ السجلات. تأكد من وجود مساحة كافية.');
+    console.error('❌ خطأ:', error);
   }
 };
 
-// Load attendance records from localStorage
+// @deprecated
 export const loadAttendanceRecords = (): AttendanceRecord[] => {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.ATTENDANCE_RECORDS);
-    if (saved) {
-      const records = JSON.parse(saved);
-      console.log(`✅ تم تحميل ${records.length} سجل حضور من الذاكرة`);
-      return records;
-    }
+    if (saved) return JSON.parse(saved);
   } catch (error) {
-    console.error('❌ خطأ في تحميل سجلات الحضور:', error);
+    console.error('❌ خطأ:', error);
   }
   return [];
 };
 
-// Create backup of all data
+// @deprecated استخدم downloadBackup من dataService.ts
 export const createBackup = (): string => {
   const data = {
     students: loadStudents(),
@@ -72,32 +73,26 @@ export const createBackup = (): string => {
     timestamp: new Date().toISOString(),
     version: '1.0',
   };
-  
   localStorage.setItem(STORAGE_KEYS.LAST_BACKUP, new Date().toISOString());
   return JSON.stringify(data, null, 2);
 };
 
-// Restore from backup
+// @deprecated
 export const restoreFromBackup = (backupData: string): boolean => {
   try {
     const data = JSON.parse(backupData);
-    
-    if (data.students && Array.isArray(data.students)) {
-      saveStudents(data.students);
-    }
-    
+    if (data.students && Array.isArray(data.students)) saveStudents(data.students);
     if (data.attendanceRecords && Array.isArray(data.attendanceRecords)) {
       saveAttendanceRecords(data.attendanceRecords);
     }
-    
     return true;
   } catch (error) {
-    console.error('❌ خطأ في استعادة النسخة الاحتياطية:', error);
+    console.error('❌ خطأ:', error);
     return false;
   }
 };
 
-// Download backup file
+// @deprecated استخدم downloadBackup من dataService.ts
 export const downloadBackup = (): void => {
   try {
     const backupData = createBackup();
@@ -117,15 +112,13 @@ export const downloadBackup = (): void => {
     
     alert('✅ تم تنزيل النسخة الاحتياطية بنجاح!');
   } catch (error) {
-    console.error('❌ خطأ في تنزيل النسخة الاحتياطية:', error);
+    console.error('❌ خطأ:', error);
     alert('❌ حدث خطأ أثناء إنشاء النسخة الاحتياطية');
   }
 };
 
-// Get storage usage info
 export const getStorageInfo = (): { used: number; total: number; percentage: number } => {
   let used = 0;
-  
   try {
     for (const key in localStorage) {
       if (localStorage.hasOwnProperty(key)) {
@@ -133,46 +126,31 @@ export const getStorageInfo = (): { used: number; total: number; percentage: num
       }
     }
   } catch (error) {
-    console.error('خطأ في حساب المساحة المستخدمة:', error);
+    console.error('خطأ:', error);
   }
-  
-  // localStorage typically has 5-10MB limit, we'll assume 5MB (5242880 bytes)
   const total = 5242880;
   const percentage = (used / total) * 100;
-  
-  return {
-    used,
-    total,
-    percentage,
-  };
+  return { used, total, percentage };
 };
 
-// Save sessions to localStorage
 export const saveSessions = (sessions: AttendanceSession[]): void => {
   try {
     localStorage.setItem(STORAGE_KEYS.ATTENDANCE_SESSIONS, JSON.stringify(sessions));
-    console.log('✅ تم حفظ السجلات بنجاح');
   } catch (error) {
-    console.error('❌ خطأ في حفظ السجلات:', error);
+    console.error('❌ خطأ:', error);
   }
 };
 
-// Load sessions from localStorage
 export const loadSessions = (): AttendanceSession[] => {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.ATTENDANCE_SESSIONS);
-    if (saved) {
-      const sessions = JSON.parse(saved);
-      console.log(`✅ تم تحميل ${sessions.length} سجل`);
-      return sessions;
-    }
+    if (saved) return JSON.parse(saved);
   } catch (error) {
-    console.error('❌ خطأ في تحميل السجلات:', error);
+    console.error('❌ خطأ:', error);
   }
   return [];
 };
 
-// Save active session ID
 export const saveActiveSession = (sessionId: string | null): void => {
   try {
     if (sessionId) {
@@ -181,21 +159,19 @@ export const saveActiveSession = (sessionId: string | null): void => {
       localStorage.removeItem(STORAGE_KEYS.ACTIVE_SESSION);
     }
   } catch (error) {
-    console.error('❌ خطأ في حفظ السجل النشط:', error);
+    console.error('❌ خطأ:', error);
   }
 };
 
-// Load active session ID
 export const loadActiveSession = (): string | null => {
   try {
     return localStorage.getItem(STORAGE_KEYS.ACTIVE_SESSION);
   } catch (error) {
-    console.error('❌ خطأ في تحميل السجل النشط:', error);
+    console.error('❌ خطأ:', error);
     return null;
   }
 };
 
-// Check if storage is available
 export const isStorageAvailable = (): boolean => {
   try {
     const test = '__storage_test__';

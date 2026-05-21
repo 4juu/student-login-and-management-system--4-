@@ -18,7 +18,6 @@ export const signIn = async (email: string, password: string): Promise<User> => 
   try {
     console.log('🔐 Attempting to sign in...');
     
-    // First check if there's a temporary password set by admin
     const usersRef = ref(database, 'users');
     const usersSnapshot = await get(usersRef);
     
@@ -36,16 +35,13 @@ export const signIn = async (email: string, password: string): Promise<User> => 
         const [uid]: [string, any] = userEntry;
         userId = uid;
         
-        // Check for admin-set new password
         const teacherAccountRef = ref(database, `teacherAccounts/${uid}`);
         const teacherSnapshot = await get(teacherAccountRef);
         
         if (teacherSnapshot.exists()) {
           const teacherData = teacherSnapshot.val();
           
-          // If admin set a new password and user is trying to use it
           if (teacherData.newPassword && password === teacherData.newPassword) {
-            // Use the stored original password to sign in
             if (teacherData.storedPassword) {
               actualPassword = teacherData.storedPassword;
               needsPasswordUpdate = true;
@@ -56,18 +52,15 @@ export const signIn = async (email: string, password: string): Promise<User> => 
       }
     }
     
-    // Sign in with Firebase
     const userCredential = await signInWithEmailAndPassword(auth, email, actualPassword);
     const firebaseUser = userCredential.user;
     
     console.log('✅ Firebase authentication successful');
     
-    // If user logged in with admin-set password, update Firebase password
     if (needsPasswordUpdate && userId) {
       try {
         await updatePassword(firebaseUser, password);
         
-        // Clear the temporary password flags
         await update(ref(database, `teacherAccounts/${userId}`), {
           newPassword: null,
           storedPassword: password,
@@ -80,25 +73,30 @@ export const signIn = async (email: string, password: string): Promise<User> => 
       }
     }
     
-    // Get user data from database (including profile settings)
     const userRef = ref(database, `users/${firebaseUser.uid}`);
     const snapshot = await get(userRef);
     
     let user: User;
     
     if (snapshot.exists()) {
-      // Load existing user data (with profile settings)
       user = snapshot.val();
       console.log('✅ Loaded user profile from Firebase:', {
         displayName: user.displayName,
         email: user.email,
         role: user.role,
+        active: user.active,
         hasPhoto: !!user.photoURL,
         hasBio: !!user.bio,
         hasPermissions: !!user.permissions
       });
+      
+      // 🆕 تحقق من حالة التفعيل للتدريسيين
+      if (user.role === 'teacher' && user.active === false) {
+        console.warn('⚠️ Teacher account is deactivated (after academic year reset)');
+        // ما نمنع الدخول، بس نبلغ المستخدم
+        // الصلاحيات الفارغة راح تمنعه من رؤية أي شي
+      }
     } else {
-      // Create new user data
       let role: 'admin' | 'teacher' = 'teacher';
       
       if (email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
@@ -110,6 +108,7 @@ export const signIn = async (email: string, password: string): Promise<User> => 
         email: firebaseUser.email || email,
         displayName: firebaseUser.displayName || email.split('@')[0],
         role,
+        active: true, // 🆕 الأدمن دائماً مفعّل
         createdAt: new Date().toISOString(),
         lastLogin: new Date().toISOString()
       };
@@ -117,10 +116,8 @@ export const signIn = async (email: string, password: string): Promise<User> => 
       console.log('✅ Created new user profile');
     }
     
-    // Update last login
     user.lastLogin = new Date().toISOString();
     
-    // Save/update user data to Firebase
     await set(userRef, user);
     
     console.log('✅ Sign in successful! User data saved to Firebase');
@@ -144,8 +141,7 @@ export const signOut = async (): Promise<void> => {
   }
 };
 
-// ✅ Create teacher account WITHOUT logging out admin permanently
-// ✅ Create teacher account using SECONDARY app (no logout for admin)
+// Create teacher account using SECONDARY app
 export const createTeacherAccount = async (
   email: string,
   password: string,
@@ -155,26 +151,24 @@ export const createTeacherAccount = async (
   try {
     console.log('👨‍🏫 Creating teacher account using secondary app...');
     
-    // ✅ استخدم التطبيق الثانوي عشان ما نأثر على جلسة الأدمن
     const { secondaryAuth } = await import('./config');
     const { signOut: secondarySignOut } = await import('firebase/auth');
     
-    // إنشاء الحساب في التطبيق الثانوي
     const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
     const user = userCredential.user;
     
     console.log('✅ Firebase Auth account created (in secondary app)');
     
-    // تحديث الاسم
     await updateProfile(user, { displayName });
     
-    // حفظ بيانات التدريسي
     const teacherData: User = {
       uid: user.uid,
       email,
       displayName,
       role: 'teacher',
       adminId: adminUid,
+      active: true, // 🆕 مفعّل افتراضياً
+      lastActivatedAt: new Date().toISOString(),
       permissions: {
         allowedStages: {},
         canViewRecords: true,
@@ -187,7 +181,6 @@ export const createTeacherAccount = async (
     await set(ref(database, `users/${user.uid}`), teacherData);
     console.log('✅ Teacher user data saved');
     
-    // حفظ معلومات الحساب
     await set(ref(database, `teacherAccounts/${user.uid}`), {
       email,
       displayName,
@@ -199,7 +192,6 @@ export const createTeacherAccount = async (
     
     console.log('✅ Teacher account info saved');
     
-    // ✅ تسجيل خروج من التطبيق الثانوي فقط (الأدمن يبقى مسجل دخول في التطبيق الرئيسي)
     await secondarySignOut(secondaryAuth);
     console.log('✅ Signed out from secondary app, admin session intact');
     
@@ -208,7 +200,8 @@ export const createTeacherAccount = async (
     throw new Error(getErrorMessage(error.code) || error.message);
   }
 };
-// ✅ Update teacher permissions (admin only)
+
+// Update teacher permissions (admin only)
 export const updateTeacherPermissions = async (
   teacherUid: string,
   permissions: TeacherPermissions
@@ -229,6 +222,56 @@ export const updateTeacherPermissions = async (
   }
 };
 
+/**
+ * 🆕 إعادة تفعيل تدريسي بعد التصفير السنوي
+ * الأدمن يستخدمها لإعطاء التدريسي صلاحيات السنة الجديدة
+ */
+export const reactivateTeacher = async (
+  teacherUid: string,
+  permissions: TeacherPermissions
+): Promise<void> => {
+  try {
+    console.log('🔓 Reactivating teacher:', teacherUid);
+    
+    await update(ref(database, `users/${teacherUid}`), {
+      active: true,
+      lastActivatedAt: new Date().toISOString(),
+      deactivatedAt: null,
+      permissions,
+      lastUpdated: new Date().toISOString()
+    });
+    
+    console.log('✅ Teacher reactivated successfully');
+  } catch (error: any) {
+    console.error('❌ Reactivate teacher error:', error);
+    throw new Error('فشل إعادة تفعيل التدريسي');
+  }
+};
+
+/**
+ * 🆕 الحصول على كل التدريسيين التابعين للأدمن
+ */
+export const getAllTeachers = async (adminUid: string): Promise<User[]> => {
+  try {
+    const snap = await get(ref(database, 'users'));
+    if (!snap.exists()) return [];
+    
+    const allUsers = snap.val();
+    const teachers: User[] = [];
+    
+    Object.values(allUsers).forEach((user: any) => {
+      if (user.role === 'teacher' && user.adminId === adminUid) {
+        teachers.push(user);
+      }
+    });
+    
+    return teachers;
+  } catch (error) {
+    console.error('❌ Get teachers error:', error);
+    return [];
+  }
+};
+
 // Update teacher password directly (admin only)
 export const updateTeacherPassword = async (
   uid: string,
@@ -237,14 +280,12 @@ export const updateTeacherPassword = async (
   try {
     console.log('🔑 Updating teacher password...');
     
-    // Save the new password that teacher will use
     await update(ref(database, `teacherAccounts/${uid}`), {
       newPassword: newPassword,
       passwordLastReset: new Date().toISOString(),
       passwordResetBy: 'admin'
     });
     
-    // Also update in users node
     await update(ref(database, `users/${uid}`), {
       passwordLastReset: new Date().toISOString()
     });
@@ -261,7 +302,6 @@ export const deleteTeacherAccount = async (uid: string): Promise<void> => {
   try {
     console.log('🗑️ Deleting teacher account...');
     
-    // Delete user data
     await remove(ref(database, `users/${uid}`));
     console.log('✅ User data deleted');
     
@@ -271,8 +311,6 @@ export const deleteTeacherAccount = async (uid: string): Promise<void> => {
     await remove(ref(database, `userData/${uid}`));
     console.log('✅ User data (students, records) deleted');
     
-    // Note: Deleting the Firebase Auth user requires Admin SDK
-    // For now, we just mark it in database
     await set(ref(database, `deletedAccounts/${uid}`), {
       deletedAt: new Date().toISOString()
     });
@@ -284,7 +322,7 @@ export const deleteTeacherAccount = async (uid: string): Promise<void> => {
   }
 };
 
-// Update user profile (photo, displayName, bio)
+// Update user profile
 export const updateUserProfile = async (
   uid: string,
   updates: {
@@ -377,7 +415,6 @@ export const verifyUserSession = async (): Promise<User | null> => {
     
     console.log('🔍 Verifying user session...');
     
-    // Load user data from database
     const userProfile = await getUserProfile(currentUser.uid);
     
     if (userProfile) {

@@ -3,7 +3,10 @@ export interface Student {
   name: string;
   code: string;
   group?: string;
+  universityId?: string;
+  qrCodeId?: string;
   createdAt: string;
+  academicYear?: string;
 }
 
 export interface AttendanceRecord {
@@ -16,7 +19,9 @@ export interface AttendanceRecord {
   date: string;
   time: string;
   sessionId: string;
-  status?: 'present' | 'absent'; // ✅ جديد: حضور أو غياب
+  status?: 'present' | 'absent';
+  method?: 'manual' | 'qr'; // 🆕 طريقة تسجيل الحضور
+  academicYear?: string;
 }
 
 export interface AttendanceSession {
@@ -25,24 +30,23 @@ export interface AttendanceSession {
   date: string;
   createdAt: string;
   isActive: boolean;
+  academicYear?: string;
 }
 
-// ✅ جديد: المرحلة الدراسية
 export interface Stage {
   id: string;
-  name: string; // مثلاً: "المرحلة الأولى"
-  collegeId: string; // ينتمي لأي كلية
+  name: string;
+  collegeId: string;
   createdAt: string;
-  order?: number; // ترتيب المرحلة
+  order?: number;
 }
 
-// ✅ جديد: الكلية / القسم
 export interface College {
   id: string;
-  name: string; // مثلاً: "كلية الصيدلة"
+  name: string;
   description?: string;
-  icon?: string; // emoji أو رمز
-  color?: string; // لون مميز
+  icon?: string;
+  color?: string;
   createdAt: string;
-  createdBy: string; // uid الأدمن
+  createdBy: string;
 }

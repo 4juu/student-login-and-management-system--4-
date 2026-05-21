@@ -1,10 +1,11 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useCallback } from 'react';
 import { Student } from '../types/student';
 import * as XLSX from 'xlsx';
 
 interface StudentManagerProps {
   students: Student[];
   onAddStudent: (student: Student) => void;
+  onAddMultipleStudents?: (students: Student[]) => void; // 🆕 إضافة دفعة واحدة
   onUpdateStudent?: (id: string, updates: Partial<Student>) => void;
   onDeleteStudent: (id: string) => void;
   onDeleteSelectedStudents: (ids: string[]) => void;
@@ -12,7 +13,6 @@ interface StudentManagerProps {
   onSortByGroup?: () => void;
 }
 
-// ✅ دالة استخراج رمز QR (من رابط الوزارة أو من النص الخام)
 const extractQrCodeId = (raw: string): string => {
   const text = raw.trim();
   if (!text) return '';
@@ -28,13 +28,13 @@ const extractQrCodeId = (raw: string): string => {
   return text;
 };
 
-// 🆕 عدد الطلاب بكل صفحة
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const DEFAULT_PAGE_SIZE = 50;
 
 export const StudentManager: React.FC<StudentManagerProps> = ({
   students,
   onAddStudent,
+  onAddMultipleStudents,
   onUpdateStudent,
   onDeleteStudent,
   onDeleteSelectedStudents,
@@ -62,7 +62,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   const [groupFilter, setGroupFilter] = useState<string>('all');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 🆕 Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
@@ -121,14 +120,14 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     setGroup('');
   };
 
-  const sortGroups = (a: string, b: string): number => {
+  const sortGroups = useCallback((a: string, b: string): number => {
     const letterA = a.charAt(0).toUpperCase();
     const letterB = b.charAt(0).toUpperCase();
     if (letterA !== letterB) return letterA.localeCompare(letterB);
     const numA = parseInt(a.slice(1)) || 0;
     const numB = parseInt(b.slice(1)) || 0;
     return numA - numB;
-  };
+  }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -219,6 +218,18 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         return;
       }
 
+      // 🆕 تأكيد قبل الاستيراد لو العدد كبير
+      if (parsed.length > 50) {
+        const confirmed = window.confirm(
+          `📊 تم العثور على ${parsed.length} طالب في الملف.\n\nهل تريد المتابعة بالاستيراد؟`
+        );
+        if (!confirmed) {
+          setImportLoading(false);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          return;
+        }
+      }
+
       parsed.sort((a, b) => {
         const groupCompare = sortGroups(a.group, b.group);
         if (groupCompare !== 0) return groupCompare;
@@ -229,13 +240,18 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       const existingCodes = new Set(students.map(s => s.code));
       const existingUniIds = new Set(students.map(s => s.universityId).filter(Boolean));
       const existingQrCodes = new Set(students.map(s => s.qrCodeId).filter(Boolean));
+      const existingNames = new Set(students.map(s => s.name));
+      
       let currentCode = startCode;
       let addedCount = 0;
       let skippedCount = 0;
       let qrLinkedCount = 0;
 
+      // 🆕 تجميع الطلاب الجدد في مصفوفة قبل الحفظ
+      const newStudentsBatch: Student[] = [];
+
       for (const student of parsed) {
-        if (students.some(s => s.name === student.name)) {
+        if (existingNames.has(student.name)) {
           skippedCount++;
           continue;
         }
@@ -272,10 +288,24 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
           createdAt: new Date().toISOString(),
         };
 
-        onAddStudent(newStudent);
+        newStudentsBatch.push(newStudent);
         existingCodes.add(String(currentCode));
+        existingNames.add(student.name);
         currentCode++;
         addedCount++;
+      }
+
+      // 🆕 إضافة دفعة واحدة (لو الدالة متوفرة) أو واحد واحد
+      if (newStudentsBatch.length > 0) {
+        if (onAddMultipleStudents) {
+          // ⚡ طريقة سريعة - إضافة دفعة واحدة
+          onAddMultipleStudents(newStudentsBatch);
+        } else {
+          // 🐢 الطريقة القديمة - إضافة واحد واحد
+          for (const student of newStudentsBatch) {
+            onAddStudent(student);
+          }
+        }
       }
 
       setImportMessage(
@@ -292,16 +322,15 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     }
   };
 
-  const toggleSelectStudent = (id: string) => {
+  const toggleSelectStudent = useCallback((id: string) => {
     setSelectedIds(prev => {
       const newSet = new Set(prev);
       if (newSet.has(id)) newSet.delete(id);
       else newSet.add(id);
       return newSet;
     });
-  };
+  }, []);
 
-  // 🆕 تحديد كل طلاب الصفحة الحالية
   const toggleSelectAllInPage = () => {
     const pageIds = paginatedStudents.map(s => s.id);
     const allSelected = pageIds.every(id => selectedIds.has(id));
@@ -316,7 +345,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     });
   };
 
-  // 🆕 تحديد كل النتائج (مو بس الصفحة)
   const toggleSelectAllFiltered = () => {
     const allFilteredIds = filteredStudents.map(s => s.id);
     const allSelected = allFilteredIds.every(id => selectedIds.has(id));
@@ -341,7 +369,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     setSelectedIds(new Set());
   };
 
-  // === تعديل الرقم الجامعي ===
   const startEditUniId = (student: Student) => {
     setEditingUniIdStudent(student.id);
     setEditUniversityId(student.universityId || '');
@@ -367,7 +394,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     setEditUniversityId('');
   };
 
-  // === تعديل رمز QR ===
   const startEditQr = (student: Student) => {
     setEditingQrStudent(student.id);
     setEditQrCodeId(student.qrCodeId || '');
@@ -399,17 +425,14 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     onUpdateStudent(student.id, { qrCodeId: undefined });
   };
 
-  // 🆕 استخراج الكروبات الفريدة للفلتر
   const uniqueGroups = useMemo(() => {
     const groups = Array.from(new Set(students.map(s => s.group).filter(Boolean))) as string[];
     groups.sort(sortGroups);
     return groups;
-  }, [students]);
+  }, [students, sortGroups]);
 
-  // 🆕 فلترة الطلاب (محسّن بـ useMemo)
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
-      // فلتر البحث
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchSearch = (
@@ -422,35 +445,29 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         if (!matchSearch) return false;
       }
 
-      // فلتر الكروب
       if (groupFilter !== 'all' && s.group !== groupFilter) return false;
 
       return true;
     });
   }, [students, searchQuery, groupFilter]);
 
-  // 🆕 Pagination - حساب الصفحات
   const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
 
-  // 🆕 الطلاب في الصفحة الحالية فقط
   const paginatedStudents = useMemo(() => {
     const start = (safeCurrentPage - 1) * pageSize;
     return filteredStudents.slice(start, start + pageSize);
   }, [filteredStudents, safeCurrentPage, pageSize]);
 
-  // 🆕 إعادة تعيين الصفحة عند تغيير البحث/الفلتر
   React.useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, groupFilter, pageSize]);
 
-  // إحصائيات
   const studentsWithUniId = students.filter(s => s.universityId).length;
   const studentsWithoutUniId = students.length - studentsWithUniId;
   const studentsWithQr = students.filter(s => s.qrCodeId).length;
   const studentsWithoutQr = students.length - studentsWithQr;
 
-  // 🆕 حالة التحديد للصفحة الحالية
   const pageIds = paginatedStudents.map(s => s.id);
   const allInPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id));
 
@@ -458,7 +475,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     <div className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-2xl font-bold mb-4 text-gray-800">إدارة الطلاب</h2>
 
-      {/* تنبيه عن رمز QR */}
       {students.length > 0 && studentsWithoutQr > 0 && (
         <div className="mb-3 p-3 bg-emerald-50 border border-emerald-300 rounded-lg flex items-center gap-3">
           <span className="text-2xl">🔳</span>
@@ -473,7 +489,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         </div>
       )}
 
-      {/* تنبيه عن الرقم الجامعي */}
       {students.length > 0 && studentsWithoutUniId > 0 && (
         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-300 rounded-lg flex items-center gap-3">
           <span className="text-2xl">⚠️</span>
@@ -594,28 +609,17 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         )}
       </form>
 
-      {/* قسم الاستيراد من Excel */}
       <div className="mb-6 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg">
         <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
           📂 استيراد الطلاب من ملف Excel
         </h3>
         <div className="mb-4 text-sm text-gray-600 space-y-1">
-          <p>
-            اختر بادئة الكود ثم ارفع الملف. سيتم اكتشاف الحقول التالية تلقائياً:
-          </p>
+          <p>اختر بادئة الكود ثم ارفع الملف. سيتم اكتشاف الحقول التالية تلقائياً:</p>
           <div className="flex flex-wrap gap-2 mt-2">
-            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
-              📝 الاسم
-            </span>
-            <span className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs font-medium">
-              👥 الكروب (A1, B2, ...)
-            </span>
-            <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-medium">
-              🪪 الرقم الجامعي (8-15 رقم)
-            </span>
-            <span className="px-2 py-1 bg-emerald-100 text-emerald-800 rounded text-xs font-medium">
-              🔳 رمز QR (رابط الوزارة الكامل)
-            </span>
+            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">📝 الاسم</span>
+            <span className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs font-medium">👥 الكروب (A1, B2, ...)</span>
+            <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-medium">🪪 الرقم الجامعي (8-15 رقم)</span>
+            <span className="px-2 py-1 bg-emerald-100 text-emerald-800 rounded text-xs font-medium">🔳 رمز QR (رابط الوزارة الكامل)</span>
           </div>
           <p className="text-xs text-emerald-700 mt-2 bg-emerald-50 p-2 rounded border border-emerald-200">
             💡 <strong>نصيحة:</strong> الصق الرابط الكامل من هوية الوزارة بأي عمود، وسيتم استخراج رمز QR تلقائياً لكل طالب.
@@ -623,9 +627,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            اختر بادئة الكود:
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">اختر بادئة الكود:</label>
           <div className="flex flex-wrap gap-2">
             {[1, 2, 3, 4, 5].map((num) => (
               <button
@@ -674,7 +676,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         )}
       </div>
 
-      {/* أزرار الترتيب */}
       {students.length > 1 && (onSortByName || onSortByGroup) && (
         <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg">
           <h3 className="text-sm font-bold text-purple-800 mb-3 flex items-center gap-2">
@@ -709,10 +710,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         </div>
       )}
 
-      {/* 🆕 شريط البحث والفلتر */}
       {students.length > 0 && (
         <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-          {/* البحث */}
           <div className="md:col-span-2 relative">
             <input
               type="text"
@@ -732,7 +731,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             )}
           </div>
 
-          {/* فلتر الكروب */}
           {uniqueGroups.length > 0 && (
             <select
               value={groupFilter}
@@ -756,7 +754,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         </p>
       )}
 
-      {/* شريط الحذف الجماعي */}
       {selectedIds.size > 0 && (
         <div className="mb-4 p-4 bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-300 rounded-lg flex items-center justify-between flex-wrap gap-3">
           <div className="text-orange-800 font-medium">
@@ -788,7 +785,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         </div>
       )}
 
-      {/* 🆕 شريط Pagination العلوي */}
       {filteredStudents.length > pageSize && (
         <div className="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2 text-sm">
@@ -916,7 +912,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                       )}
                     </td>
 
-                    {/* الرقم الجامعي */}
                     <td className="px-4 py-4 whitespace-nowrap text-right">
                       {editingUniIdStudent === student.id ? (
                         <div className="flex items-center gap-1">
@@ -968,7 +963,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                       )}
                     </td>
 
-                    {/* رمز QR */}
                     <td className="px-4 py-4 whitespace-nowrap text-right">
                       {editingQrStudent === student.id ? (
                         <div className="flex items-center gap-1">
@@ -1057,7 +1051,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         </table>
       </div>
 
-      {/* 🆕 شريط Pagination السفلي */}
       {filteredStudents.length > pageSize && (
         <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center gap-1 flex-wrap">
           <button
@@ -1075,7 +1068,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             ← السابق
           </button>
 
-          {/* أرقام الصفحات */}
           {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
             let pageNum: number;
             if (totalPages <= 7) {

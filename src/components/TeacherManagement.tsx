@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { ref, get } from 'firebase/database';
-import { database } from '../firebase/config';
 import { 
   createTeacherAccount, 
   updateTeacherPermissions,
   updateTeacherPassword,
-  deleteTeacherAccount 
+  deleteTeacherAccount,
+  reactivateTeacher,
+  getAllTeachers
 } from '../firebase/authService';
 import { User, TeacherPermissions } from '../types/user';
 import { College, Stage } from '../types/student';
@@ -43,27 +43,36 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
   const loadTeachers = async () => {
     try {
-      const snapshot = await get(ref(database, 'users'));
-      if (snapshot.exists()) {
-        const list = Object.values(snapshot.val()).filter(
-          (u: any) => u.role === 'teacher'
-        ) as User[];
-        setTeachers(list);
-      } else {
-        setTeachers([]);
+      // 🆕 استخدام الدالة الجديدة من authService
+      const list = await getAllTeachers(currentUser.uid);
+      
+      // لو الدالة ما رجعت شي، حاول الطريقة القديمة (للتدريسيين القدامى بدون adminId)
+      if (list.length === 0) {
+        const { ref, get } = await import('firebase/database');
+        const { database } = await import('../firebase/config');
+        const snapshot = await get(ref(database, 'users'));
+        if (snapshot.exists()) {
+          const allList = Object.values(snapshot.val()).filter(
+            (u: any) => u.role === 'teacher'
+          ) as User[];
+          setTeachers(allList);
+          return;
+        }
       }
+      
+      setTeachers(list);
     } catch (e) { 
       console.error('Error loading teachers:', e); 
     }
   };
 
-  // ✅ زر إصلاح التدريسيين القدامى
   const handleFixOldTeachers = async () => {
     if (!window.confirm('هذه الأداة ستربط جميع التدريسيين القدامى بحسابك (كأدمن) وتجهزهم لاستقبال الصلاحيات. متابعة؟')) return;
     
     setLoading(true);
     try {
       const { ref: dbRef, update } = await import('firebase/database');
+      const { database } = await import('../firebase/config');
       
       let fixed = 0;
       for (const t of teachers) {
@@ -82,6 +91,12 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
           };
           needsFix = true;
         }
+        // 🆕 تأكد من حقل active
+        if (t.active === undefined) {
+          updates.active = true;
+          updates.lastActivatedAt = new Date().toISOString();
+          needsFix = true;
+        }
         
         if (needsFix) {
           await update(dbRef(database, `users/${t.uid}`), updates);
@@ -98,7 +113,32 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
     }
   };
 
-  // ✅ تبديل صلاحية مرحلة معينة للتدريسي
+  // 🆕 إعادة تفعيل تدريسي معطّل
+  const handleReactivateTeacher = async (teacher: User) => {
+    if (!window.confirm(
+      `🔓 إعادة تفعيل ${teacher.displayName}؟\n\n` +
+      `سيتم تفعيل حسابه بدون صلاحيات.\n` +
+      `بعد ذلك يجب تحديد المراحل المسموحة له من زر "⚙️ الصلاحيات".`
+    )) return;
+    
+    setLoading(true);
+    try {
+      await reactivateTeacher(teacher.uid, {
+        allowedStages: {},
+        canViewRecords: true,
+        canTakeAttendance: true,
+      });
+      
+      setSuccess(`✅ تم تفعيل ${teacher.displayName}. الآن حدد له المراحل من زر "⚙️ الصلاحيات".`);
+      await loadTeachers();
+      setTimeout(() => setSuccess(''), 5000);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleToggleStage = async (
     teacher: User, 
     collegeId: string, 
@@ -137,7 +177,6 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
     }
   };
 
-  // ✅ تحديد جميع مراحل كلية معينة دفعة واحدة
   const handleSelectAllStagesInCollege = async (
     teacher: User, 
     collegeId: string
@@ -166,7 +205,6 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
     }
   };
 
-  // ✅ إلغاء جميع مراحل كلية معينة
   const handleDeselectAllStagesInCollege = async (
     teacher: User, 
     collegeId: string
@@ -190,7 +228,6 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
     }
   };
 
-  // ✅ إنشاء حساب تدريسي
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -227,7 +264,6 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
     }
   };
 
-  // ✅ تغيير كلمة المرور
   const handleOpenPasswordModal = (teacher: User) => {
     setSelectedTeacher(teacher);
     setNewPassword('');
@@ -258,7 +294,6 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
     }
   };
 
-  // ✅ حذف حساب تدريسي
   const handleDeleteTeacher = async (teacher: User) => {
     if (!window.confirm(`⚠️ هل أنت متأكد من حذف حساب ${teacher.displayName}؟\n\nسيتم حذف جميع بياناته نهائياً!`)) {
       return;
@@ -277,19 +312,20 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
     }
   };
 
-  // ✅ عدّ المراحل المسموحة لتدريسي
   const countAllowedStages = (teacher: User): number => {
     if (!teacher.permissions?.allowedStages) return 0;
     return Object.values(teacher.permissions.allowedStages).flat().length;
   };
 
+  // 🆕 إحصائيات
+  const activeTeachers = teachers.filter(t => t.active !== false).length;
+  const deactivatedTeachers = teachers.filter(t => t.active === false).length;
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
-      {/* ✅ رأس الصفحة مع الأزرار */}
       <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
         <h2 className="text-2xl font-bold text-gray-800">👨‍🏫 إدارة التدريسيين وصلاحياتهم</h2>
         <div className="flex gap-2 flex-wrap">
-          {/* ✅ زر إصلاح التدريسيين القدامى */}
           <button
             onClick={handleFixOldTeachers}
             disabled={loading}
@@ -310,6 +346,41 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
         </div>
       </div>
 
+      {/* 🆕 إحصائيات سريعة */}
+      {teachers.length > 0 && (
+        <div className="mb-4 grid grid-cols-3 gap-3">
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-center">
+            <div className="text-2xl font-bold text-blue-700">{teachers.length}</div>
+            <div className="text-xs text-blue-600">إجمالي التدريسيين</div>
+          </div>
+          <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-center">
+            <div className="text-2xl font-bold text-green-700">{activeTeachers}</div>
+            <div className="text-xs text-green-600">✅ مفعّل</div>
+          </div>
+          {deactivatedTeachers > 0 && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-center">
+              <div className="text-2xl font-bold text-red-700">{deactivatedTeachers}</div>
+              <div className="text-xs text-red-600">🔒 معطّل (بعد التصفير)</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 🆕 تنبيه عن التدريسيين المعطّلين */}
+      {deactivatedTeachers > 0 && (
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-300 rounded-lg flex items-center gap-3">
+          <span className="text-2xl">⚠️</span>
+          <div className="flex-1">
+            <p className="text-sm font-bold text-yellow-800">
+              يوجد {deactivatedTeachers} تدريسي معطّل بعد التصفير السنوي
+            </p>
+            <p className="text-xs text-yellow-700">
+              اضغط زر "🔓 إعادة تفعيل" بجانب اسم التدريسي لإعادة تفعيله، ثم حدد له المراحل من "⚙️ الصلاحيات".
+            </p>
+          </div>
+        </div>
+      )}
+
       {success && (
         <div className="p-3 bg-green-100 border border-green-400 text-green-700 rounded mb-4 whitespace-pre-line">
           {success}
@@ -321,7 +392,6 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
         </div>
       )}
 
-      {/* نموذج الإضافة */}
       {showAddForm && (
         <form onSubmit={handleSubmit} className="mb-6 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg">
           <h3 className="text-lg font-bold text-gray-800 mb-4">➕ إضافة تدريسي جديد</h3>
@@ -391,13 +461,13 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
         </form>
       )}
 
-      {/* قائمة التدريسيين */}
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">التدريسي</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الصلاحيات</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">إجراءات</th>
             </tr>
@@ -405,7 +475,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
           <tbody className="bg-white divide-y divide-gray-200">
             {teachers.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
                   لا توجد حسابات تدريسيين بعد
                 </td>
               </tr>
@@ -413,8 +483,16 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
               teachers.map(t => {
                 const allowedCount = countAllowedStages(t);
                 const isOldTeacher = !t.adminId || !t.permissions;
+                const isDeactivated = t.active === false;
+                
                 return (
-                  <tr key={t.uid} className={`hover:bg-gray-50 ${isOldTeacher ? 'bg-yellow-50' : ''}`}>
+                  <tr 
+                    key={t.uid} 
+                    className={`hover:bg-gray-50 ${
+                      isDeactivated ? 'bg-red-50' : 
+                      isOldTeacher ? 'bg-yellow-50' : ''
+                    }`}
+                  >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center overflow-hidden">
@@ -438,6 +516,20 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600" dir="ltr">{t.email}</td>
+                    
+                    {/* 🆕 عمود الحالة */}
+                    <td className="px-6 py-4 text-sm">
+                      {isDeactivated ? (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full bg-red-100 text-red-700 font-medium text-xs">
+                          🔒 معطّل
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium text-xs">
+                          ✅ مفعّل
+                        </span>
+                      )}
+                    </td>
+                    
                     <td className="px-6 py-4 text-sm">
                       {allowedCount === 0 ? (
                         <span className="inline-flex items-center px-3 py-1 rounded-full bg-red-100 text-red-700 font-medium">
@@ -451,6 +543,17 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
                     </td>
                     <td className="px-6 py-4 text-sm">
                       <div className="flex flex-wrap gap-2">
+                        {/* 🆕 زر إعادة التفعيل للمعطّلين */}
+                        {isDeactivated && (
+                          <button
+                            onClick={() => handleReactivateTeacher(t)}
+                            disabled={loading}
+                            className="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded font-medium"
+                          >
+                            🔓 إعادة تفعيل
+                          </button>
+                        )}
+                        
                         <button 
                           onClick={() => { 
                             setSelectedTeacher(t); 
@@ -483,7 +586,6 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
         </table>
       </div>
 
-      {/* ✅ مودال الصلاحيات */}
       {showPermissionModal && selectedTeacher && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
@@ -590,7 +692,6 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
         </div>
       )}
 
-      {/* ✅ مودال تغيير كلمة المرور */}
       {showPasswordModal && selectedTeacher && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
@@ -651,6 +752,8 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
         💡 <strong>كيف تعمل الصلاحيات:</strong> لما تحدد مراحل لتدريسي، راح يشوف فقط هذي المراحل وطلابها. ما يقدر يضيف أو يحذف الطلاب - فقط يسجل الحضور.
         <br />
         🔧 إذا عندك تدريسيين قدامى ما يطلعلهم زر "الصلاحيات" يشتغل، اضغط على زر <strong>"إصلاح التدريسيين القدامى"</strong> أولاً.
+        <br />
+        🔓 إذا تدريسي ظهر بحالة "معطّل" بعد التصفير السنوي، اضغط <strong>"إعادة تفعيل"</strong> ثم حدد له المراحل الجديدة.
       </div>
     </div>
   );

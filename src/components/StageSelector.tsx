@@ -15,13 +15,11 @@ export const StageSelector: React.FC<StageSelectorProps> = ({
   stages,
   onSelect,
 }) => {
-  // تصفية الكليات والمراحل حسب صلاحية التدريسي
   const getAllowedStages = (collegeId: string) => {
     const collegeStages = stages.filter(s => s.collegeId === collegeId);
     
     if (user.role === 'admin') return collegeStages;
     
-    // إذا كان تدريسي، نشوف الصلاحيات
     const allowedIds = user.permissions?.allowedStages[collegeId] || [];
     return collegeStages.filter(s => allowedIds.includes(s.id));
   };
@@ -30,6 +28,32 @@ export const StageSelector: React.FC<StageSelectorProps> = ({
     if (user.role === 'admin') return true;
     return !!user.permissions?.allowedStages[college.id];
   });
+
+  // 🆕 رسالة خاصة للتدريسي المعطّل (بعد التصفير)
+  if (user.role === 'teacher' && user.active === false) {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-12 text-center">
+        <div className="text-6xl mb-4">🔒</div>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">
+          حسابك معطّل حالياً
+        </h2>
+        <div className="max-w-md mx-auto space-y-3">
+          <p className="text-gray-600">
+            تم تعطيل حسابك بعد تصفير السنة الأكاديمية الماضية.
+          </p>
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
+            <p className="font-bold mb-2">📞 للمتابعة:</p>
+            <p>يرجى التواصل مع الأدمن لإعادة تفعيل حسابك وتحديد المراحل المسموح لك بالوصول إليها للسنة الأكاديمية الجديدة.</p>
+          </div>
+          {user.deactivatedAt && (
+            <p className="text-xs text-gray-400">
+              تاريخ التعطيل: {new Date(user.deactivatedAt).toLocaleDateString('ar')}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (allowedColleges.length === 0) {
     return (

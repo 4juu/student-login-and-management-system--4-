@@ -4,23 +4,82 @@ import { Student, AttendanceRecord, AttendanceSession, Stage, College } from "..
 import { User } from "../types/user";
 
 // ============================================================
-// 🔑 المسارات
+// 🎓 ACADEMIC YEAR MANAGEMENT
 // ============================================================
-const getStagePath = (adminUid: string, stageId: string, sub: string) =>
-  `userData/${adminUid}/stageData/${stageId}/${sub}`;
+// السنة الأكاديمية تبدأ من سبتمبر وتنتهي في أغسطس
+// مثال: من سبتمبر 2024 إلى أغسطس 2025 = "2024_2025"
+// ============================================================
+
+export const getCurrentAcademicYear = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+  
+  // إذا كنا في سبتمبر أو بعده، السنة الأكاديمية = السنة الحالية_السنة القادمة
+  // إذا كنا قبل سبتمبر، السنة الأكاديمية = السنة الماضية_السنة الحالية
+  if (month >= 9) {
+    return `${year}_${year + 1}`;
+  } else {
+    return `${year - 1}_${year}`;
+  }
+};
+
+// 🆕 الحصول على السنة الأكاديمية المحفوظة (أو الحالية)
+let _cachedAcademicYear: string | null = null;
+
+export const getActiveAcademicYear = async (): Promise<string> => {
+  if (_cachedAcademicYear) return _cachedAcademicYear;
+  
+  try {
+    const snap = await get(ref(database, 'system/metadata/currentAcademicYear'));
+    if (snap.exists()) {
+      _cachedAcademicYear = snap.val();
+      return _cachedAcademicYear!;
+    }
+  } catch {}
+  
+  // إذا ما موجودة، احفظ السنة الحالية
+  const current = getCurrentAcademicYear();
+  try {
+    await set(ref(database, 'system/metadata/currentAcademicYear'), current);
+  } catch {}
+  
+  _cachedAcademicYear = current;
+  return current;
+};
+
+// 🆕 تحديث السنة الأكاديمية (يستخدم عند التصفير)
+const setActiveAcademicYear = async (year: string): Promise<void> => {
+  _cachedAcademicYear = year;
+  await set(ref(database, 'system/metadata/currentAcademicYear'), year);
+};
+
+// ============================================================
+// 🔑 المسارات (الآن تحت academicYears)
+// ============================================================
+
+const getYearBasePath = (year: string, adminUid: string) =>
+  `academicYears/${year}/userData/${adminUid}`;
+
+const getStagePath = (year: string, adminUid: string, stageId: string, sub: string) =>
+  `${getYearBasePath(year, adminUid)}/stageData/${stageId}/${sub}`;
 
 const getTeacherDataPath = (
+  year: string,
   adminUid: string,
   stageId: string,
   teacherId: string,
   sub: string
-) => `userData/${adminUid}/stageData/${stageId}/teacherRecords/${teacherId}/${sub}`;
+) => `${getYearBasePath(year, adminUid)}/stageData/${stageId}/teacherRecords/${teacherId}/${sub}`;
 
-const getCollegesPath = (adminUid: string) => `userData/${adminUid}/colleges`;
-const getStagesPath = (adminUid: string) => `userData/${adminUid}/stages`;
+const getCollegesPath = (year: string, adminUid: string) => 
+  `${getYearBasePath(year, adminUid)}/colleges`;
+
+const getStagesPath = (year: string, adminUid: string) => 
+  `${getYearBasePath(year, adminUid)}/stages`;
 
 // ============================================================
-// 💾 LOCAL STORAGE
+// 💾 LOCAL STORAGE (نفس الكود السابق)
 // ============================================================
 const LS = {
   colleges: (uid: string) => `colleges_${uid}`,
@@ -48,28 +107,21 @@ const isDangerousEmpty = (newData: unknown[], localData: unknown[]): boolean => 
 };
 
 // ============================================================
-// ⏱️ DEBOUNCED SAVES (تقليل عمليات الكتابة بـ 80%)
-// ============================================================
-// الفكرة: بدل ما نرفع كل تعديل صغير لـ Firebase فوراً،
-// ننتظر 2 ثانية، ولو إجى تعديل ثاني نلغي القديم.
-// هذا يقلل كتابات Firebase بشكل كبير ويوفر Bandwidth.
+// ⏱️ DEBOUNCED SAVES (نفس الكود السابق)
 // ============================================================
 
-const SAVE_DELAY = 2000; // 2 ثانية
+const SAVE_DELAY = 2000;
 const pendingSaves = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingSaveFunctions = new Map<string, () => Promise<void>>();
 
 const debouncedSave = (key: string, saveFn: () => Promise<void>): void => {
-  // ألغِ الحفظ السابق المعلق
   const existing = pendingSaves.get(key);
   if (existing) {
     clearTimeout(existing);
   }
 
-  // احفظ الدالة الأحدث
   pendingSaveFunctions.set(key, saveFn);
 
-  // اجدول حفظ جديد
   const timeout = setTimeout(async () => {
     pendingSaves.delete(key);
     const fn = pendingSaveFunctions.get(key);
@@ -88,7 +140,6 @@ const debouncedSave = (key: string, saveFn: () => Promise<void>): void => {
   pendingSaves.set(key, timeout);
 };
 
-// 🆕 احفظ كل التعديلات المعلقة فوراً (يستدعى قبل المغادرة/تسجيل الخروج)
 export const flushAllPendingSaves = async (): Promise<void> => {
   const keys = Array.from(pendingSaves.keys());
   if (keys.length === 0) return;
@@ -113,15 +164,12 @@ export const flushAllPendingSaves = async (): Promise<void> => {
   }
 };
 
-// 🆕 احفظ كل التعديلات المعلقة قبل إغلاق الصفحة
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => {
-    // نلغي الـ timers ونحفظ مباشرة (sync)
     pendingSaves.forEach((timeout, key) => {
       clearTimeout(timeout);
       const fn = pendingSaveFunctions.get(key);
       if (fn) {
-        // محاولة سريعة للحفظ (قد لا تنجح بسبب إغلاق الصفحة)
         fn().catch(() => {});
       }
     });
@@ -131,7 +179,7 @@ if (typeof window !== 'undefined') {
 }
 
 // ============================================================
-// 🏛️ COLLEGES (مشترك - مع Debounce)
+// 🏛️ COLLEGES
 // ============================================================
 
 export const saveColleges = async (
@@ -147,14 +195,14 @@ export const saveColleges = async (
     }
   }
 
-  // ✅ احفظ محلياً فوراً
   saveLocal(LS.colleges(adminUid), colleges);
 
-  // ⏱️ ارفع لـ Firebase بتأخير
+  const year = await getActiveAcademicYear();
   const saveKey = `colleges_${adminUid}`;
+  
   debouncedSave(saveKey, async () => {
     try {
-      await set(ref(database, getCollegesPath(adminUid)), colleges);
+      await set(ref(database, getCollegesPath(year, adminUid)), colleges);
     } catch (e) {
       console.warn('⚠️ فشل حفظ الكليات:', e);
     }
@@ -164,7 +212,8 @@ export const saveColleges = async (
 export const loadColleges = async (adminUid: string): Promise<College[]> => {
   const local = loadLocal<College[]>(LS.colleges(adminUid), []);
   try {
-    const snap = await get(ref(database, getCollegesPath(adminUid)));
+    const year = await getActiveAcademicYear();
+    const snap = await get(ref(database, getCollegesPath(year, adminUid)));
     if (snap.exists()) {
       const data = snap.val();
       const arr: College[] = Array.isArray(data) ? data : Object.values(data);
@@ -178,7 +227,7 @@ export const loadColleges = async (adminUid: string): Promise<College[]> => {
 };
 
 // ============================================================
-// 📖 STAGES (مشترك - مع Debounce)
+// 📖 STAGES
 // ============================================================
 
 export const saveStages = async (
@@ -196,10 +245,12 @@ export const saveStages = async (
 
   saveLocal(LS.stages(adminUid), stages);
 
+  const year = await getActiveAcademicYear();
   const saveKey = `stages_${adminUid}`;
+  
   debouncedSave(saveKey, async () => {
     try {
-      await set(ref(database, getStagesPath(adminUid)), stages);
+      await set(ref(database, getStagesPath(year, adminUid)), stages);
     } catch (e) {
       console.warn('⚠️ فشل حفظ المراحل:', e);
     }
@@ -209,7 +260,8 @@ export const saveStages = async (
 export const loadStages = async (adminUid: string): Promise<Stage[]> => {
   const local = loadLocal<Stage[]>(LS.stages(adminUid), []);
   try {
-    const snap = await get(ref(database, getStagesPath(adminUid)));
+    const year = await getActiveAcademicYear();
+    const snap = await get(ref(database, getStagesPath(year, adminUid)));
     if (snap.exists()) {
       const data = snap.val();
       const arr: Stage[] = Array.isArray(data) ? data : Object.values(data);
@@ -223,7 +275,7 @@ export const loadStages = async (adminUid: string): Promise<Stage[]> => {
 };
 
 // ============================================================
-// 👥 STUDENTS (مشترك - مع Debounce)
+// 👥 STUDENTS
 // ============================================================
 
 export const saveStudents = async (
@@ -242,10 +294,12 @@ export const saveStudents = async (
 
   saveLocal(LS.students(adminUid, stageId), students);
 
+  const year = await getActiveAcademicYear();
   const saveKey = `students_${adminUid}_${stageId}`;
+  
   debouncedSave(saveKey, async () => {
     try {
-      await set(ref(database, getStagePath(adminUid, stageId, 'students')), students);
+      await set(ref(database, getStagePath(year, adminUid, stageId, 'students')), students);
     } catch (e) {
       console.warn('⚠️ فشل حفظ الطلاب:', e);
     }
@@ -255,7 +309,8 @@ export const saveStudents = async (
 export const loadStudents = async (adminUid: string, stageId: string): Promise<Student[]> => {
   const local = loadLocal<Student[]>(LS.students(adminUid, stageId), []);
   try {
-    const snap = await get(ref(database, getStagePath(adminUid, stageId, 'students')));
+    const year = await getActiveAcademicYear();
+    const snap = await get(ref(database, getStagePath(year, adminUid, stageId, 'students')));
     if (snap.exists()) {
       const data = snap.val();
       const arr: Student[] = Array.isArray(data) ? data : Object.values(data);
@@ -269,7 +324,7 @@ export const loadStudents = async (adminUid: string, stageId: string): Promise<S
 };
 
 // ============================================================
-// 📝 ATTENDANCE RECORDS (منفصل لكل تدريسي - مع Debounce)
+// 📝 ATTENDANCE RECORDS (مع الضغط الذكي التلقائي)
 // ============================================================
 
 export const saveAttendanceRecords = async (
@@ -289,13 +344,21 @@ export const saveAttendanceRecords = async (
 
   saveLocal(LS.records(adminUid, stageId, teacherId), records);
 
+  const year = await getActiveAcademicYear();
   const saveKey = `records_${adminUid}_${stageId}_${teacherId}`;
+  
   debouncedSave(saveKey, async () => {
     try {
+      // 🆕 استخدم الضغط الذكي تلقائياً
+      const { compressRecord } = await import('./dataServiceCompressed');
+      const compressed = records.map(compressRecord);
+      
       await set(
-        ref(database, getTeacherDataPath(adminUid, stageId, teacherId, 'records')),
-        records
+        ref(database, `${getYearBasePath(year, adminUid)}/stageData/${stageId}/teacherRecords/${teacherId}/recordsCompressed`),
+        compressed
       );
+      
+      console.log(`💾 حفظ مضغوط: ${records.length} سجل`);
     } catch (e) {
       console.warn('⚠️ فشل حفظ السجلات:', e);
     }
@@ -309,15 +372,32 @@ export const loadAttendanceRecords = async (
 ): Promise<AttendanceRecord[]> => {
   const local = loadLocal<AttendanceRecord[]>(LS.records(adminUid, stageId, teacherId), []);
   try {
-    const snap = await get(
-      ref(database, getTeacherDataPath(adminUid, stageId, teacherId, 'records'))
+    const year = await getActiveAcademicYear();
+    
+    // 🆕 جرب الصيغة المضغوطة أولاً
+    const compressedPath = `${getYearBasePath(year, adminUid)}/stageData/${stageId}/teacherRecords/${teacherId}/recordsCompressed`;
+    const compressedSnap = await get(ref(database, compressedPath));
+    
+    if (compressedSnap.exists()) {
+      const { decompressRecord } = await import('./dataServiceCompressed');
+      const data = compressedSnap.val();
+      const compressed = Array.isArray(data) ? data : Object.values(data);
+      const decompressed = compressed.map((c: any) => decompressRecord(c));
+      saveLocal(LS.records(adminUid, stageId, teacherId), decompressed);
+      return decompressed;
+    }
+    
+    // إذا ما لگى مضغوط، جرب القديم (للتوافق العكسي)
+    const oldSnap = await get(
+      ref(database, getTeacherDataPath(year, adminUid, stageId, teacherId, 'records'))
     );
-    if (snap.exists()) {
-      const data = snap.val();
+    if (oldSnap.exists()) {
+      const data = oldSnap.val();
       const arr: AttendanceRecord[] = Array.isArray(data) ? data : Object.values(data);
       saveLocal(LS.records(adminUid, stageId, teacherId), arr);
       return arr;
     }
+    
     return local;
   } catch {
     return local;
@@ -325,7 +405,7 @@ export const loadAttendanceRecords = async (
 };
 
 // ============================================================
-// 📅 SESSIONS (منفصل لكل تدريسي - مع Debounce)
+// 📅 SESSIONS
 // ============================================================
 
 export const saveSessions = async (
@@ -345,11 +425,13 @@ export const saveSessions = async (
 
   saveLocal(LS.sessions(adminUid, stageId, teacherId), sessions);
 
+  const year = await getActiveAcademicYear();
   const saveKey = `sessions_${adminUid}_${stageId}_${teacherId}`;
+  
   debouncedSave(saveKey, async () => {
     try {
       await set(
-        ref(database, getTeacherDataPath(adminUid, stageId, teacherId, 'sessions')),
+        ref(database, getTeacherDataPath(year, adminUid, stageId, teacherId, 'sessions')),
         sessions
       );
     } catch (e) {
@@ -365,8 +447,9 @@ export const loadSessions = async (
 ): Promise<AttendanceSession[]> => {
   const local = loadLocal<AttendanceSession[]>(LS.sessions(adminUid, stageId, teacherId), []);
   try {
+    const year = await getActiveAcademicYear();
     const snap = await get(
-      ref(database, getTeacherDataPath(adminUid, stageId, teacherId, 'sessions'))
+      ref(database, getTeacherDataPath(year, adminUid, stageId, teacherId, 'sessions'))
     );
     if (snap.exists()) {
       const data = snap.val();
@@ -381,7 +464,7 @@ export const loadSessions = async (
 };
 
 // ============================================================
-// 🎯 ACTIVE SESSION (فوري - مهم وسريع، بدون Debounce)
+// 🎯 ACTIVE SESSION (فوري بدون Debounce)
 // ============================================================
 
 export const saveActiveSession = async (
@@ -392,14 +475,15 @@ export const saveActiveSession = async (
 ): Promise<void> => {
   saveLocal(LS.activeSession(adminUid, stageId, teacherId), sessionId);
   try {
+    const year = await getActiveAcademicYear();
     if (sessionId) {
       await set(
-        ref(database, getTeacherDataPath(adminUid, stageId, teacherId, 'activeSession')),
+        ref(database, getTeacherDataPath(year, adminUid, stageId, teacherId, 'activeSession')),
         sessionId
       );
     } else {
       await remove(
-        ref(database, getTeacherDataPath(adminUid, stageId, teacherId, 'activeSession'))
+        ref(database, getTeacherDataPath(year, adminUid, stageId, teacherId, 'activeSession'))
       );
     }
   } catch (e) {
@@ -414,8 +498,9 @@ export const loadActiveSession = async (
 ): Promise<string | null> => {
   const local = loadLocal<string | null>(LS.activeSession(adminUid, stageId, teacherId), null);
   try {
+    const year = await getActiveAcademicYear();
     const snap = await get(
-      ref(database, getTeacherDataPath(adminUid, stageId, teacherId, 'activeSession'))
+      ref(database, getTeacherDataPath(year, adminUid, stageId, teacherId, 'activeSession'))
     );
     if (snap.exists()) {
       const value = snap.val();
@@ -452,7 +537,6 @@ export const loadStageData = async (
 
 export const deleteStageData = async (adminUid: string, stageId: string): Promise<void> => {
   try {
-    // ألغِ أي حفظ معلق لهذه المرحلة
     const keysToCancel: string[] = [];
     pendingSaves.forEach((_, key) => {
       if (key.includes(stageId)) keysToCancel.push(key);
@@ -464,7 +548,8 @@ export const deleteStageData = async (adminUid: string, stageId: string): Promis
       pendingSaveFunctions.delete(key);
     });
 
-    await remove(ref(database, `userData/${adminUid}/stageData/${stageId}`));
+    const year = await getActiveAcademicYear();
+    await remove(ref(database, `${getYearBasePath(year, adminUid)}/stageData/${stageId}`));
     localStorage.removeItem(LS.students(adminUid, stageId));
 
     Object.keys(localStorage).forEach((k) => {
@@ -483,7 +568,7 @@ export const deleteStageData = async (adminUid: string, stageId: string): Promis
 };
 
 // ============================================================
-// 👤 USER PROFILE
+// 👤 USER PROFILE (تبقى تحت /users/ مباشرة - مو تحت السنة)
 // ============================================================
 
 export const saveUserProfile = async (uid: string, profileData: Partial<User>): Promise<void> => {
@@ -508,7 +593,6 @@ export const loadUserProfile = async (uid: string): Promise<User | null> => {
 };
 
 export const saveUserData = async (uid: string, userData: User): Promise<void> => {
-  // ✅ User data نادراً ما يتغير - استخدم Debounce خفيف (3 ثواني)
   const saveKey = `user_${uid}`;
 
   const existing = pendingSaves.get(saveKey);
@@ -541,4 +625,269 @@ export const saveUserData = async (uid: string, userData: User): Promise<void> =
 
 export const syncPendingChanges = async (_uid: string): Promise<void> => {
   await flushAllPendingSaves();
+};
+
+// ============================================================
+// 🆕 BACKUP & RESET (للتصفير السنوي)
+// ============================================================
+
+/**
+ * 💾 تحميل نسخة احتياطية كاملة للسنة الحالية كملف JSON
+ * يُنصح بتشغيلها قبل أي تصفير!
+ */
+export const downloadBackup = async (adminUid: string): Promise<void> => {
+  try {
+    console.log('📦 جاري إنشاء نسخة احتياطية...');
+    
+    const year = await getActiveAcademicYear();
+    const snap = await get(ref(database, getYearBasePath(year, adminUid)));
+    
+    if (!snap.exists()) {
+      alert('⚠️ لا توجد بيانات للنسخ الاحتياطي');
+      return;
+    }
+    
+    const backupData = {
+      academicYear: year,
+      backupDate: new Date().toISOString(),
+      adminUid,
+      data: snap.val()
+    };
+    
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], {
+      type: 'application/json'
+    });
+    
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `backup_${year}_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    console.log('✅ تم تحميل النسخة الاحتياطية');
+  } catch (e) {
+    console.error('❌ فشل إنشاء النسخة الاحتياطية:', e);
+    throw new Error('فشل إنشاء النسخة الاحتياطية');
+  }
+};
+
+/**
+ * 🔄 تصفير السنة الأكاديمية
+ * - يحذف كل البيانات الأكاديمية (طلاب، حضور، جلسات، كليات، مراحل)
+ * - يحتفظ بحسابات التدريسيين لكن يعطّل صلاحياتهم
+ * - يبدأ سنة أكاديمية جديدة
+ * 
+ * ⚠️ تحذير: هذه العملية لا يمكن التراجع عنها!
+ */
+export const resetAcademicYear = async (
+  adminUid: string,
+  options: {
+    downloadBackupFirst?: boolean;
+    deactivateTeachers?: boolean;
+  } = {}
+): Promise<{ oldYear: string; newYear: string }> => {
+  const { downloadBackupFirst = true, deactivateTeachers = true } = options;
+  
+  try {
+    console.log('🔄 بدء عملية التصفير السنوي...');
+    
+    // 1️⃣ احفظ نسخة احتياطية أولاً
+    if (downloadBackupFirst) {
+      await downloadBackup(adminUid);
+    }
+    
+    // 2️⃣ احفظ كل التعديلات المعلقة
+    await flushAllPendingSaves();
+    
+    // 3️⃣ احصل على السنة الحالية والقادمة
+    const oldYear = await getActiveAcademicYear();
+    const newYear = getNextAcademicYear(oldYear);
+    
+    console.log(`🗓️ التصفير من ${oldYear} إلى ${newYear}`);
+    
+    // 4️⃣ احذف كل بيانات السنة القديمة من Firebase
+    await remove(ref(database, `academicYears/${oldYear}`));
+    console.log('✅ تم حذف بيانات السنة القديمة');
+    
+    // 5️⃣ تعطيل صلاحيات كل التدريسيين (الحسابات تبقى)
+    if (deactivateTeachers) {
+      await deactivateAllTeachers(adminUid);
+    }
+    
+    // 6️⃣ امسح LocalStorage بالكامل (إلا الإعدادات الشخصية)
+    clearAllLocalData(adminUid);
+    
+    // 7️⃣ حدّث السنة الأكاديمية الحالية
+    await setActiveAcademicYear(newYear);
+    
+    // 8️⃣ سجّل عملية التصفير
+    await set(ref(database, `system/metadata/lastReset`), {
+      from: oldYear,
+      to: newYear,
+      resetAt: new Date().toISOString(),
+      resetBy: adminUid
+    });
+    
+    console.log('✅ تم التصفير بنجاح!');
+    
+    return { oldYear, newYear };
+  } catch (e) {
+    console.error('❌ فشل التصفير:', e);
+    throw new Error('فشل التصفير السنوي. تأكد من اتصالك بالإنترنت.');
+  }
+};
+
+/**
+ * 🔢 حساب السنة الأكاديمية القادمة
+ * مثال: "2024_2025" → "2025_2026"
+ */
+const getNextAcademicYear = (currentYear: string): string => {
+  const [start, end] = currentYear.split('_').map(Number);
+  return `${start + 1}_${end + 1}`;
+};
+
+/**
+ * 🚫 تعطيل كل التدريسيين (يبقون مسجّلين لكن بدون صلاحيات)
+ */
+const deactivateAllTeachers = async (adminUid: string): Promise<void> => {
+  try {
+    const usersSnap = await get(ref(database, 'users'));
+    if (!usersSnap.exists()) return;
+    
+    const allUsers = usersSnap.val();
+    const updates: { [key: string]: any } = {};
+    const now = new Date().toISOString();
+    
+    Object.entries(allUsers).forEach(([uid, user]: [string, any]) => {
+      // عطّل التدريسيين فقط (مو الأدمن)
+      if (user.role === 'teacher' && user.adminId === adminUid) {
+        updates[`users/${uid}/active`] = false;
+        updates[`users/${uid}/deactivatedAt`] = now;
+        updates[`users/${uid}/permissions`] = {
+          allowedStages: {},
+          canViewRecords: false,
+          canTakeAttendance: false
+        };
+      }
+    });
+    
+    if (Object.keys(updates).length > 0) {
+      await update(ref(database), updates);
+      console.log(`✅ تم تعطيل ${Object.keys(updates).length / 3} تدريسي`);
+    }
+  } catch (e) {
+    console.warn('⚠️ فشل تعطيل التدريسيين:', e);
+  }
+};
+
+/**
+ * 🧹 مسح كل البيانات المحلية (LocalStorage)
+ */
+const clearAllLocalData = (adminUid: string): void => {
+  const keysToRemove: string[] = [];
+  
+  Object.keys(localStorage).forEach((key) => {
+    if (
+      key.startsWith(`colleges_${adminUid}`) ||
+      key.startsWith(`stages_${adminUid}`) ||
+      key.startsWith(`students_${adminUid}_`) ||
+      key.startsWith(`records_${adminUid}_`) ||
+      key.startsWith(`sessions_${adminUid}_`) ||
+      key.startsWith(`activeSession_${adminUid}_`)
+    ) {
+      keysToRemove.push(key);
+    }
+  });
+  
+  keysToRemove.forEach(k => localStorage.removeItem(k));
+  console.log(`🧹 تم مسح ${keysToRemove.length} عنصر من LocalStorage`);
+};
+
+// ============================================================
+// 📊 STATISTICS (لمراقبة حجم البيانات والفاتورة)
+// ============================================================
+
+export const getDatabaseStats = async (adminUid: string): Promise<{
+  academicYear: string;
+  totalSizeKB: number;
+  collegesCount: number;
+  stagesCount: number;
+  totalStudents: number;
+  totalRecords: number;
+  totalSessions: number;
+}> => {
+  try {
+    const year = await getActiveAcademicYear();
+    const snap = await get(ref(database, getYearBasePath(year, adminUid)));
+    
+    if (!snap.exists()) {
+      return {
+        academicYear: year,
+        totalSizeKB: 0,
+        collegesCount: 0,
+        stagesCount: 0,
+        totalStudents: 0,
+        totalRecords: 0,
+        totalSessions: 0
+      };
+    }
+    
+    const data = snap.val();
+    const jsonStr = JSON.stringify(data);
+    const sizeKB = Math.round(jsonStr.length / 1024);
+    
+    const colleges = data.colleges ? (Array.isArray(data.colleges) ? data.colleges.length : Object.keys(data.colleges).length) : 0;
+    const stages = data.stages ? (Array.isArray(data.stages) ? data.stages.length : Object.keys(data.stages).length) : 0;
+    
+    let totalStudents = 0;
+    let totalRecords = 0;
+    let totalSessions = 0;
+    
+    if (data.stageData) {
+      Object.values(data.stageData).forEach((stage: any) => {
+        if (stage.students) {
+          totalStudents += Array.isArray(stage.students) ? stage.students.length : Object.keys(stage.students).length;
+        }
+        if (stage.teacherRecords) {
+          Object.values(stage.teacherRecords).forEach((teacher: any) => {
+            if (teacher.records) {
+              totalRecords += Array.isArray(teacher.records) ? teacher.records.length : Object.keys(teacher.records).length;
+            }
+            if (teacher.sessions) {
+              totalSessions += Array.isArray(teacher.sessions) ? teacher.sessions.length : Object.keys(teacher.sessions).length;
+            }
+          });
+        }
+      });
+    }
+    
+    return {
+      academicYear: year,
+      totalSizeKB: sizeKB,
+      collegesCount: colleges,
+      stagesCount: stages,
+      totalStudents,
+      totalRecords,
+      totalSessions
+    };
+  } catch (e) {
+    console.error('❌ فشل جلب الإحصائيات:', e);
+    throw e;
+  }
+};
+
+/**
+ * 📋 عرض كل السنوات الأكاديمية الموجودة
+ */
+export const listAllAcademicYears = async (): Promise<string[]> => {
+  try {
+    const snap = await get(ref(database, 'academicYears'));
+    if (!snap.exists()) return [];
+    return Object.keys(snap.val()).sort().reverse();
+  } catch {
+    return [];
+  }
 };

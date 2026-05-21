@@ -9,20 +9,22 @@ export interface User {
   photoURL?: string;
   bio?: string;
   
-  // ✅ جديد: للتدريسي - الصلاحيات
-  adminId?: string; // الأدمن اللي يتبعه
-  permissions?: TeacherPermissions; // صلاحياته
+  // للتدريسي - الصلاحيات
+  adminId?: string;
+  permissions?: TeacherPermissions;
+  
+  // 🆕 حالة التفعيل (للتصفير السنوي)
+  active?: boolean; // true = مفعّل، false = معطّل بعد التصفير
+  lastActivatedAt?: string; // تاريخ آخر تفعيل
+  deactivatedAt?: string; // تاريخ التعطيل
 }
 
-// ✅ جديد: صلاحيات التدريسي
 export interface TeacherPermissions {
-  // الكليات والمراحل المسموح بها
-  // مثال: { "college1": ["stage1", "stage2"], "college2": ["stage3"] }
   allowedStages: {
-    [collegeId: string]: string[]; // قائمة معرّفات المراحل المسموح بها
+    [collegeId: string]: string[];
   };
-  canViewRecords: boolean; // يكدر يشوف سجل الحضور
-  canTakeAttendance: boolean; // يكدر يسجل حضور
+  canViewRecords: boolean;
+  canTakeAttendance: boolean;
 }
 
 export interface TeacherAccount {
