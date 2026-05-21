@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { AttendanceSession, Student } from '../types/student';
 
 interface QRAttendanceProps {
@@ -20,105 +20,65 @@ interface ToastMessage {
   student?: Student;
 }
 
-const QR_REGION_ID = 'qr-reader-fast-attendance';
-const DUPLICATE_BLOCK_MS = 60_000;
-const REFOCUS_INTERVAL_MS = 2000;
+const QR_REGION_ID = 'qr-reader-region';
+const DUPLICATE_BLOCK_MS = 30_000;
 
-const extractQrCodeId = (decodedText: string): string | null => {
-  const raw = decodedText.trim();
+/* ─── استخراج معرف QR ─── */
+const extractQrCodeId = (text: string): string | null => {
+  const raw = text.trim();
+  // محاولة URL
   try {
     const url = new URL(raw);
     const id = url.searchParams.get('id');
     if (id) return id.trim();
   } catch {}
+  // محاولة JSON
   try {
     const obj = JSON.parse(raw);
-    const possible =
-      obj.qrCodeId || obj.qrId || obj.id || obj.studentId ||
-      obj.universityId || obj.code;
-    if (possible) return String(possible).trim();
+    const val = obj.qrCodeId || obj.qrId || obj.id || obj.studentId || obj.universityId || obj.code;
+    if (val) return String(val).trim();
   } catch {}
-  if (/^[A-Za-z0-9_-]{5,100}$/.test(raw)) return raw;
+  // نص عادي
+  if (/^[A-Za-z0-9_-]{3,100}$/.test(raw)) return raw;
   return null;
 };
 
-const playSuccessFeedback = () => {
-  try { navigator.vibrate?.([80, 40, 80]); } catch {}
+/* ─── تأثيرات صوتية خفيفة ─── */
+const playSuccess = () => {
+  try { navigator.vibrate?.([50, 30, 50]); } catch {}
   try {
     const AC = window.AudioContext || (window as any).webkitAudioContext;
     if (!AC) return;
     const ctx = new AC();
     const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+    const g = ctx.createGain();
     osc.type = 'sine';
     osc.frequency.value = 880;
-    gain.gain.value = 0.08;
-    osc.connect(gain);
-    gain.connect(ctx.destination);
+    g.gain.value = 0.06;
+    osc.connect(g);
+    g.connect(ctx.destination);
     osc.start();
-    osc.stop(ctx.currentTime + 0.12);
+    osc.stop(ctx.currentTime + 0.1);
+    setTimeout(() => ctx.close(), 200);
   } catch {}
 };
 
-const playErrorFeedback = () => {
-  try { navigator.vibrate?.([200]); } catch {}
+const playError = () => {
+  try { navigator.vibrate?.([150]); } catch {}
 };
 
-const getMaxResolution = async (): Promise<{ width: number; height: number }> => {
-  const resolutions = [
-    { width: 3840, height: 2160 },
-    { width: 2560, height: 1440 },
-    { width: 1920, height: 1080 },
-    { width: 1280, height: 720 },
-    { width: 640, height: 480 },
-  ];
-  for (const res of resolutions) {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { exact: res.width },
-          height: { exact: res.height },
-          facingMode: 'environment',
-        },
-      });
-      stream.getTracks().forEach(t => t.stop());
-      return res;
-    } catch { continue; }
-  }
-  return { width: 1280, height: 720 };
+/* ─── كشف الجهاز الضعيف ─── */
+const isLowEndDevice = (): boolean => {
+  const cores = navigator.hardwareConcurrency || 2;
+  const memory = (navigator as any).deviceMemory || 2;
+  return cores <= 4 || memory <= 3;
 };
 
-const selectBestCamera = async (): Promise<MediaDeviceInfo | null> => {
-  try {
-    await navigator.mediaDevices.getUserMedia({ video: true });
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const cameras = devices.filter(d => d.kind === 'videoinput');
-    if (cameras.length === 0) return null;
-    const backCameras = cameras.filter(c =>
-      /back|rear|environment|wide/i.test(c.label)
-    );
-    if (backCameras.length === 0) return cameras[0];
-    const mainCamera = backCameras.find(c => {
-      const label = c.label.toLowerCase();
-      return !label.includes('ultra') &&
-             !label.includes('telephoto') &&
-             !label.includes('tele');
-    });
-    return mainCamera || backCameras[0];
-  } catch (e) {
-    console.error('فشل اختيار الكاميرا:', e);
-    return null;
-  }
-};
-
-const getOptimalQrBox = (): { width: number; height: number } => {
-  const minDim = Math.min(window.innerWidth, window.innerHeight);
-  const size = Math.max(200, Math.min(400, Math.floor(minDim * 0.7)));
+/* ─── حجم صندوق QR المناسب ─── */
+const getQrBox = (): { width: number; height: number } => {
+  const min = Math.min(window.innerWidth, window.innerHeight);
+  const size = Math.max(180, Math.min(300, Math.floor(min * 0.6)));
   return { width: size, height: size };
-};
-
-const getOptimalCameraHeight = (): number => {
-  return Math.max(300, Math.min(500, Math.floor(window.innerHeight * 0.5)));
 };
 
 export const QRAttendance: React.FC<QRAttendanceProps> = ({
@@ -129,45 +89,46 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   alreadyPresentIds,
   onClose,
 }) => {
+  /* ─── Refs ─── */
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const isProcessingRef = useRef(false);
-  const lastScanRef = useRef<Record<string, number>>({});
-  const videoTrackRef = useRef<MediaStreamTrack | null>(null);
-  const refocusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const trackRef = useRef<MediaStreamTrack | null>(null);
+  const processingRef = useRef(false);
+  const lastScansRef = useRef<Record<string, number>>({});
+  const mountedRef = useRef(true);
+  const startingRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const [cameraStarted, setCameraStarted] = useState(false);
+  /* ─── State ─── */
+  const [cameraReady, setCameraReady] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [scanCount, setScanCount] = useState(0);
-  const [lastStudents, setLastStudents] = useState<Student[]>([]);
-  const [pendingQrCodeId, setPendingQrCodeId] = useState<string | null>(null);
-  const [studentSearch, setStudentSearch] = useState('');
-  const [zoom, setZoom] = useState(2); // 🆕 الافتراضي 2x
+  const [recentStudents, setRecentStudents] = useState<Student[]>([]);
+  const [pendingQrId, setPendingQrId] = useState<string | null>(null);
+  const [searchText, setSearchText] = useState('');
+  const [zoom, setZoom] = useState(1);
   const [maxZoom, setMaxZoom] = useState(1);
   const [minZoom, setMinZoom] = useState(1);
-  const [zoomStep, setZoomStep] = useState(0.1);
+  const [canZoom, setCanZoom] = useState(false);
   const [hasTorch, setHasTorch] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
-  const [supportsZoom, setSupportsZoom] = useState(false);
-  const [cameraLabel, setCameraLabel] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [cameraHeight, setCameraHeight] = useState(getOptimalCameraHeight());
-  const [resolution, setResolution] = useState('');
-  const [focusStatus, setFocusStatus] = useState<'focusing' | 'locked' | 'idle'>('idle');
-  const [distanceMode, setDistanceMode] = useState<'near' | 'medium' | 'far'>('medium');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [lowEnd] = useState(isLowEndDevice);
 
-  const studentsByQr = useMemo(() => {
-    const map = new Map<string, Student>();
-    students.forEach((s) => {
-      if (s.qrCodeId) map.set(s.qrCodeId.trim(), s);
-      if (s.universityId) map.set(s.universityId.trim(), s);
+  /* ─── خريطة الطلاب ─── */
+  const studentMap = useMemo(() => {
+    const m = new Map<string, Student>();
+    students.forEach(s => {
+      if (s.qrCodeId) m.set(s.qrCodeId.trim(), s);
+      if (s.universityId) m.set(s.universityId.trim(), s);
     });
-    return map;
+    return m;
   }, [students]);
 
-  const filteredStudents = useMemo(() => {
-    const q = studentSearch.trim().toLowerCase();
+  /* ─── طلاب بدون QR للربط ─── */
+  const linkableStudents = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
     return students
-      .filter((s) => {
+      .filter(s => {
         if (s.qrCodeId) return false;
         if (!q) return true;
         return (
@@ -177,632 +138,500 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           (s.universityId || '').toLowerCase().includes(q)
         );
       })
-      .slice(0, 30);
-  }, [students, studentSearch]);
+      .slice(0, 25);
+  }, [students, searchText]);
 
-  const showToast = useCallback((message: ToastMessage, timeout = 2200) => {
-    setToast(message);
-    window.setTimeout(() => {
-      setToast((current) => (current === message ? null : current));
-    }, timeout);
+  /* ─── Toast ─── */
+  const showToast = useCallback((msg: ToastMessage, ms = 2000) => {
+    setToast(msg);
+    setTimeout(() => setToast(prev => (prev === msg ? null : prev)), ms);
   }, []);
 
-  const handleKnownStudent = useCallback(async (student: Student, qrCodeId: string) => {
+  /* ─── معالجة طالب معروف ─── */
+  const processKnown = useCallback(async (student: Student, qrId: string) => {
     const now = Date.now();
-    const lastTime = lastScanRef.current[qrCodeId] || 0;
-    if (now - lastTime < DUPLICATE_BLOCK_MS) return;
-    lastScanRef.current[qrCodeId] = now;
+    if (now - (lastScansRef.current[qrId] || 0) < DUPLICATE_BLOCK_MS) return;
+    lastScansRef.current[qrId] = now;
+
     if (alreadyPresentIds.has(student.id)) {
       showToast({
         type: 'warning',
         title: 'مسجل مسبقاً',
-        text: `${student.name} مسجل حضور مسبقاً بهذا السجل`,
+        text: `${student.name} حاضر بالفعل`,
         student,
-      }, 1800);
+      }, 1500);
       return;
     }
+
     await onMarkAttendance(student);
-    setScanCount((prev) => prev + 1);
-    setLastStudents((prev) =>
-      [student, ...prev.filter((s) => s.id !== student.id)].slice(0, 5)
-    );
-    playSuccessFeedback();
+    setScanCount(c => c + 1);
+    setRecentStudents(prev => [student, ...prev.filter(s => s.id !== student.id)].slice(0, 5));
+    playSuccess();
     showToast({
       type: 'success',
-      title: `تم تسجيل ${student.name}`,
-      text: student.group ? `الكروب: ${student.group}` : 'تم تسجيل الحضور بنجاح',
+      title: `✅ ${student.name}`,
+      text: student.group ? `الكروب: ${student.group}` : 'تم تسجيل الحضور',
       student,
     });
   }, [alreadyPresentIds, onMarkAttendance, showToast]);
 
-  const handleDecoded = useCallback(async (decodedText: string) => {
-    if (isProcessingRef.current) return;
-    const qrCodeId = extractQrCodeId(decodedText);
-    if (!qrCodeId) {
-      playErrorFeedback();
-      showToast({ type: 'error', title: 'QR غير صالح', text: 'لم يتم التعرف على رمز الهوية' });
-      return;
-    }
-    isProcessingRef.current = true;
+  /* ─── معالجة QR مقروء ─── */
+  const onDecoded = useCallback(async (text: string) => {
+    if (processingRef.current) return;
+    const qrId = extractQrCodeId(text);
+    if (!qrId) return; // تجاهل صامت - لا نعرض خطأ لكل إطار فاشل
+
+    processingRef.current = true;
     try {
-      const student = studentsByQr.get(qrCodeId);
+      const student = studentMap.get(qrId);
       if (student) {
-        await handleKnownStudent(student, qrCodeId);
+        await processKnown(student, qrId);
       } else {
-        const lastTime = lastScanRef.current[qrCodeId] || 0;
         const now = Date.now();
-        if (now - lastTime < DUPLICATE_BLOCK_MS) return;
-        lastScanRef.current[qrCodeId] = now;
-        setPendingQrCodeId(qrCodeId);
-        playErrorFeedback();
+        if (now - (lastScansRef.current[qrId] || 0) < DUPLICATE_BLOCK_MS) return;
+        lastScansRef.current[qrId] = now;
+        setPendingQrId(qrId);
+        playError();
         showToast({
           type: 'info',
           title: 'هوية غير مربوطة',
-          text: 'اختر الطالب مرة واحدة فقط لربط الهوية',
+          text: 'اختر الطالب لربطه بهذا الرمز',
         }, 3000);
       }
     } finally {
-      window.setTimeout(() => { isProcessingRef.current = false; }, 350);
+      setTimeout(() => { processingRef.current = false; }, 300);
     }
-  }, [studentsByQr, handleKnownStudent, showToast]);
+  }, [studentMap, processKnown, showToast]);
 
-  const triggerRefocus = useCallback(async () => {
-    const track = videoTrackRef.current;
-    if (!track) return;
+  /* ─── إعدادات الكاميرا بعد التشغيل ─── */
+  const configureCamera = useCallback(async () => {
     try {
-      const capabilities = track.getCapabilities?.() as any;
-      if (!capabilities?.focusMode) return;
-      setFocusStatus('focusing');
-      if (capabilities.focusMode.includes('manual')) {
-        try {
-          await track.applyConstraints({ advanced: [{ focusMode: 'manual' }] as any });
-          await new Promise(r => setTimeout(r, 100));
-        } catch {}
-      }
-      if (capabilities.focusMode.includes('continuous')) {
-        await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] as any });
-      } else if (capabilities.focusMode.includes('auto')) {
-        await track.applyConstraints({ advanced: [{ focusMode: 'auto' }] as any });
-      }
-      if (capabilities.focusDistance) {
-        const { min, max } = capabilities.focusDistance;
-        let targetDistance: number;
-        switch (distanceMode) {
-          case 'near': targetDistance = min + (max - min) * 0.2; break;
-          case 'far':  targetDistance = min + (max - min) * 0.8; break;
-          default:     targetDistance = min + (max - min) * 0.5;
-        }
-        try {
-          await track.applyConstraints({
-            advanced: [{ focusMode: 'manual', focusDistance: targetDistance }] as any,
-          });
-          await new Promise(r => setTimeout(r, 200));
-          if (capabilities.focusMode.includes('continuous')) {
-            await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] as any });
-          }
-        } catch {}
-      }
-      setTimeout(() => setFocusStatus('locked'), 500);
-      setTimeout(() => setFocusStatus('idle'), 1500);
-    } catch (e) {
-      console.warn('فشل إعادة الفوكس:', e);
-      setFocusStatus('idle');
-    }
-  }, [distanceMode]);
+      await new Promise(r => setTimeout(r, 500));
+      const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement;
+      if (!video?.srcObject) return;
 
-  const startPeriodicRefocus = useCallback(() => {
-    if (refocusIntervalRef.current) clearInterval(refocusIntervalRef.current);
-    refocusIntervalRef.current = setInterval(() => triggerRefocus(), REFOCUS_INTERVAL_MS);
-  }, [triggerRefocus]);
-
-  const stopPeriodicRefocus = useCallback(() => {
-    if (refocusIntervalRef.current) {
-      clearInterval(refocusIntervalRef.current);
-      refocusIntervalRef.current = null;
-    }
-  }, []);
-
-  const applyAdvancedCameraSettings = useCallback(async () => {
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      const videoElement = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement;
-      if (!videoElement?.srcObject) return;
-
-      const stream = videoElement.srcObject as MediaStream;
+      const stream = video.srcObject as MediaStream;
       const track = stream.getVideoTracks()[0];
       if (!track) return;
+      trackRef.current = track;
 
-      videoTrackRef.current = track;
+      const caps = track.getCapabilities?.() as any || {};
 
-      const capabilities = track.getCapabilities?.() as any || {};
-      const settings = track.getSettings?.() || {};
-
-      setCameraLabel(track.label || 'كاميرا غير معروفة');
-      if (settings.width && settings.height) {
-        setResolution(`${settings.width}×${settings.height}`);
-      }
-
-      const advancedConstraints: any[] = [];
-
-      // ✅ Focus
-      if (capabilities.focusMode?.includes('continuous')) {
-        advancedConstraints.push({ focusMode: 'continuous' });
-      } else if (capabilities.focusMode?.includes('auto')) {
-        advancedConstraints.push({ focusMode: 'auto' });
-      }
-
-      // ✅ Exposure
-      if (capabilities.exposureMode?.includes('continuous')) {
-        advancedConstraints.push({ exposureMode: 'continuous' });
-      }
-
-      // ✅ White Balance
-      if (capabilities.whiteBalanceMode?.includes('continuous')) {
-        advancedConstraints.push({ whiteBalanceMode: 'continuous' });
-      }
-
-      // ✅ ISO
-      if (capabilities.iso) {
-        advancedConstraints.push({ iso: Math.min(capabilities.iso.max, 800) });
-      }
-
-      // ✅ Exposure Compensation
-      if (capabilities.exposureCompensation) {
-        advancedConstraints.push({ exposureCompensation: 0 });
-      }
-
-      // ✅ Sharpness
-      if (capabilities.sharpness) {
-        advancedConstraints.push({ sharpness: capabilities.sharpness.max });
-      }
-
-      // ✅ Contrast
-      if (capabilities.contrast) {
-        const highContrast = Math.min(
-          capabilities.contrast.max,
-          capabilities.contrast.min + (capabilities.contrast.max - capabilities.contrast.min) * 0.7
-        );
-        advancedConstraints.push({ contrast: highContrast });
-      }
-
-      // ✅ Zoom - يبدأ بـ 2x تلقائياً
-      if (capabilities.zoom) {
-        const zoomMin = capabilities.zoom.min || 1;
-        const zoomMax = capabilities.zoom.max || 1;
-        const zoomStepVal = capabilities.zoom.step || 0.1;
-        setMinZoom(zoomMin);
-        setMaxZoom(zoomMax);
-        setZoomStep(zoomStepVal);
-        setSupportsZoom(zoomMax > zoomMin);
-
-        // 🆕 zoom افتراضي 2x
-        if (zoomMax >= 2) {
-          advancedConstraints.push({ zoom: 2 });
-          setZoom(2);
-        } else if (zoomMax >= 1.5) {
-          advancedConstraints.push({ zoom: 1.5 });
-          setZoom(1.5);
-        } else {
-          setZoom(settings.zoom || zoomMin);
+      // Focus
+      if (caps.focusMode) {
+        const modes = caps.focusMode as string[];
+        if (modes.includes('continuous')) {
+          try { await track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as any] }); } catch {}
         }
       }
 
-      // ✅ Torch - يشتغل تلقائياً 🆕
-      if (capabilities.torch) {
-        setHasTorch(true);
-        try {
-          await track.applyConstraints({
-            advanced: [{ torch: true }] as any,
-          });
-          setTorchOn(true);
-          console.log('✅ الفلاش يعمل تلقائياً');
-        } catch (e) {
-          console.warn('⚠️ فشل تشغيل الفلاش التلقائي:', e);
-        }
+      // Exposure
+      if (caps.exposureMode) {
+        try { await track.applyConstraints({ advanced: [{ exposureMode: 'continuous' } as any] }); } catch {}
       }
 
-      // تطبيق كل إعداد على حدة
-      for (const constraint of advancedConstraints) {
-        try {
-          await track.applyConstraints({ advanced: [constraint] } as any);
-        } catch (e) {
-          console.warn('⚠️ إعداد غير مدعوم:', constraint, e);
-        }
-      }
-
-      startPeriodicRefocus();
-      setTimeout(() => triggerRefocus(), 500);
-
-    } catch (e) {
-      console.error('❌ فشل تطبيق إعدادات الكاميرا:', e);
-    }
-  }, [startPeriodicRefocus, triggerRefocus]);
-
-  const applyZoom = useCallback(async (newZoom: number) => {
-    if (!videoTrackRef.current || !supportsZoom) return;
-    try {
-      const clampedZoom = Math.max(minZoom, Math.min(maxZoom, newZoom));
-      await videoTrackRef.current.applyConstraints({
-        advanced: [{ zoom: clampedZoom }] as any,
-      });
-      setZoom(clampedZoom);
-    } catch (e) {
-      console.warn('فشل تطبيق Zoom:', e);
-    }
-  }, [supportsZoom, minZoom, maxZoom]);
-
-  const toggleTorch = useCallback(async () => {
-    if (!videoTrackRef.current || !hasTorch) return;
-    try {
-      const newState = !torchOn;
-      await videoTrackRef.current.applyConstraints({
-        advanced: [{ torch: newState }] as any,
-      });
-      setTorchOn(newState);
-    } catch (e) {
-      console.warn('فشل تشغيل الفلاش:', e);
-    }
-  }, [hasTorch, torchOn]);
-
-  const changeDistanceMode = useCallback((mode: 'near' | 'medium' | 'far') => {
-    setDistanceMode(mode);
-    if (supportsZoom) {
-      switch (mode) {
-        case 'near':   applyZoom(minZoom); break;
-        case 'medium': applyZoom(Math.min(maxZoom, 2)); break;  // 🆕 medium = 2x
-        case 'far':    applyZoom(Math.min(maxZoom, 3)); break;
-      }
-    }
-    setTimeout(() => triggerRefocus(), 300);
-  }, [supportsZoom, minZoom, maxZoom, applyZoom, triggerRefocus]);
-
-  const startCamera = useCallback(async () => {
-    try {
-      setErrorMessage('');
-      const maxRes = await getMaxResolution();
-      const bestCamera = await selectBestCamera();
-      const qrBox = getOptimalQrBox();
-      const cameraConfig = bestCamera?.deviceId
-        ? { deviceId: { exact: bestCamera.deviceId } }
-        : { facingMode: 'environment' };
-
-      const html5QrCode = new Html5Qrcode(QR_REGION_ID, {
-        verbose: false,
-        formatsToSupport: undefined,
-      } as any);
-      scannerRef.current = html5QrCode;
-
-      const isPortrait = window.innerHeight > window.innerWidth;
-
-      await html5QrCode.start(
-        cameraConfig as any,
-        {
-          fps: 30,
-          qrbox: qrBox,
-          aspectRatio: isPortrait ? 9 / 16 : 16 / 9,
-          disableFlip: false,
-          videoConstraints: {
-            facingMode: 'environment',
-            width: { ideal: maxRes.width, min: 1280 },
-            height: { ideal: maxRes.height, min: 720 },
-            frameRate: { ideal: 30, min: 15 },
-            advanced: [
-              { focusMode: 'continuous' } as any,
-              { exposureMode: 'continuous' } as any,
-              { whiteBalanceMode: 'continuous' } as any,
-            ],
-          } as any,
-        },
-        handleDecoded,
-        () => {}
-      );
-
-      setCameraStarted(true);
-      await applyAdvancedCameraSettings();
-
-    } catch (err: any) {
-      const msg = err?.message || err?.toString() || '';
-      let userMessage = 'فشل فتح الكاميرا';
-
-      if (msg.includes('NotAllowedError') || msg.includes('Permission')) {
-        userMessage = 'لم يتم السماح باستخدام الكاميرا. اسمح بها من إعدادات المتصفح.';
-      } else if (msg.includes('NotFoundError')) {
-        userMessage = 'لم يتم العثور على كاميرا في الجهاز';
-      } else if (msg.includes('NotReadableError')) {
-        userMessage = 'الكاميرا مستخدمة من تطبيق آخر.';
-      } else if (msg.includes('OverconstrainedError') || msg.includes('Overconstrained')) {
-        try {
-          const html5QrCode = new Html5Qrcode(QR_REGION_ID);
-          scannerRef.current = html5QrCode;
-          await html5QrCode.start(
-            { facingMode: 'environment' },
-            { fps: 25, qrbox: getOptimalQrBox(), aspectRatio: 1.0,
-              videoConstraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } as any },
-            handleDecoded, () => {}
-          );
-          setCameraStarted(true);
-          await applyAdvancedCameraSettings();
-          return;
-        } catch {
+      // Zoom
+      if (caps.zoom) {
+        const zMin = caps.zoom.min || 1;
+        const zMax = caps.zoom.max || 1;
+        setMinZoom(zMin);
+        setMaxZoom(zMax);
+        const hasZoom = zMax > zMin;
+        setCanZoom(hasZoom);
+        if (hasZoom) {
+          // تكبير افتراضي معقول: 1.5x للأجهزة الضعيفة، 2x للقوية
+          const defaultZoom = lowEnd
+            ? Math.min(zMax, 1.5)
+            : Math.min(zMax, 2);
           try {
-            const html5QrCode = new Html5Qrcode(QR_REGION_ID);
-            scannerRef.current = html5QrCode;
-            await html5QrCode.start(
-              { facingMode: 'environment' },
-              { fps: 15, qrbox: { width: 200, height: 200 } },
-              handleDecoded, () => {}
-            );
-            setCameraStarted(true);
-            await applyAdvancedCameraSettings();
-            return;
-          } catch {
-            userMessage = 'إعدادات الكاميرا غير مدعومة على هذا الجهاز';
-          }
+            await track.applyConstraints({ advanced: [{ zoom: defaultZoom } as any] });
+            setZoom(defaultZoom);
+          } catch {}
         }
       }
 
-      setErrorMessage(userMessage);
-      showToast({ type: 'error', title: 'فشل فتح الكاميرا', text: userMessage });
-    }
-  }, [handleDecoded, applyAdvancedCameraSettings, showToast]);
-
-  const stopCamera = useCallback(async () => {
-    try {
-      stopPeriodicRefocus();
-      if (torchOn && videoTrackRef.current) {
-        try {
-          await videoTrackRef.current.applyConstraints({
-            advanced: [{ torch: false }] as any,
-          });
-        } catch {}
+      // Torch
+      if (caps.torch) {
+        setHasTorch(true);
+        // لا نشغّل الفلاش تلقائياً - يسبب حرارة
       }
+    } catch (e) {
+      console.warn('Camera config error:', e);
+    }
+  }, [lowEnd]);
+
+  /* ─── تشغيل الكاميرا ─── */
+  const startCamera = useCallback(async () => {
+    if (startingRef.current || !mountedRef.current) return;
+    startingRef.current = true;
+    setErrorMsg('');
+    setCameraReady(false);
+
+    try {
+      // تنظيف أي مسح سابق
       if (scannerRef.current) {
         try {
           const state = scannerRef.current.getState();
-          if (state) await scannerRef.current.stop();
+          if (state === Html5QrcodeScannerState.SCANNING || state === Html5QrcodeScannerState.PAUSED) {
+            await scannerRef.current.stop();
+          }
           await scannerRef.current.clear();
         } catch {}
+        scannerRef.current = null;
       }
-    } catch (err) {
-      console.warn('Camera stop error:', err);
+
+      // ننتظر قليلاً لضمان تحرير الكاميرا
+      await new Promise(r => setTimeout(r, 300));
+
+      if (!mountedRef.current) return;
+
+      const qrBox = getQrBox();
+
+      // إعدادات مختلفة حسب قوة الجهاز
+      const fps = lowEnd ? 8 : 15; // أقل FPS = أقل حرارة واستهلاك
+      const aspectRatio = window.innerHeight > window.innerWidth ? 4 / 3 : 16 / 9;
+
+      const scanner = new Html5Qrcode(QR_REGION_ID, { verbose: false });
+      scannerRef.current = scanner;
+
+      // محاولة 1: كاميرا خلفية مع إعدادات مناسبة
+      try {
+        await scanner.start(
+          { facingMode: 'environment' },
+          {
+            fps,
+            qrbox: qrBox,
+            aspectRatio,
+            disableFlip: true,
+            videoConstraints: {
+              facingMode: 'environment',
+              width: { ideal: lowEnd ? 1280 : 1920 },
+              height: { ideal: lowEnd ? 720 : 1080 },
+              ...(lowEnd ? {} : { frameRate: { ideal: 30, max: 30 } }),
+            } as any,
+          },
+          onDecoded,
+          () => {} // تجاهل أخطاء المسح العادية
+        );
+      } catch {
+        // محاولة 2: إعدادات بسيطة جداً
+        try {
+          if (scannerRef.current) {
+            try { await scannerRef.current.clear(); } catch {}
+          }
+          const scanner2 = new Html5Qrcode(QR_REGION_ID, { verbose: false });
+          scannerRef.current = scanner2;
+
+          await scanner2.start(
+            { facingMode: 'environment' },
+            {
+              fps: 5,
+              qrbox: { width: 200, height: 200 },
+              disableFlip: true,
+            },
+            onDecoded,
+            () => {}
+          );
+        } catch {
+          // محاولة 3: أي كاميرا متاحة
+          try {
+            if (scannerRef.current) {
+              try { await scannerRef.current.clear(); } catch {}
+            }
+            const scanner3 = new Html5Qrcode(QR_REGION_ID, { verbose: false });
+            scannerRef.current = scanner3;
+
+            const devices = await Html5Qrcode.getCameras();
+            if (devices.length === 0) throw new Error('لا توجد كاميرا');
+
+            await scanner3.start(
+              devices[0].id,
+              { fps: 5, qrbox: { width: 180, height: 180 } },
+              onDecoded,
+              () => {}
+            );
+          } catch (finalErr: any) {
+            throw finalErr;
+          }
+        }
+      }
+
+      if (mountedRef.current) {
+        setCameraReady(true);
+        await configureCamera();
+      }
+    } catch (err: any) {
+      console.error('Camera start failed:', err);
+      const msg = err?.message || '';
+      if (msg.includes('NotAllowed') || msg.includes('Permission')) {
+        setErrorMsg('يرجى السماح باستخدام الكاميرا من إعدادات المتصفح');
+      } else if (msg.includes('NotFound')) {
+        setErrorMsg('لا توجد كاميرا في هذا الجهاز');
+      } else if (msg.includes('NotReadable')) {
+        setErrorMsg('الكاميرا مستخدمة من تطبيق آخر - أغلق التطبيقات الأخرى');
+      } else {
+        setErrorMsg('فشل تشغيل الكاميرا - حاول مرة أخرى');
+      }
     } finally {
-      scannerRef.current = null;
-      videoTrackRef.current = null;
-      setCameraStarted(false);
+      startingRef.current = false;
+    }
+  }, [lowEnd, onDecoded, configureCamera]);
+
+  /* ─── إيقاف الكاميرا بالكامل ─── */
+  const stopCamera = useCallback(async () => {
+    try {
+      // إطفاء الفلاش أولاً
+      if (trackRef.current && hasTorch && torchOn) {
+        try {
+          await trackRef.current.applyConstraints({ advanced: [{ torch: false } as any] });
+        } catch {}
+      }
+
+      // إيقاف الماسح
+      if (scannerRef.current) {
+        try {
+          const state = scannerRef.current.getState();
+          if (state === Html5QrcodeScannerState.SCANNING || state === Html5QrcodeScannerState.PAUSED) {
+            await scannerRef.current.stop();
+          }
+        } catch {}
+        try {
+          await scannerRef.current.clear();
+        } catch {}
+        scannerRef.current = null;
+      }
+
+      // إيقاف جميع المسارات يدوياً (ضمان إغلاق الكاميرا)
+      if (trackRef.current) {
+        try { trackRef.current.stop(); } catch {}
+        trackRef.current = null;
+      }
+
+      // إيقاف أي stream متبقي في عنصر الفيديو
+      const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement;
+      if (video?.srcObject) {
+        const stream = video.srcObject as MediaStream;
+        stream.getTracks().forEach(t => { try { t.stop(); } catch {} });
+        video.srcObject = null;
+      }
+    } catch (e) {
+      console.warn('Stop camera error:', e);
+    } finally {
+      setCameraReady(false);
       setTorchOn(false);
     }
-  }, [stopPeriodicRefocus, torchOn]);
+  }, [hasTorch, torchOn]);
 
-  useEffect(() => {
-    const handleResize = () => setCameraHeight(getOptimalCameraHeight());
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('orientationchange', handleResize);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('orientationchange', handleResize);
-    };
-  }, []);
+  /* ─── Zoom ─── */
+  const applyZoom = useCallback(async (val: number) => {
+    if (!trackRef.current || !canZoom) return;
+    const clamped = Math.max(minZoom, Math.min(maxZoom, val));
+    try {
+      await trackRef.current.applyConstraints({ advanced: [{ zoom: clamped } as any] });
+      setZoom(clamped);
+    } catch {}
+  }, [canZoom, minZoom, maxZoom]);
 
+  /* ─── Torch ─── */
+  const toggleTorch = useCallback(async () => {
+    if (!trackRef.current || !hasTorch) return;
+    const next = !torchOn;
+    try {
+      await trackRef.current.applyConstraints({ advanced: [{ torch: next } as any] });
+      setTorchOn(next);
+    } catch {}
+  }, [hasTorch, torchOn]);
+
+  /* ─── Mount / Unmount ─── */
   useEffect(() => {
+    mountedRef.current = true;
     startCamera();
-    return () => { stopCamera(); };
+
+    return () => {
+      mountedRef.current = false;
+      // إيقاف كامل عند الخروج
+      (async () => {
+        try {
+          if (scannerRef.current) {
+            try {
+              const state = scannerRef.current.getState();
+              if (state === Html5QrcodeScannerState.SCANNING || state === Html5QrcodeScannerState.PAUSED) {
+                await scannerRef.current.stop();
+              }
+            } catch {}
+            try { await scannerRef.current.clear(); } catch {}
+            scannerRef.current = null;
+          }
+          if (trackRef.current) {
+            try { trackRef.current.stop(); } catch {}
+            trackRef.current = null;
+          }
+          // إيقاف كل streams
+          const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement;
+          if (video?.srcObject) {
+            (video.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+            video.srcObject = null;
+          }
+        } catch {}
+      })();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleClose = async () => {
+  /* ─── إغلاق ─── */
+  const handleClose = useCallback(async () => {
     await stopCamera();
+    // انتظار إضافي لضمان الإغلاق
+    await new Promise(r => setTimeout(r, 100));
     onClose();
-  };
+  }, [stopCamera, onClose]);
 
-  const handleLinkStudent = async (student: Student) => {
-    if (!pendingQrCodeId || !onUpdateStudent) return;
-    const updatedStudent: Student = { ...student, qrCodeId: pendingQrCodeId };
-    onUpdateStudent(student.id, { qrCodeId: pendingQrCodeId });
-    setPendingQrCodeId(null);
-    setStudentSearch('');
-    await handleKnownStudent(updatedStudent, pendingQrCodeId);
-  };
+  /* ─── ربط طالب ─── */
+  const handleLink = useCallback(async (student: Student) => {
+    if (!pendingQrId || !onUpdateStudent) return;
+    const updated = { ...student, qrCodeId: pendingQrId };
+    onUpdateStudent(student.id, { qrCodeId: pendingQrId });
+    setPendingQrId(null);
+    setSearchText('');
+    await processKnown(updated, pendingQrId);
+  }, [pendingQrId, onUpdateStudent, processKnown]);
 
-  const toastColors: Record<ToastType, string> = {
+  /* ─── ألوان Toast ─── */
+  const toastBg: Record<ToastType, string> = {
     success: 'bg-emerald-600',
     error: 'bg-red-600',
     info: 'bg-blue-600',
-    warning: 'bg-amber-500',
+    warning: 'bg-amber-600',
   };
-
-  const distanceModeLabels = {
-    near:   { icon: '📱', label: 'قريب (10-15 سم)' },
-    medium: { icon: '📏', label: 'متوسط (20-40 سم)' },
-    far:    { icon: '🔭', label: 'بعيد (50+ سم)' },
+  const toastIcon: Record<ToastType, string> = {
+    success: '✅',
+    error: '❌',
+    info: 'ℹ️',
+    warning: '⚠️',
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/95 text-white flex flex-col" dir="rtl">
+    <div className="fixed inset-0 z-[9999] bg-black text-white flex flex-col" dir="rtl" ref={containerRef}>
 
-      {/* ===== Header ===== */}
-      <div className="p-3 bg-gray-900 border-b border-white/10 flex items-center justify-between gap-3 safe-area-top">
+      {/* ═══ Header ═══ */}
+      <header className="flex items-center justify-between px-3 py-2 bg-gray-900/90 border-b border-white/10"
+              style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}>
         <div className="flex-1 min-w-0">
-          <h2 className="text-base font-bold truncate">التسجيل عن طريق هوية الطالب</h2>
-          <p className="text-[10px] text-gray-300 truncate">
-            {activeSession ? `السجل: ${activeSession.name}` : 'لا يوجد سجل نشط'}
-            {resolution && <span className="opacity-60"> • {resolution}</span>}
-            {cameraLabel && <span className="opacity-40"> • {cameraLabel.substring(0, 20)}</span>}
+          <h2 className="text-sm font-bold truncate">📷 ماسح الحضور</h2>
+          <p className="text-[10px] text-gray-400 truncate">
+            {activeSession ? activeSession.name : 'لا يوجد سجل نشط'}
+            {lowEnd && ' • وضع موفر الطاقة'}
           </p>
         </div>
 
-        {/* مؤشر الفوكس */}
-        {cameraStarted && (
-          <div className={`w-3 h-3 rounded-full flex-shrink-0 transition-colors duration-300 ${
-            focusStatus === 'focusing' ? 'bg-yellow-400 animate-pulse' :
-            focusStatus === 'locked'   ? 'bg-emerald-400' : 'bg-gray-500'
-          }`} title={`Focus: ${focusStatus}`} />
-        )}
+        <div className="flex items-center gap-2">
+          {cameraReady && (
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          )}
+          <button
+            onClick={handleClose}
+            className="bg-red-600 active:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold
+                       active:scale-95 transition-transform"
+          >
+            ✕ إغلاق
+          </button>
+        </div>
+      </header>
 
-        {/* مؤشر الفلاش */}
-        {torchOn && (
-          <div className="w-3 h-3 rounded-full bg-yellow-400 flex-shrink-0 animate-pulse"
-               title="الفلاش يعمل" />
-        )}
-
-        <button
-          onClick={handleClose}
-          className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg font-bold text-sm flex-shrink-0 active:scale-95 transition-transform"
-        >
-          إغلاق
-        </button>
-      </div>
-
-      {/* ===== رسالة خطأ ===== */}
-      {errorMessage && !cameraStarted && (
-        <div className="m-4 p-4 bg-red-900/50 border border-red-500 rounded-xl text-center">
-          <p className="text-red-200 font-bold mb-2">❌ {errorMessage}</p>
+      {/* ═══ خطأ ═══ */}
+      {errorMsg && !cameraReady && (
+        <div className="mx-3 mt-3 p-4 bg-red-900/60 border border-red-500/50 rounded-xl text-center">
+          <p className="text-red-200 text-sm mb-2">{errorMsg}</p>
           <button
             onClick={startCamera}
-            className="mt-2 bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-sm active:scale-95 transition-transform"
+            className="bg-red-600 active:bg-red-700 px-4 py-2 rounded-lg text-xs font-bold
+                       active:scale-95 transition-transform"
           >
             🔄 إعادة المحاولة
           </button>
         </div>
       )}
 
-      {/* ===== المحتوى الرئيسي ===== */}
-      <div className="relative flex-1 flex flex-col items-center justify-start p-3 overflow-y-auto">
+      {/* ═══ المحتوى ═══ */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
 
-        {/* ===== الكاميرا ===== */}
-        <div
-          className="w-full max-w-2xl rounded-2xl overflow-hidden border-2 border-emerald-500/50 shadow-2xl bg-black relative"
-          style={{ minHeight: `${cameraHeight}px` }}
-        >
-          <div id={QR_REGION_ID} className="w-full" style={{ minHeight: `${cameraHeight}px` }} />
+        {/* الكاميرا */}
+        <div className="w-full max-w-lg mx-auto rounded-xl overflow-hidden border border-emerald-500/30 bg-gray-900 relative">
+          <div
+            id={QR_REGION_ID}
+            className="w-full"
+            style={{ minHeight: '280px' }}
+          />
 
-          {/* إطار توجيهي */}
-          {cameraStarted && (
+          {/* إطار مسح */}
+          {cameraReady && (
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-              <div className="relative" style={{
-                width: `${getOptimalQrBox().width}px`,
-                height: `${getOptimalQrBox().height}px`,
-              }}>
-                <div className="absolute top-0 right-0 w-14 h-14 border-t-[3px] border-r-[3px] border-emerald-400 rounded-tr-2xl shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
-                <div className="absolute top-0 left-0 w-14 h-14 border-t-[3px] border-l-[3px] border-emerald-400 rounded-tl-2xl shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
-                <div className="absolute bottom-0 right-0 w-14 h-14 border-b-[3px] border-r-[3px] border-emerald-400 rounded-br-2xl shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
-                <div className="absolute bottom-0 left-0 w-14 h-14 border-b-[3px] border-l-[3px] border-emerald-400 rounded-bl-2xl shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
-                <div className="absolute inset-x-2 h-[2px] bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_15px_rgba(16,185,129,0.8)] animate-laser-scan" />
-                <div className="absolute -bottom-8 inset-x-0 text-center">
-                  <span className="text-[10px] text-emerald-300/80 bg-black/50 px-2 py-0.5 rounded-full">
-                    وجّه الكاميرا نحو رمز QR
-                  </span>
-                </div>
+              <div className="relative" style={{ width: getQrBox().width, height: getQrBox().height }}>
+                {/* زوايا */}
+                <div className="absolute top-0 right-0 w-10 h-10 border-t-2 border-r-2 border-emerald-400 rounded-tr-lg" />
+                <div className="absolute top-0 left-0 w-10 h-10 border-t-2 border-l-2 border-emerald-400 rounded-tl-lg" />
+                <div className="absolute bottom-0 right-0 w-10 h-10 border-b-2 border-r-2 border-emerald-400 rounded-br-lg" />
+                <div className="absolute bottom-0 left-0 w-10 h-10 border-b-2 border-l-2 border-emerald-400 rounded-bl-lg" />
+                {/* خط المسح */}
+                <div className="absolute inset-x-3 h-px bg-emerald-400/80 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-scan-line" />
               </div>
             </div>
           )}
         </div>
 
-        {/* ===== شريط أدوات الكاميرا ===== */}
-        {cameraStarted && (
-          <div className="mt-3 w-full max-w-2xl space-y-2">
+        {/* أدوات الكاميرا */}
+        {cameraReady && (
+          <div className="w-full max-w-lg mx-auto space-y-2">
 
-            {/* صف 1: أزرار المسافة */}
-            <div className="bg-white/5 rounded-xl p-2">
-              <p className="text-[10px] text-gray-400 mb-1.5 font-bold">📐 وضع المسافة:</p>
-              <div className="grid grid-cols-3 gap-1.5">
-                {(['near', 'medium', 'far'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={() => changeDistanceMode(mode)}
-                    className={`py-2 rounded-lg text-xs font-bold transition-all active:scale-95 ${
-                      distanceMode === mode
-                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30'
-                        : 'bg-white/10 text-gray-300 hover:bg-white/20'
-                    }`}
-                  >
-                    {distanceModeLabels[mode].icon} {distanceModeLabels[mode].label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* صف الأزرار */}
+            <div className="flex gap-1.5 flex-wrap">
+              {/* Zoom presets */}
+              {canZoom && (
+                <>
+                  {[1, 1.5, 2, 3].filter(v => v <= maxZoom).map(v => (
+                    <button
+                      key={v}
+                      onClick={() => applyZoom(v)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 ${
+                        Math.abs(zoom - v) < 0.15
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-white/10 text-gray-300'
+                      }`}
+                    >
+                      {v}x
+                    </button>
+                  ))}
+                </>
+              )}
 
-            {/* صف 2: أدوات */}
-            <div className="bg-white/5 rounded-xl p-2">
-              <div className="flex gap-1.5 flex-wrap">
-
-                {/* زر إعادة الفوكس */}
+              {/* فلاش */}
+              {hasTorch && (
                 <button
-                  onClick={() => triggerRefocus()}
-                  className={`flex-1 min-w-[80px] py-2 rounded-lg font-bold text-xs transition-all active:scale-95 ${
-                    focusStatus === 'focusing'
-                      ? 'bg-yellow-600 text-white animate-pulse'
-                      : 'bg-white/10 text-white hover:bg-white/20'
+                  onClick={toggleTorch}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 ${
+                    torchOn
+                      ? 'bg-yellow-500 text-black'
+                      : 'bg-white/10 text-gray-300'
                   }`}
                 >
-                  {focusStatus === 'focusing' ? '🔄 تركيز...' : '🎯 إعادة فوكس'}
+                  {torchOn ? '💡 إطفاء' : '🔦 فلاش'}
                 </button>
-
-                {/* فلاش - يظهر حالته الحالية */}
-                {hasTorch && (
-                  <button
-                    onClick={toggleTorch}
-                    className={`flex-1 min-w-[80px] py-2 rounded-lg font-bold text-xs transition-all active:scale-95 ${
-                      torchOn
-                        ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/30'
-                        : 'bg-white/10 text-white hover:bg-white/20'
-                    }`}
-                  >
-                    {torchOn ? '💡 إطفاء الفلاش' : '🔦 تشغيل الفلاش'}
-                  </button>
-                )}
-
-                {/* أزرار Zoom */}
-                {supportsZoom && (
-                  <>
-                    <button
-                      onClick={() => applyZoom(1)}
-                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all active:scale-95 ${
-                        Math.abs(zoom - 1) < 0.1 ? 'bg-emerald-600 text-white' : 'bg-white/10 hover:bg-white/20'
-                      }`}
-                    >1x</button>
-                    <button
-                      onClick={() => applyZoom(2)}
-                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all active:scale-95 ${
-                        Math.abs(zoom - 2) < 0.2 ? 'bg-emerald-600 text-white' : 'bg-white/10 hover:bg-white/20'
-                      }`}
-                    >2x</button>
-                    {maxZoom >= 3 && (
-                      <button
-                        onClick={() => applyZoom(3)}
-                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all active:scale-95 ${
-                          Math.abs(zoom - 3) < 0.3 ? 'bg-emerald-600 text-white' : 'bg-white/10 hover:bg-white/20'
-                        }`}
-                      >3x</button>
-                    )}
-                    {maxZoom >= 5 && (
-                      <button
-                        onClick={() => applyZoom(5)}
-                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all active:scale-95 ${
-                          Math.abs(zoom - 5) < 0.5 ? 'bg-emerald-600 text-white' : 'bg-white/10 hover:bg-white/20'
-                        }`}
-                      >5x</button>
-                    )}
-                  </>
-                )}
-              </div>
+              )}
             </div>
 
-            {/* صف 3: Zoom Slider */}
-            {supportsZoom && (
-              <div className="bg-white/5 rounded-xl p-2">
+            {/* Zoom slider */}
+            {canZoom && (
+              <div className="bg-white/5 rounded-lg p-2">
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-[10px] font-bold text-emerald-300">
-                    🔍 التكبير: {zoom.toFixed(1)}x
-                  </label>
+                  <span className="text-[10px] text-emerald-300 font-bold">🔍 {zoom.toFixed(1)}x</span>
                   <div className="flex gap-1">
                     <button
-                      onClick={() => applyZoom(zoom - zoomStep * 5)}
-                      className="w-7 h-7 bg-white/15 hover:bg-white/25 rounded-lg text-xs font-bold active:scale-90 transition"
+                      onClick={() => applyZoom(zoom - 0.5)}
+                      className="w-6 h-6 bg-white/10 rounded text-xs font-bold active:scale-90"
                     >−</button>
                     <button
-                      onClick={() => applyZoom(zoom + zoomStep * 5)}
-                      className="w-7 h-7 bg-white/15 hover:bg-white/25 rounded-lg text-xs font-bold active:scale-90 transition"
+                      onClick={() => applyZoom(zoom + 0.5)}
+                      className="w-6 h-6 bg-white/10 rounded text-xs font-bold active:scale-90"
                     >+</button>
                   </div>
                 </div>
@@ -810,192 +639,181 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                   type="range"
                   min={minZoom}
                   max={maxZoom}
-                  step={zoomStep}
+                  step={0.1}
                   value={zoom}
-                  onChange={(e) => applyZoom(parseFloat(e.target.value))}
-                  className="w-full h-2 accent-emerald-400 cursor-pointer"
+                  onChange={e => applyZoom(parseFloat(e.target.value))}
+                  className="w-full h-1.5 accent-emerald-400 cursor-pointer"
                 />
-                <div className="flex justify-between text-[9px] text-gray-500 mt-0.5">
-                  <span>{minZoom}x</span>
-                  <span>{maxZoom.toFixed(1)}x</span>
-                </div>
               </div>
             )}
           </div>
         )}
 
-        {/* ===== إحصائيات ===== */}
-        <div className="mt-3 grid grid-cols-2 gap-2 w-full max-w-2xl">
-          <div className="bg-white/5 rounded-xl p-2.5 text-center border border-white/5">
+        {/* إحصائيات */}
+        <div className="grid grid-cols-2 gap-2 w-full max-w-lg mx-auto">
+          <div className="bg-white/5 rounded-lg p-2.5 text-center">
             <div className="text-2xl font-bold text-emerald-400">{scanCount}</div>
             <div className="text-[10px] text-gray-400">تم تسجيلهم</div>
           </div>
-          <div className="bg-white/5 rounded-xl p-2.5 text-center border border-white/5">
-            <div className="text-xl font-bold">
-              {cameraStarted ? '🟢 يعمل' : '🔴 متوقف'}
+          <div className="bg-white/5 rounded-lg p-2.5 text-center">
+            <div className="text-lg font-bold">{cameraReady ? '🟢' : '🔴'}</div>
+            <div className="text-[10px] text-gray-400">
+              {cameraReady ? 'الكاميرا تعمل' : 'متوقفة'}
             </div>
-            <div className="text-[10px] text-gray-400">حالة الكاميرا</div>
           </div>
         </div>
 
-        {/* ===== آخر المسجلين ===== */}
-        {lastStudents.length > 0 && (
-          <div className="mt-3 w-full max-w-2xl bg-white/5 rounded-xl p-3 border border-white/5">
-            <p className="text-xs font-bold mb-2 text-emerald-300">آخر المسجلين:</p>
+        {/* آخر المسجلين */}
+        {recentStudents.length > 0 && (
+          <div className="w-full max-w-lg mx-auto bg-white/5 rounded-lg p-2.5">
+            <p className="text-[11px] font-bold mb-1.5 text-emerald-300">آخر المسجلين:</p>
             <div className="space-y-1">
-              {lastStudents.map((s) => (
-                <div key={s.id} className="flex justify-between items-center bg-black/25 rounded-lg px-3 py-1.5">
-                  <span className="text-xs">{s.name}</span>
-                  <span className="text-[10px] bg-emerald-600 px-2 py-0.5 rounded-full">{s.group || '-'}</span>
+              {recentStudents.map(s => (
+                <div key={s.id} className="flex justify-between items-center bg-black/30 rounded px-2.5 py-1.5">
+                  <span className="text-xs truncate">{s.name}</span>
+                  <span className="text-[10px] bg-emerald-600/80 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                    {s.group || '-'}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
         )}
-
-        {/* ===== Toast ===== */}
-        {toast && (
-          <div className={`fixed top-16 left-1/2 -translate-x-1/2 ${toastColors[toast.type]} text-white rounded-2xl px-5 py-4 shadow-2xl w-[90%] max-w-md animate-bounce-in z-[10001]`}>
-            <div className="flex items-center gap-3">
-              <div className="text-3xl">
-                {toast.type === 'success' ? '✅' : toast.type === 'error' ? '❌' : toast.type === 'warning' ? '⚠️' : 'ℹ️'}
-              </div>
-              <div>
-                <p className="font-bold text-lg">{toast.title}</p>
-                {toast.text && <p className="text-sm opacity-95">{toast.text}</p>}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* ===== نافذة ربط الطالب ===== */}
-      {pendingQrCodeId && (
-        <div className="fixed inset-0 z-[10000] bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-white text-gray-900 rounded-2xl p-5 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <h3 className="text-xl font-bold mb-2">ربط هوية طالب لأول مرة</h3>
-            <p className="text-sm text-gray-600 mb-3">
-              هذا الرمز غير مربوط بأي طالب. اختر الطالب مرة واحدة فقط، وبعدها يسجل تلقائياً.
-            </p>
-            <div className="mb-3 bg-gray-100 border rounded-lg p-2 text-xs font-mono break-all" dir="ltr">
-              {pendingQrCodeId}
-            </div>
-            {!onUpdateStudent && (
-              <div className="mb-3 p-3 bg-red-50 border border-red-300 rounded-lg text-red-700 text-sm">
-                لا توجد صلاحية ربط. يجب تمرير دالة تحديث الطالب إلى الماسح.
-              </div>
-            )}
-            <input
-              value={studentSearch}
-              onChange={(e) => setStudentSearch(e.target.value)}
-              placeholder="ابحث بالاسم أو الرمز أو الكروب..."
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-3 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
-              autoFocus
-            />
-            <div className="max-h-72 overflow-y-auto border rounded-lg divide-y">
-              {filteredStudents.length === 0 ? (
-                <div className="p-4 text-center text-gray-500">لا توجد نتائج أو كل الطلاب مربوطين</div>
-              ) : (
-                filteredStudents.map((student) => (
-                  <button
-                    key={student.id}
-                    onClick={() => handleLinkStudent(student)}
-                    className="w-full text-right p-3 hover:bg-emerald-50 flex items-center justify-between active:bg-emerald-100 transition"
-                    disabled={!onUpdateStudent}
-                  >
-                    <div>
-                      <div className="font-bold">{student.name}</div>
-                      <div className="text-xs text-gray-500">الرمز: {student.code} | الكروب: {student.group || '-'}</div>
-                    </div>
-                    <span className="text-emerald-600 font-bold">اختيار</span>
-                  </button>
-                ))
-              )}
-            </div>
-            <div className="mt-4 flex gap-2">
-              <button
-                onClick={() => setPendingQrCodeId(null)}
-                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 rounded-lg font-bold active:scale-95 transition-transform"
-              >
-                إلغاء
-              </button>
+      {/* ═══ Toast ═══ */}
+      {toast && (
+        <div className={`fixed top-14 left-1/2 -translate-x-1/2 w-[88%] max-w-sm z-[10001]
+                         ${toastBg[toast.type]} rounded-xl px-4 py-3 shadow-2xl animate-toast-in`}>
+          <div className="flex items-center gap-2">
+            <span className="text-xl flex-shrink-0">{toastIcon[toast.type]}</span>
+            <div className="min-w-0">
+              <p className="font-bold text-sm truncate">{toast.title}</p>
+              {toast.text && <p className="text-xs opacity-90 truncate">{toast.text}</p>}
             </div>
           </div>
         </div>
       )}
 
-      {/* ===== Styles ===== */}
-      <style>{`
-        @keyframes bounceIn {
-          0%   { opacity: 0; transform: translate(-50%, -20px) scale(0.95); }
-          60%  { opacity: 1; transform: translate(-50%, 5px) scale(1.02); }
-          100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
-        }
-        .animate-bounce-in { animation: bounceIn 0.25s ease-out; }
+      {/* ═══ نافذة ربط الطالب ═══ */}
+      {pendingQrId && (
+        <div className="fixed inset-0 z-[10000] bg-black/85 flex items-center justify-center p-4">
+          <div className="bg-white text-gray-900 rounded-xl p-4 w-full max-w-md max-h-[85vh] flex flex-col">
+            <h3 className="text-lg font-bold mb-1">ربط هوية جديدة</h3>
+            <p className="text-xs text-gray-500 mb-2">
+              اختر الطالب لربطه بهذا الرمز (مرة واحدة فقط)
+            </p>
+            <div className="bg-gray-100 rounded p-1.5 text-[10px] font-mono break-all mb-2" dir="ltr">
+              {pendingQrId}
+            </div>
 
-        @keyframes laserScan {
-          0%   { top: 5%;  opacity: 0; }
-          5%   { opacity: 1; }
-          45%  { top: 92%; opacity: 1; }
-          50%  { top: 92%; opacity: 0.3; }
-          55%  { top: 92%; opacity: 1; }
-          95%  { top: 5%;  opacity: 1; }
-          100% { top: 5%;  opacity: 0; }
+            {!onUpdateStudent && (
+              <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded text-red-600 text-xs">
+                لا توجد صلاحية ربط
+              </div>
+            )}
+
+            <input
+              value={searchText}
+              onChange={e => setSearchText(e.target.value)}
+              placeholder="ابحث بالاسم أو الرمز..."
+              className="border rounded-lg px-3 py-2 text-sm mb-2 w-full outline-none
+                         focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
+              autoFocus
+            />
+
+            <div className="flex-1 overflow-y-auto border rounded-lg divide-y min-h-0">
+              {linkableStudents.length === 0 ? (
+                <div className="p-3 text-center text-gray-400 text-sm">لا توجد نتائج</div>
+              ) : (
+                linkableStudents.map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => handleLink(s)}
+                    disabled={!onUpdateStudent}
+                    className="w-full text-right p-2.5 hover:bg-emerald-50 active:bg-emerald-100
+                               flex items-center justify-between transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-bold text-sm truncate">{s.name}</div>
+                      <div className="text-[10px] text-gray-500">
+                        {s.code} | {s.group || '-'}
+                      </div>
+                    </div>
+                    <span className="text-emerald-600 text-xs font-bold flex-shrink-0 mr-2">اختيار</span>
+                  </button>
+                ))
+              )}
+            </div>
+
+            <button
+              onClick={() => { setPendingQrId(null); setSearchText(''); }}
+              className="mt-3 w-full bg-gray-200 active:bg-gray-300 py-2 rounded-lg text-sm font-bold
+                         active:scale-[0.98] transition-transform"
+            >
+              إلغاء
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ CSS ═══ */}
+      <style>{`
+        @keyframes toastIn {
+          from { opacity: 0; transform: translate(-50%, -12px) scale(0.96); }
+          to   { opacity: 1; transform: translate(-50%, 0) scale(1); }
         }
-        .animate-laser-scan {
-          animation: laserScan 2.5s ease-in-out infinite;
+        .animate-toast-in { animation: toastIn 0.2s ease-out; }
+
+        @keyframes scanLine {
+          0%, 100% { top: 8%; opacity: 0.4; }
+          50%      { top: 88%; opacity: 1; }
+        }
+        .animate-scan-line {
+          animation: scanLine 2s ease-in-out infinite;
           position: absolute;
         }
 
-        .safe-area-top {
-          padding-top: max(0.75rem, env(safe-area-inset-top));
+        #${QR_REGION_ID} {
+          border-radius: 0.75rem;
+          overflow: hidden;
         }
-
         #${QR_REGION_ID} video {
           width: 100% !important;
           height: auto !important;
-          min-height: ${cameraHeight}px !important;
+          min-height: 280px !important;
           object-fit: cover !important;
         }
-        #${QR_REGION_ID} {
-          border-radius: 1rem;
-          overflow: hidden;
-          position: relative;
-        }
+        /* إخفاء عناصر المكتبة الزائدة */
         #${QR_REGION_ID} img[alt="Info icon"],
         #${QR_REGION_ID} > div:last-child {
           display: none !important;
         }
 
+        /* Scrollbar خفيف */
+        ::-webkit-scrollbar { width: 3px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 99px; }
+
+        /* Range input */
         input[type="range"] {
           -webkit-appearance: none;
-          appearance: none;
-          background: rgba(255,255,255,0.1);
-          border-radius: 999px;
-          height: 6px;
+          background: rgba(255,255,255,0.08);
+          border-radius: 99px;
+          height: 4px;
         }
         input[type="range"]::-webkit-slider-thumb {
           -webkit-appearance: none;
-          appearance: none;
-          width: 22px; height: 22px;
+          width: 18px; height: 18px;
           border-radius: 50%;
           background: #10b981;
           cursor: pointer;
-          box-shadow: 0 0 8px rgba(16,185,129,0.5);
         }
         input[type="range"]::-moz-range-thumb {
-          width: 22px; height: 22px;
+          width: 18px; height: 18px;
           border-radius: 50%;
           background: #10b981;
-          cursor: pointer;
           border: none;
-          box-shadow: 0 0 8px rgba(16,185,129,0.5);
-        }
-
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb {
-          background: rgba(255,255,255,0.2);
-          border-radius: 999px;
+          cursor: pointer;
         }
       `}</style>
     </div>
