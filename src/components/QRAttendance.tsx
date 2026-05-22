@@ -19,7 +19,7 @@ interface QRAttendanceProps {
 }
 
 type ToastType = 'success' | 'error' | 'info' | 'warning';
-type ScanMode = 'qr' | 'face' | 'bulk'; // 🆕 وضع المسح الجماعي
+type ScanMode = 'qr' | 'face' | 'bulk';
 type CameraFacing = 'environment' | 'user';
 
 interface ToastMessage {
@@ -29,7 +29,6 @@ interface ToastMessage {
   student?: Student;
 }
 
-// 🆕 معلومات الوجه المكتشف للرسم
 interface DetectedFaceBox {
   box: { x: number; y: number; width: number; height: number };
   student: Student | null;
@@ -41,8 +40,8 @@ interface DetectedFaceBox {
 const QR_REGION_ID = 'qr-reader-region';
 const DUPLICATE_BLOCK_MS = 30_000;
 const FACE_DUPLICATE_BLOCK_MS = 60_000;
-const BULK_FACE_BLOCK_MS = 120_000; // 🆕 منع التكرار 2 دقيقة بالوضع الجماعي
-const BOX_FADE_MS = 2000; // 🆕 المربع يبقى ظاهر ثانيتين بعد آخر اكتشاف
+const BULK_FACE_BLOCK_MS = 120_000;
+const BOX_FADE_MS = 2000;
 
 /* ─── استخراج معرف QR ─── */
 const extractQrCodeId = (text: string): string | null => {
@@ -195,10 +194,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const [registerMessage, setRegisterMessage] = useState('');
   const [captureProgress, setCaptureProgress] = useState(0);
 
-  /* 🆕 Bulk Mode State */
+  /* Bulk Mode State */
   const [bulkSessionStudents, setBulkSessionStudents] = useState<Student[]>([]);
   const [bulkShowSidebar, setBulkShowSidebar] = useState(true);
-  const [, forceRender] = useState(0); // لإعادة الرسم
+  const [, forceRender] = useState(0);
 
   /* ─── خريطة الطلاب ─── */
   const studentMap = useMemo(() => {
@@ -213,6 +212,9 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const studentsWithFace = useMemo(() => {
     return students.filter(s => s.faceDescriptor && s.faceDescriptor.length > 0);
   }, [students]);
+
+  const isFrontCamera = facing === 'user';
+  const isBulkMode = mode === 'bulk';
 
   /* ─── Toast ─── */
   const showToast = useCallback((msg: ToastMessage, ms = 2200) => {
@@ -372,7 +374,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             fps,
             qrbox: qrBox,
             aspectRatio,
-            disableFlip: currentFacing === 'environment',
+            disableFlip: true,
             videoConstraints: {
               facingMode: currentFacing,
               width: { ideal: lowEnd ? 1280 : 1920 },
@@ -396,7 +398,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             {
               fps: 5,
               qrbox: { width: 200, height: 200 },
-              disableFlip: currentFacing === 'environment',
+              disableFlip: true,
             },
             onDecoded,
             () => {}
@@ -556,12 +558,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   /* ─── تغيير الوضع ─── */
   useEffect(() => {
     if (!cameraReady) return;
-    
-    // امسح المربعات عند تغيير الوضع
+
     detectedFacesRef.current.clear();
-    
+
     if (mode === 'face' || mode === 'bulk') {
-      // وضع جماعي = خلفية، وضع فردي = أمامية
       const targetFacing: CameraFacing = mode === 'bulk' ? 'environment' : 'user';
       if (facing !== targetFacing) {
         setFacing(targetFacing);
@@ -574,7 +574,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     }
   }, [mode]); // eslint-disable-line
 
-  /* 🆕 ─── رسم المربعات على الـ Canvas ─── */
+  /* ─── رسم المربعات على الـ Canvas ─── */
   useEffect(() => {
     if (mode !== 'bulk' || !cameraReady) {
       if (animationFrameRef.current) {
@@ -594,7 +594,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         return;
       }
 
-      // ضبط حجم الـ canvas ليطابق الفيديو المعروض
       const rect = video.getBoundingClientRect();
       const containerRect = canvas.parentElement?.getBoundingClientRect();
       if (!containerRect) {
@@ -615,8 +614,8 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       const videoHeight = video.videoHeight || 720;
       const scaleX = canvas.width / videoWidth;
       const scaleY = canvas.height / videoHeight;
+      const mirrorX = isFrontCamera;
 
-      // ارسم كل مربع
       detectedFacesRef.current.forEach((face, key) => {
         const age = now - face.timestamp;
         if (age > BOX_FADE_MS) {
@@ -624,32 +623,32 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           return;
         }
 
-        // opacity حسب العمر
         const opacity = Math.max(0.4, 1 - age / BOX_FADE_MS);
 
-        // الألوان حسب الحالة
-        let strokeColor = '#ef4444'; // أحمر
+        let strokeColor = '#ef4444';
         let fillColor = 'rgba(239, 68, 68, 0.15)';
         let label = '❓ غير معروف';
 
         if (face.status === 'recognized') {
-          strokeColor = '#10b981'; // أخضر
+          strokeColor = '#10b981';
           fillColor = 'rgba(16, 185, 129, 0.2)';
           label = face.student?.name || '';
         } else if (face.status === 'already') {
-          strokeColor = '#f59e0b'; // أصفر
+          strokeColor = '#f59e0b';
           fillColor = 'rgba(245, 158, 11, 0.2)';
           label = `✓ ${face.student?.name || ''}`;
         } else if (face.status === 'analyzing') {
-          strokeColor = '#3b82f6'; // أزرق
+          strokeColor = '#3b82f6';
           fillColor = 'rgba(59, 130, 246, 0.2)';
           label = '🔍 جاري التحليل...';
         }
 
-        const x = face.box.x * scaleX;
+        // ✅ معالجة انعكاس المرآة
+        const rawX = face.box.x * scaleX;
         const y = face.box.y * scaleY;
         const w = face.box.width * scaleX;
         const h = face.box.height * scaleY;
+        const x = mirrorX ? (canvas.width - rawX - w) : rawX;
 
         // ملء خفيف
         ctx.fillStyle = fillColor.replace(/[\d.]+\)/, `${opacity * 0.2})`);
@@ -665,19 +664,15 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         const corner = Math.min(20, w / 4);
         ctx.lineWidth = 6;
         ctx.beginPath();
-        // أعلى يسار
         ctx.moveTo(x, y + corner);
         ctx.lineTo(x, y);
         ctx.lineTo(x + corner, y);
-        // أعلى يمين
         ctx.moveTo(x + w - corner, y);
         ctx.lineTo(x + w, y);
         ctx.lineTo(x + w, y + corner);
-        // أسفل يمين
         ctx.moveTo(x + w, y + h - corner);
         ctx.lineTo(x + w, y + h);
         ctx.lineTo(x + w - corner, y + h);
-        // أسفل يسار
         ctx.moveTo(x + corner, y + h);
         ctx.lineTo(x, y + h);
         ctx.lineTo(x, y + h - corner);
@@ -693,17 +688,14 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           const textX = x + (w - textWidth) / 2;
           const textY = y - textHeight - 6;
 
-          // خلفية النص
           ctx.fillStyle = strokeColor;
           ctx.fillRect(textX, textY, textWidth, textHeight);
-          
-          // النص
+
           ctx.fillStyle = '#ffffff';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(label, textX + textWidth / 2, textY + textHeight / 2);
 
-          // نسبة الدقة
           if (face.confidence > 0 && face.status === 'recognized') {
             ctx.font = 'bold 11px Arial, sans-serif';
             ctx.fillStyle = strokeColor;
@@ -711,7 +703,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             const confMetrics = ctx.measureText(confLabel);
             const confW = confMetrics.width + 10;
             const confY = y + h + 4;
-            
+
             ctx.fillRect(x + (w - confW) / 2, confY, confW, 18);
             ctx.fillStyle = '#ffffff';
             ctx.fillText(confLabel, x + w / 2, confY + 9);
@@ -731,7 +723,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         animationFrameRef.current = null;
       }
     };
-  }, [mode, cameraReady]);
+  }, [mode, cameraReady, isFrontCamera]);
 
   /* ─── المسح المستمر للوجوه (فردي + جماعي) ─── */
   useEffect(() => {
@@ -750,7 +742,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
     const isBulk = mode === 'bulk';
     const blockMs = isBulk ? BULK_FACE_BLOCK_MS : FACE_DUPLICATE_BLOCK_MS;
-    const intervalMs = isBulk ? 300 : 500; // أسرع في الوضع الجماعي
+    const intervalMs = isBulk ? 300 : 500;
 
     faceIntervalRef.current = window.setInterval(async () => {
       if (faceProcessingRef.current || !video || video.readyState < 2) return;
@@ -759,18 +751,14 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
       try {
         const detections = await extractAllFaceDescriptors(video);
-        
+
         if (isBulk) {
-          // 🆕 الوضع الجماعي - رسم مربعات لكل وجه
-          if (detections.length === 0) {
-            // ما يصير شي - المربعات القديمة تختفي تلقائياً
-            return;
-          }
+          if (detections.length === 0) return;
 
           for (const detection of detections) {
             const box = detection.detection.box;
             const boxKey = `${Math.round(box.x / 50)}_${Math.round(box.y / 50)}`;
-            
+
             const match = findBestMatch(detection.descriptor, studentsWithFace, 0.5);
             const now = Date.now();
 
@@ -781,7 +769,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               const recentlyScanned = now - lastTime < blockMs;
 
               if (recentlyScanned || isAlreadyPresent) {
-                // عرض كأصفر (مسجل سابقاً)
                 detectedFacesRef.current.set(boxKey, {
                   box: { x: box.x, y: box.y, width: box.width, height: box.height },
                   student,
@@ -790,9 +777,8 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                   timestamp: now,
                 });
               } else {
-                // ✅ تسجيل جديد!
                 lastScansRef.current[`bulk_${student.id}`] = now;
-                
+
                 detectedFacesRef.current.set(boxKey, {
                   box: { x: box.x, y: box.y, width: box.width, height: box.height },
                   student,
@@ -803,7 +789,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
                 await onMarkAttendance(student);
                 setScanCount(c => c + 1);
-                setBulkSessionStudents(prev => 
+                setBulkSessionStudents(prev =>
                   [student, ...prev.filter(s => s.id !== student.id)]
                 );
                 setRecentStudents(prev =>
@@ -812,7 +798,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                 playBulkSuccess();
               }
             } else {
-              // وجه غير معروف
               detectedFacesRef.current.set(boxKey, {
                 box: { x: box.x, y: box.y, width: box.width, height: box.height },
                 student: null,
@@ -825,7 +810,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
           forceRender(x => x + 1);
         } else {
-          // الوضع الفردي العادي
           if (detections.length === 0) return;
 
           for (const detection of detections) {
@@ -952,12 +936,12 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
     const updated = { ...student, qrCodeId: pendingQrId };
     onUpdateStudent(student.id, { qrCodeId: pendingQrId });
-    
+
     const qrId = pendingQrId;
     setPendingQrId(null);
     setQrLinkCode('');
     setQrLinkMessage('');
-    
+
     await processKnown(updated, qrId);
   }, [pendingQrId, onUpdateStudent, students, processKnown]);
 
@@ -1081,9 +1065,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     warning: '⚠️',
   };
 
-  const isFrontCamera = facing === 'user';
-  const isBulkMode = mode === 'bulk';
-
   return (
     <div className="fixed inset-0 z-[9999] bg-black text-white flex flex-col" dir="rtl">
 
@@ -1115,7 +1096,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         </div>
       </header>
 
-      {/* ═══ تبديل الوضع - 3 أزرار الآن ═══ */}
+      {/* ═══ تبديل الوضع ═══ */}
       <div className="px-3 py-2 bg-gray-900/60 border-b border-white/5 flex gap-1.5">
         <button
           onClick={() => setMode('qr')}
@@ -1137,7 +1118,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         >
           😊 بصمة
         </button>
-        {/* 🆕 الزر الجديد */}
         <button
           onClick={() => setMode('bulk')}
           className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all active:scale-95 relative ${
@@ -1175,7 +1155,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         </div>
       )}
 
-      {/* 🆕 ═══ تنبيه الوضع الجماعي ═══ */}
+      {/* ═══ تنبيه الوضع الجماعي ═══ */}
       {mode === 'bulk' && faceModelsReady && cameraReady && studentsWithFace.length > 0 && (
         <div className="mx-3 mt-2 p-2 bg-gradient-to-r from-orange-900/50 to-red-900/50 border border-orange-500/40 rounded-lg">
           <div className="flex items-center justify-between gap-2">
@@ -1231,13 +1211,14 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           <div className={`w-full mx-auto rounded-xl overflow-hidden border bg-gray-900 relative ${
             isBulkMode ? 'max-w-3xl border-orange-500/40' : 'max-w-lg border-emerald-500/30'
           }`}>
+            {/* ✅ إضافة class انعكاس المرآة للكاميرا الأمامية */}
             <div
               id={QR_REGION_ID}
-              className="w-full"
+              className={`w-full ${isFrontCamera ? 'front-camera' : ''}`}
               style={{ minHeight: isBulkMode ? '400px' : '280px' }}
             />
 
-            {/* 🆕 Canvas للمربعات في الوضع الجماعي */}
+            {/* Canvas للمربعات في الوضع الجماعي */}
             {isBulkMode && cameraReady && (
               <canvas
                 ref={overlayCanvasRef}
@@ -1282,7 +1263,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               </div>
             )}
 
-            {/* 🆕 عداد كبير في الوضع الجماعي */}
+            {/* عداد كبير في الوضع الجماعي */}
             {isBulkMode && cameraReady && (
               <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-orange-600 to-red-600 px-4 py-2 rounded-full shadow-xl z-10">
                 <div className="flex items-center gap-2 text-white">
@@ -1361,7 +1342,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             </div>
           )}
 
-          {/* إحصائيات (للأوضاع غير الجماعية) */}
+          {/* إحصائيات */}
           {!isBulkMode && (
             <div className="grid grid-cols-2 gap-2 w-full max-w-lg mx-auto">
               <div className="bg-white/5 rounded-lg p-2.5 text-center">
@@ -1377,7 +1358,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             </div>
           )}
 
-          {/* آخر المسجلين (للأوضاع غير الجماعية) */}
+          {/* آخر المسجلين */}
           {!isBulkMode && recentStudents.length > 0 && (
             <div className="w-full max-w-lg mx-auto bg-white/5 rounded-lg p-2.5">
               <p className="text-[11px] font-bold mb-1.5 text-emerald-300">آخر المسجلين:</p>
@@ -1395,11 +1376,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           )}
         </div>
 
-        {/* 🆕 شريط جانبي للوضع الجماعي */}
+        {/* شريط جانبي للوضع الجماعي */}
         {isBulkMode && bulkShowSidebar && (
           <div className="lg:w-80 bg-gray-900/95 border-t lg:border-t-0 lg:border-r border-white/10 flex flex-col max-h-[40vh] lg:max-h-none">
-            
-            {/* رأس الشريط */}
+
             <div className="p-3 border-b border-white/10 bg-gradient-to-r from-orange-900/50 to-red-900/50">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-bold text-orange-200 flex items-center gap-2">
@@ -1423,7 +1403,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               </div>
             </div>
 
-            {/* القائمة */}
             <div className="flex-1 overflow-y-auto p-2 space-y-1">
               {bulkSessionStudents.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 text-xs">
@@ -1451,7 +1430,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               )}
             </div>
 
-            {/* أسفل القائمة */}
             <div className="p-2 border-t border-white/10 bg-black/40">
               <div className="text-[10px] text-gray-400 text-center">
                 📊 إجمالي الطلاب: {students.length} • مع بصمة: {studentsWithFace.length}
@@ -1461,7 +1439,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         )}
       </div>
 
-      {/* ═══ Toast من فوق ═══ */}
+      {/* ═══ Toast ═══ */}
       {toast && (
         <div className={`fixed top-0 left-1/2 -translate-x-1/2 w-[92%] max-w-md z-[10001]
                          ${toastBg[toast.type]} rounded-b-2xl px-5 py-4 shadow-2xl animate-toast-drop`}
@@ -1621,7 +1599,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                 </p>
 
                 <div className="relative inline-block mb-3">
-                  <FaceCameraPreview />
+                  <FaceCameraPreview isFrontCamera={isFrontCamera} />
                   <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 200 200">
                     <circle cx="100" cy="100" r="95" fill="none" stroke="rgba(239, 68, 68, 0.2)" strokeWidth="6" />
                     <circle
@@ -1708,6 +1686,12 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           min-height: 280px !important;
           object-fit: cover !important;
         }
+
+        /* ✅ انعكاس المرآة للكاميرا الأمامية */
+        #${QR_REGION_ID}.front-camera video {
+          transform: scaleX(-1) !important;
+        }
+
         #${QR_REGION_ID} img[alt="Info icon"],
         #${QR_REGION_ID} > div:last-child {
           display: none !important;
@@ -1742,7 +1726,11 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 };
 
 /* ─── مكون معاينة الكاميرا ─── */
-const FaceCameraPreview: React.FC = () => {
+interface FaceCameraPreviewProps {
+  isFrontCamera: boolean;
+}
+
+const FaceCameraPreview: React.FC<FaceCameraPreviewProps> = ({ isFrontCamera }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -1756,7 +1744,7 @@ const FaceCameraPreview: React.FC = () => {
     if (!ctx) return;
 
     let animationId: number;
-    
+
     const draw = () => {
       if (video.readyState >= 2) {
         const size = 200;
@@ -1774,8 +1762,11 @@ const FaceCameraPreview: React.FC = () => {
         const sx = (vw - minDim) / 2;
         const sy = (vh - minDim) / 2;
 
-        ctx.translate(size, 0);
-        ctx.scale(-1, 1);
+        // ✅ انعكاس المرآة فقط للكاميرا الأمامية
+        if (isFrontCamera) {
+          ctx.translate(size, 0);
+          ctx.scale(-1, 1);
+        }
         ctx.drawImage(video, sx, sy, minDim, minDim, 0, 0, size, size);
         ctx.restore();
       }
@@ -1787,7 +1778,7 @@ const FaceCameraPreview: React.FC = () => {
     return () => {
       if (animationId) cancelAnimationFrame(animationId);
     };
-  }, []);
+  }, [isFrontCamera]);
 
   return (
     <canvas
