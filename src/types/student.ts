@@ -5,6 +5,8 @@ export interface Student {
   group?: string;
   universityId?: string;
   qrCodeId?: string;
+  faceDescriptor?: number[];
+  faceRegisteredAt?: string;
   createdAt: string;
   academicYear?: string;
 }
@@ -20,7 +22,7 @@ export interface AttendanceRecord {
   time: string;
   sessionId: string;
   status?: 'present' | 'absent';
-  method?: 'manual' | 'qr'; // 🆕 طريقة تسجيل الحضور
+  method?: 'manual' | 'qr' | 'face';
   academicYear?: string;
 }
 

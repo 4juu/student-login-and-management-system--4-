@@ -1,11 +1,12 @@
 import React, { useState, useRef, useMemo, useCallback } from 'react';
 import { Student } from '../types/student';
 import * as XLSX from 'xlsx';
+import { FaceRegister } from './FaceRegister';
 
 interface StudentManagerProps {
   students: Student[];
   onAddStudent: (student: Student) => void;
-  onAddMultipleStudents?: (students: Student[]) => void; // 🆕 إضافة دفعة واحدة
+  onAddMultipleStudents?: (students: Student[]) => void;
   onUpdateStudent?: (id: string, updates: Partial<Student>) => void;
   onDeleteStudent: (id: string) => void;
   onDeleteSelectedStudents: (ids: string[]) => void;
@@ -57,6 +58,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
 
   const [editingQrStudent, setEditingQrStudent] = useState<string | null>(null);
   const [editQrCodeId, setEditQrCodeId] = useState('');
+
+  const [showFaceRegister, setShowFaceRegister] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [groupFilter, setGroupFilter] = useState<string>('all');
@@ -218,7 +221,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         return;
       }
 
-      // 🆕 تأكيد قبل الاستيراد لو العدد كبير
       if (parsed.length > 50) {
         const confirmed = window.confirm(
           `📊 تم العثور على ${parsed.length} طالب في الملف.\n\nهل تريد المتابعة بالاستيراد؟`
@@ -241,13 +243,12 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       const existingUniIds = new Set(students.map(s => s.universityId).filter(Boolean));
       const existingQrCodes = new Set(students.map(s => s.qrCodeId).filter(Boolean));
       const existingNames = new Set(students.map(s => s.name));
-      
+
       let currentCode = startCode;
       let addedCount = 0;
       let skippedCount = 0;
       let qrLinkedCount = 0;
 
-      // 🆕 تجميع الطلاب الجدد في مصفوفة قبل الحفظ
       const newStudentsBatch: Student[] = [];
 
       for (const student of parsed) {
@@ -295,13 +296,10 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         addedCount++;
       }
 
-      // 🆕 إضافة دفعة واحدة (لو الدالة متوفرة) أو واحد واحد
       if (newStudentsBatch.length > 0) {
         if (onAddMultipleStudents) {
-          // ⚡ طريقة سريعة - إضافة دفعة واحدة
           onAddMultipleStudents(newStudentsBatch);
         } else {
-          // 🐢 الطريقة القديمة - إضافة واحد واحد
           for (const student of newStudentsBatch) {
             onAddStudent(student);
           }
@@ -425,6 +423,12 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     onUpdateStudent(student.id, { qrCodeId: undefined });
   };
 
+  const removeFaceData = (student: Student) => {
+    if (!onUpdateStudent) return;
+    if (!window.confirm(`هل تريد حذف بصمة الوجه من ${student.name}؟`)) return;
+    onUpdateStudent(student.id, { faceDescriptor: undefined, faceRegisteredAt: undefined });
+  };
+
   const uniqueGroups = useMemo(() => {
     const groups = Array.from(new Set(students.map(s => s.group).filter(Boolean))) as string[];
     groups.sort(sortGroups);
@@ -467,6 +471,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   const studentsWithoutUniId = students.length - studentsWithUniId;
   const studentsWithQr = students.filter(s => s.qrCodeId).length;
   const studentsWithoutQr = students.length - studentsWithQr;
+  const studentsWithFace = students.filter(s => s.faceDescriptor && s.faceDescriptor.length > 0).length;
+  const studentsWithoutFace = students.length - studentsWithFace;
 
   const pageIds = paginatedStudents.map(s => s.id);
   const allInPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id));
@@ -676,6 +682,46 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         )}
       </div>
 
+      {/* ═══════════ بصمات الوجه ═══════════ */}
+      {students.length > 0 && onUpdateStudent && (
+        <div className="mb-6 p-5 bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg">
+          <h3 className="text-lg font-bold text-purple-900 mb-2 flex items-center gap-2">
+            😊 بصمات الوجه
+            <span className="text-xs font-normal bg-purple-200 text-purple-800 px-2 py-0.5 rounded-full">
+              جديد ⚡
+            </span>
+          </h3>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3">
+            <div className="bg-white rounded-lg p-2 text-center border border-purple-200">
+              <div className="text-2xl font-bold text-purple-600">{studentsWithFace}</div>
+              <div className="text-xs text-purple-700">مسجّلين</div>
+            </div>
+            <div className="bg-white rounded-lg p-2 text-center border border-purple-200">
+              <div className="text-2xl font-bold text-gray-400">{studentsWithoutFace}</div>
+              <div className="text-xs text-gray-600">بدون بصمة</div>
+            </div>
+            <div className="bg-white rounded-lg p-2 text-center border border-purple-200">
+              <div className="text-2xl font-bold text-pink-600">
+                {students.length > 0 ? Math.round((studentsWithFace / students.length) * 100) : 0}%
+              </div>
+              <div className="text-xs text-pink-700">نسبة الإكمال</div>
+            </div>
+          </div>
+
+          <p className="text-xs text-purple-700 mb-3 bg-white/60 p-2 rounded">
+            💡 <strong>كيف يعمل؟</strong> سجّل بصمة وجه كل طالب مرة واحدة (يأخذ ثانيتين فقط)، ثم يستطيع الطلاب تسجيل حضورهم بمجرد المرور قبال الكاميرا تلقائياً، بدون باركود أو كود يدوي.
+          </p>
+
+          <button
+            onClick={() => setShowFaceRegister(true)}
+            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-3 px-6 rounded-md shadow-md transition duration-200 transform active:scale-95"
+          >
+            📷 فتح أداة التسجيل الجماعي السريع
+          </button>
+        </div>
+      )}
+
       {students.length > 1 && (onSortByName || onSortByGroup) && (
         <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg">
           <h3 className="text-sm font-bold text-purple-800 mb-3 flex items-center gap-2">
@@ -862,13 +908,14 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الكروب</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">🪪 الرقم الجامعي</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">🔳 رمز QR</th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">😊 الوجه</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">إجراءات</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {paginatedStudents.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
                   <div className="flex flex-col items-center gap-2">
                     <p className="font-medium">
                       {searchQuery || groupFilter !== 'all' ? '🔍 لا توجد نتائج للبحث' : 'لا توجد طلاب مسجلين'}
@@ -882,6 +929,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             ) : (
               paginatedStudents.map((student, index) => {
                 const globalIndex = (safeCurrentPage - 1) * pageSize + index + 1;
+                const hasFace = student.faceDescriptor && student.faceDescriptor.length > 0;
                 return (
                   <tr
                     key={student.id}
@@ -1031,6 +1079,33 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                       )}
                     </td>
 
+                    {/* عمود بصمة الوجه */}
+                    <td className="px-4 py-4 whitespace-nowrap text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        {hasFace ? (
+                          <>
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-purple-50 text-purple-700 text-xs font-medium rounded border border-purple-200"
+                              title={student.faceRegisteredAt ? `سُجلت في: ${new Date(student.faceRegisteredAt).toLocaleDateString('ar-EG')}` : 'مسجّلة'}
+                            >
+                              ✅ مسجّلة
+                            </span>
+                            {onUpdateStudent && (
+                              <button
+                                onClick={() => removeFaceData(student)}
+                                className="text-red-500 hover:text-red-700 text-xs"
+                                title="حذف بصمة الوجه"
+                              >
+                                🗑️
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-gray-400 text-xs italic">غير مسجّلة</span>
+                        )}
+                      </div>
+                    </td>
+
                     <td className="px-4 py-4 whitespace-nowrap text-right">
                       <button
                         onClick={() => {
@@ -1117,12 +1192,10 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             <span>📊 <strong>إجمالي:</strong> {students.length}</span>
             <span>🔳 <strong>مربوط QR:</strong> {studentsWithQr}</span>
             {studentsWithoutQr > 0 && (
-              <span className="text-emerald-700">⏳ <strong>بانتظار الربط:</strong> {studentsWithoutQr}</span>
+              <span className="text-emerald-700">⏳ <strong>بانتظار QR:</strong> {studentsWithoutQr}</span>
             )}
-            <span>🪪 <strong>مع رقم جامعي:</strong> {studentsWithUniId}</span>
-            {studentsWithoutUniId > 0 && (
-              <span className="text-yellow-700">⚠️ <strong>بدون رقم:</strong> {studentsWithoutUniId}</span>
-            )}
+            <span>🪪 <strong>رقم جامعي:</strong> {studentsWithUniId}</span>
+            <span className="text-purple-700">😊 <strong>بصمة وجه:</strong> {studentsWithFace}</span>
             {selectedIds.size > 0 && (
               <span>| <strong>المحدد:</strong> {selectedIds.size}</span>
             )}
@@ -1131,6 +1204,15 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             )}
           </div>
         </div>
+      )}
+
+      {/* نافذة تسجيل البصمات */}
+      {showFaceRegister && onUpdateStudent && (
+        <FaceRegister
+          students={students}
+          onUpdateStudent={onUpdateStudent}
+          onClose={() => setShowFaceRegister(false)}
+        />
       )}
     </div>
   );
