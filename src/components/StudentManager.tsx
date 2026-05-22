@@ -2,6 +2,11 @@ import React, { useState, useRef, useMemo, useCallback } from 'react';
 import { Student } from '../types/student';
 import * as XLSX from 'xlsx';
 import { FaceRegister } from './FaceRegister';
+import {
+  compressFaceDescriptor,
+  detectDescriptorFormat,
+  getCompressionStats,
+} from '../services/faceCompression';
 
 interface StudentManagerProps {
   students: Student[];
@@ -60,6 +65,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   const [editQrCodeId, setEditQrCodeId] = useState('');
 
   const [showFaceRegister, setShowFaceRegister] = useState(false);
+  const [compressing, setCompressing] = useState(false);
+  const [compressionProgress, setCompressionProgress] = useState({ current: 0, total: 0 });
 
   const [searchQuery, setSearchQuery] = useState('');
   const [groupFilter, setGroupFilter] = useState<string>('all');
@@ -429,6 +436,63 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     onUpdateStudent(student.id, { faceDescriptor: undefined, faceRegisteredAt: undefined });
   };
 
+  /* 🆕 ضغط كل البصمات غير المضغوطة */
+  const handleCompressAll = async () => {
+    if (!onUpdateStudent) return;
+
+    const uncompressedStudents = students.filter(s => {
+      if (!s.faceDescriptor) return false;
+      const format = detectDescriptorFormat(s.faceDescriptor);
+      return format === 'normal';
+    });
+
+    if (uncompressedStudents.length === 0) {
+      alert('✨ كل البصمات مضغوطة بالفعل!');
+      return;
+    }
+
+    const stats = getCompressionStats(students);
+    
+    if (!window.confirm(
+      `🗜️ سيتم ضغط ${uncompressedStudents.length} بصمة\n\n` +
+      `💾 توفير متوقع: ~${stats.potentialSavingsKB.toFixed(1)} KB\n` +
+      `📊 الدقة: لن تتأثر (أقل من 1%)\n\n` +
+      `هل تريد المتابعة؟`
+    )) return;
+
+    setCompressing(true);
+    setCompressionProgress({ current: 0, total: uncompressedStudents.length });
+
+    try {
+      let count = 0;
+      for (const student of uncompressedStudents) {
+        if (!student.faceDescriptor) continue;
+        
+        const compressed = compressFaceDescriptor(student.faceDescriptor);
+        onUpdateStudent(student.id, {
+          faceDescriptor: compressed,
+          faceCompressed: true,
+        });
+        
+        count++;
+        setCompressionProgress({ current: count, total: uncompressedStudents.length });
+        
+        // فاصل صغير لتحديث الواجهة
+        if (count % 10 === 0) {
+          await new Promise(r => setTimeout(r, 50));
+        }
+      }
+
+      alert(`✅ تم ضغط ${count} بصمة بنجاح!\n💾 تم توفير ~${stats.potentialSavingsKB.toFixed(1)} KB`);
+    } catch (e) {
+      console.error(e);
+      alert('❌ حدث خطأ أثناء الضغط');
+    } finally {
+      setCompressing(false);
+      setCompressionProgress({ current: 0, total: 0 });
+    }
+  };
+
   const uniqueGroups = useMemo(() => {
     const groups = Array.from(new Set(students.map(s => s.group).filter(Boolean))) as string[];
     groups.sort(sortGroups);
@@ -473,6 +537,9 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   const studentsWithoutQr = students.length - studentsWithQr;
   const studentsWithFace = students.filter(s => s.faceDescriptor && s.faceDescriptor.length > 0).length;
   const studentsWithoutFace = students.length - studentsWithFace;
+
+  // 🆕 إحصائيات الضغط
+  const compressionStats = useMemo(() => getCompressionStats(students), [students]);
 
   const pageIds = paginatedStudents.map(s => s.id);
   const allInPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id));
@@ -692,7 +759,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             </span>
           </h3>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3">
+          {/* الإحصائيات الأساسية - 4 خانات */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
             <div className="bg-white rounded-lg p-2 text-center border border-purple-200">
               <div className="text-2xl font-bold text-purple-600">{studentsWithFace}</div>
               <div className="text-xs text-purple-700">مسجّلين</div>
@@ -707,7 +775,91 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               </div>
               <div className="text-xs text-pink-700">نسبة الإكمال</div>
             </div>
+            {/* 🆕 خانة الحجم */}
+            <div className="bg-white rounded-lg p-2 text-center border border-emerald-200">
+              <div className="text-2xl font-bold text-emerald-600">
+                {compressionStats.totalSizeKB < 1024 
+                  ? `${compressionStats.totalSizeKB.toFixed(1)}`
+                  : `${(compressionStats.totalSizeKB / 1024).toFixed(2)}`
+                }
+              </div>
+              <div className="text-xs text-emerald-700">
+                {compressionStats.totalSizeKB < 1024 ? 'KB' : 'MB'} إجمالي
+              </div>
+            </div>
           </div>
+
+          {/* 🆕 لوحة الضغط الذكية */}
+          {studentsWithFace > 0 && (
+            <div className="bg-white rounded-lg p-3 mb-3 border-2 border-purple-200 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-bold text-gray-800 flex items-center gap-1">
+                  🗜️ حالة الضغط
+                </h4>
+                {compressionStats.uncompressedCount > 0 && (
+                  <button
+                    onClick={handleCompressAll}
+                    disabled={compressing}
+                    className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 text-white text-xs font-bold rounded-md transition shadow-sm"
+                  >
+                    {compressing 
+                      ? `⏳ ${compressionProgress.current}/${compressionProgress.total}`
+                      : `🗜️ ضغط ${compressionStats.uncompressedCount} بصمة`
+                    }
+                  </button>
+                )}
+              </div>
+
+              {/* شريط تقدم الضغط */}
+              {compressing && (
+                <div className="mb-2">
+                  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                    <div 
+                      className="bg-gradient-to-r from-emerald-500 to-teal-500 h-2 transition-all duration-200"
+                      style={{ width: `${(compressionProgress.current / compressionProgress.total) * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 text-center mt-1">
+                    جاري الضغط: {compressionProgress.current} من {compressionProgress.total}
+                  </p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex items-center gap-2 bg-emerald-50 p-2 rounded border border-emerald-200">
+                  <span className="text-emerald-600 text-xl">✓</span>
+                  <div className="flex-1">
+                    <div className="font-bold text-emerald-800 text-lg leading-none">
+                      {compressionStats.compressedCount}
+                    </div>
+                    <div className="text-emerald-600 text-[10px]">مضغوطة</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 bg-amber-50 p-2 rounded border border-amber-200">
+                  <span className="text-amber-600 text-xl">⚠️</span>
+                  <div className="flex-1">
+                    <div className="font-bold text-amber-800 text-lg leading-none">
+                      {compressionStats.uncompressedCount}
+                    </div>
+                    <div className="text-amber-600 text-[10px]">غير مضغوطة</div>
+                  </div>
+                </div>
+              </div>
+
+              {compressionStats.uncompressedCount > 0 && (
+                <div className="mt-2 text-[11px] text-gray-700 bg-gradient-to-r from-amber-50 to-yellow-50 p-2 rounded border border-amber-200">
+                  💡 يمكنك توفير <strong className="text-emerald-700">~{compressionStats.potentialSavingsKB.toFixed(1)} KB</strong> بضغط البصمات غير المضغوطة. <strong>الضغط آمن</strong> ولا يؤثر على دقة التعرف (أقل من 1%).
+                </div>
+              )}
+
+              {compressionStats.compressedCount > 0 && compressionStats.uncompressedCount === 0 && (
+                <div className="mt-2 text-[11px] text-emerald-700 bg-emerald-50 p-2 rounded border border-emerald-200 flex items-center gap-1">
+                  <span className="text-base">✨</span>
+                  <span>ممتاز! كل البصمات مضغوطة. توفر <strong>~75%</strong> من المساحة في قاعدة البيانات.</span>
+                </div>
+              )}
+            </div>
+          )}
 
           <p className="text-xs text-purple-700 mb-3 bg-white/60 p-2 rounded">
             💡 <strong>كيف يعمل؟</strong> سجّل بصمة وجه كل طالب مرة واحدة (يأخذ ثانيتين فقط)، ثم يستطيع الطلاب تسجيل حضورهم بمجرد المرور قبال الكاميرا تلقائياً، بدون باركود أو كود يدوي.
@@ -930,6 +1082,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               paginatedStudents.map((student, index) => {
                 const globalIndex = (safeCurrentPage - 1) * pageSize + index + 1;
                 const hasFace = student.faceDescriptor && student.faceDescriptor.length > 0;
+                const faceFormat = hasFace ? detectDescriptorFormat(student.faceDescriptor) : null;
+                const isCompressed = faceFormat === 'compressed' || faceFormat === 'base64';
                 return (
                   <tr
                     key={student.id}
@@ -1079,16 +1233,24 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                       )}
                     </td>
 
-                    {/* عمود بصمة الوجه */}
+                    {/* عمود بصمة الوجه - مع علامة الضغط */}
                     <td className="px-4 py-4 whitespace-nowrap text-center">
                       <div className="flex items-center justify-center gap-1">
                         {hasFace ? (
                           <>
                             <span
-                              className="inline-flex items-center gap-1 px-2 py-1 bg-purple-50 text-purple-700 text-xs font-medium rounded border border-purple-200"
-                              title={student.faceRegisteredAt ? `سُجلت في: ${new Date(student.faceRegisteredAt).toLocaleDateString('ar-EG')}` : 'مسجّلة'}
+                              className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border ${
+                                isCompressed
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}
+                              title={
+                                student.faceRegisteredAt 
+                                  ? `سُجلت في: ${new Date(student.faceRegisteredAt).toLocaleDateString('ar-EG')}\n${isCompressed ? '🗜️ مضغوطة' : '⚠️ غير مضغوطة'}`
+                                  : 'مسجّلة'
+                              }
                             >
-                              ✅ مسجّلة
+                              {isCompressed ? '✅ 🗜️' : '✅ ⚠️'}
                             </span>
                             {onUpdateStudent && (
                               <button
@@ -1196,6 +1358,11 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             )}
             <span>🪪 <strong>رقم جامعي:</strong> {studentsWithUniId}</span>
             <span className="text-purple-700">😊 <strong>بصمة وجه:</strong> {studentsWithFace}</span>
+            {compressionStats.totalSizeKB > 0 && (
+              <span className="text-emerald-700">
+                💾 <strong>حجم البصمات:</strong> {compressionStats.totalSizeKB < 1024 ? `${compressionStats.totalSizeKB.toFixed(1)} KB` : `${(compressionStats.totalSizeKB / 1024).toFixed(2)} MB`}
+              </span>
+            )}
             {selectedIds.size > 0 && (
               <span>| <strong>المحدد:</strong> {selectedIds.size}</span>
             )}

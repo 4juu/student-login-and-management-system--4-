@@ -1,12 +1,15 @@
 import * as faceapi from 'face-api.js';
+import {
+  compressFaceDescriptor,
+  ensureDecompressed,
+} from './faceCompression';
 
 let modelsLoaded = false;
 let loadingPromise: Promise<void> | null = null;
 
-// ✅ تحميل الموديلات من CDN - بدون تحميل يدوي
 const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
 
-/* ─── تحميل الموديلات (مرة وحدة فقط) ─── */
+/* ─── تحميل الموديلات ─── */
 export const loadFaceModels = async (): Promise<void> => {
   if (modelsLoaded) return;
   if (loadingPromise) return loadingPromise;
@@ -32,13 +35,12 @@ export const loadFaceModels = async (): Promise<void> => {
 
 export const areModelsLoaded = () => modelsLoaded;
 
-/* ─── إعدادات الكاشف (سريعة) ─── */
 const detectorOptions = new faceapi.TinyFaceDetectorOptions({
   inputSize: 320,
   scoreThreshold: 0.5,
 });
 
-/* ─── استخراج بصمة من فيديو/صورة ─── */
+/* ─── استخراج بصمة من فيديو ─── */
 export const extractFaceDescriptor = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ): Promise<Float32Array | null> => {
@@ -52,7 +54,7 @@ export const extractFaceDescriptor = async (
   return result?.descriptor || null;
 };
 
-/* ─── استخراج كل الوجوه (للوضع المتعدد) ─── */
+/* ─── استخراج كل الوجوه ─── */
 export const extractAllFaceDescriptors = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ) => {
@@ -67,21 +69,27 @@ export const extractAllFaceDescriptors = async (
 /* ─── مقارنة بصمتين ─── */
 export const compareFaces = (
   desc1: Float32Array | number[],
-  desc2: Float32Array | number[]
+  desc2: Float32Array | number[] | string
 ): number => {
   const a = desc1 instanceof Float32Array ? desc1 : new Float32Array(desc1);
-  const b = desc2 instanceof Float32Array ? desc2 : new Float32Array(desc2);
+  
+  // 🆕 فك الضغط تلقائياً لو كانت مضغوطة
+  const desc2Array = typeof desc2 === 'string' || (Array.isArray(desc2) && desc2.every(v => Number.isInteger(v)))
+    ? ensureDecompressed(desc2)
+    : (Array.isArray(desc2) ? desc2 : Array.from(desc2));
+  
+  const b = new Float32Array(desc2Array);
   return faceapi.euclideanDistance(a, b);
 };
 
-/* ─── البحث عن أفضل تطابق من قائمة ─── */
+/* ─── البحث عن أفضل تطابق ─── */
 export interface FaceMatchResult<T> {
   item: T;
   distance: number;
   confidence: number;
 }
 
-export const findBestMatch = <T extends { faceDescriptor?: number[] }>(
+export const findBestMatch = <T extends { faceDescriptor?: number[] | string }>(
   queryDescriptor: Float32Array,
   items: T[],
   threshold: number = 0.5
@@ -89,9 +97,10 @@ export const findBestMatch = <T extends { faceDescriptor?: number[] }>(
   let best: FaceMatchResult<T> | null = null;
 
   for (const item of items) {
-    if (!item.faceDescriptor || item.faceDescriptor.length === 0) continue;
-
-    const distance = compareFaces(queryDescriptor, item.faceDescriptor);
+    if (!item.faceDescriptor) continue;
+    
+    // 🆕 يدعم المضغوطة والعادية تلقائياً
+    const distance = compareFaces(queryDescriptor, item.faceDescriptor as any);
 
     if (distance < threshold) {
       if (!best || distance < best.distance) {
@@ -107,7 +116,13 @@ export const findBestMatch = <T extends { faceDescriptor?: number[] }>(
   return best;
 };
 
-/* ─── تحويل Float32Array → Array عادي للحفظ ─── */
+/* ─── 🆕 تحويل Float32Array → مضغوطة (الافتراضي الآن) ─── */
 export const descriptorToArray = (descriptor: Float32Array): number[] => {
+  // 🗜️ ضغط تلقائي عند الحفظ!
+  return compressFaceDescriptor(descriptor);
+};
+
+/* ─── تحويل بدون ضغط (للحالات الخاصة) ─── */
+export const descriptorToArrayUncompressed = (descriptor: Float32Array): number[] => {
   return Array.from(descriptor);
 };

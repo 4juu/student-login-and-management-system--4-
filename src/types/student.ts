@@ -5,8 +5,9 @@ export interface Student {
   group?: string;
   universityId?: string;
   qrCodeId?: string;
-  faceDescriptor?: number[];
+  faceDescriptor?: number[]; // 🆕 الآن يدعم المضغوطة (Int8) والعادية (Float32) معاً
   faceRegisteredAt?: string;
+  faceCompressed?: boolean; // 🆕 علامة للإشارة لأن البصمة مضغوطة
   createdAt: string;
   academicYear?: string;
 }
