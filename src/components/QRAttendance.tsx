@@ -184,7 +184,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const [cameraStatus,    setCameraStatus]    = useState<'starting'|'ready'|'error'|'restarting'>('starting');
   const [bulkStudents,    setBulkStudents]    = useState<Student[]>([]);
   const [bulkDetected,    setBulkDetected]    = useState(0);
-  const [bulkSidebar,     setBulkSidebar]     = useState(true);
+  const [bulkSidebar,     setBulkSidebar]     = useState(false);
 
   // ← القيمة الافتراضية 'far' (متوازن) والخيار الثاني 'extreme' (بعيد)
   const [sensitivity, setSensitivity] = useState<BulkSensitivity>('far');
