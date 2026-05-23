@@ -1,4 +1,3 @@
-// src/services/faceRecognition.ts
 import * as faceapi from 'face-api.js';
 import {
   compressFaceDescriptor,
@@ -13,7 +12,6 @@ const MODEL_URLS = [
   'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights',
 ];
 
-/* ─── تحميل الموديلات ─── */
 export const loadFaceModels = async (): Promise<void> => {
   if (modelsLoaded) return;
   if (loadingPromise) return loadingPromise;
@@ -52,25 +50,28 @@ export const resetModels = () => {
 
 export const areModelsLoaded = () => modelsLoaded;
 
-/* ─── إعدادات الكاشف ─── */
-const detectorOptionsFast = new faceapi.TinyFaceDetectorOptions({
-  inputSize: 416,
-  scoreThreshold: 0.45,
-});
+/* ─── قدرة الجهاز ─── */
+const getDeviceInputSize = (): 160 | 224 | 320 | 416 | 512 | 608 => {
+  const cores  = navigator.hardwareConcurrency || 2;
+  const memory = (navigator as any).deviceMemory || 2;
+  if (cores >= 8 && memory >= 6) return 608;
+  if (cores >= 4 && memory >= 3) return 416;
+  return 320;
+};
 
-const detectorOptionsBulk = new faceapi.TinyFaceDetectorOptions({
-  inputSize: 608,
-  scoreThreshold: 0.38,
-});
+/* ─── إعدادات ديناميكية حسب الجهاز ─── */
+const getDetectorOptions = () => {
+  const inputSize = getDeviceInputSize();
+  return new faceapi.TinyFaceDetectorOptions({
+    inputSize,
+    scoreThreshold: 0.38,
+  });
+};
 
-const detectorOptionsFar = new faceapi.TinyFaceDetectorOptions({
-  inputSize: 800,
-  scoreThreshold: 0.30,
-});
-
+/* ─── SSD فقط للأجهزة القوية ─── */
 const detectorOptionsSSD = new faceapi.SsdMobilenetv1Options({
   minConfidence: 0.35,
-  maxResults: 20,
+  maxResults: 10,
 });
 
 /* ─── Canvas مُشترك ─── */
@@ -87,7 +88,6 @@ const getSharedCanvas = (width: number, height: number): HTMLCanvasElement => {
   return sharedCanvas;
 };
 
-/* ─── تحسين الصورة ─── */
 const preprocessFrame = (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
   targetWidth = 1280
@@ -105,14 +105,14 @@ const preprocessFrame = (
 
   sharedCtx.imageSmoothingEnabled = true;
   sharedCtx.imageSmoothingQuality = 'high';
-  sharedCtx.filter = 'contrast(1.15) brightness(1.05) saturate(1.1)';
+  sharedCtx.filter = 'contrast(1.15) brightness(1.05)';
   sharedCtx.drawImage(input, 0, 0, w, h);
   sharedCtx.filter = 'none';
 
   return canvas;
 };
 
-/* ─── استخراج بصمة واحدة ─── */
+/* ─── بصمة واحدة ─── */
 export const extractFaceDescriptor = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ): Promise<Float32Array | null> => {
@@ -120,15 +120,15 @@ export const extractFaceDescriptor = async (
   const processed = preprocessFrame(input, 640);
 
   let result = await faceapi
-    .detectSingleFace(processed, detectorOptionsFast)
+    .detectSingleFace(processed, getDetectorOptions())
     .withFaceLandmarks(true)
     .withFaceDescriptor();
 
   if (!result) {
     result = await faceapi
       .detectSingleFace(processed, new faceapi.TinyFaceDetectorOptions({
-        inputSize: 512,
-        scoreThreshold: 0.35,
+        inputSize: 320,
+        scoreThreshold: 0.32,
       }))
       .withFaceLandmarks(true)
       .withFaceDescriptor();
@@ -137,52 +137,80 @@ export const extractFaceDescriptor = async (
   return result?.descriptor || null;
 };
 
-/* ─── استخراج كل الوجوه ─── */
+/* ─── كل الوجوه - الطريقة الأساسية (متوازن) ─── */
 export const extractAllFaceDescriptors = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ) => {
   if (!modelsLoaded) await loadFaceModels();
   const processed = preprocessFrame(input, 1280);
+
   return faceapi
-    .detectAllFaces(processed, detectorOptionsBulk)
+    .detectAllFaces(processed, getDetectorOptions())
     .withFaceLandmarks(true)
     .withFaceDescriptors();
 };
 
-/* ─── الكشف الهجين ─── */
+/* ─── كشف هجين - بالتسلسل مو بالتوازي ─── */
 export const extractAllFaceDescriptorsHybrid = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ) => {
   if (!modelsLoaded) await loadFaceModels();
-  const processed = preprocessFrame(input, 1920);
 
-  const [bulkFaces, farFaces, ssdFaces] = await Promise.allSettled([
-    faceapi.detectAllFaces(processed, detectorOptionsBulk)
-      .withFaceLandmarks(true).withFaceDescriptors(),
-    faceapi.detectAllFaces(processed, detectorOptionsFar)
-      .withFaceLandmarks(true).withFaceDescriptors(),
-    faceapi.detectAllFaces(processed, detectorOptionsSSD)
-      .withFaceLandmarks(true).withFaceDescriptors(),
-  ]);
+  const cores  = navigator.hardwareConcurrency || 2;
+  const memory = (navigator as any).deviceMemory || 2;
+  const isHighEnd = cores >= 8 && memory >= 6;
 
-  const bulk = bulkFaces.status === 'fulfilled' ? bulkFaces.value : [];
-  const far  = farFaces.status  === 'fulfilled' ? farFaces.value  : [];
-  const ssd  = ssdFaces.status  === 'fulfilled' ? ssdFaces.value  : [];
+  const targetWidth = isHighEnd ? 1280 : 960;
+  const processed   = preprocessFrame(input, targetWidth);
 
-  const merged = [...bulk];
-  const IOU_THRESHOLD = 0.4;
+  const options = getDetectorOptions();
 
-  const addIfUnique = (face: typeof bulk[0]) => {
-    const isDup = merged.some(m =>
-      calculateIoU(m.detection.box, face.detection.box) > IOU_THRESHOLD
-    );
-    if (!isDup) merged.push(face);
-  };
+  /* الجهاز القوي: موديلين بالتسلسل (مو بالتوازي) */
+  if (isHighEnd) {
+    // موديل 1: TinyFaceDetector
+    let tiny: any[] = [];
+    try {
+      tiny = await faceapi
+        .detectAllFaces(processed, options)
+        .withFaceLandmarks(true)
+        .withFaceDescriptors();
+    } catch {
+      tiny = [];
+    }
 
-  far.forEach(addIfUnique);
-  ssd.forEach(addIfUnique);
+    const merged = [...tiny];
+    const IOU_THRESHOLD = 0.4;
 
-  return merged;
+    // موديل 2: SSD — بالتسلسل بعد الأول
+    let ssd: any[] = [];
+    try {
+      ssd = await faceapi
+        .detectAllFaces(processed, detectorOptionsSSD)
+        .withFaceLandmarks(true)
+        .withFaceDescriptors();
+    } catch {
+      ssd = [];
+    }
+
+    ssd.forEach((face: any) => {
+      const isDup = merged.some(m =>
+        calculateIoU(m.detection.box, face.detection.box) > IOU_THRESHOLD
+      );
+      if (!isDup) merged.push(face);
+    });
+
+    return merged;
+  }
+
+  /* الجهاز المتوسط/الضعيف: موديل واحد فقط */
+  try {
+    return await faceapi
+      .detectAllFaces(processed, options)
+      .withFaceLandmarks(true)
+      .withFaceDescriptors();
+  } catch {
+    return [];
+  }
 };
 
 /* ─── IoU ─── */
