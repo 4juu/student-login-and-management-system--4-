@@ -1,4 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+// QRAttendance.tsx - محسّن كامل
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+} from 'react';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { AttendanceSession, Student } from '../types/student';
 import {
@@ -41,7 +48,7 @@ const QR_REGION_ID = 'qr-reader-region';
 const DUPLICATE_BLOCK_MS = 30_000;
 const FACE_DUPLICATE_BLOCK_MS = 60_000;
 const BULK_FACE_BLOCK_MS = 120_000;
-const BOX_FADE_MS = 2000;
+const BOX_FADE_MS = 2500;
 
 /* ─── استخراج معرف QR ─── */
 const extractQrCodeId = (text: string): string | null => {
@@ -53,7 +60,13 @@ const extractQrCodeId = (text: string): string | null => {
   } catch {}
   try {
     const obj = JSON.parse(raw);
-    const val = obj.qrCodeId || obj.qrId || obj.id || obj.studentId || obj.universityId || obj.code;
+    const val =
+      obj.qrCodeId ||
+      obj.qrId ||
+      obj.id ||
+      obj.studentId ||
+      obj.universityId ||
+      obj.code;
     if (val) return String(val).trim();
   } catch {}
   if (/^[A-Za-z0-9_-]{3,100}$/.test(raw)) return raw;
@@ -61,63 +74,37 @@ const extractQrCodeId = (text: string): string | null => {
 };
 
 /* ─── تأثيرات صوتية ─── */
+const createBeep = (freq: number, duration: number, vol = 0.06) => {
+  try {
+    const AC =
+      window.AudioContext || (window as any).webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    g.gain.value = vol;
+    osc.connect(g);
+    g.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duration);
+    setTimeout(() => ctx.close(), duration * 1000 + 100);
+  } catch {}
+};
+
 const playSuccess = () => {
   try { navigator.vibrate?.([50, 30, 50]); } catch {}
-  try {
-    const AC = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AC) return;
-    const ctx = new AC();
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.value = 880;
-    g.gain.value = 0.06;
-    osc.connect(g);
-    g.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.1);
-    setTimeout(() => ctx.close(), 200);
-  } catch {}
+  createBeep(880, 0.12);
 };
-
 const playBulkSuccess = () => {
   try { navigator.vibrate?.(40); } catch {}
-  try {
-    const AC = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AC) return;
-    const ctx = new AC();
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.value = 1000;
-    g.gain.value = 0.04;
-    osc.connect(g);
-    g.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.08);
-    setTimeout(() => ctx.close(), 150);
-  } catch {}
+  createBeep(1000, 0.08, 0.04);
 };
-
 const playCapture = () => {
   try { navigator.vibrate?.(30); } catch {}
-  try {
-    const AC = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AC) return;
-    const ctx = new AC();
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.value = 1200;
-    g.gain.value = 0.04;
-    osc.connect(g);
-    g.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.05);
-    setTimeout(() => ctx.close(), 100);
-  } catch {}
+  createBeep(1200, 0.05, 0.04);
 };
-
 const playError = () => {
   try { navigator.vibrate?.([150]); } catch {}
 };
@@ -129,17 +116,46 @@ const isLowEndDevice = (): boolean => {
   return cores <= 4 || memory <= 3;
 };
 
-/* ─── حجم صندوق QR ─── */
-const getQrBox = (): { width: number; height: number } => {
+const getQrBox = () => {
   const min = Math.min(window.innerWidth, window.innerHeight);
   const size = Math.max(180, Math.min(300, Math.floor(min * 0.6)));
   return { width: size, height: size };
 };
 
-/* ─── التكبير الافتراضي ─── */
-const getDefaultZoom = (facing: CameraFacing, mode: ScanMode, maxZoom: number): number => {
-  if (mode === 'face' || mode === 'bulk') return Math.min(maxZoom, 1);
-  return Math.min(maxZoom, 1.5);
+/* ─── إيقاف كاميرا بشكل آمن ─── */
+const safeStopScanner = async (scanner: Html5Qrcode | null) => {
+  if (!scanner) return;
+  try {
+    const state = scanner.getState();
+    if (
+      state === Html5QrcodeScannerState.SCANNING ||
+      state === Html5QrcodeScannerState.PAUSED
+    ) {
+      await scanner.stop();
+    }
+  } catch {}
+  try { await scanner.clear(); } catch {}
+};
+
+const safeStopTrack = (track: MediaStreamTrack | null) => {
+  if (!track) return;
+  try { track.stop(); } catch {}
+};
+
+const safeStopVideoStream = () => {
+  try {
+    const videos = document.querySelectorAll(
+      `#${QR_REGION_ID} video`,
+    ) as NodeListOf<HTMLVideoElement>;
+    videos.forEach((video) => {
+      if (video.srcObject) {
+        (video.srcObject as MediaStream)
+          .getTracks()
+          .forEach((t) => { try { t.stop(); } catch {} });
+        video.srcObject = null;
+      }
+    });
+  } catch {}
 };
 
 export const QRAttendance: React.FC<QRAttendanceProps> = ({
@@ -157,13 +173,15 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const lastScansRef = useRef<Record<string, number>>({});
   const mountedRef = useRef(true);
   const startingRef = useRef(false);
-  const faceIntervalRef = useRef<number | null>(null);
+  const stoppingRef = useRef(false);
+  const faceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const faceProcessingRef = useRef(false);
   const codeInputRef = useRef<HTMLInputElement>(null);
   const qrCodeInputRef = useRef<HTMLInputElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const detectedFacesRef = useRef<Map<string, DetectedFaceBox>>(new Map());
   const animationFrameRef = useRef<number | null>(null);
+  const cameraReadyRef = useRef(false); // ref للتزامن السريع
 
   /* ─── State ─── */
   const [mode, setMode] = useState<ScanMode>('qr');
@@ -189,12 +207,14 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   /* Face Register */
   const [showFaceRegister, setShowFaceRegister] = useState(false);
   const [registerCode, setRegisterCode] = useState('');
-  const [registerStep, setRegisterStep] = useState<'code' | 'capturing' | 'success'>('code');
+  const [registerStep, setRegisterStep] = useState<
+    'code' | 'capturing' | 'success'
+  >('code');
   const [registerStudent, setRegisterStudent] = useState<Student | null>(null);
   const [registerMessage, setRegisterMessage] = useState('');
   const [captureProgress, setCaptureProgress] = useState(0);
 
-  /* Bulk Mode State */
+  /* Bulk */
   const [bulkSessionStudents, setBulkSessionStudents] = useState<Student[]>([]);
   const [bulkShowSidebar, setBulkShowSidebar] = useState(true);
   const [, forceRender] = useState(0);
@@ -202,16 +222,17 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   /* ─── خريطة الطلاب ─── */
   const studentMap = useMemo(() => {
     const m = new Map<string, Student>();
-    students.forEach(s => {
+    students.forEach((s) => {
       if (s.qrCodeId) m.set(s.qrCodeId.trim(), s);
       if (s.universityId) m.set(s.universityId.trim(), s);
     });
     return m;
   }, [students]);
 
-  const studentsWithFace = useMemo(() => {
-    return students.filter(s => s.faceDescriptor && s.faceDescriptor.length > 0);
-  }, [students]);
+  const studentsWithFace = useMemo(
+    () => students.filter((s) => s.faceDescriptor && s.faceDescriptor.length > 0),
+    [students],
+  );
 
   const isFrontCamera = facing === 'user';
   const isBulkMode = mode === 'bulk';
@@ -219,246 +240,405 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   /* ─── Toast ─── */
   const showToast = useCallback((msg: ToastMessage, ms = 2200) => {
     setToast(msg);
-    setTimeout(() => setToast(prev => (prev === msg ? null : prev)), ms);
+    setTimeout(
+      () => setToast((prev) => (prev === msg ? null : prev)),
+      ms,
+    );
   }, []);
 
   /* ─── معالجة طالب QR ─── */
-  const processKnown = useCallback(async (student: Student, qrId: string) => {
-    const now = Date.now();
-    if (now - (lastScansRef.current[qrId] || 0) < DUPLICATE_BLOCK_MS) return;
-    lastScansRef.current[qrId] = now;
+  const processKnown = useCallback(
+    async (student: Student, qrId: string) => {
+      const now = Date.now();
+      if (now - (lastScansRef.current[qrId] || 0) < DUPLICATE_BLOCK_MS)
+        return;
+      lastScansRef.current[qrId] = now;
 
-    if (alreadyPresentIds.has(student.id)) {
+      if (alreadyPresentIds.has(student.id)) {
+        showToast(
+          {
+            type: 'warning',
+            title: 'مسجل مسبقاً',
+            text: `${student.name} حاضر بالفعل`,
+            student,
+          },
+          1500,
+        );
+        return;
+      }
+
+      await onMarkAttendance(student);
+      setScanCount((c) => c + 1);
+      setRecentStudents((prev) =>
+        [student, ...prev.filter((s) => s.id !== student.id)].slice(0, 5),
+      );
+      playSuccess();
       showToast({
-        type: 'warning',
-        title: 'مسجل مسبقاً',
-        text: `${student.name} حاضر بالفعل`,
+        type: 'success',
+        title: `✅ ${student.name}`,
+        text: student.group ? `الكروب: ${student.group}` : 'تم تسجيل الحضور',
         student,
-      }, 1500);
-      return;
-    }
-
-    await onMarkAttendance(student);
-    setScanCount(c => c + 1);
-    setRecentStudents(prev => [student, ...prev.filter(s => s.id !== student.id)].slice(0, 5));
-    playSuccess();
-    showToast({
-      type: 'success',
-      title: `✅ ${student.name}`,
-      text: student.group ? `الكروب: ${student.group}` : 'تم تسجيل الحضور',
-      student,
-    });
-  }, [alreadyPresentIds, onMarkAttendance, showToast]);
+      });
+    },
+    [alreadyPresentIds, onMarkAttendance, showToast],
+  );
 
   /* ─── QR decoded ─── */
-  const onDecoded = useCallback(async (text: string) => {
-    if (processingRef.current) return;
-    const qrId = extractQrCodeId(text);
-    if (!qrId) return;
+  const onDecoded = useCallback(
+    async (text: string) => {
+      if (processingRef.current) return;
+      const qrId = extractQrCodeId(text);
+      if (!qrId) return;
 
-    processingRef.current = true;
-    try {
-      const student = studentMap.get(qrId);
-      if (student) {
-        await processKnown(student, qrId);
-      } else {
-        const now = Date.now();
-        if (now - (lastScansRef.current[qrId] || 0) < DUPLICATE_BLOCK_MS) return;
-        lastScansRef.current[qrId] = now;
-        setPendingQrId(qrId);
-        setQrLinkCode('');
-        setQrLinkMessage('');
-        playError();
-        setTimeout(() => qrCodeInputRef.current?.focus(), 200);
-      }
-    } finally {
-      setTimeout(() => { processingRef.current = false; }, 300);
-    }
-  }, [studentMap, processKnown]);
-
-  /* ─── إعدادات الكاميرا ─── */
-  const configureCamera = useCallback(async (currentFacing: CameraFacing, currentMode: ScanMode) => {
-    try {
-      await new Promise(r => setTimeout(r, 500));
-      const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement;
-      if (!video?.srcObject) return;
-
-      const stream = video.srcObject as MediaStream;
-      const track = stream.getVideoTracks()[0];
-      if (!track) return;
-      trackRef.current = track;
-
-      const caps = track.getCapabilities?.() as any || {};
-
-      if (caps.focusMode) {
-        const modes = caps.focusMode as string[];
-        if (modes.includes('continuous')) {
-          try { await track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as any] }); } catch {}
+      processingRef.current = true;
+      try {
+        const student = studentMap.get(qrId);
+        if (student) {
+          await processKnown(student, qrId);
+        } else {
+          const now = Date.now();
+          if (now - (lastScansRef.current[qrId] || 0) < DUPLICATE_BLOCK_MS)
+            return;
+          lastScansRef.current[qrId] = now;
+          setPendingQrId(qrId);
+          setQrLinkCode('');
+          setQrLinkMessage('');
+          playError();
+          setTimeout(() => qrCodeInputRef.current?.focus(), 200);
         }
+      } finally {
+        setTimeout(() => { processingRef.current = false; }, 300);
       }
+    },
+    [studentMap, processKnown],
+  );
 
-      if (caps.exposureMode) {
-        try { await track.applyConstraints({ advanced: [{ exposureMode: 'continuous' } as any] }); } catch {}
-      }
+  /* ─── إعداد الكاميرا ─── */
+  const configureCamera = useCallback(
+    async (currentFacing: CameraFacing, currentMode: ScanMode) => {
+      try {
+        await new Promise((r) => setTimeout(r, 600));
+        const video = document.querySelector(
+          `#${QR_REGION_ID} video`,
+        ) as HTMLVideoElement;
+        if (!video?.srcObject) return;
 
-      if (caps.zoom) {
-        const zMin = caps.zoom.min || 1;
-        const zMax = caps.zoom.max || 1;
-        setMinZoom(zMin);
-        setMaxZoom(zMax);
-        const hasZoom = zMax > zMin;
-        setCanZoom(hasZoom);
-        if (hasZoom) {
-          const defaultZoom = getDefaultZoom(currentFacing, currentMode, zMax);
+        const stream = video.srcObject as MediaStream;
+        const track = stream.getVideoTracks()[0];
+        if (!track) return;
+        trackRef.current = track;
+
+        const caps = (track.getCapabilities?.() as any) || {};
+
+        if (caps.focusMode) {
+          const modes = caps.focusMode as string[];
+          if (modes.includes('continuous')) {
+            try {
+              await track.applyConstraints({
+                advanced: [{ focusMode: 'continuous' } as any],
+              });
+            } catch {}
+          }
+        }
+        if (caps.exposureMode) {
           try {
-            await track.applyConstraints({ advanced: [{ zoom: defaultZoom } as any] });
-            setZoom(defaultZoom);
+            await track.applyConstraints({
+              advanced: [{ exposureMode: 'continuous' } as any],
+            });
           } catch {}
         }
-      } else {
-        setCanZoom(false);
-      }
 
-      if (caps.torch) {
-        setHasTorch(true);
-      } else {
-        setHasTorch(false);
+        if (caps.zoom) {
+          const zMin = caps.zoom.min || 1;
+          const zMax = caps.zoom.max || 1;
+          setMinZoom(zMin);
+          setMaxZoom(zMax);
+          const hasZoom = zMax > zMin;
+          setCanZoom(hasZoom);
+          if (hasZoom) {
+            const defaultZoom =
+              currentMode === 'face' || currentMode === 'bulk'
+                ? Math.min(zMax, 1)
+                : Math.min(zMax, 1.5);
+            try {
+              await track.applyConstraints({
+                advanced: [{ zoom: defaultZoom } as any],
+              });
+              setZoom(defaultZoom);
+            } catch {}
+          }
+        } else {
+          setCanZoom(false);
+        }
+
+        setHasTorch(!!caps.torch);
+      } catch (e) {
+        console.warn('Camera config error:', e);
       }
-    } catch (e) {
-      console.warn('Camera config error:', e);
+    },
+    [],
+  );
+
+  /* ─── إيقاف كل شيء ─── */
+  const stopEverything = useCallback(async () => {
+    // إيقاف face interval
+    if (faceIntervalRef.current) {
+      clearInterval(faceIntervalRef.current);
+      faceIntervalRef.current = null;
     }
-  }, []);
+    // إيقاف animation frame
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    faceProcessingRef.current = false;
+    processingRef.current = false;
+
+    // إطفاء التورش
+    if (trackRef.current && torchOn) {
+      try {
+        await trackRef.current.applyConstraints({
+          advanced: [{ torch: false } as any],
+        });
+      } catch {}
+    }
+
+    // إيقاف الماسح
+    const scanner = scannerRef.current;
+    scannerRef.current = null;
+    await safeStopScanner(scanner);
+
+    // إيقاف الـ track
+    safeStopTrack(trackRef.current);
+    trackRef.current = null;
+
+    // إيقاف stream من video مباشرة
+    safeStopVideoStream();
+
+    // انتظر قليلاً لتحرير الكاميرا
+    await new Promise((r) => setTimeout(r, 300));
+
+    if (mountedRef.current) {
+      setCameraReady(false);
+      cameraReadyRef.current = false;
+      setTorchOn(false);
+      setHasTorch(false);
+      setCanZoom(false);
+    }
+  }, [torchOn]);
 
   /* ─── تشغيل الكاميرا ─── */
-  const startCamera = useCallback(async (currentFacing: CameraFacing, currentMode: ScanMode) => {
-    if (startingRef.current || !mountedRef.current) return;
-    startingRef.current = true;
-    setErrorMsg('');
-    setCameraReady(false);
-    setHasTorch(false);
-    setTorchOn(false);
-    setCanZoom(false);
-
-    try {
-      if (scannerRef.current) {
-        try {
-          const state = scannerRef.current.getState();
-          if (state === Html5QrcodeScannerState.SCANNING || state === Html5QrcodeScannerState.PAUSED) {
-            await scannerRef.current.stop();
-          }
-          await scannerRef.current.clear();
-        } catch {}
-        scannerRef.current = null;
-      }
-
-      if (trackRef.current) {
-        try { trackRef.current.stop(); } catch {}
-        trackRef.current = null;
-      }
-
-      await new Promise(r => setTimeout(r, 250));
-
+  const startCamera = useCallback(
+    async (currentFacing: CameraFacing, currentMode: ScanMode) => {
+      if (startingRef.current || stoppingRef.current) return;
       if (!mountedRef.current) return;
 
-      const qrBox = getQrBox();
-      const fps = lowEnd ? 8 : 15;
-      const aspectRatio = window.innerHeight > window.innerWidth ? 4 / 3 : 16 / 9;
-
-      const scanner = new Html5Qrcode(QR_REGION_ID, { verbose: false });
-      scannerRef.current = scanner;
+      startingRef.current = true;
+      setErrorMsg('');
+      setCameraReady(false);
+      cameraReadyRef.current = false;
 
       try {
-        await scanner.start(
-          { facingMode: currentFacing },
-          {
-            fps,
-            qrbox: qrBox,
-            aspectRatio,
-            disableFlip: true,
-            videoConstraints: {
-              facingMode: currentFacing,
-              width: { ideal: lowEnd ? 1280 : 1920 },
-              height: { ideal: lowEnd ? 720 : 1080 },
-              ...(lowEnd ? {} : { frameRate: { ideal: 30, max: 30 } }),
-            } as any,
-          },
-          onDecoded,
-          () => {}
-        );
-      } catch {
-        try {
-          if (scannerRef.current) {
-            try { await scannerRef.current.clear(); } catch {}
-          }
-          const scanner2 = new Html5Qrcode(QR_REGION_ID, { verbose: false });
-          scannerRef.current = scanner2;
+        // تأكد من إيقاف القديم
+        if (faceIntervalRef.current) {
+          clearInterval(faceIntervalRef.current);
+          faceIntervalRef.current = null;
+        }
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
+        }
+        faceProcessingRef.current = false;
 
-          await scanner2.start(
+        const oldScanner = scannerRef.current;
+        scannerRef.current = null;
+        await safeStopScanner(oldScanner);
+        safeStopTrack(trackRef.current);
+        trackRef.current = null;
+        safeStopVideoStream();
+
+        await new Promise((r) => setTimeout(r, 400));
+
+        if (!mountedRef.current) return;
+
+        const qrBox = getQrBox();
+        const fps = lowEnd ? 8 : 15;
+        const aspectRatio =
+          window.innerHeight > window.innerWidth ? 4 / 3 : 16 / 9;
+
+        // محاولة 1 - عالية الجودة
+        let started = false;
+        const scanner = new Html5Qrcode(QR_REGION_ID, { verbose: false });
+        scannerRef.current = scanner;
+
+        try {
+          await scanner.start(
             { facingMode: currentFacing },
             {
-              fps: 5,
-              qrbox: { width: 200, height: 200 },
+              fps,
+              qrbox: qrBox,
+              aspectRatio,
               disableFlip: true,
+              videoConstraints: {
+                facingMode: currentFacing,
+                width: { ideal: lowEnd ? 1280 : 1920 },
+                height: { ideal: lowEnd ? 720 : 1080 },
+              } as any,
             },
             onDecoded,
-            () => {}
+            () => {},
           );
-        } catch {
+          started = true;
+        } catch {}
+
+        // محاولة 2 - متوسطة
+        if (!started && mountedRef.current) {
           try {
-            if (scannerRef.current) {
-              try { await scannerRef.current.clear(); } catch {}
-            }
-            const scanner3 = new Html5Qrcode(QR_REGION_ID, { verbose: false });
-            scannerRef.current = scanner3;
+            await safeStopScanner(scannerRef.current);
+            safeStopVideoStream();
+            await new Promise((r) => setTimeout(r, 300));
+
+            const s2 = new Html5Qrcode(QR_REGION_ID, { verbose: false });
+            scannerRef.current = s2;
+            await s2.start(
+              { facingMode: currentFacing },
+              {
+                fps: 8,
+                qrbox: { width: 220, height: 220 },
+                disableFlip: true,
+              },
+              onDecoded,
+              () => {},
+            );
+            started = true;
+          } catch {}
+        }
+
+        // محاولة 3 - بالـ deviceId
+        if (!started && mountedRef.current) {
+          try {
+            await safeStopScanner(scannerRef.current);
+            safeStopVideoStream();
+            await new Promise((r) => setTimeout(r, 300));
 
             const devices = await Html5Qrcode.getCameras();
             if (devices.length === 0) throw new Error('لا توجد كاميرا');
 
             let deviceId = devices[0].id;
             if (currentFacing === 'user' && devices.length > 1) {
-              const front = devices.find(d => /front|user|selfie/i.test(d.label));
+              const front = devices.find((d) =>
+                /front|user|selfie/i.test(d.label),
+              );
               if (front) deviceId = front.id;
             } else if (currentFacing === 'environment' && devices.length > 1) {
-              const back = devices.find(d => /back|rear|environment/i.test(d.label));
+              const back = devices.find((d) =>
+                /back|rear|environment/i.test(d.label),
+              );
               if (back) deviceId = back.id;
             }
 
-            await scanner3.start(
+            const s3 = new Html5Qrcode(QR_REGION_ID, { verbose: false });
+            scannerRef.current = s3;
+            await s3.start(
               deviceId,
               { fps: 5, qrbox: { width: 180, height: 180 } },
               onDecoded,
-              () => {}
+              () => {},
             );
+            started = true;
           } catch (finalErr: any) {
             throw finalErr;
           }
         }
-      }
 
-      if (mountedRef.current) {
-        setCameraReady(true);
-        await configureCamera(currentFacing, currentMode);
-      }
-    } catch (err: any) {
-      console.error('Camera start failed:', err);
-      const msg = err?.message || '';
-      if (msg.includes('NotAllowed') || msg.includes('Permission')) {
-        setErrorMsg('يرجى السماح باستخدام الكاميرا');
-      } else if (msg.includes('NotFound')) {
-        setErrorMsg('لا توجد كاميرا في هذا الجهاز');
-      } else if (msg.includes('NotReadable')) {
-        setErrorMsg('الكاميرا مستخدمة من تطبيق آخر');
-      } else {
-        setErrorMsg('فشل تشغيل الكاميرا');
-      }
-    } finally {
-      startingRef.current = false;
-    }
-  }, [lowEnd, onDecoded, configureCamera]);
+        if (!started) throw new Error('فشل تشغيل الكاميرا');
 
-  /* ─── إيقاف الكاميرا ─── */
-  const stopCamera = useCallback(async () => {
+        if (mountedRef.current) {
+          setCameraReady(true);
+          cameraReadyRef.current = true;
+          await configureCamera(currentFacing, currentMode);
+        }
+      } catch (err: any) {
+        console.error('Camera start failed:', err);
+        if (!mountedRef.current) return;
+        const msg = err?.message || '';
+        if (msg.includes('NotAllowed') || msg.includes('Permission')) {
+          setErrorMsg('يرجى السماح باستخدام الكاميرا');
+        } else if (msg.includes('NotFound')) {
+          setErrorMsg('لا توجد كاميرا في هذا الجهاز');
+        } else if (msg.includes('NotReadable')) {
+          setErrorMsg('الكاميرا مستخدمة من تطبيق آخر - أغلق التطبيقات الأخرى');
+        } else {
+          setErrorMsg('فشل تشغيل الكاميرا - حاول مجدداً');
+        }
+      } finally {
+        startingRef.current = false;
+      }
+    },
+    [lowEnd, onDecoded, configureCamera],
+  );
+
+  /* ─── تبديل الكاميرا ─── */
+  const toggleCamera = useCallback(async () => {
+    if (startingRef.current || stoppingRef.current) return;
+    const newFacing: CameraFacing =
+      facing === 'environment' ? 'user' : 'environment';
+    setFacing(newFacing);
+    await startCamera(newFacing, mode);
+  }, [facing, mode, startCamera]);
+
+  /* ─── Zoom ─── */
+  const applyZoom = useCallback(
+    async (val: number) => {
+      if (!trackRef.current || !canZoom) return;
+      const clamped = Math.max(minZoom, Math.min(maxZoom, val));
+      try {
+        await trackRef.current.applyConstraints({
+          advanced: [{ zoom: clamped } as any],
+        });
+        setZoom(clamped);
+      } catch {}
+    },
+    [canZoom, minZoom, maxZoom],
+  );
+
+  /* ─── Torch ─── */
+  const toggleTorch = useCallback(async () => {
+    if (!trackRef.current || !hasTorch) return;
+    const next = !torchOn;
     try {
+      await trackRef.current.applyConstraints({
+        advanced: [{ torch: next } as any],
+      });
+      setTorchOn(next);
+    } catch {}
+  }, [hasTorch, torchOn]);
+
+  /* ─── تحميل موديلات الوجه ─── */
+  useEffect(() => {
+    if ((mode !== 'face' && mode !== 'bulk') || faceModelsReady) return;
+    setFaceLoading(true);
+    loadFaceModels()
+      .then(() => {
+        if (mountedRef.current) setFaceModelsReady(true);
+      })
+      .catch(() => {
+        if (mountedRef.current)
+          showToast({ type: 'error', title: '❌ فشل تحميل نظام التعرف' }, 3000);
+      })
+      .finally(() => {
+        if (mountedRef.current) setFaceLoading(false);
+      });
+  }, [mode, faceModelsReady, showToast]);
+
+  /* ─── تغيير الوضع ─── */
+  const handleModeChange = useCallback(
+    async (newMode: ScanMode) => {
+      if (newMode === mode) return;
+      if (startingRef.current) return;
+
+      // إيقاف face interval فوراً
       if (faceIntervalRef.current) {
         clearInterval(faceIntervalRef.current);
         faceIntervalRef.current = null;
@@ -467,114 +647,36 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
+      faceProcessingRef.current = false;
+      detectedFacesRef.current.clear();
 
-      if (trackRef.current && hasTorch && torchOn) {
-        try {
-          await trackRef.current.applyConstraints({ advanced: [{ torch: false } as any] });
-        } catch {}
-      }
+      setMode(newMode);
 
-      if (scannerRef.current) {
-        try {
-          const state = scannerRef.current.getState();
-          if (state === Html5QrcodeScannerState.SCANNING || state === Html5QrcodeScannerState.PAUSED) {
-            await scannerRef.current.stop();
-          }
-        } catch {}
-        try {
-          await scannerRef.current.clear();
-        } catch {}
-        scannerRef.current = null;
-      }
+      // تحديد الكاميرا المناسبة
+      const targetFacing: CameraFacing =
+        newMode === 'face' ? 'user' : 'environment';
 
-      if (trackRef.current) {
-        try { trackRef.current.stop(); } catch {}
-        trackRef.current = null;
-      }
-
-      const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement;
-      if (video?.srcObject) {
-        const stream = video.srcObject as MediaStream;
-        stream.getTracks().forEach(t => { try { t.stop(); } catch {} });
-        video.srcObject = null;
-      }
-    } catch (e) {
-      console.warn('Stop camera error:', e);
-    } finally {
-      setCameraReady(false);
-      setTorchOn(false);
-    }
-  }, [hasTorch, torchOn]);
-
-  /* ─── تبديل الكاميرا ─── */
-  const toggleCamera = useCallback(async () => {
-    if (startingRef.current) return;
-    const newFacing: CameraFacing = facing === 'environment' ? 'user' : 'environment';
-    setFacing(newFacing);
-    await startCamera(newFacing, mode);
-  }, [facing, mode, startCamera]);
-
-  /* ─── Zoom ─── */
-  const applyZoom = useCallback(async (val: number) => {
-    if (!trackRef.current || !canZoom) return;
-    const clamped = Math.max(minZoom, Math.min(maxZoom, val));
-    try {
-      await trackRef.current.applyConstraints({ advanced: [{ zoom: clamped } as any] });
-      setZoom(clamped);
-    } catch {}
-  }, [canZoom, minZoom, maxZoom]);
-
-  /* ─── Torch ─── */
-  const toggleTorch = useCallback(async () => {
-    if (!trackRef.current || !hasTorch) return;
-    const next = !torchOn;
-    try {
-      await trackRef.current.applyConstraints({ advanced: [{ torch: next } as any] });
-      setTorchOn(next);
-    } catch {}
-  }, [hasTorch, torchOn]);
-
-  /* ─── تحميل موديلات الوجه ─── */
-  useEffect(() => {
-    if ((mode !== 'face' && mode !== 'bulk') || faceModelsReady) return;
-
-    setFaceLoading(true);
-    loadFaceModels()
-      .then(() => {
-        if (mountedRef.current) {
-          setFaceModelsReady(true);
+      if (newMode === 'face' || newMode === 'bulk') {
+        if (facing !== targetFacing || newMode === 'face') {
+          setFacing(targetFacing);
+          await startCamera(targetFacing, newMode);
+        } else {
+          if (canZoom && trackRef.current) applyZoom(1);
         }
-      })
-      .catch(() => {
-        if (mountedRef.current) {
-          showToast({ type: 'error', title: '❌ فشل تحميل نظام التعرف' }, 3000);
-        }
-      })
-      .finally(() => {
-        if (mountedRef.current) setFaceLoading(false);
-      });
-  }, [mode, faceModelsReady, showToast]);
-
-  /* ─── تغيير الوضع ─── */
-  useEffect(() => {
-    if (!cameraReady) return;
-
-    detectedFacesRef.current.clear();
-
-    if (mode === 'face' || mode === 'bulk') {
-      const targetFacing: CameraFacing = mode === 'bulk' ? 'environment' : 'user';
-      if (facing !== targetFacing) {
-        setFacing(targetFacing);
-        startCamera(targetFacing, mode);
       } else {
-        if (canZoom && trackRef.current) applyZoom(1);
+        // وضع QR
+        if (facing !== 'environment') {
+          setFacing('environment');
+          await startCamera('environment', newMode);
+        } else {
+          if (canZoom && trackRef.current) applyZoom(1.5);
+        }
       }
-    } else {
-      if (canZoom && trackRef.current) applyZoom(1.5);
-    }
-  }, [mode]); // eslint-disable-line
+    },
+    [mode, facing, startCamera, canZoom, applyZoom],
+  );
 
-  /* ─── رسم المربعات على الـ Canvas ─── */
+  /* ─── رسم المربعات ─── */
   useEffect(() => {
     if (mode !== 'bulk' || !cameraReady) {
       if (animationFrameRef.current) {
@@ -585,139 +687,124 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     }
 
     const canvas = overlayCanvasRef.current;
-    const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement;
+    const video = document.querySelector(
+      `#${QR_REGION_ID} video`,
+    ) as HTMLVideoElement;
     if (!canvas || !video) return;
 
+    let running = true;
+
     const draw = () => {
-      if (!canvas || !video || video.readyState < 2) {
-        animationFrameRef.current = requestAnimationFrame(draw);
-        return;
-      }
+      if (!running || !canvas || !video) return;
 
-      const rect = video.getBoundingClientRect();
-      const containerRect = canvas.parentElement?.getBoundingClientRect();
-      if (!containerRect) {
-        animationFrameRef.current = requestAnimationFrame(draw);
-        return;
-      }
+      if (video.readyState >= 2 && video.videoWidth > 0) {
+        const rect = video.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
 
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const now = Date.now();
-      const videoWidth = video.videoWidth || 1280;
-      const videoHeight = video.videoHeight || 720;
-      const scaleX = canvas.width / videoWidth;
-      const scaleY = canvas.height / videoHeight;
-      const mirrorX = isFrontCamera;
-
-      detectedFacesRef.current.forEach((face, key) => {
-        const age = now - face.timestamp;
-        if (age > BOX_FADE_MS) {
-          detectedFacesRef.current.delete(key);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          animationFrameRef.current = requestAnimationFrame(draw);
           return;
         }
 
-        const opacity = Math.max(0.4, 1 - age / BOX_FADE_MS);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const now = Date.now();
+        const videoWidth = video.videoWidth;
+        const videoHeight = video.videoHeight;
+        const scaleX = canvas.width / videoWidth;
+        const scaleY = canvas.height / videoHeight;
 
-        let strokeColor = '#ef4444';
-        let fillColor = 'rgba(239, 68, 68, 0.15)';
-        let label = '❓ غير معروف';
-
-        if (face.status === 'recognized') {
-          strokeColor = '#10b981';
-          fillColor = 'rgba(16, 185, 129, 0.2)';
-          label = face.student?.name || '';
-        } else if (face.status === 'already') {
-          strokeColor = '#f59e0b';
-          fillColor = 'rgba(245, 158, 11, 0.2)';
-          label = `✓ ${face.student?.name || ''}`;
-        } else if (face.status === 'analyzing') {
-          strokeColor = '#3b82f6';
-          fillColor = 'rgba(59, 130, 246, 0.2)';
-          label = '🔍 جاري التحليل...';
-        }
-
-        // ✅ معالجة انعكاس المرآة
-        const rawX = face.box.x * scaleX;
-        const y = face.box.y * scaleY;
-        const w = face.box.width * scaleX;
-        const h = face.box.height * scaleY;
-        const x = mirrorX ? (canvas.width - rawX - w) : rawX;
-
-        // ملء خفيف
-        ctx.fillStyle = fillColor.replace(/[\d.]+\)/, `${opacity * 0.2})`);
-        ctx.fillRect(x, y, w, h);
-
-        // إطار سميك
-        ctx.strokeStyle = strokeColor;
-        ctx.globalAlpha = opacity;
-        ctx.lineWidth = 4;
-        ctx.strokeRect(x, y, w, h);
-
-        // زوايا
-        const corner = Math.min(20, w / 4);
-        ctx.lineWidth = 6;
-        ctx.beginPath();
-        ctx.moveTo(x, y + corner);
-        ctx.lineTo(x, y);
-        ctx.lineTo(x + corner, y);
-        ctx.moveTo(x + w - corner, y);
-        ctx.lineTo(x + w, y);
-        ctx.lineTo(x + w, y + corner);
-        ctx.moveTo(x + w, y + h - corner);
-        ctx.lineTo(x + w, y + h);
-        ctx.lineTo(x + w - corner, y + h);
-        ctx.moveTo(x + corner, y + h);
-        ctx.lineTo(x, y + h);
-        ctx.lineTo(x, y + h - corner);
-        ctx.stroke();
-
-        // اسم الطالب فوق المربع
-        if (label) {
-          ctx.globalAlpha = opacity;
-          ctx.font = 'bold 14px Arial, sans-serif';
-          const textMetrics = ctx.measureText(label);
-          const textWidth = textMetrics.width + 16;
-          const textHeight = 24;
-          const textX = x + (w - textWidth) / 2;
-          const textY = y - textHeight - 6;
-
-          ctx.fillStyle = strokeColor;
-          ctx.fillRect(textX, textY, textWidth, textHeight);
-
-          ctx.fillStyle = '#ffffff';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(label, textX + textWidth / 2, textY + textHeight / 2);
-
-          if (face.confidence > 0 && face.status === 'recognized') {
-            ctx.font = 'bold 11px Arial, sans-serif';
-            ctx.fillStyle = strokeColor;
-            const confLabel = `${face.confidence}%`;
-            const confMetrics = ctx.measureText(confLabel);
-            const confW = confMetrics.width + 10;
-            const confY = y + h + 4;
-
-            ctx.fillRect(x + (w - confW) / 2, confY, confW, 18);
-            ctx.fillStyle = '#ffffff';
-            ctx.fillText(confLabel, x + w / 2, confY + 9);
+        detectedFacesRef.current.forEach((face, key) => {
+          const age = now - face.timestamp;
+          if (age > BOX_FADE_MS) {
+            detectedFacesRef.current.delete(key);
+            return;
           }
-        }
-      });
 
-      ctx.globalAlpha = 1;
+          const opacity = Math.max(0.3, 1 - age / BOX_FADE_MS);
+
+          let strokeColor = '#ef4444';
+          let fillColor = 'rgba(239,68,68,0.15)';
+          let label = '❓ غير معروف';
+
+          if (face.status === 'recognized') {
+            strokeColor = '#10b981';
+            fillColor = 'rgba(16,185,129,0.2)';
+            label = face.student?.name || '';
+          } else if (face.status === 'already') {
+            strokeColor = '#f59e0b';
+            fillColor = 'rgba(245,158,11,0.2)';
+            label = `✓ ${face.student?.name || ''}`;
+          } else if (face.status === 'analyzing') {
+            strokeColor = '#3b82f6';
+            fillColor = 'rgba(59,130,246,0.2)';
+            label = '🔍 جاري...';
+          }
+
+          const rawX = face.box.x * scaleX;
+          const y = face.box.y * scaleY;
+          const w = face.box.width * scaleX;
+          const h = face.box.height * scaleY;
+          const x = isFrontCamera ? canvas.width - rawX - w : rawX;
+
+          ctx.globalAlpha = opacity * 0.15;
+          ctx.fillStyle = fillColor;
+          ctx.fillRect(x, y, w, h);
+
+          ctx.globalAlpha = opacity;
+          ctx.strokeStyle = strokeColor;
+          ctx.lineWidth = 3;
+          ctx.strokeRect(x, y, w, h);
+
+          // زوايا
+          const corner = Math.min(18, w / 4);
+          ctx.lineWidth = 5;
+          ctx.beginPath();
+          ctx.moveTo(x, y + corner); ctx.lineTo(x, y); ctx.lineTo(x + corner, y);
+          ctx.moveTo(x + w - corner, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + corner);
+          ctx.moveTo(x + w, y + h - corner); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - corner, y + h);
+          ctx.moveTo(x + corner, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - corner);
+          ctx.stroke();
+
+          if (label) {
+            ctx.font = 'bold 13px Arial';
+            const tw = ctx.measureText(label).width + 14;
+            const th = 22;
+            const tx = x + (w - tw) / 2;
+            const ty = Math.max(0, y - th - 4);
+
+            ctx.fillStyle = strokeColor;
+            ctx.globalAlpha = opacity;
+            ctx.fillRect(tx, ty, tw, th);
+            ctx.fillStyle = '#fff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, tx + tw / 2, ty + th / 2);
+
+            if (face.confidence > 0 && face.status === 'recognized') {
+              ctx.font = 'bold 10px Arial';
+              const cl = `${face.confidence}%`;
+              const cw = ctx.measureText(cl).width + 8;
+              const cy2 = y + h + 3;
+              ctx.fillStyle = strokeColor;
+              ctx.fillRect(x + (w - cw) / 2, cy2, cw, 16);
+              ctx.fillStyle = '#fff';
+              ctx.fillText(cl, x + w / 2, cy2 + 8);
+            }
+          }
+        });
+
+        ctx.globalAlpha = 1;
+      }
+
       animationFrameRef.current = requestAnimationFrame(draw);
     };
 
     draw();
 
     return () => {
+      running = false;
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
@@ -725,143 +812,183 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     };
   }, [mode, cameraReady, isFrontCamera]);
 
-  /* ─── المسح المستمر للوجوه (فردي + جماعي) ─── */
+  /* ─── مسح الوجوه المستمر ─── */
   useEffect(() => {
-    if ((mode !== 'face' && mode !== 'bulk') || !cameraReady || !faceModelsReady) {
+    if (!cameraReady || !faceModelsReady) return;
+    if (mode !== 'face' && mode !== 'bulk') return;
+    if (studentsWithFace.length === 0) return;
+
+    // تأخير قصير للتأكد من جاهزية الكاميرا
+    const startDelay = setTimeout(() => {
+      if (!mountedRef.current || !cameraReadyRef.current) return;
+
+      const video = document.querySelector(
+        `#${QR_REGION_ID} video`,
+      ) as HTMLVideoElement;
+      if (!video) return;
+
+      const isBulk = mode === 'bulk';
+      const blockMs = isBulk ? BULK_FACE_BLOCK_MS : FACE_DUPLICATE_BLOCK_MS;
+      const intervalMs = isBulk ? (lowEnd ? 500 : 300) : (lowEnd ? 800 : 500);
+
       if (faceIntervalRef.current) {
         clearInterval(faceIntervalRef.current);
         faceIntervalRef.current = null;
       }
-      return;
-    }
 
-    if (studentsWithFace.length === 0) return;
+      faceIntervalRef.current = setInterval(async () => {
+        if (faceProcessingRef.current) return;
+        if (!cameraReadyRef.current) return;
+        if (showFaceRegister) return;
 
-    const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement;
-    if (!video) return;
+        const videoEl = document.querySelector(
+          `#${QR_REGION_ID} video`,
+        ) as HTMLVideoElement;
+        if (!videoEl || videoEl.readyState < 2 || videoEl.videoWidth === 0) return;
 
-    const isBulk = mode === 'bulk';
-    const blockMs = isBulk ? BULK_FACE_BLOCK_MS : FACE_DUPLICATE_BLOCK_MS;
-    const intervalMs = isBulk ? 300 : 500;
+        faceProcessingRef.current = true;
+        try {
+          const detections = await extractAllFaceDescriptors(videoEl, isBulk);
+          if (!mountedRef.current) return;
 
-    faceIntervalRef.current = window.setInterval(async () => {
-      if (faceProcessingRef.current || !video || video.readyState < 2) return;
-      if (showFaceRegister) return;
-      faceProcessingRef.current = true;
-
-      try {
-        const detections = await extractAllFaceDescriptors(video);
-
-        if (isBulk) {
-          if (detections.length === 0) return;
-
-          for (const detection of detections) {
-            const box = detection.detection.box;
-            const boxKey = `${Math.round(box.x / 50)}_${Math.round(box.y / 50)}`;
-
-            const match = findBestMatch(detection.descriptor, studentsWithFace, 0.5);
+          if (isBulk) {
+            if (detections.length === 0) return;
             const now = Date.now();
 
-            if (match) {
-              const student = match.item;
-              const lastTime = lastScansRef.current[`bulk_${student.id}`] || 0;
-              const isAlreadyPresent = alreadyPresentIds.has(student.id);
-              const recentlyScanned = now - lastTime < blockMs;
+            for (const detection of detections) {
+              const box = detection.detection.box;
+              const boxKey = `${Math.round(box.x / 40)}_${Math.round(box.y / 40)}`;
+              const match = findBestMatch(
+                detection.descriptor,
+                studentsWithFace,
+                0.5,
+              );
 
-              if (recentlyScanned || isAlreadyPresent) {
-                detectedFacesRef.current.set(boxKey, {
-                  box: { x: box.x, y: box.y, width: box.width, height: box.height },
-                  student,
-                  status: 'already',
-                  confidence: match.confidence,
-                  timestamp: now,
-                });
+              if (match) {
+                const student = match.item;
+                const lastTime =
+                  lastScansRef.current[`bulk_${student.id}`] || 0;
+                const isPresent = alreadyPresentIds.has(student.id);
+                const recentlyScanned = now - lastTime < blockMs;
+
+                if (recentlyScanned || isPresent) {
+                  detectedFacesRef.current.set(boxKey, {
+                    box: { x: box.x, y: box.y, width: box.width, height: box.height },
+                    student,
+                    status: 'already',
+                    confidence: match.confidence,
+                    timestamp: now,
+                  });
+                } else {
+                  lastScansRef.current[`bulk_${student.id}`] = now;
+                  detectedFacesRef.current.set(boxKey, {
+                    box: { x: box.x, y: box.y, width: box.width, height: box.height },
+                    student,
+                    status: 'recognized',
+                    confidence: match.confidence,
+                    timestamp: now,
+                  });
+                  await onMarkAttendance(student);
+                  if (mountedRef.current) {
+                    setScanCount((c) => c + 1);
+                    setBulkSessionStudents((prev) =>
+                      [student, ...prev.filter((s) => s.id !== student.id)],
+                    );
+                    setRecentStudents((prev) =>
+                      [student, ...prev.filter((s) => s.id !== student.id)].slice(0, 5),
+                    );
+                    playBulkSuccess();
+                  }
+                }
               } else {
-                lastScansRef.current[`bulk_${student.id}`] = now;
-
                 detectedFacesRef.current.set(boxKey, {
                   box: { x: box.x, y: box.y, width: box.width, height: box.height },
-                  student,
-                  status: 'recognized',
-                  confidence: match.confidence,
+                  student: null,
+                  status: 'unknown',
+                  confidence: 0,
                   timestamp: now,
                 });
-
-                await onMarkAttendance(student);
-                setScanCount(c => c + 1);
-                setBulkSessionStudents(prev =>
-                  [student, ...prev.filter(s => s.id !== student.id)]
-                );
-                setRecentStudents(prev =>
-                  [student, ...prev.filter(s => s.id !== student.id)].slice(0, 5)
-                );
-                playBulkSuccess();
               }
-            } else {
-              detectedFacesRef.current.set(boxKey, {
-                box: { x: box.x, y: box.y, width: box.width, height: box.height },
-                student: null,
-                status: 'unknown',
-                confidence: 0,
-                timestamp: now,
-              });
             }
-          }
-
-          forceRender(x => x + 1);
-        } else {
-          if (detections.length === 0) return;
-
-          for (const detection of detections) {
-            const match = findBestMatch(detection.descriptor, studentsWithFace, 0.5);
-            if (!match) continue;
-
-            const student = match.item;
+            if (mountedRef.current) forceRender((x) => x + 1);
+          } else {
+            // وضع الوجه الفردي
+            if (detections.length === 0) return;
             const now = Date.now();
-            const lastTime = lastScansRef.current[`face_${student.id}`] || 0;
-            if (now - lastTime < blockMs) continue;
 
-            lastScansRef.current[`face_${student.id}`] = now;
+            for (const detection of detections) {
+              const match = findBestMatch(
+                detection.descriptor,
+                studentsWithFace,
+                0.5,
+              );
+              if (!match) continue;
 
-            if (alreadyPresentIds.has(student.id)) {
-              showToast({
-                type: 'warning',
-                title: '⚠️ مسجل مسبقاً',
-                text: student.name,
-                student,
-              }, 2000);
-              continue;
+              const student = match.item;
+              const lastTime =
+                lastScansRef.current[`face_${student.id}`] || 0;
+              if (now - lastTime < blockMs) continue;
+
+              lastScansRef.current[`face_${student.id}`] = now;
+
+              if (alreadyPresentIds.has(student.id)) {
+                showToast(
+                  {
+                    type: 'warning',
+                    title: '⚠️ مسجل مسبقاً',
+                    text: student.name,
+                    student,
+                  },
+                  2000,
+                );
+                continue;
+              }
+
+              await onMarkAttendance(student);
+              if (mountedRef.current) {
+                setScanCount((c) => c + 1);
+                setRecentStudents((prev) =>
+                  [student, ...prev.filter((s) => s.id !== student.id)].slice(0, 5),
+                );
+                playSuccess();
+                showToast(
+                  {
+                    type: 'success',
+                    title: `✅ ${student.name}`,
+                    text: `${student.group || ''} • دقة: ${match.confidence}%`,
+                    student,
+                  },
+                  2500,
+                );
+              }
             }
-
-            await onMarkAttendance(student);
-            setScanCount(c => c + 1);
-            setRecentStudents(prev =>
-              [student, ...prev.filter(s => s.id !== student.id)].slice(0, 5)
-            );
-            playSuccess();
-
-            showToast({
-              type: 'success',
-              title: `✅ ${student.name}`,
-              text: `${student.group || ''} • دقة: ${match.confidence}%`,
-              student,
-            }, 2500);
           }
+        } catch (e) {
+          console.warn('Face detection error:', e);
+        } finally {
+          faceProcessingRef.current = false;
         }
-      } catch (e) {
-        // تجاهل
-      } finally {
-        faceProcessingRef.current = false;
-      }
-    }, intervalMs);
+      }, intervalMs);
+    }, 800); // انتظر 800ms بعد جاهزية الكاميرا
 
     return () => {
+      clearTimeout(startDelay);
       if (faceIntervalRef.current) {
         clearInterval(faceIntervalRef.current);
         faceIntervalRef.current = null;
       }
     };
-  }, [mode, cameraReady, faceModelsReady, studentsWithFace, alreadyPresentIds, onMarkAttendance, showToast, showFaceRegister]);
+  }, [
+    mode,
+    cameraReady,
+    faceModelsReady,
+    studentsWithFace,
+    alreadyPresentIds,
+    onMarkAttendance,
+    showToast,
+    showFaceRegister,
+    lowEnd,
+  ]);
 
   /* ─── Mount / Unmount ─── */
   useEffect(() => {
@@ -870,84 +997,92 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
     return () => {
       mountedRef.current = false;
-      (async () => {
-        try {
-          if (faceIntervalRef.current) {
-            clearInterval(faceIntervalRef.current);
-            faceIntervalRef.current = null;
-          }
-          if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-            animationFrameRef.current = null;
-          }
-          if (scannerRef.current) {
-            try {
-              const state = scannerRef.current.getState();
-              if (state === Html5QrcodeScannerState.SCANNING || state === Html5QrcodeScannerState.PAUSED) {
-                await scannerRef.current.stop();
-              }
-            } catch {}
-            try { await scannerRef.current.clear(); } catch {}
-            scannerRef.current = null;
-          }
-          if (trackRef.current) {
-            try { trackRef.current.stop(); } catch {}
-            trackRef.current = null;
-          }
-          const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement;
-          if (video?.srcObject) {
-            (video.srcObject as MediaStream).getTracks().forEach(t => t.stop());
-            video.srcObject = null;
-          }
-        } catch {}
-      })();
+      cameraReadyRef.current = false;
+
+      // إيقاف كل شيء
+      if (faceIntervalRef.current) {
+        clearInterval(faceIntervalRef.current);
+        faceIntervalRef.current = null;
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      faceProcessingRef.current = false;
+
+      // إيقاف الكاميرا
+      const scanner = scannerRef.current;
+      scannerRef.current = null;
+      safeStopScanner(scanner);
+      safeStopTrack(trackRef.current);
+      trackRef.current = null;
+      safeStopVideoStream();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ─── إغلاق ─── */
   const handleClose = useCallback(async () => {
-    await stopCamera();
-    await new Promise(r => setTimeout(r, 100));
+    if (stoppingRef.current) return;
+    stoppingRef.current = true;
+
+    mountedRef.current = false;
+    cameraReadyRef.current = false;
+
+    if (faceIntervalRef.current) {
+      clearInterval(faceIntervalRef.current);
+      faceIntervalRef.current = null;
+    }
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    faceProcessingRef.current = false;
+
+    const scanner = scannerRef.current;
+    scannerRef.current = null;
+    await safeStopScanner(scanner);
+    safeStopTrack(trackRef.current);
+    trackRef.current = null;
+    safeStopVideoStream();
+
+    await new Promise((r) => setTimeout(r, 200));
+    stoppingRef.current = false;
     onClose();
-  }, [stopCamera, onClose]);
+  }, [onClose]);
 
   /* ─── ربط QR ─── */
-  const handleQrLinkByCode = useCallback(async (code: string) => {
-    if (!pendingQrId || !onUpdateStudent) return;
+  const handleQrLinkByCode = useCallback(
+    async (code: string) => {
+      if (!pendingQrId || !onUpdateStudent) return;
+      if (code.length !== 4) {
+        setQrLinkMessage('❌ الكود يجب أن يكون 4 أرقام');
+        return;
+      }
+      const student = students.find((s) => s.code === code);
+      if (!student) {
+        setQrLinkMessage('❌ لا يوجد طالب بهذا الكود');
+        playError();
+        return;
+      }
+      if (student.qrCodeId) {
+        setQrLinkMessage(`⚠️ ${student.name} لديه QR مربوط بالفعل`);
+        playError();
+        return;
+      }
+      const updated = { ...student, qrCodeId: pendingQrId };
+      onUpdateStudent(student.id, { qrCodeId: pendingQrId });
+      const qrId = pendingQrId;
+      setPendingQrId(null);
+      setQrLinkCode('');
+      setQrLinkMessage('');
+      await processKnown(updated, qrId);
+    },
+    [pendingQrId, onUpdateStudent, students, processKnown],
+  );
 
-    if (code.length !== 4) {
-      setQrLinkMessage('❌ الكود يجب أن يكون 4 أرقام');
-      return;
-    }
-
-    const student = students.find(s => s.code === code);
-    if (!student) {
-      setQrLinkMessage('❌ لا يوجد طالب بهذا الكود');
-      playError();
-      return;
-    }
-
-    if (student.qrCodeId) {
-      setQrLinkMessage(`⚠️ ${student.name} لديه QR مربوط بالفعل`);
-      playError();
-      return;
-    }
-
-    const updated = { ...student, qrCodeId: pendingQrId };
-    onUpdateStudent(student.id, { qrCodeId: pendingQrId });
-
-    const qrId = pendingQrId;
-    setPendingQrId(null);
-    setQrLinkCode('');
-    setQrLinkMessage('');
-
-    await processKnown(updated, qrId);
-  }, [pendingQrId, onUpdateStudent, students, processKnown]);
-
-  /* ─── فتح نافذة تسجيل بصمة ─── */
+  /* ─── فتح تسجيل بصمة ─── */
   const openFaceRegister = useCallback(async () => {
-    if (mode !== 'face') setMode('face');
     if (facing !== 'user') {
       setFacing('user');
       await startCamera('user', 'face');
@@ -958,98 +1093,104 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     setRegisterMessage('');
     setCaptureProgress(0);
     setShowFaceRegister(true);
-    setTimeout(() => codeInputRef.current?.focus(), 200);
-  }, [mode, facing, startCamera]);
+    setTimeout(() => codeInputRef.current?.focus(), 300);
+  }, [facing, startCamera]);
 
   /* ─── التقاط بصمة ─── */
-  const captureFaceForRegister = useCallback(async (student: Student) => {
-    if (!onUpdateStudent) return;
+  const captureFaceForRegister = useCallback(
+    async (student: Student) => {
+      if (!onUpdateStudent) return;
 
-    const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement;
-    if (!video || video.readyState < 2) {
-      setRegisterMessage('❌ الكاميرا غير جاهزة');
-      return;
-    }
-
-    setRegisterStep('capturing');
-    setCaptureProgress(0);
-
-    let progress = 0;
-    const progressInterval = window.setInterval(() => {
-      progress = Math.min(progress + 12, 90);
-      setCaptureProgress(progress);
-    }, 40);
-
-    try {
-      await loadFaceModels();
-      playCapture();
-
-      let descriptor = null;
-      for (let i = 0; i < 4; i++) {
-        descriptor = await extractFaceDescriptor(video);
-        if (descriptor) break;
-        await new Promise(r => setTimeout(r, 120));
-      }
-
-      clearInterval(progressInterval);
-
-      if (!descriptor) {
-        setCaptureProgress(0);
-        setRegisterStep('code');
-        setRegisterMessage('❌ لم يتم رؤية الوجه');
-        playError();
-        setTimeout(() => codeInputRef.current?.focus(), 100);
+      const video = document.querySelector(
+        `#${QR_REGION_ID} video`,
+      ) as HTMLVideoElement;
+      if (!video || video.readyState < 2) {
+        setRegisterMessage('❌ الكاميرا غير جاهزة');
         return;
       }
 
-      setCaptureProgress(100);
+      setRegisterStep('capturing');
+      setCaptureProgress(0);
 
-      onUpdateStudent(student.id, {
-        faceDescriptor: descriptorToArray(descriptor),
-        faceRegisteredAt: new Date().toISOString(),
-      });
+      let progress = 0;
+      const progressInterval = setInterval(() => {
+        progress = Math.min(progress + 10, 88);
+        setCaptureProgress(progress);
+      }, 50);
 
-      playSuccess();
-      setRegisterStep('success');
+      try {
+        await loadFaceModels();
+        playCapture();
 
-      setTimeout(() => {
-        setRegisterCode('');
-        setRegisterStudent(null);
-        setRegisterMessage('');
+        // محاولات متعددة
+        let descriptor: Float32Array | null = null;
+        for (let i = 0; i < 6; i++) {
+          descriptor = await extractFaceDescriptor(video);
+          if (descriptor) break;
+          await new Promise((r) => setTimeout(r, 150));
+        }
+
+        clearInterval(progressInterval);
+
+        if (!descriptor) {
+          setCaptureProgress(0);
+          setRegisterStep('code');
+          setRegisterMessage('❌ لم يتم رؤية الوجه - قرّب وجهك للكاميرا');
+          playError();
+          setTimeout(() => codeInputRef.current?.focus(), 100);
+          return;
+        }
+
+        setCaptureProgress(100);
+        onUpdateStudent(student.id, {
+          faceDescriptor: descriptorToArray(descriptor),
+          faceRegisteredAt: new Date().toISOString(),
+        });
+
+        playSuccess();
+        setRegisterStep('success');
+
+        setTimeout(() => {
+          if (!mountedRef.current) return;
+          setRegisterCode('');
+          setRegisterStudent(null);
+          setRegisterMessage('');
+          setCaptureProgress(0);
+          setRegisterStep('code');
+          setTimeout(() => codeInputRef.current?.focus(), 100);
+        }, 1500);
+      } catch {
+        clearInterval(progressInterval);
         setCaptureProgress(0);
         setRegisterStep('code');
-        setTimeout(() => codeInputRef.current?.focus(), 100);
-      }, 1200);
-    } catch (e) {
-      clearInterval(progressInterval);
-      setCaptureProgress(0);
-      setRegisterStep('code');
-      setRegisterMessage('❌ حدث خطأ');
-      playError();
-    }
-  }, [onUpdateStudent]);
+        setRegisterMessage('❌ حدث خطأ - حاول مجدداً');
+        playError();
+      }
+    },
+    [onUpdateStudent],
+  );
 
-  /* ─── إدخال الكود ─── */
-  const handleCodeSubmit = useCallback(async (code: string) => {
-    if (code.length !== 4) return;
-
-    const student = students.find(s => s.code === code);
-    if (!student) {
-      setRegisterMessage('❌ لا يوجد طالب بهذا الكود');
-      playError();
-      setRegisterCode('');
-      return;
-    }
-
-    if (student.faceDescriptor && student.faceDescriptor.length > 0) {
-      setRegisterMessage(`♻️ إعادة تسجيل ${student.name}`);
-    } else {
-      setRegisterMessage('');
-    }
-
-    setRegisterStudent(student);
-    captureFaceForRegister(student);
-  }, [students, captureFaceForRegister]);
+  /* ─── إدخال كود التسجيل ─── */
+  const handleCodeSubmit = useCallback(
+    async (code: string) => {
+      if (code.length !== 4) return;
+      const student = students.find((s) => s.code === code);
+      if (!student) {
+        setRegisterMessage('❌ لا يوجد طالب بهذا الكود');
+        playError();
+        setRegisterCode('');
+        return;
+      }
+      if (student.faceDescriptor && student.faceDescriptor.length > 0) {
+        setRegisterMessage(`♻️ إعادة تسجيل ${student.name}`);
+      } else {
+        setRegisterMessage('');
+      }
+      setRegisterStudent(student);
+      await captureFaceForRegister(student);
+    },
+    [students, captureFaceForRegister],
+  );
 
   /* ─── ألوان Toast ─── */
   const toastBg: Record<ToastType, string> = {
@@ -1059,18 +1200,22 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     warning: 'bg-gradient-to-r from-amber-500 to-orange-600',
   };
   const toastIcon: Record<ToastType, string> = {
-    success: '✅',
-    error: '❌',
-    info: 'ℹ️',
-    warning: '⚠️',
+    success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️',
   };
 
+  /* ═══════════════════════════════════════════════════════ */
+  /*                       RENDER                           */
+  /* ═══════════════════════════════════════════════════════ */
   return (
-    <div className="fixed inset-0 z-[9999] bg-black text-white flex flex-col" dir="rtl">
-
+    <div
+      className="fixed inset-0 z-[9999] bg-black text-white flex flex-col"
+      dir="rtl"
+    >
       {/* ═══ Header ═══ */}
-      <header className="flex items-center justify-between px-3 py-2 bg-gray-900/90 border-b border-white/10"
-              style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}>
+      <header
+        className="flex items-center justify-between px-3 py-2 bg-gray-900/90 border-b border-white/10"
+        style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}
+      >
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-bold truncate">
             {mode === 'qr' && '📷 ماسح QR'}
@@ -1082,7 +1227,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             {lowEnd && ' • وضع موفر الطاقة'}
           </p>
         </div>
-
         <div className="flex items-center gap-2">
           {cameraReady && (
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -1099,7 +1243,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       {/* ═══ تبديل الوضع ═══ */}
       <div className="px-3 py-2 bg-gray-900/60 border-b border-white/5 flex gap-1.5">
         <button
-          onClick={() => setMode('qr')}
+          onClick={() => handleModeChange('qr')}
           className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all active:scale-95 ${
             mode === 'qr'
               ? 'bg-emerald-600 text-white shadow-lg'
@@ -1109,7 +1253,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           🔳 QR
         </button>
         <button
-          onClick={() => setMode('face')}
+          onClick={() => handleModeChange('face')}
           className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all active:scale-95 ${
             mode === 'face'
               ? 'bg-purple-600 text-white shadow-lg'
@@ -1119,7 +1263,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           😊 بصمة
         </button>
         <button
-          onClick={() => setMode('bulk')}
+          onClick={() => handleModeChange('bulk')}
           className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all active:scale-95 relative ${
             mode === 'bulk'
               ? 'bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg'
@@ -1143,7 +1287,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         </div>
       )}
 
-      {/* ═══ تنبيه وضع الوجه ═══ */}
+      {/* ═══ تنبيهات الوضع ═══ */}
       {mode === 'face' && faceModelsReady && cameraReady && studentsWithFace.length > 0 && (
         <div className="mx-3 mt-2 p-2 bg-purple-900/40 border border-purple-500/30 rounded-lg text-center">
           <p className="text-[11px] text-purple-200">
@@ -1155,7 +1299,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         </div>
       )}
 
-      {/* ═══ تنبيه الوضع الجماعي ═══ */}
       {mode === 'bulk' && faceModelsReady && cameraReady && studentsWithFace.length > 0 && (
         <div className="mx-3 mt-2 p-2 bg-gradient-to-r from-orange-900/50 to-red-900/50 border border-orange-500/40 rounded-lg">
           <div className="flex items-center justify-between gap-2">
@@ -1168,7 +1311,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               </p>
             </div>
             <button
-              onClick={() => setBulkShowSidebar(s => !s)}
+              onClick={() => setBulkShowSidebar((s) => !s)}
               className="bg-white/10 hover:bg-white/20 px-2 py-1 rounded text-[10px] font-bold"
             >
               {bulkShowSidebar ? '◀ إخفاء' : '▶ قائمة'}
@@ -1177,16 +1320,19 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         </div>
       )}
 
-      {(mode === 'face' || mode === 'bulk') && faceModelsReady && cameraReady && studentsWithFace.length === 0 && (
-        <div className="mx-3 mt-2 p-3 bg-amber-900/40 border border-amber-500/40 rounded-lg text-center">
-          <p className="text-xs text-amber-200 font-bold">
-            ℹ️ لا توجد بصمات مسجلة
-          </p>
-          <p className="text-[10px] text-amber-300 mt-1">
-            سجّل بصمات الطلاب من وضع "😊 بصمة" أولاً
-          </p>
-        </div>
-      )}
+      {(mode === 'face' || mode === 'bulk') &&
+        faceModelsReady &&
+        cameraReady &&
+        studentsWithFace.length === 0 && (
+          <div className="mx-3 mt-2 p-3 bg-amber-900/40 border border-amber-500/40 rounded-lg text-center">
+            <p className="text-xs text-amber-200 font-bold">
+              ℹ️ لا توجد بصمات مسجلة
+            </p>
+            <p className="text-[10px] text-amber-300 mt-1">
+              سجّل بصمات الطلاب من وضع "😊 بصمة" أولاً
+            </p>
+          </div>
+        )}
 
       {/* ═══ خطأ ═══ */}
       {errorMsg && !cameraReady && (
@@ -1202,23 +1348,29 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       )}
 
       {/* ═══ المحتوى ═══ */}
-      <div className={`flex-1 overflow-hidden flex ${isBulkMode && bulkShowSidebar ? 'flex-col lg:flex-row' : 'flex-col'}`}>
-
-        {/* القسم الرئيسي - الكاميرا */}
+      <div
+        className={`flex-1 overflow-hidden flex ${
+          isBulkMode && bulkShowSidebar ? 'flex-col lg:flex-row' : 'flex-col'
+        }`}
+      >
+        {/* القسم الرئيسي */}
         <div className="flex-1 overflow-y-auto p-3 space-y-3">
 
           {/* الكاميرا */}
-          <div className={`w-full mx-auto rounded-xl overflow-hidden border bg-gray-900 relative ${
-            isBulkMode ? 'max-w-3xl border-orange-500/40' : 'max-w-lg border-emerald-500/30'
-          }`}>
-            {/* ✅ إضافة class انعكاس المرآة للكاميرا الأمامية */}
+          <div
+            className={`w-full mx-auto rounded-xl overflow-hidden border bg-gray-900 relative ${
+              isBulkMode
+                ? 'max-w-3xl border-orange-500/40'
+                : 'max-w-lg border-emerald-500/30'
+            }`}
+          >
             <div
               id={QR_REGION_ID}
               className={`w-full ${isFrontCamera ? 'front-camera' : ''}`}
               style={{ minHeight: isBulkMode ? '400px' : '280px' }}
             />
 
-            {/* Canvas للمربعات في الوضع الجماعي */}
+            {/* Canvas للمربعات */}
             {isBulkMode && cameraReady && (
               <canvas
                 ref={overlayCanvasRef}
@@ -1229,7 +1381,13 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             {/* إطار QR */}
             {cameraReady && mode === 'qr' && (
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                <div className="relative" style={{ width: getQrBox().width, height: getQrBox().height }}>
+                <div
+                  className="relative"
+                  style={{
+                    width: getQrBox().width,
+                    height: getQrBox().height,
+                  }}
+                >
                   <div className="absolute top-0 right-0 w-10 h-10 border-t-2 border-r-2 border-emerald-400 rounded-tr-lg" />
                   <div className="absolute top-0 left-0 w-10 h-10 border-t-2 border-l-2 border-emerald-400 rounded-tl-lg" />
                   <div className="absolute bottom-0 right-0 w-10 h-10 border-b-2 border-r-2 border-emerald-400 rounded-br-lg" />
@@ -1239,7 +1397,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               </div>
             )}
 
-            {/* إطار الوجه الفردي */}
+            {/* إطار الوجه */}
             {cameraReady && mode === 'face' && (
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                 <div className="w-48 h-64 border-4 border-purple-400/60 rounded-3xl shadow-[0_0_30px_rgba(168,85,247,0.3)]" />
@@ -1263,13 +1421,15 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               </div>
             )}
 
-            {/* عداد كبير في الوضع الجماعي */}
+            {/* عداد الوضع الجماعي */}
             {isBulkMode && cameraReady && (
               <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-orange-600 to-red-600 px-4 py-2 rounded-full shadow-xl z-10">
                 <div className="flex items-center gap-2 text-white">
                   <span className="text-2xl">📊</span>
                   <div>
-                    <div className="text-2xl font-bold leading-none">{bulkSessionStudents.length}</div>
+                    <div className="text-2xl font-bold leading-none">
+                      {bulkSessionStudents.length}
+                    </div>
                     <div className="text-[9px] opacity-90">طالب مسجّل</div>
                   </div>
                 </div>
@@ -1280,11 +1440,11 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           {/* أدوات الكاميرا */}
           {cameraReady && (
             <div className="w-full max-w-lg mx-auto space-y-2">
-
               <div className="flex gap-1.5 flex-wrap">
-                {canZoom && (
-                  <>
-                    {[1, 1.5, 2, 2.5, 3].filter(v => v <= maxZoom).map(v => (
+                {canZoom &&
+                  [1, 1.5, 2, 2.5, 3]
+                    .filter((v) => v <= maxZoom)
+                    .map((v) => (
                       <button
                         key={v}
                         onClick={() => applyZoom(v)}
@@ -1297,8 +1457,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                         {v}x
                       </button>
                     ))}
-                  </>
-                )}
 
                 {hasTorch && (
                   <button
@@ -1326,7 +1484,9 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               {canZoom && (
                 <div className="bg-white/5 rounded-lg p-2">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-emerald-300 font-bold">🔍 {zoom.toFixed(1)}x</span>
+                    <span className="text-[10px] text-emerald-300 font-bold">
+                      🔍 {zoom.toFixed(1)}x
+                    </span>
                   </div>
                   <input
                     type="range"
@@ -1334,7 +1494,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                     max={maxZoom}
                     step={0.1}
                     value={zoom}
-                    onChange={e => applyZoom(parseFloat(e.target.value))}
+                    onChange={(e) => applyZoom(parseFloat(e.target.value))}
                     className="w-full h-1.5 accent-emerald-400 cursor-pointer"
                   />
                 </div>
@@ -1346,11 +1506,15 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           {!isBulkMode && (
             <div className="grid grid-cols-2 gap-2 w-full max-w-lg mx-auto">
               <div className="bg-white/5 rounded-lg p-2.5 text-center">
-                <div className="text-2xl font-bold text-emerald-400">{scanCount}</div>
+                <div className="text-2xl font-bold text-emerald-400">
+                  {scanCount}
+                </div>
                 <div className="text-[10px] text-gray-400">تم تسجيلهم</div>
               </div>
               <div className="bg-white/5 rounded-lg p-2.5 text-center">
-                <div className="text-lg font-bold">{cameraReady ? '🟢' : '🔴'}</div>
+                <div className="text-lg font-bold">
+                  {cameraReady ? '🟢' : '🔴'}
+                </div>
                 <div className="text-[10px] text-gray-400">
                   {cameraReady ? 'الكاميرا تعمل' : 'متوقفة'}
                 </div>
@@ -1361,10 +1525,15 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           {/* آخر المسجلين */}
           {!isBulkMode && recentStudents.length > 0 && (
             <div className="w-full max-w-lg mx-auto bg-white/5 rounded-lg p-2.5">
-              <p className="text-[11px] font-bold mb-1.5 text-emerald-300">آخر المسجلين:</p>
+              <p className="text-[11px] font-bold mb-1.5 text-emerald-300">
+                آخر المسجلين:
+              </p>
               <div className="space-y-1">
-                {recentStudents.map(s => (
-                  <div key={s.id} className="flex justify-between items-center bg-black/30 rounded px-2.5 py-1.5">
+                {recentStudents.map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex justify-between items-center bg-black/30 rounded px-2.5 py-1.5"
+                  >
                     <span className="text-xs truncate">{s.name}</span>
                     <span className="text-[10px] bg-emerald-600/80 px-1.5 py-0.5 rounded-full flex-shrink-0">
                       {s.group || '-'}
@@ -1376,10 +1545,9 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           )}
         </div>
 
-        {/* شريط جانبي للوضع الجماعي */}
+        {/* شريط جانبي - الوضع الجماعي */}
         {isBulkMode && bulkShowSidebar && (
           <div className="lg:w-80 bg-gray-900/95 border-t lg:border-t-0 lg:border-r border-white/10 flex flex-col max-h-[40vh] lg:max-h-none">
-
             <div className="p-3 border-b border-white/10 bg-gradient-to-r from-orange-900/50 to-red-900/50">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-bold text-orange-200 flex items-center gap-2">
@@ -1391,7 +1559,9 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               </div>
               <div className="grid grid-cols-2 gap-2 text-center">
                 <div className="bg-white/10 rounded p-1.5">
-                  <div className="text-lg font-bold text-emerald-400">{bulkSessionStudents.length}</div>
+                  <div className="text-lg font-bold text-emerald-400">
+                    {bulkSessionStudents.length}
+                  </div>
                   <div className="text-[9px] text-gray-300">مسجّل</div>
                 </div>
                 <div className="bg-white/10 rounded p-1.5">
@@ -1419,7 +1589,9 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                       {idx + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-bold truncate text-emerald-200">{s.name}</div>
+                      <div className="text-xs font-bold truncate text-emerald-200">
+                        {s.name}
+                      </div>
                       <div className="text-[9px] text-emerald-400/70">
                         {s.code} • {s.group || '-'}
                       </div>
@@ -1432,7 +1604,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
             <div className="p-2 border-t border-white/10 bg-black/40">
               <div className="text-[10px] text-gray-400 text-center">
-                📊 إجمالي الطلاب: {students.length} • مع بصمة: {studentsWithFace.length}
+                📊 إجمالي: {students.length} • مع بصمة: {studentsWithFace.length}
               </div>
             </div>
           </div>
@@ -1441,14 +1613,20 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
       {/* ═══ Toast ═══ */}
       {toast && (
-        <div className={`fixed top-0 left-1/2 -translate-x-1/2 w-[92%] max-w-md z-[10001]
-                         ${toastBg[toast.type]} rounded-b-2xl px-5 py-4 shadow-2xl animate-toast-drop`}
-             style={{ marginTop: 'env(safe-area-inset-top)' }}>
+        <div
+          className={`fixed top-0 left-1/2 -translate-x-1/2 w-[92%] max-w-md z-[10001]
+                       ${toastBg[toast.type]} rounded-b-2xl px-5 py-4 shadow-2xl animate-toast-drop`}
+          style={{ marginTop: 'env(safe-area-inset-top)' }}
+        >
           <div className="flex items-center gap-3">
-            <span className="text-3xl flex-shrink-0 animate-toast-icon">{toastIcon[toast.type]}</span>
+            <span className="text-3xl flex-shrink-0 animate-toast-icon">
+              {toastIcon[toast.type]}
+            </span>
             <div className="min-w-0 flex-1">
               <p className="font-bold text-base truncate">{toast.title}</p>
-              {toast.text && <p className="text-xs opacity-95 truncate mt-0.5">{toast.text}</p>}
+              {toast.text && (
+                <p className="text-xs opacity-95 truncate mt-0.5">{toast.text}</p>
+              )}
             </div>
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20 overflow-hidden rounded-b-2xl">
@@ -1467,8 +1645,12 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               <p className="text-xs text-gray-500 mt-1">أدخل كود الطالب لربطه</p>
             </div>
 
-            <div className="bg-gray-100 rounded p-1.5 text-[10px] font-mono break-all mb-3 text-center" dir="ltr">
-              {pendingQrId.slice(0, 30)}{pendingQrId.length > 30 ? '...' : ''}
+            <div
+              className="bg-gray-100 rounded p-1.5 text-[10px] font-mono break-all mb-3 text-center"
+              dir="ltr"
+            >
+              {pendingQrId.slice(0, 30)}
+              {pendingQrId.length > 30 ? '...' : ''}
             </div>
 
             <input
@@ -1493,11 +1675,13 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             />
 
             {qrLinkMessage && (
-              <div className={`mt-3 p-2 rounded text-center text-xs font-medium ${
-                qrLinkMessage.includes('⚠️')
-                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                  : 'bg-red-50 text-red-700 border border-red-200'
-              }`}>
+              <div
+                className={`mt-3 p-2 rounded text-center text-xs font-medium ${
+                  qrLinkMessage.includes('⚠️')
+                    ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                    : 'bg-red-50 text-red-700 border border-red-200'
+                }`}
+              >
                 {qrLinkMessage}
               </div>
             )}
@@ -1516,7 +1700,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               <button
                 onClick={() => handleQrLinkByCode(qrLinkCode)}
                 disabled={qrLinkCode.length !== 4 || !onUpdateStudent}
-                className="py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-40 text-white font-bold rounded-lg transition shadow-md active:scale-95"
+                className="py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 disabled:opacity-40 text-white font-bold rounded-lg transition shadow-md active:scale-95"
               >
                 🔗 ربط
               </button>
@@ -1529,13 +1713,16 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       {showFaceRegister && (
         <div className="fixed inset-0 z-[10000] bg-black/95 flex items-center justify-center p-4">
           <div className="bg-white text-gray-900 rounded-2xl p-5 w-full max-w-sm shadow-2xl">
-
             {registerStep === 'code' && (
               <>
                 <div className="text-center mb-4">
                   <div className="text-4xl mb-2">📸</div>
-                  <h3 className="text-lg font-bold text-gray-800">إضافة بصمة وجه</h3>
-                  <p className="text-xs text-gray-500 mt-1">أدخل كود الطالب (4 أرقام)</p>
+                  <h3 className="text-lg font-bold text-gray-800">
+                    إضافة بصمة وجه
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    أدخل كود الطالب (4 أرقام)
+                  </p>
                 </div>
 
                 <input
@@ -1559,13 +1746,15 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                 />
 
                 {registerMessage && (
-                  <div className={`mt-3 p-2 rounded text-center text-xs font-medium ${
-                    registerMessage.includes('♻️')
-                      ? 'bg-blue-50 text-blue-800 border border-blue-200'
-                      : registerMessage.includes('⚠️')
-                      ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                      : 'bg-red-50 text-red-700 border border-red-200'
-                  }`}>
+                  <div
+                    className={`mt-3 p-2 rounded text-center text-xs font-medium ${
+                      registerMessage.includes('♻️')
+                        ? 'bg-blue-50 text-blue-800 border border-blue-200'
+                        : registerMessage.includes('⚠️')
+                          ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                          : 'bg-red-50 text-red-700 border border-red-200'
+                    }`}
+                  >
                     {registerMessage}
                   </div>
                 )}
@@ -1600,24 +1789,36 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
                 <div className="relative inline-block mb-3">
                   <FaceCameraPreview isFrontCamera={isFrontCamera} />
-                  <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 200 200">
-                    <circle cx="100" cy="100" r="95" fill="none" stroke="rgba(239, 68, 68, 0.2)" strokeWidth="6" />
+                  <svg
+                    className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none"
+                    viewBox="0 0 200 200"
+                  >
                     <circle
-                      cx="100"
-                      cy="100"
-                      r="95"
+                      cx="100" cy="100" r="95"
+                      fill="none"
+                      stroke="rgba(239,68,68,0.2)"
+                      strokeWidth="6"
+                    />
+                    <circle
+                      cx="100" cy="100" r="95"
                       fill="none"
                       stroke={captureProgress >= 100 ? '#10b981' : '#ef4444'}
                       strokeWidth="6"
                       strokeLinecap="round"
                       strokeDasharray={`${2 * Math.PI * 95}`}
                       strokeDashoffset={`${2 * Math.PI * 95 * (1 - captureProgress / 100)}`}
-                      style={{ transition: 'stroke-dashoffset 0.1s linear, stroke 0.3s ease' }}
+                      style={{
+                        transition: 'stroke-dashoffset 0.1s linear, stroke 0.3s ease',
+                      }}
                     />
                   </svg>
                 </div>
 
-                <p className={`font-bold text-sm ${captureProgress >= 100 ? 'text-green-600' : 'text-red-600'}`}>
+                <p
+                  className={`font-bold text-sm ${
+                    captureProgress >= 100 ? 'text-green-600' : 'text-red-600'
+                  }`}
+                >
                   {captureProgress >= 100 ? '✅ تم!' : '📸 جاري الالتقاط...'}
                 </p>
               </div>
@@ -1644,26 +1845,26 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       <style>{`
         @keyframes toastDrop {
           from { opacity: 0; transform: translate(-50%, -100%); }
-          to { opacity: 1; transform: translate(-50%, 0); }
+          to   { opacity: 1; transform: translate(-50%, 0); }
         }
-        .animate-toast-drop { animation: toastDrop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .animate-toast-drop { animation: toastDrop 0.4s cubic-bezier(0.34,1.56,0.64,1); }
 
         @keyframes toastIcon {
-          0% { transform: scale(0.5) rotate(-20deg); opacity: 0; }
-          60% { transform: scale(1.2) rotate(10deg); }
+          0%   { transform: scale(0.5) rotate(-20deg); opacity: 0; }
+          60%  { transform: scale(1.2) rotate(10deg); }
           100% { transform: scale(1) rotate(0); opacity: 1; }
         }
-        .animate-toast-icon { animation: toastIcon 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .animate-toast-icon { animation: toastIcon 0.5s cubic-bezier(0.34,1.56,0.64,1); }
 
         @keyframes toastProgress {
           from { width: 100%; }
-          to { width: 0%; }
+          to   { width: 0%; }
         }
         .animate-toast-progress { animation: toastProgress 2.2s linear; }
 
         @keyframes scanLine {
           0%, 100% { top: 8%; opacity: 0.4; }
-          50% { top: 88%; opacity: 1; }
+          50%       { top: 88%; opacity: 1; }
         }
         .animate-scan-line {
           animation: scanLine 2s ease-in-out infinite;
@@ -1672,7 +1873,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
         @keyframes slideIn {
           from { opacity: 0; transform: translateX(20px); }
-          to { opacity: 1; transform: translateX(0); }
+          to   { opacity: 1; transform: translateX(0); }
         }
         .animate-slide-in { animation: slideIn 0.3s ease-out; }
 
@@ -1686,19 +1887,19 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           min-height: 280px !important;
           object-fit: cover !important;
         }
-
-        /* ✅ انعكاس المرآة للكاميرا الأمامية */
         #${QR_REGION_ID}.front-camera video {
           transform: scaleX(-1) !important;
         }
-
         #${QR_REGION_ID} img[alt="Info icon"],
         #${QR_REGION_ID} > div:last-child {
           display: none !important;
         }
 
         ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 99px; }
+        ::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.2);
+          border-radius: 99px;
+        }
 
         input[type="range"] {
           -webkit-appearance: none;
@@ -1730,39 +1931,45 @@ interface FaceCameraPreviewProps {
   isFrontCamera: boolean;
 }
 
-const FaceCameraPreview: React.FC<FaceCameraPreviewProps> = ({ isFrontCamera }) => {
+const FaceCameraPreview: React.FC<FaceCameraPreviewProps> = ({
+  isFrontCamera,
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement;
+    const video = document.querySelector(
+      `#${QR_REGION_ID} video`,
+    ) as HTMLVideoElement;
     if (!video) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     let animationId: number;
+    let running = true;
+
+    const size = 200;
+    canvas.width = size;
+    canvas.height = size;
 
     const draw = () => {
-      if (video.readyState >= 2) {
-        const size = 200;
-        canvas.width = size;
-        canvas.height = size;
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(size / 2, size / 2, size / 2 - 8, 0, Math.PI * 2);
-        ctx.clip();
-
+      if (!running) return;
+      if (video.readyState >= 2 && video.videoWidth > 0) {
         const vw = video.videoWidth;
         const vh = video.videoHeight;
         const minDim = Math.min(vw, vh);
         const sx = (vw - minDim) / 2;
         const sy = (vh - minDim) / 2;
 
-        // ✅ انعكاس المرآة فقط للكاميرا الأمامية
+        ctx.save();
+        ctx.clearRect(0, 0, size, size);
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
+        ctx.clip();
+
         if (isFrontCamera) {
           ctx.translate(size, 0);
           ctx.scale(-1, 1);
@@ -1776,6 +1983,7 @@ const FaceCameraPreview: React.FC<FaceCameraPreviewProps> = ({ isFrontCamera }) 
     draw();
 
     return () => {
+      running = false;
       if (animationId) cancelAnimationFrame(animationId);
     };
   }, [isFrontCamera]);
