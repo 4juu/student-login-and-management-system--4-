@@ -137,6 +137,85 @@ export const extractFaceDescriptor = async (
   return result?.descriptor || null;
 };
 
+/* ─── التقاط متعدد ودمج البصمات (3 ثواني) ─── */
+export const extractFaceDescriptorMultiCapture = async (
+  input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
+  onProgress?: (progress: number) => void
+): Promise<Float32Array | null> => {
+  if (!modelsLoaded) await loadFaceModels();
+
+  const CAPTURE_DURATION_MS = 3000;
+  const CAPTURE_INTERVAL_MS = 300;
+  const startTime = Date.now();
+  const descriptors: Float32Array[] = [];
+
+  onProgress?.(0);
+
+  while (Date.now() - startTime < CAPTURE_DURATION_MS) {
+    const elapsed = Date.now() - startTime;
+    const progress = Math.min(90, Math.round((elapsed / CAPTURE_DURATION_MS) * 90));
+    onProgress?.(progress);
+
+    try {
+      const vid = input instanceof HTMLVideoElement ? input : input;
+      if ('readyState' in vid && (vid as HTMLVideoElement).readyState < 2) {
+        await new Promise(r => setTimeout(r, CAPTURE_INTERVAL_MS));
+        continue;
+      }
+
+      const processed = preprocessFrame(input, 640);
+
+      let result = await faceapi
+        .detectSingleFace(processed, getDetectorOptions())
+        .withFaceLandmarks(true)
+        .withFaceDescriptor();
+
+      if (!result) {
+        result = await faceapi
+          .detectSingleFace(processed, new faceapi.TinyFaceDetectorOptions({
+            inputSize: 320,
+            scoreThreshold: 0.30,
+          }))
+          .withFaceLandmarks(true)
+          .withFaceDescriptor();
+      }
+
+      if (result?.descriptor) {
+        descriptors.push(result.descriptor);
+      }
+    } catch (e) {
+      console.warn('capture frame error:', e);
+    }
+
+    await new Promise(r => setTimeout(r, CAPTURE_INTERVAL_MS));
+  }
+
+  onProgress?.(95);
+
+  if (descriptors.length === 0) return null;
+
+  /* ─── دمج البصمات بالمتوسط ─── */
+  const merged = new Float32Array(128);
+  for (let i = 0; i < 128; i++) {
+    let sum = 0;
+    for (const d of descriptors) sum += d[i];
+    merged[i] = sum / descriptors.length;
+  }
+
+  /* ─── تطبيع البصمة المدمجة ─── */
+  let norm = 0;
+  for (let i = 0; i < 128; i++) norm += merged[i] * merged[i];
+  norm = Math.sqrt(norm);
+  if (norm > 0) {
+    for (let i = 0; i < 128; i++) merged[i] /= norm;
+  }
+
+  onProgress?.(100);
+  console.log(`✅ دُمجت ${descriptors.length} بصمة من أصل ${Math.round(CAPTURE_DURATION_MS / CAPTURE_INTERVAL_MS)} محاولة`);
+
+  return merged;
+};
+
 /* ─── كل الوجوه - الطريقة الأساسية (متوازن) ─── */
 export const extractAllFaceDescriptors = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
@@ -165,9 +244,7 @@ export const extractAllFaceDescriptorsHybrid = async (
 
   const options = getDetectorOptions();
 
-  /* الجهاز القوي: موديلين بالتسلسل (مو بالتوازي) */
   if (isHighEnd) {
-    // موديل 1: TinyFaceDetector
     let tiny: any[] = [];
     try {
       tiny = await faceapi
@@ -181,7 +258,6 @@ export const extractAllFaceDescriptorsHybrid = async (
     const merged = [...tiny];
     const IOU_THRESHOLD = 0.4;
 
-    // موديل 2: SSD — بالتسلسل بعد الأول
     let ssd: any[] = [];
     try {
       ssd = await faceapi
@@ -202,7 +278,6 @@ export const extractAllFaceDescriptorsHybrid = async (
     return merged;
   }
 
-  /* الجهاز المتوسط/الضعيف: موديل واحد فقط */
   try {
     return await faceapi
       .detectAllFaces(processed, options)
