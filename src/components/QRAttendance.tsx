@@ -1,10 +1,9 @@
-// src/components/QRAttendance.tsx
 import React, {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  useCallback,
 } from 'react';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { AttendanceSession, Student } from '../types/student';
@@ -13,15 +12,21 @@ import {
   extractAllFaceDescriptorsHybrid,
   extractAllFaceDescriptors,
   extractFaceDescriptorMultiCapture,
-  findBestMatch,
+  findBestMatchSmart,
   descriptorToArray,
   areModelsLoaded,
   resetModels,
+  analyzeRegistrationFrame,
+  RegistrationQualityResult,
 } from '../services/faceRecognition';
+import {
+  addFaceMatchLog,
+  getFaceMatchLogs,
+  clearFaceMatchLogs,
+  exportFaceMatchLogsCsv,
+  FaceMatchLog,
+} from '../services/faceMatchLog';
 
-/* ══════════════════════════════════════════════════════════
-   Types
-══════════════════════════════════════════════════════════ */
 interface QRAttendanceProps {
   students: Student[];
   activeSession: AttendanceSession | null;
@@ -31,10 +36,10 @@ interface QRAttendanceProps {
   onClose: () => void;
 }
 
-type ToastType    = 'success' | 'error' | 'info' | 'warning';
-type ScanMode     = 'qr' | 'bulk';
+type ToastType = 'success' | 'error' | 'info' | 'warning';
+type ScanMode = 'qr' | 'bulk';
 type CameraFacing = 'environment' | 'user';
-type BulkSensitivity = 'far' | 'extreme';
+type BulkSensitivity = 'accurate' | 'balanced' | 'far';
 
 interface ToastMessage {
   id: number;
@@ -51,18 +56,6 @@ interface DetectedFaceBox {
   timestamp: number;
 }
 
-/* ══════════════════════════════════════════════════════════
-   Constants
-══════════════════════════════════════════════════════════ */
-const QR_REGION_ID        = 'qr-reader-v3';
-const DUPLICATE_BLOCK_MS  = 30_000;
-const BULK_FACE_BLOCK_MS  = 120_000;
-const BOX_FADE_MS         = 4000;
-const CONFIDENCE_THRESHOLD = 0.50;
-
-/* ══════════════════════════════════════════════════════════
-   Device capability detection
-══════════════════════════════════════════════════════════ */
 interface DeviceTier {
   tier: 'low' | 'mid' | 'high';
   cores: number;
@@ -73,468 +66,503 @@ interface DeviceTier {
   useHybrid: boolean;
 }
 
-const detectDeviceTier = (): DeviceTier => {
-  const cores  = navigator.hardwareConcurrency || 2;
-  const memory = (navigator as any).deviceMemory || 2;
-  if (cores >= 8 && memory >= 6)
-    return { tier:'high', cores, memory, fps:30, maxFaces:8, intervalMs:300, useHybrid:true  };
-  if (cores >= 4 && memory >= 3)
-    return { tier:'mid',  cores, memory, fps:20, maxFaces:5, intervalMs:450, useHybrid:false };
-  return       { tier:'low',  cores, memory, fps:10, maxFaces:3, intervalMs:700, useHybrid:false };
+const QR_REGION_ID = 'qr-reader-v3';
+const DUPLICATE_BLOCK_MS = 30_000;
+const BULK_FACE_BLOCK_MS = 120_000;
+const BOX_FADE_MS = 4000;
+
+const BULK_MATCH_CONFIG: Record<
+  BulkSensitivity,
+  { label: string; threshold: number; minGap: number; intervalFactor: number; useHybrid: boolean }
+> = {
+  accurate: { label: 'دقيق', threshold: 0.48, minGap: 0.055, intervalFactor: 1.2, useHybrid: false },
+  balanced: { label: 'متوازن', threshold: 0.50, minGap: 0.045, intervalFactor: 1, useHybrid: false },
+  far: { label: 'بعيد', threshold: 0.52, minGap: 0.035, intervalFactor: 0.75, useHybrid: true },
 };
 
-/* ══════════════════════════════════════════════════════════
-   Helpers
-══════════════════════════════════════════════════════════ */
+const detectDeviceTier = (): DeviceTier => {
+  const cores = navigator.hardwareConcurrency || 2;
+  const memory = (navigator as any).deviceMemory || 2;
+  if (cores >= 8 && memory >= 6) return { tier: 'high', cores, memory, fps: 30, maxFaces: 8, intervalMs: 300, useHybrid: true };
+  if (cores >= 4 && memory >= 3) return { tier: 'mid', cores, memory, fps: 20, maxFaces: 5, intervalMs: 450, useHybrid: false };
+  return { tier: 'low', cores, memory, fps: 10, maxFaces: 3, intervalMs: 700, useHybrid: false };
+};
+
 const extractQrCodeId = (text: string): string | null => {
   const raw = text.trim();
-  try { const u=new URL(raw); const id=u.searchParams.get('id'); if(id) return id.trim(); } catch {}
-  try { const o=JSON.parse(raw); const v=o.qrCodeId||o.qrId||o.id||o.studentId||o.universityId||o.code; if(v) return String(v).trim(); } catch {}
+  try {
+    const u = new URL(raw);
+    const id = u.searchParams.get('id');
+    if (id) return id.trim();
+  } catch {}
+  try {
+    const o = JSON.parse(raw);
+    const v = o.qrCodeId || o.qrId || o.id || o.studentId || o.universityId || o.code;
+    if (v) return String(v).trim();
+  } catch {}
   if (/^[A-Za-z0-9_-]{3,100}$/.test(raw)) return raw;
   return null;
 };
 
 const getQrBox = () => {
-  const min  = Math.min(window.innerWidth, window.innerHeight);
+  const min = Math.min(window.innerWidth, window.innerHeight);
   const size = Math.max(180, Math.min(300, Math.floor(min * 0.6)));
   return { width: size, height: size };
 };
 
-/* ─── Audio ─── */
-const beep = (freq: number, dur: number, vol = 0.05) => {
+const playTone = (
+  notes: Array<{ freq: number; start: number; dur: number; vol: number; type?: OscillatorType }>
+) => {
   try {
     const AC = window.AudioContext || (window as any).webkitAudioContext;
     if (!AC) return;
     const ctx = new AC();
-    const osc = ctx.createOscillator();
-    const g   = ctx.createGain();
-    osc.type='sine'; osc.frequency.value=freq; g.gain.value=vol;
-    osc.connect(g); g.connect(ctx.destination);
-    osc.start(); osc.stop(ctx.currentTime+dur/1000);
-    setTimeout(()=>ctx.close(), dur+100);
+    notes.forEach(({ freq, start, dur, vol, type = 'sine' }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.001, ctx.currentTime + start);
+      gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + start + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + dur + 0.04);
+    });
+    setTimeout(() => ctx.close(), 900);
   } catch {}
 };
 
+const playSuccess = () => {
+  navigator.vibrate?.([35, 20, 35]);
+  playTone([{ freq: 523, start: 0, dur: 0.11, vol: 0.13 }, { freq: 659, start: 0.1, dur: 0.12, vol: 0.15 }, { freq: 784, start: 0.21, dur: 0.18, vol: 0.16 }]);
+};
 const playFaceSuccess = () => {
-  try {
-    const AC = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AC) return;
-    const ctx = new AC();
-    const notes = [
-      { freq: 523, start: 0,    dur: 0.12, vol: 0.18 },
-      { freq: 659, start: 0.10, dur: 0.12, vol: 0.20 },
-      { freq: 784, start: 0.20, dur: 0.22, vol: 0.22 },
-    ];
-    notes.forEach(({ freq, start, dur, vol }) => {
-      const osc = ctx.createOscillator();
-      const g   = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      g.gain.setValueAtTime(0, ctx.currentTime + start);
-      g.gain.linearRampToValueAtTime(vol, ctx.currentTime + start + 0.03);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
-      osc.connect(g); g.connect(ctx.destination);
-      osc.start(ctx.currentTime + start);
-      osc.stop(ctx.currentTime + start + dur + 0.05);
-    });
-    setTimeout(() => ctx.close(), 700);
-    navigator.vibrate?.([40, 20, 40]);
-  } catch {}
+  navigator.vibrate?.([45, 25, 45]);
+  playTone([{ freq: 587, start: 0, dur: 0.1, vol: 0.15 }, { freq: 740, start: 0.09, dur: 0.12, vol: 0.17 }, { freq: 880, start: 0.21, dur: 0.18, vol: 0.18 }]);
+};
+const playAlready = () => {
+  navigator.vibrate?.(25);
+  playTone([{ freq: 440, start: 0, dur: 0.1, vol: 0.06, type: 'triangle' }]);
+};
+const playWarning = () => {
+  navigator.vibrate?.([40, 30, 40]);
+  playTone([{ freq: 520, start: 0, dur: 0.11, vol: 0.09, type: 'triangle' }, { freq: 390, start: 0.11, dur: 0.13, vol: 0.08, type: 'triangle' }]);
+};
+const playError = () => {
+  navigator.vibrate?.([120]);
+  playTone([{ freq: 220, start: 0, dur: 0.18, vol: 0.1, type: 'sawtooth' }]);
+};
+const playCapture = () => {
+  navigator.vibrate?.(25);
+  playTone([{ freq: 1100, start: 0, dur: 0.055, vol: 0.08 }]);
 };
 
-/* ── صوت تنبيهي "لديه بصمة بالفعل" ── */
-const playAlreadyHasFace = () => {
-  try {
-    const AC = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AC) return;
-    const ctx = new AC();
-    const notes = [
-      { freq: 600, start: 0,    dur: 0.15, vol: 0.16 },
-      { freq: 400, start: 0.12, dur: 0.20, vol: 0.14 },
-    ];
-    notes.forEach(({ freq, start, dur, vol }) => {
-      const osc = ctx.createOscillator();
-      const g   = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.value = freq;
-      g.gain.setValueAtTime(0, ctx.currentTime + start);
-      g.gain.linearRampToValueAtTime(vol, ctx.currentTime + start + 0.03);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
-      osc.connect(g); g.connect(ctx.destination);
-      osc.start(ctx.currentTime + start);
-      osc.stop(ctx.currentTime + start + dur + 0.05);
-    });
-    setTimeout(() => ctx.close(), 600);
-    navigator.vibrate?.([50, 30, 50]);
-  } catch {}
-};
-
-const playSuccess     = () => { navigator.vibrate?.([50,30,50]); beep(880,100,0.15); };
-const playCapture     = () => { navigator.vibrate?.(30);         beep(1200,50,0.08); };
-const playError       = () => { navigator.vibrate?.([150]);      beep(200,200,0.10); };
-
-/* ─── Canvas ─── */
-function drawRoundedRect(
-  ctx: CanvasRenderingContext2D,
-  x:number, y:number, w:number, h:number, r:number
-) {
+function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
-  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
-  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
-  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
-  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
   ctx.closePath();
 }
 
-/* ══════════════════════════════════════════════════════════
-   Main Component
-══════════════════════════════════════════════════════════ */
 export const QRAttendance: React.FC<QRAttendanceProps> = ({
-  students, activeSession, onMarkAttendance, onUpdateStudent,
-  alreadyPresentIds, onClose,
+  students,
+  activeSession,
+  onMarkAttendance,
+  onUpdateStudent,
+  alreadyPresentIds,
+  onClose,
 }) => {
   const device = useMemo(detectDeviceTier, []);
 
-  /* ─── Refs ─── */
-  const scannerRef       = useRef<Html5Qrcode | null>(null);
-  const trackRef         = useRef<MediaStreamTrack | null>(null);
-  const processingRef    = useRef(false);
-  const lastScansRef     = useRef<Record<string,number>>({});
-  const mountedRef       = useRef(true);
-  const startingRef      = useRef(false);
-  const faceTimerRef     = useRef<ReturnType<typeof setTimeout>|null>(null);
-  const faceRunningRef   = useRef(false);
-  const faceBlockedUntil = useRef(0);
-  const overlayCanvasRef = useRef<HTMLCanvasElement|null>(null);
-  const detectedFacesRef = useRef<Map<string,DetectedFaceBox>>(new Map());
-  const animFrameRef     = useRef<number|null>(null);
-  const lastRestartRef   = useRef(0);
-  const toastCounterRef  = useRef(0);
-  const codeInputRef     = useRef<HTMLInputElement|null>(null);
-  const qrCodeInputRef   = useRef<HTMLInputElement|null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const trackRef = useRef<MediaStreamTrack | null>(null);
+  const processingRef = useRef(false);
+  const lastScansRef = useRef<Record<string, number>>({});
+  const mountedRef = useRef(true);
+  const startingRef = useRef(false);
+  const faceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const faceRunningRef = useRef(false);
+  const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const detectedFacesRef = useRef<Map<string, DetectedFaceBox>>(new Map());
+  const animFrameRef = useRef<number | null>(null);
+  const lastRestartRef = useRef(0);
+  const toastCounterRef = useRef(0);
+  const codeInputRef = useRef<HTMLInputElement | null>(null);
+  const qrCodeInputRef = useRef<HTMLInputElement | null>(null);
 
-  /* ─── State ─── */
-  const [mode,            setMode]            = useState<ScanMode>('qr');
-  const [facing,          setFacing]          = useState<CameraFacing>('environment');
-  const [cameraReady,     setCameraReady]     = useState(false);
-  const [toasts,          setToasts]          = useState<ToastMessage[]>([]);
-  const [scanCount,       setScanCount]       = useState(0);
-  const [recentStudents,  setRecentStudents]  = useState<Student[]>([]);
-  const [pendingQrId,     setPendingQrId]     = useState<string|null>(null);
-  const [qrLinkCode,      setQrLinkCode]      = useState('');
-  const [qrLinkMessage,   setQrLinkMessage]   = useState('');
-  const [zoom,            setZoom]            = useState(1);
-  const [maxZoom,         setMaxZoom]         = useState(1);
-  const [minZoom,         setMinZoom]         = useState(1);
-  const [canZoom,         setCanZoom]         = useState(false);
-  const [hasTorch,        setHasTorch]        = useState(false);
-  const [torchOn,         setTorchOn]         = useState(false);
-  const [errorMsg,        setErrorMsg]        = useState('');
+  const [mode, setMode] = useState<ScanMode>('qr');
+  const [facing, setFacing] = useState<CameraFacing>('environment');
+  const [cameraReady, setCameraReady] = useState(false);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [scanCount, setScanCount] = useState(0);
+  const [recentStudents, setRecentStudents] = useState<Student[]>([]);
+  const [pendingQrId, setPendingQrId] = useState<string | null>(null);
+  const [qrLinkCode, setQrLinkCode] = useState('');
+  const [qrLinkMessage, setQrLinkMessage] = useState('');
+  const [zoom, setZoom] = useState(1);
+  const [maxZoom, setMaxZoom] = useState(1);
+  const [minZoom, setMinZoom] = useState(1);
+  const [canZoom, setCanZoom] = useState(false);
+  const [hasTorch, setHasTorch] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const [faceModelsReady, setFaceModelsReady] = useState(areModelsLoaded);
-  const [faceLoading,     setFaceLoading]     = useState(false);
-  const [cameraStatus,    setCameraStatus]    = useState<'starting'|'ready'|'error'|'restarting'>('starting');
-  const [bulkStudents,    setBulkStudents]    = useState<Student[]>([]);
-  const [bulkDetected,    setBulkDetected]    = useState(0);
-  const [bulkSidebar,     setBulkSidebar]     = useState(false);
-  const [sensitivity,     setSensitivity]     = useState<BulkSensitivity>('far');
+  const [faceLoading, setFaceLoading] = useState(false);
+  const [cameraStatus, setCameraStatus] = useState<'starting' | 'ready' | 'error' | 'restarting'>('starting');
+  const [bulkStudents, setBulkStudents] = useState<Student[]>([]);
+  const [bulkDetected, setBulkDetected] = useState(0);
+  const [bulkSidebar, setBulkSidebar] = useState(false);
+  const [sensitivity, setSensitivity] = useState<BulkSensitivity>('balanced');
 
-  /* ── نافذة "لديه بصمة بالفعل" ── */
-  const [alreadyFacePopup, setAlreadyFacePopup] = useState<{name: string; visible: boolean}>({name:'', visible:false});
-
-  /* Face Register */
   const [showRegister, setShowRegister] = useState(false);
-  const [regCode,      setRegCode]      = useState('');
-  const [regStep,      setRegStep]      = useState<'code'|'capturing'|'success'>('code');
-  const [regStudent,   setRegStudent]   = useState<Student|null>(null);
-  const [regMessage,   setRegMessage]   = useState('');
-  const [regProgress,  setRegProgress]  = useState(0);
-  const [regFacing,    setRegFacing]    = useState<CameraFacing>('environment');
+  const [regCode, setRegCode] = useState('');
+  const [regStep, setRegStep] = useState<'code' | 'capturing' | 'success'>('code');
+  const [regStudent, setRegStudent] = useState<Student | null>(null);
+  const [regMessage, setRegMessage] = useState('');
+  const [regProgress, setRegProgress] = useState(0);
+  const [regFacing, setRegFacing] = useState<CameraFacing>('environment');
   const [regCountdown, setRegCountdown] = useState(3);
+  const [regQuality, setRegQuality] = useState<RegistrationQualityResult | null>(null);
+  const [updateFaceStudent, setUpdateFaceStudent] = useState<Student | null>(null);
 
-  /* ─── Maps ─── */
+  const [showLogs, setShowLogs] = useState(false);
+  const [matchLogs, setMatchLogs] = useState<FaceMatchLog[]>([]);
+
   const studentMap = useMemo(() => {
-    const m = new Map<string,Student>();
+    const m = new Map<string, Student>();
     students.forEach(s => {
-      if (s.qrCodeId)     m.set(s.qrCodeId.trim(),    s);
+      if (s.qrCodeId) m.set(s.qrCodeId.trim(), s);
       if (s.universityId) m.set(s.universityId.trim(), s);
+      if (s.code) m.set(s.code.trim(), s);
     });
     return m;
   }, [students]);
 
   const studentsWithFace = useMemo(
-    () => students.filter(s => s.faceDescriptor && s.faceDescriptor.length > 0),
+    () => students.filter(s => !!s.faceDescriptor && (typeof s.faceDescriptor === 'string' || s.faceDescriptor.length > 0)),
     [students]
   );
 
-  /* ─── Toast ─── */
-  const showToast = useCallback((msg: Omit<ToastMessage,'id'>, ms = 2500) => {
+  const showToast = useCallback((msg: Omit<ToastMessage, 'id'>, ms = 2500) => {
     const id = ++toastCounterRef.current;
     setToasts(prev => [{ ...msg, id }, ...prev].slice(0, 4));
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), ms);
   }, []);
 
-  /* ── إظهار نافذة "لديه بصمة بالفعل" لمدة 3 ثواني ── */
-  const showAlreadyHasFacePopup = useCallback((studentName: string) => {
-    setAlreadyFacePopup({ name: studentName, visible: true });
-    playAlreadyHasFace();
-    setTimeout(() => {
-      setAlreadyFacePopup({ name: '', visible: false });
-    }, 3000);
+  const stopFaceLoop = useCallback(() => {
+    faceRunningRef.current = false;
+    if (faceTimerRef.current) {
+      clearTimeout(faceTimerRef.current);
+      faceTimerRef.current = null;
+    }
   }, []);
 
-  /* ══════════════════════════════════════════════════════
-     إيقاف كل شيء
-  ══════════════════════════════════════════════════════ */
   const hardStop = useCallback(async () => {
     faceRunningRef.current = false;
     if (faceTimerRef.current) { clearTimeout(faceTimerRef.current); faceTimerRef.current = null; }
     if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
 
     if (trackRef.current && torchOn) {
-      try { await trackRef.current.applyConstraints({ advanced:[{ torch:false } as any] }); } catch {}
+      try { await trackRef.current.applyConstraints({ advanced: [{ torch: false } as any] }); } catch {}
     }
 
     if (scannerRef.current) {
       try {
         const st = scannerRef.current.getState();
-        if (st===Html5QrcodeScannerState.SCANNING || st===Html5QrcodeScannerState.PAUSED)
+        if (st === Html5QrcodeScannerState.SCANNING || st === Html5QrcodeScannerState.PAUSED) {
           await scannerRef.current.stop();
+        }
       } catch {}
       try { await scannerRef.current.clear(); } catch {}
       scannerRef.current = null;
     }
 
-    if (trackRef.current) { try { trackRef.current.stop(); } catch {} trackRef.current = null; }
+    if (trackRef.current) {
+      try { trackRef.current.stop(); } catch {}
+      trackRef.current = null;
+    }
 
-    const vid = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement|null;
+    const vid = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
     if (vid?.srcObject) {
-      try { (vid.srcObject as MediaStream).getTracks().forEach(t=>t.stop()); vid.srcObject=null; } catch {}
+      try {
+        (vid.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+        vid.srcObject = null;
+      } catch {}
     }
 
     const reg = document.getElementById(QR_REGION_ID);
     if (reg) reg.innerHTML = '';
   }, [torchOn]);
 
-  /* ══════════════════════════════════════════════════════
-     تشغيل الكاميرا
-  ══════════════════════════════════════════════════════ */
+  const onDecoded = useCallback(async (text: string) => {
+    if (processingRef.current) return;
+    const qrId = extractQrCodeId(text);
+    if (!qrId) return;
+
+    processingRef.current = true;
+    try {
+      const student = studentMap.get(qrId);
+      const now = Date.now();
+      if (now - (lastScansRef.current[qrId] || 0) < DUPLICATE_BLOCK_MS) return;
+      lastScansRef.current[qrId] = now;
+
+      if (student) {
+        if (alreadyPresentIds.has(student.id)) {
+          showToast({ type: 'warning', title: '🟡 مسجل مسبقاً', text: student.name }, 1200);
+          playAlready();
+          addFaceMatchLog({ mode: 'qr', status: 'already', studentId: student.id, studentName: student.name, studentCode: student.code, group: student.group, reason: 'QR مسجل مسبقاً' });
+          return;
+        }
+
+        await onMarkAttendance(student);
+        setScanCount(c => c + 1);
+        setRecentStudents(prev => [student, ...prev.filter(s => s.id !== student.id)].slice(0, 8));
+        playSuccess();
+        showToast({ type: 'success', title: `✅ ${student.name}`, text: student.group ? `الكروب: ${student.group}` : 'تم تسجيل الحضور' });
+        addFaceMatchLog({ mode: 'qr', status: 'accepted', studentId: student.id, studentName: student.name, studentCode: student.code, group: student.group, reason: 'تسجيل QR' });
+      } else {
+        setPendingQrId(qrId);
+        setQrLinkCode('');
+        setQrLinkMessage('');
+        playError();
+        setTimeout(() => qrCodeInputRef.current?.focus(), 200);
+      }
+    } finally {
+      setTimeout(() => { processingRef.current = false; }, 400);
+    }
+  }, [studentMap, alreadyPresentIds, onMarkAttendance, showToast]);
+
   const startCamera = useCallback(async (cf: CameraFacing) => {
     if (!mountedRef.current || startingRef.current) return;
     startingRef.current = true;
-
     setCameraStatus('starting');
     setErrorMsg('');
     setCameraReady(false);
 
     try {
       await hardStop();
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 350));
       if (!mountedRef.current) return;
 
       const region = document.getElementById(QR_REGION_ID);
       if (region) region.innerHTML = '';
 
       const qrBox = getQrBox();
-      const fps   = device.fps;
-
       const attempts = [
-        { constraints:{ facingMode:cf, width:{ideal:1920,min:1280}, height:{ideal:1080,min:720}, frameRate:{ideal:60,min:30} }, fps, box:qrBox },
-        { constraints:{ facingMode:cf, width:{ideal:1280}, height:{ideal:720} }, fps:Math.min(fps,20), box:qrBox },
-        { constraints:{ facingMode:cf }, fps:10, box:{width:200,height:200} },
+        { constraints: { facingMode: cf, width: { ideal: 1920, min: 1280 }, height: { ideal: 1080, min: 720 }, frameRate: { ideal: 60, min: 30 } }, fps: device.fps, box: qrBox },
+        { constraints: { facingMode: cf, width: { ideal: 1280 }, height: { ideal: 720 } }, fps: Math.min(device.fps, 20), box: qrBox },
+        { constraints: { facingMode: cf }, fps: 10, box: { width: 200, height: 200 } },
       ];
 
-      let scanner: Html5Qrcode|null = null;
+      let scanner: Html5Qrcode | null = null;
       for (const att of attempts) {
         try {
-          const s = new Html5Qrcode(QR_REGION_ID, { verbose:false });
+          const s = new Html5Qrcode(QR_REGION_ID, { verbose: false });
           await s.start(
-            { facingMode:cf },
-            { fps:att.fps, qrbox:att.box,
-              aspectRatio: window.innerHeight>window.innerWidth ? 4/3 : 16/9,
-              disableFlip:true, videoConstraints:att.constraints },
-            onDecoded, ()=>{}
+            { facingMode: cf },
+            {
+              fps: att.fps,
+              qrbox: att.box,
+              aspectRatio: window.innerHeight > window.innerWidth ? 4 / 3 : 16 / 9,
+              disableFlip: true,
+              videoConstraints: att.constraints,
+            },
+            onDecoded,
+            () => {}
           );
-          scanner = s; break;
+          scanner = s;
+          break;
         } catch (e) {
           console.warn('camera attempt failed:', e);
           const r2 = document.getElementById(QR_REGION_ID);
           if (r2) r2.innerHTML = '';
-          await new Promise(r => setTimeout(r, 350));
+          await new Promise(r => setTimeout(r, 300));
         }
       }
 
-      if (!scanner || !mountedRef.current) {
-        if (scanner) { try { await scanner.stop(); } catch {} }
-        throw new Error('كل المحاولات فشلت');
-      }
-
+      if (!scanner || !mountedRef.current) throw new Error('كل محاولات تشغيل الكاميرا فشلت');
       scannerRef.current = scanner;
 
       await new Promise(r => setTimeout(r, 500));
-      const vid = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement|null;
+      const vid = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
       if (vid?.srcObject) {
         const track = (vid.srcObject as MediaStream).getVideoTracks()[0];
         if (track) {
           trackRef.current = track;
           const caps = (track.getCapabilities?.() || {}) as any;
 
-          for (const [cap, val] of [
-            ['focusMode','continuous'],['exposureMode','continuous'],['whiteBalanceMode','continuous']
-          ] as const) {
-            if (caps[cap]?.includes?.(val))
-              try { await track.applyConstraints({ advanced:[{ [cap]:val } as any] }); } catch {}
+          for (const [cap, val] of [['focusMode', 'continuous'], ['exposureMode', 'continuous'], ['whiteBalanceMode', 'continuous']] as const) {
+            if (caps[cap]?.includes?.(val)) {
+              try { await track.applyConstraints({ advanced: [{ [cap]: val } as any] }); } catch {}
+            }
           }
 
           if (caps.zoom && caps.zoom.max > caps.zoom.min) {
-            setMinZoom(caps.zoom.min); setMaxZoom(caps.zoom.max); setCanZoom(true);
-            try { await track.applyConstraints({ advanced:[{ zoom:caps.zoom.min } as any] }); setZoom(caps.zoom.min); } catch {}
-          } else { setCanZoom(false); setMinZoom(1); setMaxZoom(1); }
+            setMinZoom(caps.zoom.min);
+            setMaxZoom(caps.zoom.max);
+            setCanZoom(true);
+            try { await track.applyConstraints({ advanced: [{ zoom: caps.zoom.min } as any] }); setZoom(caps.zoom.min); } catch {}
+          } else {
+            setCanZoom(false);
+            setMinZoom(1);
+            setMaxZoom(1);
+          }
 
           setHasTorch(!!caps.torch);
         }
       }
 
-      if (mountedRef.current) { setCameraReady(true); setCameraStatus('ready'); }
-
+      if (mountedRef.current) {
+        setCameraReady(true);
+        setCameraStatus('ready');
+      }
     } catch (err: any) {
       if (!mountedRef.current) return;
       setCameraStatus('error');
       const msg = err?.message || '';
-      if (msg.includes('NotAllowed') || msg.includes('Permission'))
-        setErrorMsg('يرجى السماح باستخدام الكاميرا');
-      else if (msg.includes('NotFound'))
-        setErrorMsg('لا توجد كاميرا متاحة');
-      else if (msg.includes('NotReadable') || msg.includes('TrackStartError'))
-        setErrorMsg('الكاميرا مستخدمة من تطبيق آخر');
-      else
-        setErrorMsg(`فشل تشغيل الكاميرا: ${msg.slice(0,60)}`);
-
+      if (msg.includes('NotAllowed') || msg.includes('Permission')) setErrorMsg('يرجى السماح باستخدام الكاميرا');
+      else if (msg.includes('NotFound')) setErrorMsg('لا توجد كاميرا متاحة');
+      else if (msg.includes('NotReadable') || msg.includes('TrackStartError')) setErrorMsg('الكاميرا مستخدمة من تطبيق آخر');
+      else setErrorMsg(`فشل تشغيل الكاميرا: ${msg.slice(0, 70)}`);
       setTimeout(() => { if (mountedRef.current) startCamera(cf); }, 4000);
     } finally {
       startingRef.current = false;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [device.fps, hardStop]);
+  }, [device.fps, hardStop, onDecoded]);
 
-  /* ─── QR decode ─── */
-  const onDecoded = useCallback(async (text: string) => {
-    if (processingRef.current) return;
-    const qrId = extractQrCodeId(text);
-    if (!qrId) return;
-    processingRef.current = true;
-    try {
-      const student = studentMap.get(qrId);
-      if (student) {
-        const now = Date.now();
-        if (now-(lastScansRef.current[qrId]||0) < DUPLICATE_BLOCK_MS) return;
-        lastScansRef.current[qrId] = now;
-        if (alreadyPresentIds.has(student.id)) {
-          showToast({ type:'warning', title:'⚠️ مسجل مسبقاً', text:student.name }, 1500);
-          return;
-        }
-        await onMarkAttendance(student);
-        setScanCount(c=>c+1);
-        setRecentStudents(prev=>[student,...prev.filter(s=>s.id!==student.id)].slice(0,8));
-        playSuccess();
-        showToast({ type:'success', title:`✅ ${student.name}`, text:student.group?`الكروب: ${student.group}`:'تم تسجيل الحضور' });
-      } else {
-        const now = Date.now();
-        if (now-(lastScansRef.current[qrId]||0) < DUPLICATE_BLOCK_MS) return;
-        lastScansRef.current[qrId] = now;
-        setPendingQrId(qrId); setQrLinkCode(''); setQrLinkMessage('');
-        playError();
-        setTimeout(()=>qrCodeInputRef.current?.focus(), 200);
-      }
-    } finally {
-      setTimeout(()=>{ processingRef.current=false; }, 400);
-    }
-  }, [studentMap, alreadyPresentIds, onMarkAttendance, showToast]);
-
-  /* ─── Zoom / Torch ─── */
   const applyZoom = useCallback(async (val: number) => {
     if (!trackRef.current || !canZoom) return;
     const c = Math.max(minZoom, Math.min(maxZoom, val));
-    try { await trackRef.current.applyConstraints({ advanced:[{ zoom:c } as any] }); setZoom(c); } catch {}
+    try { await trackRef.current.applyConstraints({ advanced: [{ zoom: c } as any] }); setZoom(c); } catch {}
   }, [canZoom, minZoom, maxZoom]);
 
   const toggleTorch = useCallback(async () => {
     if (!trackRef.current || !hasTorch) return;
     const next = !torchOn;
-    try { await trackRef.current.applyConstraints({ advanced:[{ torch:next } as any] }); setTorchOn(next); } catch {}
+    try { await trackRef.current.applyConstraints({ advanced: [{ torch: next } as any] }); setTorchOn(next); } catch {}
   }, [hasTorch, torchOn]);
 
   const toggleCamera = useCallback(async () => {
     if (startingRef.current) return;
-    const nf: CameraFacing = facing==='environment' ? 'user' : 'environment';
+    const nf: CameraFacing = facing === 'environment' ? 'user' : 'environment';
     setFacing(nf);
     await startCamera(nf);
   }, [facing, startCamera]);
 
-  /* ══════════════════════════════════════════════════════
-     تحميل موديلات الوجه
-  ══════════════════════════════════════════════════════ */
   useEffect(() => {
-    if (mode!=='bulk' || faceModelsReady) return;
+    let cancelled = false;
+    const t = window.setTimeout(async () => {
+      if (cancelled || areModelsLoaded()) return;
+      try {
+        await loadFaceModels();
+        if (!cancelled && mountedRef.current) setFaceModelsReady(true);
+      } catch (e) {
+        console.warn('preload face models failed:', e);
+      }
+    }, 1800);
+
+    return () => { cancelled = true; clearTimeout(t); };
+  }, []);
+
+  useEffect(() => {
+    if (mode !== 'bulk' || faceModelsReady) return;
     let cancelled = false;
 
-    const load = async (attempt=0): Promise<void> => {
+    const load = async (attempt = 0): Promise<void> => {
       if (cancelled || !mountedRef.current) return;
       setFaceLoading(true);
       try {
         await loadFaceModels();
-        if (!cancelled && mountedRef.current) { setFaceModelsReady(true); setFaceLoading(false); }
+        if (!cancelled && mountedRef.current) {
+          setFaceModelsReady(true);
+          setFaceLoading(false);
+        }
       } catch {
         if (cancelled || !mountedRef.current) return;
         setFaceLoading(false);
         if (attempt < 5) {
           resetModels();
-          await new Promise(r=>setTimeout(r, 1500*(attempt+1)));
-          return load(attempt+1);
+          await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
+          return load(attempt + 1);
         }
-        showToast({ type:'error', title:'❌ فشل تحميل نظام التعرف' }, 5000);
+        showToast({ type: 'error', title: '❌ فشل تحميل نظام التعرف' }, 5000);
       }
     };
 
     load();
-    return ()=>{ cancelled=true; };
+    return () => { cancelled = true; };
   }, [mode, faceModelsReady, showToast]);
 
-  /* ══════════════════════════════════════════════════════
-     Canvas Overlay
-  ══════════════════════════════════════════════════════ */
   useEffect(() => {
-    if (mode!=='bulk' || !cameraReady) {
-      if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current=null; }
+    if (!showRegister || regStep !== 'code') {
+      setRegQuality(null);
+      return;
+    }
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const loop = async () => {
+      if (cancelled || !mountedRef.current) return;
+      const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
+      if (video && video.readyState >= 2) {
+        try {
+          const q = await analyzeRegistrationFrame(video);
+          if (!cancelled && mountedRef.current) setRegQuality(q);
+        } catch {}
+      }
+      timer = setTimeout(loop, 700);
+    };
+
+    timer = setTimeout(loop, 300);
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [showRegister, regStep]);
+
+  useEffect(() => {
+    if (mode !== 'bulk' || !cameraReady) {
+      if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
       return;
     }
 
     const canvas = overlayCanvasRef.current;
-    const video  = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement|null;
+    const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
     if (!canvas || !video) return;
-
-    const isFront = facing==='user';
+    const isFront = facing === 'user';
 
     const draw = () => {
       if (!mountedRef.current) return;
-      if (!canvas || !video || video.readyState<2) {
-        animFrameRef.current = requestAnimationFrame(draw); return;
+      if (!canvas || !video || video.readyState < 2) {
+        animFrameRef.current = requestAnimationFrame(draw);
+        return;
       }
 
       const rect = video.getBoundingClientRect();
-      if (Math.abs(canvas.width-rect.width)>1 || Math.abs(canvas.height-rect.height)>1) {
-        canvas.width=rect.width; canvas.height=rect.height;
+      if (Math.abs(canvas.width - rect.width) > 1 || Math.abs(canvas.height - rect.height) > 1) {
+        canvas.width = rect.width;
+        canvas.height = rect.height;
       }
 
       const ctx = canvas.getContext('2d');
-      if (!ctx) { animFrameRef.current=requestAnimationFrame(draw); return; }
+      if (!ctx) {
+        animFrameRef.current = requestAnimationFrame(draw);
+        return;
+      }
 
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       const now = Date.now();
-      const vw  = video.videoWidth  || 1280;
-      const vh  = video.videoHeight || 720;
-      const sx  = canvas.width  / vw;
-      const sy  = canvas.height / vh;
+      const vw = video.videoWidth || 1280;
+      const vh = video.videoHeight || 720;
+      const sx = canvas.width / vw;
+      const sy = canvas.height / vh;
       let visible = 0;
 
       detectedFacesRef.current.forEach((face, key) => {
@@ -542,55 +570,75 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         if (age > BOX_FADE_MS) { detectedFacesRef.current.delete(key); return; }
         visible++;
 
-        const opacity = age<200 ? age/200 : Math.max(0.35, 1-(age-200)/BOX_FADE_MS);
+        const opacity = age < 200 ? age / 200 : Math.max(0.35, 1 - (age - 200) / BOX_FADE_MS);
+        let stroke = '#ef4444';
+        let bg = 'rgba(239,68,68,0.85)';
+        let label = '❓ مجهول';
+        if (face.status === 'recognized') { stroke = '#10b981'; bg = 'rgba(16,185,129,0.92)'; label = face.student?.name || ''; }
+        else if (face.status === 'already') { stroke = '#f59e0b'; bg = 'rgba(245,158,11,0.92)'; label = `✓ ${face.student?.name || ''}`; }
 
-        let stroke='#ef4444', bg='rgba(239,68,68,0.85)', label='❓ مجهول';
-        if (face.status==='recognized') { stroke='#10b981'; bg='rgba(16,185,129,0.92)'; label=face.student?.name||''; }
-        else if (face.status==='already') { stroke='#f59e0b'; bg='rgba(245,158,11,0.92)'; label=`✓ ${face.student?.name||''}`; }
-
-        let dx = face.box.x*sx;
-        const dy=face.box.y*sy, dw=face.box.width*sx, dh=face.box.height*sy;
-        if (isFront) dx = canvas.width-dx-dw;
+        let dx = face.box.x * sx;
+        const dy = face.box.y * sy;
+        const dw = face.box.width * sx;
+        const dh = face.box.height * sy;
+        if (isFront) dx = canvas.width - dx - dw;
 
         ctx.globalAlpha = opacity;
+        ctx.shadowColor = stroke;
+        ctx.shadowBlur = 16;
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(dx, dy, dw, dh);
+        ctx.shadowBlur = 0;
 
-        ctx.shadowColor=stroke; ctx.shadowBlur=16;
-        ctx.strokeStyle=stroke; ctx.lineWidth=2.5;
-        ctx.strokeRect(dx,dy,dw,dh);
-        ctx.shadowBlur=0;
-
-        const cl = Math.max(12, Math.min(24, dw*0.2));
-        ctx.lineWidth=4; ctx.lineCap='round'; ctx.strokeStyle=stroke;
+        const cl = Math.max(12, Math.min(24, dw * 0.2));
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = stroke;
         ctx.beginPath();
-        ctx.moveTo(dx,dy+cl); ctx.lineTo(dx,dy); ctx.lineTo(dx+cl,dy);
-        ctx.moveTo(dx+dw-cl,dy); ctx.lineTo(dx+dw,dy); ctx.lineTo(dx+dw,dy+cl);
-        ctx.moveTo(dx+dw,dy+dh-cl); ctx.lineTo(dx+dw,dy+dh); ctx.lineTo(dx+dw-cl,dy+dh);
-        ctx.moveTo(dx+cl,dy+dh); ctx.lineTo(dx,dy+dh); ctx.lineTo(dx,dy+dh-cl);
+        ctx.moveTo(dx, dy + cl); ctx.lineTo(dx, dy); ctx.lineTo(dx + cl, dy);
+        ctx.moveTo(dx + dw - cl, dy); ctx.lineTo(dx + dw, dy); ctx.lineTo(dx + dw, dy + cl);
+        ctx.moveTo(dx + dw, dy + dh - cl); ctx.lineTo(dx + dw, dy + dh); ctx.lineTo(dx + dw - cl, dy + dh);
+        ctx.moveTo(dx + cl, dy + dh); ctx.lineTo(dx, dy + dh); ctx.lineTo(dx, dy + dh - cl);
         ctx.stroke();
 
-        if (label && face.status!=='unknown') {
-          const fs = Math.max(11, Math.min(17, dw/7));
-          ctx.font=`bold ${fs}px Arial,sans-serif`;
-          const tw=ctx.measureText(label).width, pad=7, bw=tw+pad*2, bh=fs+pad;
-          const bx=dx+(dw-bw)/2, by=dy-bh-6;
+        if (label && face.status !== 'unknown') {
+          const fs = Math.max(11, Math.min(17, dw / 7));
+          ctx.font = `bold ${fs}px Arial,sans-serif`;
+          const tw = ctx.measureText(label).width;
+          const pad = 7;
+          const bw = tw + pad * 2;
+          const bh = fs + pad;
+          const bx = dx + (dw - bw) / 2;
+          const by = Math.max(2, dy - bh - 6);
 
-          ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur=8; ctx.shadowOffsetY=2;
-          ctx.fillStyle=bg; drawRoundedRect(ctx,bx,by,bw,bh,6); ctx.fill();
-          ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+          ctx.shadowColor = 'rgba(0,0,0,0.5)';
+          ctx.shadowBlur = 8;
+          ctx.fillStyle = bg;
+          drawRoundedRect(ctx, bx, by, bw, bh, 6);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = '#fff';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(label, bx + bw / 2, by + bh / 2);
 
-          ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.textBaseline='middle';
-          ctx.fillText(label, bx+bw/2, by+bh/2);
-
-          if (face.confidence>0 && face.status==='recognized') {
-            const cl2=`${face.confidence}%`, cf=Math.max(9,fs-3);
-            ctx.font=`bold ${cf}px Arial`;
-            const cw=ctx.measureText(cl2).width+10, ch=cf+5;
-            const cx2=dx+(dw-cw)/2, cy2=dy+dh+4;
-            ctx.fillStyle=bg; drawRoundedRect(ctx,cx2,cy2,cw,ch,4); ctx.fill();
-            ctx.fillStyle='#fff'; ctx.fillText(cl2, cx2+cw/2, cy2+ch/2);
+          if (face.confidence > 0 && face.status === 'recognized') {
+            const cl2 = `${face.confidence}%`;
+            const cf = Math.max(9, fs - 3);
+            ctx.font = `bold ${cf}px Arial`;
+            const cw = ctx.measureText(cl2).width + 10;
+            const ch = cf + 5;
+            const cx2 = dx + (dw - cw) / 2;
+            const cy2 = dy + dh + 4;
+            ctx.fillStyle = bg;
+            drawRoundedRect(ctx, cx2, cy2, cw, ch, 4);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.fillText(cl2, cx2 + cw / 2, cy2 + ch / 2);
           }
         }
-        ctx.globalAlpha=1;
+        ctx.globalAlpha = 1;
       });
 
       setBulkDetected(visible);
@@ -598,203 +646,170 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     };
 
     animFrameRef.current = requestAnimationFrame(draw);
-    return () => { if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current=null; } };
+    return () => { if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; } };
   }, [mode, cameraReady, facing]);
 
-  /* ══════════════════════════════════════════════════════
-     Face Recognition Loop
-  ══════════════════════════════════════════════════════ */
-  const stopFaceLoop = useCallback(() => {
-    faceRunningRef.current = false;
-    if (faceTimerRef.current) { clearTimeout(faceTimerRef.current); faceTimerRef.current=null; }
-  }, []);
-
-  const startFaceLoop = useCallback((
-    sens: BulkSensitivity,
-    cf: CameraFacing,
-    faces: Student[]
-  ) => {
+  const startFaceLoop = useCallback((sens: BulkSensitivity, cf: CameraFacing, faces: Student[]) => {
     stopFaceLoop();
     faceRunningRef.current = true;
-
-    const intervalMs = sens==='extreme' ? device.intervalMs*0.6 : device.intervalMs;
+    const matchConfig = BULK_MATCH_CONFIG[sens];
+    const intervalMs = device.intervalMs * matchConfig.intervalFactor;
     const FRAME_TIMEOUT = 3000;
 
     const loop = async () => {
       if (!faceRunningRef.current || !mountedRef.current) return;
 
-      if (document.hidden) {
-        faceTimerRef.current = setTimeout(loop, 500) as any; return;
-      }
-      if (showRegister) {
-        faceTimerRef.current = setTimeout(loop, 400) as any; return;
-      }
+      if (document.hidden) { faceTimerRef.current = setTimeout(loop, 500); return; }
+      if (showRegister) { faceTimerRef.current = setTimeout(loop, 400); return; }
 
-      const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement|null;
-      if (!video || video.readyState<2 || video.paused || video.ended) {
+      const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
+      if (!video || video.readyState < 2 || video.paused || video.ended) {
         const now = Date.now();
-        if (now-lastRestartRef.current>6000 && mountedRef.current) {
+        if (now - lastRestartRef.current > 6000 && mountedRef.current) {
           lastRestartRef.current = now;
           setCameraStatus('restarting');
-          setTimeout(()=>{ if (mountedRef.current) startCamera(cf); }, 300);
+          setTimeout(() => { if (mountedRef.current) startCamera(cf); }, 300);
         }
-        faceTimerRef.current = setTimeout(loop, 600) as any; return;
+        faceTimerRef.current = setTimeout(loop, 600);
+        return;
       }
 
-      faceBlockedUntil.current = Date.now()+FRAME_TIMEOUT;
-
       try {
-        const useH = sens==='extreme' ? true : device.useHybrid;
-
+        const useH = matchConfig.useHybrid || device.useHybrid;
         const detections = await Promise.race([
           useH ? extractAllFaceDescriptorsHybrid(video) : extractAllFaceDescriptors(video),
-          new Promise<never>((_,rej)=>setTimeout(()=>rej(new Error('timeout')), FRAME_TIMEOUT-200)),
+          new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), FRAME_TIMEOUT - 200)),
         ]) as Awaited<ReturnType<typeof extractAllFaceDescriptorsHybrid>>;
 
         if (!faceRunningRef.current || !mountedRef.current) return;
 
-        const limited = detections.slice(0, device.maxFaces);
-
-        for (const det of limited) {
+        for (const det of detections.slice(0, device.maxFaces)) {
           if (!faceRunningRef.current) break;
-          const box    = det.detection.box;
-          const boxKey = `${Math.round(box.x/35)}_${Math.round(box.y/35)}_${Math.round(box.width/35)}`;
-          const now    = Date.now();
-          const match  = findBestMatch(det.descriptor, faces, CONFIDENCE_THRESHOLD);
+          const box = det.detection.box;
+          const boxKey = `${Math.round(box.x / 35)}_${Math.round(box.y / 35)}_${Math.round(box.width / 35)}`;
+          const now = Date.now();
+          const match = findBestMatchSmart(det.descriptor, faces, {
+            threshold: matchConfig.threshold,
+            minGap: matchConfig.minGap,
+          });
 
-          if (match) {
-            const s           = match.item;
-            const alrPresent  = alreadyPresentIds.has(s.id);
-            const recentlySeen= now-(lastScansRef.current[`bulk_${s.id}`]||0)<BULK_FACE_BLOCK_MS;
+          if (match && match.status === 'accepted') {
+            const s = match.item;
+            const alrPresent = alreadyPresentIds.has(s.id);
+            const recentlySeen = now - (lastScansRef.current[`bulk_${s.id}`] || 0) < BULK_FACE_BLOCK_MS;
 
             if (alrPresent || recentlySeen) {
-              detectedFacesRef.current.set(boxKey, {
-                box:{x:box.x,y:box.y,width:box.width,height:box.height},
-                student:s, status:'already', confidence:match.confidence, timestamp:now,
-              });
+              detectedFacesRef.current.set(boxKey, { box: { x: box.x, y: box.y, width: box.width, height: box.height }, student: s, status: 'already', confidence: match.confidence, timestamp: now });
+              addFaceMatchLog({ mode: 'bulk', status: 'already', studentId: s.id, studentName: s.name, studentCode: s.code, group: s.group, distance: match.distance, secondDistance: match.secondDistance ?? undefined, gap: match.gap ?? undefined, threshold: matchConfig.threshold, confidence: match.confidence, reason: alrPresent ? 'مسجل مسبقاً' : 'شوهد مؤخراً' });
             } else {
               lastScansRef.current[`bulk_${s.id}`] = now;
-              detectedFacesRef.current.set(boxKey, {
-                box:{x:box.x,y:box.y,width:box.width,height:box.height},
-                student:s, status:'recognized', confidence:match.confidence, timestamp:now,
-              });
+              detectedFacesRef.current.set(boxKey, { box: { x: box.x, y: box.y, width: box.width, height: box.height }, student: s, status: 'recognized', confidence: match.confidence, timestamp: now });
               await onMarkAttendance(s);
-              setScanCount(c=>c+1);
-              setBulkStudents(prev=>[s,...prev.filter(x=>x.id!==s.id)]);
-              setRecentStudents(prev=>[s,...prev.filter(x=>x.id!==s.id)].slice(0,8));
+              setScanCount(c => c + 1);
+              setBulkStudents(prev => [s, ...prev.filter(x => x.id !== s.id)]);
+              setRecentStudents(prev => [s, ...prev.filter(x => x.id !== s.id)].slice(0, 8));
               playFaceSuccess();
-              showToast({ type:'success', title:`✅ ${s.name}`, text:`${s.group||''} • ${match.confidence}%` }, 2000);
+              showToast({ type: 'success', title: `✅ ${s.name}`, text: `${s.group || ''} • ${match.confidence}% • ${matchConfig.label}` }, 2000);
+              addFaceMatchLog({ mode: 'bulk', status: 'accepted', studentId: s.id, studentName: s.name, studentCode: s.code, group: s.group, distance: match.distance, secondDistance: match.secondDistance ?? undefined, gap: match.gap ?? undefined, threshold: matchConfig.threshold, confidence: match.confidence, reason: `قبول تلقائي - وضع ${matchConfig.label}` });
             }
           } else {
-            detectedFacesRef.current.set(boxKey, {
-              box:{x:box.x,y:box.y,width:box.width,height:box.height},
-              student:null, status:'unknown', confidence:0, timestamp:now,
-            });
+            detectedFacesRef.current.set(boxKey, { box: { x: box.x, y: box.y, width: box.width, height: box.height }, student: match?.item || null, status: 'unknown', confidence: match?.confidence || 0, timestamp: now });
+            addFaceMatchLog({ mode: 'bulk', status: match?.status === 'uncertain' ? 'uncertain' : 'unknown', studentId: (match?.item as any)?.id, studentName: (match?.item as any)?.name, studentCode: (match?.item as any)?.code, group: (match?.item as any)?.group, distance: match?.distance, secondDistance: match?.secondDistance ?? undefined, gap: match?.gap ?? undefined, threshold: matchConfig.threshold, confidence: match?.confidence, reason: match?.reason || 'وجه غير معروف' });
           }
         }
       } catch (e: any) {
-        if (e?.message!=='timeout') console.warn('face loop:', e);
-      } finally {
-        faceBlockedUntil.current = 0;
+        if (e?.message !== 'timeout') console.warn('face loop:', e);
       }
 
-      if (faceRunningRef.current && mountedRef.current) {
-        faceTimerRef.current = setTimeout(loop, intervalMs) as any;
-      }
+      if (faceRunningRef.current && mountedRef.current) faceTimerRef.current = setTimeout(loop, intervalMs);
     };
 
-    faceTimerRef.current = setTimeout(loop, 600) as any;
-  }, [device, stopFaceLoop, alreadyPresentIds, onMarkAttendance, showToast, showRegister]); // eslint-disable-line
+    faceTimerRef.current = setTimeout(loop, 600);
+  }, [device, stopFaceLoop, alreadyPresentIds, onMarkAttendance, showToast, showRegister, startCamera]);
 
-  /* ─── تفعيل / إيقاف ─── */
   useEffect(() => {
-    if (mode==='bulk' && cameraReady && faceModelsReady && studentsWithFace.length>0)
+    if (mode === 'bulk' && cameraReady && faceModelsReady && studentsWithFace.length > 0) {
       startFaceLoop(sensitivity, facing, studentsWithFace);
-    else
+    } else {
       stopFaceLoop();
-    return ()=>stopFaceLoop();
+    }
+    return () => stopFaceLoop();
   }, [mode, cameraReady, faceModelsReady, studentsWithFace, sensitivity, facing, startFaceLoop, stopFaceLoop]);
 
-  /* ─── استمرارية عند العودة للتبويب ─── */
   useEffect(() => {
     const onVisible = () => {
       if (document.hidden) return;
-      if (mode==='bulk' && cameraReady && faceModelsReady && studentsWithFace.length>0 && !faceRunningRef.current)
+      if (mode === 'bulk' && cameraReady && faceModelsReady && studentsWithFace.length > 0 && !faceRunningRef.current) {
         startFaceLoop(sensitivity, facing, studentsWithFace);
+      }
     };
     document.addEventListener('visibilitychange', onVisible);
-    return ()=>document.removeEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [mode, cameraReady, faceModelsReady, studentsWithFace, sensitivity, facing, startFaceLoop]);
 
-  /* ══════════════════════════════════════════════════════
-     Mount / Unmount
-  ══════════════════════════════════════════════════════ */
   useEffect(() => {
     mountedRef.current = true;
-    const t = setTimeout(()=>{ if(mountedRef.current) startCamera('environment'); }, 250);
-    return ()=>{
-      mountedRef.current=false;
+    const t = setTimeout(() => { if (mountedRef.current) startCamera('environment'); }, 250);
+    return () => {
+      mountedRef.current = false;
       clearTimeout(t);
       stopFaceLoop();
       hardStop();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(()=>{
+  useEffect(() => {
     detectedFacesRef.current.clear();
-    if (mode==='bulk' && facing!=='environment') { setFacing('environment'); startCamera('environment'); }
-  }, [mode]); // eslint-disable-line
+    if (mode === 'bulk' && facing !== 'environment') {
+      setFacing('environment');
+      startCamera('environment');
+    }
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleClose = useCallback(async ()=>{
-    mountedRef.current=false;
+  const handleClose = useCallback(async () => {
+    mountedRef.current = false;
     stopFaceLoop();
     await hardStop();
-    await new Promise(r=>setTimeout(r,150));
+    await new Promise(r => setTimeout(r, 150));
     onClose();
   }, [hardStop, stopFaceLoop, onClose]);
 
-  /* ══════════════════════════════════════════════════════
-     QR Link
-  ══════════════════════════════════════════════════════ */
-  const handleQrLinkByCode = useCallback(async (code: string)=>{
+  const handleQrLinkByCode = useCallback(async (code: string) => {
     if (!pendingQrId || !onUpdateStudent) return;
-    if (code.length!==4) { setQrLinkMessage('❌ الكود 4 أرقام'); return; }
-    const student = students.find(s=>s.code===code);
+    if (code.length !== 4) { setQrLinkMessage('❌ الكود 4 أرقام'); return; }
+    const student = students.find(s => s.code === code);
     if (!student) { setQrLinkMessage('❌ لا يوجد طالب'); playError(); return; }
     if (student.qrCodeId) { setQrLinkMessage(`⚠️ ${student.name} لديه QR`); playError(); return; }
 
-    const updated = { ...student, qrCodeId:pendingQrId };
-    onUpdateStudent(student.id, { qrCodeId:pendingQrId });
+    const updated = { ...student, qrCodeId: pendingQrId };
+    onUpdateStudent(student.id, { qrCodeId: pendingQrId });
     const qrId = pendingQrId;
-    setPendingQrId(null); setQrLinkCode(''); setQrLinkMessage('');
+    setPendingQrId(null);
+    setQrLinkCode('');
+    setQrLinkMessage('');
     lastScansRef.current[qrId] = Date.now();
 
     if (!alreadyPresentIds.has(student.id)) {
       await onMarkAttendance(updated);
-      setScanCount(c=>c+1);
-      setRecentStudents(prev=>[updated,...prev.filter(s=>s.id!==updated.id)].slice(0,8));
+      setScanCount(c => c + 1);
+      setRecentStudents(prev => [updated, ...prev.filter(s => s.id !== updated.id)].slice(0, 8));
       playSuccess();
-      showToast({ type:'success', title:`✅ ${updated.name}`, text:'تم الربط والتسجيل' });
+      showToast({ type: 'success', title: `✅ ${updated.name}`, text: 'تم الربط والتسجيل' });
     }
   }, [pendingQrId, onUpdateStudent, students, alreadyPresentIds, onMarkAttendance, showToast]);
 
-  /* ══════════════════════════════════════════════════════
-     Face Register — مع دعم الكاميرا الأمامية/الخلفية
-     والتقاط 3 ثواني ودمج البصمات
-  ══════════════════════════════════════════════════════ */
-  const openRegister = useCallback(async ()=>{
+  const openRegister = useCallback(async () => {
     setRegCode('');
     setRegStep('code');
     setRegStudent(null);
     setRegMessage('');
     setRegProgress(0);
-    setRegFacing(facing); // ← يستخدم نفس اتجاه الكاميرا الحالي
+    setRegQuality(null);
+    setRegFacing(facing);
     setShowRegister(true);
-    setTimeout(()=>codeInputRef.current?.focus(), 300);
+    setTimeout(() => codeInputRef.current?.focus(), 300);
   }, [facing]);
 
-  /* ─── تبديل كاميرا التسجيل ─── */
   const toggleRegFacing = useCallback(async () => {
     if (startingRef.current) return;
     const nf: CameraFacing = regFacing === 'environment' ? 'user' : 'environment';
@@ -803,16 +818,14 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     await startCamera(nf);
   }, [regFacing, startCamera]);
 
-  /* ─── التقاط البصمة (3 ثواني + دمج) ─── */
-  const captureFace = useCallback(async (student: Student)=>{
+  const captureFace = useCallback(async (student: Student) => {
     if (!onUpdateStudent) return;
-
-    const getVid = () => document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement|null;
+    const getVid = () => document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
     const vid = getVid();
 
     if (!vid || vid.readyState < 2) {
       setRegMessage('❌ الكاميرا غير جاهزة...');
-      setTimeout(()=>{
+      setTimeout(() => {
         const v2 = getVid();
         if (v2 && v2.readyState >= 2) captureFace(student);
         else { setRegStep('code'); setRegMessage('❌ الكاميرا لم تستجب'); }
@@ -820,36 +833,43 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       return;
     }
 
+    try {
+      const q = await analyzeRegistrationFrame(vid);
+      setRegQuality(q);
+      if (!q.ok) {
+        setRegMessage(`❌ ${q.message}`);
+        playWarning();
+        setTimeout(() => codeInputRef.current?.focus(), 100);
+        return;
+      }
+    } catch {
+      // إذا فحص الجودة فشل، لا نوقف التسجيل نهائياً
+    }
+
     setRegStep('capturing');
     setRegProgress(0);
     setRegCountdown(3);
 
-    /* ─── عداد تنازلي 3 ثواني ─── */
     let countdownVal = 3;
     const countdownInterval = window.setInterval(() => {
       countdownVal -= 1;
-      setRegCountdown(countdownVal);
+      setRegCountdown(Math.max(0, countdownVal));
     }, 1000);
 
     try {
       playCapture();
-
-      /* ─── التقاط متعدد لمدة 3 ثواني مع دمج ─── */
-      const descriptor = await extractFaceDescriptorMultiCapture(
-        vid,
-        (progress) => {
-          if (mountedRef.current) setRegProgress(progress);
-        }
-      );
+      const descriptor = await extractFaceDescriptorMultiCapture(vid, progress => {
+        if (mountedRef.current) setRegProgress(progress);
+      });
 
       clearInterval(countdownInterval);
 
       if (!descriptor) {
         setRegProgress(0);
         setRegStep('code');
-        setRegMessage('❌ لم يُرَ الوجه - ابتعد قليلاً وانظر للكاميرا مباشرة');
+        setRegMessage('❌ لم تُحفظ البصمة - ثبت الوجه وتأكد من الإضاءة');
         playError();
-        setTimeout(()=>codeInputRef.current?.focus(), 100);
+        setTimeout(() => codeInputRef.current?.focus(), 100);
         return;
       }
 
@@ -857,22 +877,24 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       onUpdateStudent(student.id, {
         faceDescriptor: descriptorToArray(descriptor),
         faceRegisteredAt: new Date().toISOString(),
+        faceCompressed: true,
       });
+
+      addFaceMatchLog({ mode: 'register', status: 'accepted', studentId: student.id, studentName: student.name, studentCode: student.code, group: student.group, reason: student.faceDescriptor ? 'تم تحديث البصمة' : 'تم تسجيل بصمة جديدة' });
 
       playSuccess();
       setRegStep('success');
-
-      setTimeout(()=>{
+      setTimeout(() => {
         if (!mountedRef.current) return;
         setRegCode('');
         setRegStudent(null);
         setRegMessage('');
         setRegProgress(0);
         setRegCountdown(3);
+        setRegQuality(null);
         setRegStep('code');
-        setTimeout(()=>codeInputRef.current?.focus(), 100);
+        setTimeout(() => codeInputRef.current?.focus(), 100);
       }, 1800);
-
     } catch {
       clearInterval(countdownInterval);
       setRegProgress(0);
@@ -882,102 +904,74 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     }
   }, [onUpdateStudent]);
 
-  /* ══════════════════════════════════════════════════════
-     handleCodeSubmit — مع فحص "لديه بصمة بالفعل"
-  ══════════════════════════════════════════════════════ */
-  const handleCodeSubmit = useCallback(async (code: string)=>{
-    if (code.length!==4) return;
-    const student = students.find(s=>s.code===code);
+  const handleCodeSubmit = useCallback(async (code: string) => {
+    if (code.length !== 4) return;
+    const student = students.find(s => s.code === code);
     if (!student) {
       setRegMessage('❌ لا يوجد طالب بهذا الكود');
       playError();
       setRegCode('');
-      setTimeout(()=>codeInputRef.current?.focus(), 100);
+      setTimeout(() => codeInputRef.current?.focus(), 100);
       return;
     }
-    setRegStudent(student);
 
-    /* ══ فحص: هل الطالب لديه بصمة بالفعل؟ ══ */
-    if (student.faceDescriptor && student.faceDescriptor.length > 0) {
-      /* ← أغلق نافذة التسجيل وأظهر النافذة المنبثقة 3 ثواني */
-      setShowRegister(false);
-      setRegCode('');
-      setRegStudent(null);
+    setRegStudent(student);
+    if (student.faceDescriptor && (typeof student.faceDescriptor === 'string' || student.faceDescriptor.length > 0)) {
+      setUpdateFaceStudent(student);
       setRegMessage('');
-      showAlreadyHasFacePopup(student.name);
+      playAlready();
       return;
     }
 
     await captureFace(student);
-  }, [students, captureFace, showAlreadyHasFacePopup]);
+  }, [students, captureFace]);
 
-  /* ══════════════════════════════════════════════════════
-     Render
-  ══════════════════════════════════════════════════════ */
-  const isBulk  = mode==='bulk';
-  const isFront = facing==='user';
+  const isBulk = mode === 'bulk';
+  const isFront = facing === 'user';
   const doMirror = isFront;
 
-  const toastBg: Record<ToastType,string> = {
-    success:'from-emerald-500 to-green-600', error:'from-red-500 to-rose-600',
-    info:'from-blue-500 to-cyan-600',        warning:'from-amber-500 to-orange-500',
+  const toastBg: Record<ToastType, string> = {
+    success: 'from-emerald-500 to-green-600',
+    error: 'from-red-500 to-rose-600',
+    info: 'from-blue-500 to-cyan-600',
+    warning: 'from-amber-500 to-orange-500',
   };
-  const toastIcon: Record<ToastType,string> = { success:'✅', error:'❌', info:'ℹ️', warning:'⚠️' };
+  const toastIcon: Record<ToastType, string> = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black text-white flex flex-col" dir="rtl">
-
-      {/* ── Header ── */}
-      <header className="flex items-center justify-between px-3 py-2 bg-gray-900/95 border-b border-white/10"
-        style={{ paddingTop:'max(0.5rem,env(safe-area-inset-top))' }}>
+      <header className="flex items-center justify-between px-3 py-2 bg-gray-900/95 border-b border-white/10" style={{ paddingTop: 'max(0.5rem,env(safe-area-inset-top))' }}>
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-bold flex items-center gap-1.5 truncate">
             {isBulk ? '🎯 المسح الجماعي' : '🔳 ماسح QR'}
-            {cameraStatus==='restarting' && (
-              <span className="text-[9px] bg-yellow-600 px-1.5 py-0.5 rounded-full animate-pulse">إعادة تشغيل...</span>
-            )}
+            {cameraStatus === 'restarting' && <span className="text-[9px] bg-yellow-600 px-1.5 py-0.5 rounded-full animate-pulse">إعادة تشغيل...</span>}
           </h2>
           <p className="text-[10px] text-gray-400 truncate">
-            {activeSession ? activeSession.name : 'لا يوجد سجل نشط'}
-            {' • '}{device.tier==='high'?'🚀 عالي':device.tier==='mid'?'⚡ متوسط':'🔋 موفر'}
+            {activeSession ? activeSession.name : 'لا يوجد سجل نشط'} {' • '}
+            {device.tier === 'high' ? '🚀 عالي' : device.tier === 'mid' ? '⚡ متوسط' : '🔋 موفر'}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className={`flex items-center gap-1 text-[9px] px-2 py-1 rounded-full ${
-            cameraStatus==='ready'      ? 'bg-emerald-900/60 text-emerald-300' :
-            cameraStatus==='restarting' ? 'bg-yellow-900/60 text-yellow-300'  :
-            cameraStatus==='error'      ? 'bg-red-900/60 text-red-300'        :
-                                          'bg-gray-800 text-gray-400'}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${
-              cameraStatus==='ready'      ? 'bg-emerald-400 animate-pulse' :
-              cameraStatus==='restarting' ? 'bg-yellow-400 animate-spin'  :
-              cameraStatus==='error'      ? 'bg-red-400'                  : 'bg-gray-400'}`}/>
-            {cameraStatus==='ready'?'مباشر':cameraStatus==='restarting'?'يُعاد':cameraStatus==='error'?'خطأ':'تهيؤ'}
+          <button onClick={() => { setMatchLogs(getFaceMatchLogs()); setShowLogs(true); }} className="bg-white/10 hover:bg-white/20 px-2 py-1.5 rounded-lg text-[10px] font-bold">📜 سجل</button>
+          <div className={`flex items-center gap-1 text-[9px] px-2 py-1 rounded-full ${cameraStatus === 'ready' ? 'bg-emerald-900/60 text-emerald-300' : cameraStatus === 'restarting' ? 'bg-yellow-900/60 text-yellow-300' : cameraStatus === 'error' ? 'bg-red-900/60 text-red-300' : 'bg-gray-800 text-gray-400'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${cameraStatus === 'ready' ? 'bg-emerald-400 animate-pulse' : cameraStatus === 'restarting' ? 'bg-yellow-400 animate-spin' : cameraStatus === 'error' ? 'bg-red-400' : 'bg-gray-400'}`} />
+            {cameraStatus === 'ready' ? 'مباشر' : cameraStatus === 'restarting' ? 'يُعاد' : cameraStatus === 'error' ? 'خطأ' : 'تهيؤ'}
           </div>
-          <button onClick={handleClose}
-            className="bg-red-600 active:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95">
-            ✕ إغلاق
-          </button>
+          <button onClick={handleClose} className="bg-red-600 active:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95">✕ إغلاق</button>
         </div>
       </header>
 
-      {/* ── Tabs ── */}
       <div className="px-3 py-2 bg-gray-900/70 border-b border-white/5 flex gap-1.5">
-        {(['qr','bulk'] as ScanMode[]).map(m=>(
-          <button key={m} onClick={()=>setMode(m)}
-            className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all active:scale-95 ${
-              mode===m ? m==='qr' ? 'bg-emerald-600 text-white shadow-lg'
-                                  : 'bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg'
-                       : 'bg-white/8 text-gray-300 hover:bg-white/12'}`}>
-            {m==='qr' ? '🔳 QR' : '🎯 جماعي'}
+        {(['qr', 'bulk'] as ScanMode[]).map(m => (
+          <button key={m} onClick={() => setMode(m)} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all active:scale-95 ${mode === m ? (m === 'qr' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg') : 'bg-white/8 text-gray-300 hover:bg-white/12'}`}>
+            {m === 'qr' ? '🔳 QR' : '🎯 جماعي'}
           </button>
         ))}
       </div>
 
-      {/* ── تحميل موديلات ── */}
       {isBulk && faceLoading && (
         <div className="mx-3 mt-2 p-3 bg-purple-900/50 border border-purple-500/40 rounded-lg flex items-center gap-3">
-          <div className="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin flex-shrink-0"/>
+          <div className="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
           <div>
             <p className="text-xs font-bold text-purple-200">جاري تحميل نظام التعرف على الوجوه...</p>
             <p className="text-[10px] text-purple-400">قد يستغرق بضع ثوان</p>
@@ -985,536 +979,285 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         </div>
       )}
 
-      {/* ── شريط الوضع الجماعي ── */}
       {isBulk && faceModelsReady && cameraReady && (
         <div className="mx-3 mt-2 p-2 bg-gradient-to-r from-orange-900/50 to-red-900/50 border border-orange-500/30 rounded-lg space-y-2">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <div>
-              <p className="text-[11px] text-orange-200 font-bold">
-                🎯 {studentsWithFace.length} بصمة • يُكتشف {bulkDetected} الآن • حد {device.maxFaces} وجه
-              </p>
-              <p className="text-[10px] text-orange-300">🟢 معروف &nbsp;•&nbsp; 🟡 مسجّل &nbsp;•&nbsp; 🔴 مجهول</p>
+              <p className="text-[11px] text-orange-200 font-bold">🎯 {studentsWithFace.length} بصمة • يُكتشف {bulkDetected} الآن • حد {device.maxFaces} وجه • وضع {BULK_MATCH_CONFIG[sensitivity].label}</p>
+              <p className="text-[10px] text-orange-300">🟢 معروف • 🟡 مسجّل • 🔴 مجهول</p>
             </div>
             <div className="flex gap-1.5">
-              {/* ── زر إضافة بصمة في الشريط العلوي للجماعي ── */}
-              {onUpdateStudent && (
-                <button
-                  onClick={openRegister}
-                  className="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-[11px] font-bold px-3 py-2 rounded-lg shadow-lg active:scale-95 flex items-center gap-1.5">
-                  <span className="text-base">➕</span>
-                  <span>بصمة</span>
-                </button>
-              )}
-              <button onClick={()=>setBulkSidebar(s=>!s)}
-                className="bg-white/10 hover:bg-white/20 px-2 py-1 rounded text-[10px] font-bold">
-                {bulkSidebar?'◀':'▶'} قائمة
-              </button>
+              {onUpdateStudent && <button onClick={openRegister} className="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-[11px] font-bold px-3 py-2 rounded-lg shadow-lg active:scale-95">➕ بصمة</button>}
+              <button onClick={() => setBulkSidebar(s => !s)} className="bg-white/10 hover:bg-white/20 px-2 py-1 rounded text-[10px] font-bold">{bulkSidebar ? '◀' : '▶'} قائمة</button>
             </div>
           </div>
 
-          <div className="flex gap-1.5 text-[10px]">
-            <button
-              onClick={()=>setSensitivity('far')}
-              className={`flex-1 py-2 rounded-lg font-bold transition active:scale-95 ${
-                sensitivity==='far'
-                  ? 'bg-emerald-600 text-white shadow-md'
-                  : 'bg-white/10 text-gray-300 hover:bg-white/15'}`}>
-              🎯 متوازن
-            </button>
-            <button
-              onClick={()=>setSensitivity('extreme')}
-              className={`flex-1 py-2 rounded-lg font-bold transition active:scale-95 ${
-                sensitivity==='extreme'
-                  ? 'bg-red-600 text-white shadow-md'
-                  : 'bg-white/10 text-gray-300 hover:bg-white/15'}`}>
-              🔍 بعيد
-            </button>
+          <div className="grid grid-cols-3 gap-1.5 text-[10px]">
+            {([
+              { id: 'accurate', icon: '🎯', title: 'دقيق', desc: 'أقل أخطاء' },
+              { id: 'balanced', icon: '⚖️', title: 'متوازن', desc: 'مناسب' },
+              { id: 'far', icon: '🔍', title: 'بعيد', desc: 'مرن' },
+            ] as Array<{ id: BulkSensitivity; icon: string; title: string; desc: string }>).map(opt => (
+              <button key={opt.id} onClick={() => setSensitivity(opt.id)} className={`py-2 rounded-xl font-bold transition active:scale-95 ${sensitivity === opt.id ? (opt.id === 'accurate' ? 'bg-emerald-600 text-white' : opt.id === 'balanced' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white') : 'bg-white/10 text-gray-300 hover:bg-white/15'}`}>
+                <div>{opt.icon} {opt.title}</div>
+                <div className="text-[8px] opacity-70 mt-0.5">{opt.desc}</div>
+              </button>
+            ))}
           </div>
         </div>
       )}
 
-      {isBulk && faceModelsReady && cameraReady && studentsWithFace.length===0 && (
+      {isBulk && faceModelsReady && cameraReady && studentsWithFace.length === 0 && (
         <div className="mx-3 mt-2 p-3 bg-amber-900/40 border border-amber-500/30 rounded-lg text-center">
           <p className="text-xs text-amber-200 font-bold">⚠️ لا توجد بصمات مسجلة</p>
           <p className="text-[10px] text-amber-300 mt-1">أضف بصمات من زر "➕ بصمة" أعلاه</p>
         </div>
       )}
 
-      {/* ── خطأ ── */}
       {errorMsg && (
         <div className="mx-3 mt-2 p-3 bg-red-900/60 border border-red-500/40 rounded-xl text-center">
           <p className="text-red-200 text-xs mb-2">{errorMsg}</p>
-          <button onClick={()=>startCamera(facing)}
-            className="bg-red-600 active:bg-red-700 px-4 py-2 rounded-lg text-xs font-bold">
-            🔄 إعادة المحاولة
-          </button>
+          <button onClick={() => startCamera(facing)} className="bg-red-600 active:bg-red-700 px-4 py-2 rounded-lg text-xs font-bold">🔄 إعادة المحاولة</button>
         </div>
       )}
 
-      {/* ── المحتوى ── */}
       <div className={`flex-1 overflow-hidden flex ${isBulk && bulkSidebar ? 'flex-col lg:flex-row' : 'flex-col'}`}>
         <div className="flex-1 overflow-y-auto p-3 space-y-3">
-
-          {/* ── الكاميرا ── */}
-          <div className={`w-full mx-auto rounded-xl overflow-hidden border bg-gray-900 relative ${
-            isBulk ? 'max-w-3xl border-orange-500/30' : 'max-w-lg border-emerald-500/20'}`}>
-            <div id={QR_REGION_ID}
-              className={`w-full ${doMirror ? 'mirror-video' : ''}`}
-              style={{ minHeight: isBulk ? '380px' : '260px' }}/>
-
-            {isBulk && cameraReady && (
-              <canvas ref={overlayCanvasRef}
-                className="absolute inset-0 pointer-events-none"
-                style={{ width:'100%', height:'100%' }}/>
-            )}
+          <div className={`w-full mx-auto rounded-xl overflow-hidden border bg-gray-900 relative ${isBulk ? 'max-w-3xl border-orange-500/30' : 'max-w-lg border-emerald-500/20'}`}>
+            <div id={QR_REGION_ID} className={`w-full ${doMirror ? 'mirror-video' : ''}`} style={{ minHeight: isBulk ? '380px' : '260px' }} />
+            {isBulk && cameraReady && <canvas ref={overlayCanvasRef} className="absolute inset-0 pointer-events-none" style={{ width: '100%', height: '100%' }} />}
 
             {cameraReady && !isBulk && (
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                <div className="relative" style={{ width:getQrBox().width, height:getQrBox().height }}>
-                  {['top-0 right-0 border-t-2 border-r-2 rounded-tr-lg',
-                    'top-0 left-0 border-t-2 border-l-2 rounded-tl-lg',
-                    'bottom-0 right-0 border-b-2 border-r-2 rounded-br-lg',
-                    'bottom-0 left-0 border-b-2 border-l-2 rounded-bl-lg',
-                  ].map((c,i)=><div key={i} className={`absolute w-8 h-8 border-emerald-400 ${c}`}/>)}
-                  <div className="absolute inset-x-2 h-px bg-emerald-400/80 animate-scan-line"/>
+                <div className="relative" style={{ width: getQrBox().width, height: getQrBox().height }}>
+                  {['top-0 right-0 border-t-2 border-r-2 rounded-tr-lg', 'top-0 left-0 border-t-2 border-l-2 rounded-tl-lg', 'bottom-0 right-0 border-b-2 border-r-2 rounded-br-lg', 'bottom-0 left-0 border-b-2 border-l-2 rounded-bl-lg'].map((c, i) => <div key={i} className={`absolute w-8 h-8 border-emerald-400 ${c}`} />)}
+                  <div className="absolute inset-x-2 h-px bg-emerald-400/80 animate-scan-line" />
                 </div>
               </div>
             )}
 
-            {/* ── زر تبديل الكاميرا ── */}
-            {cameraReady && (
-              <button onClick={toggleCamera}
-                className="absolute top-2 left-2 bg-black/60 hover:bg-black/80 text-white p-2.5 rounded-full z-10 active:scale-95 text-lg">
-                🔄
-              </button>
-            )}
-
-            {/* ── مؤشر الكاميرا ── */}
-            {cameraReady && (
-              <div className="absolute top-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-full z-10">
-                {isFront ? '📱 أمامية' : '📷 خلفية'}{isBulk && ' • 1080p'}
-              </div>
-            )}
-
-            {/* ── عداد المسجلين (جماعي) ── */}
+            {cameraReady && <button onClick={toggleCamera} className="absolute top-2 left-2 bg-black/60 hover:bg-black/80 text-white p-2.5 rounded-full z-10 active:scale-95 text-lg">🔄</button>}
+            {cameraReady && <div className="absolute top-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-full z-10">{isFront ? '📱 أمامية' : '📷 خلفية'}{isBulk && ' • 1080p'}</div>}
             {isBulk && cameraReady && (
               <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-orange-600 to-red-600 px-4 py-2 rounded-full shadow-xl z-10">
-                <div className="flex items-center gap-2 text-white">
-                  <span className="text-xl">📊</span>
-                  <div className="text-center">
-                    <div className="text-xl font-bold leading-none">{bulkStudents.length}</div>
-                    <div className="text-[9px] opacity-90">مسجّل</div>
-                  </div>
-                </div>
+                <div className="flex items-center gap-2 text-white"><span className="text-xl">📊</span><div className="text-center"><div className="text-xl font-bold leading-none">{bulkStudents.length}</div><div className="text-[9px] opacity-90">مسجّل</div></div></div>
               </div>
             )}
           </div>
 
-          {/* ── أدوات الكاميرا (زوم وفلاش أكبر) ── */}
           {cameraReady && (
             <div className="w-full max-w-lg mx-auto space-y-2.5">
               <div className="flex gap-2 flex-wrap items-center">
-                {/* ── أزرار الزوم — أكبر ── */}
                 {canZoom && [1, 1.5, 2, 2.5, 3].filter(v => v <= maxZoom).map(v => (
-                  <button key={v} onClick={() => applyZoom(v)}
-                    className={`px-5 py-3 rounded-xl text-sm font-bold active:scale-95 min-w-[58px] shadow-md ${
-                      Math.abs(zoom - v) < 0.15
-                        ? 'bg-emerald-600 text-white shadow-emerald-900/40'
-                        : 'bg-white/12 text-gray-200 hover:bg-white/20'}`}>
-                    {v}x
-                  </button>
+                  <button key={v} onClick={() => applyZoom(v)} className={`px-5 py-3 rounded-xl text-sm font-bold active:scale-95 min-w-[58px] shadow-md ${Math.abs(zoom - v) < 0.15 ? 'bg-emerald-600 text-white shadow-emerald-900/40' : 'bg-white/12 text-gray-200 hover:bg-white/20'}`}>{v}x</button>
                 ))}
-                {/* ── زر الفلاش — أكبر ── */}
-                {hasTorch && (
-                  <button onClick={toggleTorch}
-                    className={`px-5 py-3 rounded-xl text-sm font-bold active:scale-95 shadow-md flex items-center gap-2 ${
-                      torchOn
-                        ? 'bg-yellow-500 text-black shadow-yellow-900/40'
-                        : 'bg-white/12 text-gray-200 hover:bg-white/20'}`}>
-                    <span className="text-lg">{torchOn ? '💡' : '🔦'}</span>
-                    <span>{torchOn ? 'إطفاء' : 'فلاش'}</span>
-                  </button>
-                )}
+                {hasTorch && <button onClick={toggleTorch} className={`px-5 py-3 rounded-xl text-sm font-bold active:scale-95 shadow-md flex items-center gap-2 ${torchOn ? 'bg-yellow-500 text-black shadow-yellow-900/40' : 'bg-white/12 text-gray-200 hover:bg-white/20'}`}><span className="text-lg">{torchOn ? '💡' : '🔦'}</span><span>{torchOn ? 'إطفاء' : 'فلاش'}</span></button>}
               </div>
-              {/* ── شريط الزوم ── */}
-              {canZoom && (
-                <div className="bg-white/5 rounded-xl p-3">
-                  <p className="text-[11px] text-emerald-300 font-bold mb-2">🔍 {zoom.toFixed(1)}x</p>
-                  <input type="range" min={minZoom} max={maxZoom} step={0.1} value={zoom}
-                    onChange={e => applyZoom(parseFloat(e.target.value))}
-                    className="w-full h-2.5 accent-emerald-400 cursor-pointer"/>
-                </div>
-              )}
+              {canZoom && <div className="bg-white/5 rounded-xl p-3"><p className="text-[11px] text-emerald-300 font-bold mb-2">🔍 {zoom.toFixed(1)}x</p><input type="range" min={minZoom} max={maxZoom} step={0.1} value={zoom} onChange={e => applyZoom(parseFloat(e.target.value))} className="w-full h-2.5 accent-emerald-400 cursor-pointer" /></div>}
             </div>
           )}
 
-          {/* ── إحصائيات QR ── */}
           {!isBulk && (
             <div className="grid grid-cols-2 gap-2 w-full max-w-lg mx-auto">
-              <div className="bg-white/5 rounded-lg p-2.5 text-center">
-                <div className="text-2xl font-bold text-emerald-400">{scanCount}</div>
-                <div className="text-[10px] text-gray-400">تم تسجيلهم</div>
-              </div>
-              <div className="bg-white/5 rounded-lg p-2.5 text-center">
-                <div className="text-lg font-bold">
-                  {cameraStatus==='ready'?'🟢':cameraStatus==='restarting'?'🟡':'🔴'}
-                </div>
-                <div className="text-[10px] text-gray-400">
-                  {cameraStatus==='ready'?'تعمل':cameraStatus==='restarting'?'تُعاد':'خطأ'}
-                </div>
-              </div>
+              <div className="bg-white/5 rounded-lg p-2.5 text-center"><div className="text-2xl font-bold text-emerald-400">{scanCount}</div><div className="text-[10px] text-gray-400">تم تسجيلهم</div></div>
+              <div className="bg-white/5 rounded-lg p-2.5 text-center"><div className="text-lg font-bold">{cameraStatus === 'ready' ? '🟢' : cameraStatus === 'restarting' ? '🟡' : '🔴'}</div><div className="text-[10px] text-gray-400">{cameraStatus === 'ready' ? 'تعمل' : cameraStatus === 'restarting' ? 'تُعاد' : 'خطأ'}</div></div>
             </div>
           )}
 
-          {/* ── آخر المسجلين ── */}
-          {!isBulk && recentStudents.length>0 && (
+          {!isBulk && recentStudents.length > 0 && (
             <div className="w-full max-w-lg mx-auto bg-white/5 rounded-lg p-2.5">
               <p className="text-[11px] font-bold mb-1.5 text-emerald-300">آخر المسجلين:</p>
               <div className="space-y-1">
-                {recentStudents.map(s=>(
-                  <div key={s.id} className="flex justify-between items-center bg-black/30 rounded px-2.5 py-1.5">
-                    <span className="text-xs font-medium truncate">{s.name}</span>
-                    <span className="text-[10px] bg-emerald-700/80 px-1.5 py-0.5 rounded-full flex-shrink-0 mr-2">{s.group||'-'}</span>
-                  </div>
-                ))}
+                {recentStudents.map(s => <div key={s.id} className="flex justify-between items-center bg-black/30 rounded px-2.5 py-1.5"><span className="text-xs font-medium truncate">{s.name}</span><span className="text-[10px] bg-emerald-700/80 px-1.5 py-0.5 rounded-full flex-shrink-0 mr-2">{s.group || '-'}</span></div>)}
               </div>
             </div>
           )}
         </div>
 
-        {/* ── شريط جانبي ── */}
         {isBulk && bulkSidebar && (
           <div className="lg:w-80 bg-gray-900/98 border-t lg:border-t-0 lg:border-r border-white/10 flex flex-col max-h-[45vh] lg:max-h-none">
             <div className="p-3 border-b border-white/10 bg-gradient-to-r from-orange-900/40 to-red-900/40">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-bold text-orange-200">📋 سجل الجلسة</h3>
-                <span className="bg-orange-600 text-white text-xs px-2 py-0.5 rounded-full font-bold">{bulkStudents.length}</span>
-              </div>
+              <div className="flex items-center justify-between mb-2"><h3 className="text-sm font-bold text-orange-200">📋 سجل الجلسة</h3><span className="bg-orange-600 text-white text-xs px-2 py-0.5 rounded-full font-bold">{bulkStudents.length}</span></div>
               <div className="grid grid-cols-3 gap-1.5 text-center">
-                {[
-                  { val:bulkStudents.length, c:'emerald', l:'مسجّل' },
-                  { val:bulkDetected,        c:'blue',    l:'مكتشف' },
-                  { val:Math.max(0,studentsWithFace.length-bulkStudents.length), c:'orange', l:'متبقٍ' },
-                ].map(({val,c,l})=>(
-                  <div key={l} className="bg-white/8 rounded p-1.5">
-                    <div className={`text-base font-bold text-${c}-400`}>{val}</div>
-                    <div className="text-[9px] text-gray-300">{l}</div>
-                  </div>
-                ))}
+                <div className="bg-white/8 rounded p-1.5"><div className="text-base font-bold text-emerald-400">{bulkStudents.length}</div><div className="text-[9px] text-gray-300">مسجّل</div></div>
+                <div className="bg-white/8 rounded p-1.5"><div className="text-base font-bold text-blue-400">{bulkDetected}</div><div className="text-[9px] text-gray-300">مكتشف</div></div>
+                <div className="bg-white/8 rounded p-1.5"><div className="text-base font-bold text-orange-400">{Math.max(0, studentsWithFace.length - bulkStudents.length)}</div><div className="text-[9px] text-gray-300">متبقٍ</div></div>
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-1">
-              {bulkStudents.length===0 ? (
-                <div className="text-center py-8 text-gray-500 text-xs">
-                  <div className="text-3xl mb-2">👁️</div>
-                  <p>وجّه الكاميرا نحو الطلاب...</p>
-                  <p className="mt-1 text-[10px]">النظام يعمل تلقائياً</p>
-                </div>
-              ) : bulkStudents.map((s,idx)=>(
+              {bulkStudents.length === 0 ? <div className="text-center py-8 text-gray-500 text-xs"><div className="text-3xl mb-2">👁️</div><p>وجّه الكاميرا نحو الطلاب...</p><p className="mt-1 text-[10px]">النظام يعمل تلقائياً</p></div> : bulkStudents.map((s, idx) => (
                 <div key={s.id} className="flex items-center gap-2 bg-emerald-900/25 border border-emerald-600/25 rounded-lg px-2.5 py-2">
-                  <div className="bg-emerald-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0">{idx+1}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-bold text-emerald-100 truncate">{s.name}</div>
-                    <div className="text-[9px] text-emerald-400/70">{s.code}{s.group?` • ${s.group}`:''}</div>
-                  </div>
+                  <div className="bg-emerald-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0">{idx + 1}</div>
+                  <div className="flex-1 min-w-0"><div className="text-xs font-bold text-emerald-100 truncate">{s.name}</div><div className="text-[9px] text-emerald-400/70">{s.code}{s.group ? ` • ${s.group}` : ''}</div></div>
                   <span className="text-emerald-400 text-sm">✓</span>
                 </div>
               ))}
             </div>
-            <div className="p-2 border-t border-white/10 bg-black/30 text-center">
-              <p className="text-[9px] text-gray-500">
-                إجمالي: {students.length} • بصمات: {studentsWithFace.length} • حد: {device.maxFaces} وجه
-              </p>
-            </div>
+            <div className="p-2 border-t border-white/10 bg-black/30 text-center"><p className="text-[9px] text-gray-500">إجمالي: {students.length} • بصمات: {studentsWithFace.length} • حد: {device.maxFaces} وجه</p></div>
           </div>
         )}
       </div>
 
-      {/* ══ Toasts ══ */}
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 z-[10001] flex flex-col gap-2 w-[92%] max-w-md pointer-events-none"
-        style={{ paddingTop:'env(safe-area-inset-top)' }}>
-        {toasts.map(t=>(
-          <div key={t.id}
-            className={`bg-gradient-to-r ${toastBg[t.type]} rounded-xl px-4 py-3 shadow-2xl animate-toast-slide-down`}>
-            <div className="flex items-center gap-3">
-              <span className="text-2xl flex-shrink-0">{toastIcon[t.type]}</span>
-              <div className="min-w-0 flex-1">
-                <p className="font-bold text-sm truncate">{t.title}</p>
-                {t.text && <p className="text-xs opacity-90 truncate">{t.text}</p>}
-              </div>
-            </div>
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 z-[10001] flex flex-col gap-2 w-[92%] max-w-md pointer-events-none" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        {toasts.map(t => (
+          <div key={t.id} className={`bg-gradient-to-r ${toastBg[t.type]} rounded-xl px-4 py-3 shadow-2xl animate-toast-slide-down`}>
+            <div className="flex items-center gap-3"><span className="text-2xl flex-shrink-0">{toastIcon[t.type]}</span><div className="min-w-0 flex-1"><p className="font-bold text-sm truncate">{t.title}</p>{t.text && <p className="text-xs opacity-90 truncate">{t.text}</p>}</div></div>
           </div>
         ))}
       </div>
 
-      {/* ══ نافذة "الطالب لديه بصمة بالفعل" — 3 ثواني ══ */}
-      {alreadyFacePopup.visible && (
-        <div className="fixed inset-0 z-[10003] flex items-center justify-center pointer-events-none px-6">
-          <div className="animate-already-popup-center bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 text-white rounded-3xl px-8 py-7 shadow-2xl border-2 border-amber-300/50 max-w-xs w-full text-center">
-            {/* أيقونة كبيرة */}
-            <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-              <span className="text-4xl">👤</span>
-            </div>
-            {/* اسم الطالب */}
-            <p className="font-bold text-xl mb-2 leading-snug">{alreadyFacePopup.name}</p>
-            {/* الرسالة */}
-            <div className="bg-white/20 rounded-2xl px-4 py-3 mt-2">
-              <p className="text-base font-semibold opacity-95">لديه بصمة بالفعل ✅</p>
-              <p className="text-sm opacity-80 mt-1">لا يمكن إضافة بصمة جديدة</p>
-            </div>
-            {/* شريط التقدم 3 ثواني */}
-            <div className="mt-4 bg-white/20 rounded-full h-1.5 overflow-hidden">
-              <div className="h-full bg-white rounded-full animate-shrink-bar"/>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══ QR Link Modal ══ */}
       {pendingQrId && (
         <div className="fixed inset-0 z-[10000] bg-black/90 flex items-center justify-center p-4">
           <div className="bg-white text-gray-900 rounded-2xl p-5 w-full max-w-sm shadow-2xl">
-            <div className="text-center mb-4">
-              <div className="text-4xl mb-2">🔗</div>
-              <h3 className="text-lg font-bold">ربط هوية جديدة</h3>
-              <p className="text-xs text-gray-500 mt-1">أدخل كود الطالب (4 أرقام)</p>
-            </div>
-            <div className="bg-gray-100 rounded p-1.5 text-[10px] font-mono break-all mb-3 text-center" dir="ltr">
-              {pendingQrId.slice(0,32)}{pendingQrId.length>32?'...':''}
-            </div>
-            <input ref={qrCodeInputRef} type="text" value={qrLinkCode}
-              onChange={e=>{ const v=e.target.value.replace(/\D/g,'').slice(0,4); setQrLinkCode(v); setQrLinkMessage(''); if(v.length===4) setTimeout(()=>handleQrLinkByCode(v),150); }}
-              placeholder="0000" disabled={!onUpdateStudent}
-              className="w-full text-center text-3xl font-bold tracking-[1em] py-3 border-2 border-emerald-300 rounded-xl outline-none focus:border-emerald-500"
-              maxLength={4} inputMode="numeric" autoFocus/>
-            {qrLinkMessage && (
-              <div className={`mt-3 p-2 rounded text-center text-xs font-medium ${qrLinkMessage.includes('⚠️')?'bg-amber-50 text-amber-800 border border-amber-200':'bg-red-50 text-red-700 border border-red-200'}`}>
-                {qrLinkMessage}
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-2 mt-4">
-              <button onClick={()=>{setPendingQrId(null);setQrLinkCode('');setQrLinkMessage('');}}
-                className="py-3 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95">إلغاء</button>
-              <button onClick={()=>handleQrLinkByCode(qrLinkCode)}
-                disabled={qrLinkCode.length!==4||!onUpdateStudent}
-                className="py-3 bg-gradient-to-r from-emerald-600 to-teal-600 disabled:opacity-40 text-white font-bold rounded-lg active:scale-95 shadow-md">
-                🔗 ربط
-              </button>
-            </div>
+            <div className="text-center mb-4"><div className="text-4xl mb-2">🔗</div><h3 className="text-lg font-bold">ربط هوية جديدة</h3><p className="text-xs text-gray-500 mt-1">أدخل كود الطالب (4 أرقام)</p></div>
+            <div className="bg-gray-100 rounded p-1.5 text-[10px] font-mono break-all mb-3 text-center" dir="ltr">{pendingQrId.slice(0, 32)}{pendingQrId.length > 32 ? '...' : ''}</div>
+            <input ref={qrCodeInputRef} type="text" value={qrLinkCode} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); setQrLinkCode(v); setQrLinkMessage(''); if (v.length === 4) setTimeout(() => handleQrLinkByCode(v), 150); }} placeholder="0000" disabled={!onUpdateStudent} className="w-full text-center text-3xl font-bold tracking-[1em] py-3 border-2 border-emerald-300 rounded-xl outline-none focus:border-emerald-500" maxLength={4} inputMode="numeric" autoFocus />
+            {qrLinkMessage && <div className={`mt-3 p-2 rounded text-center text-xs font-medium ${qrLinkMessage.includes('⚠️') ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>{qrLinkMessage}</div>}
+            <div className="grid grid-cols-2 gap-2 mt-4"><button onClick={() => { setPendingQrId(null); setQrLinkCode(''); setQrLinkMessage(''); }} className="py-3 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95">إلغاء</button><button onClick={() => handleQrLinkByCode(qrLinkCode)} disabled={qrLinkCode.length !== 4 || !onUpdateStudent} className="py-3 bg-gradient-to-r from-emerald-600 to-teal-600 disabled:opacity-40 text-white font-bold rounded-lg active:scale-95 shadow-md">🔗 ربط</button></div>
           </div>
         </div>
       )}
 
-      {/* ══ Face Register Modal ══ */}
       {showRegister && (
         <div className="fixed inset-0 z-[10000] bg-black/95 flex items-center justify-center p-4">
           <div className="bg-white text-gray-900 rounded-2xl p-5 w-full max-w-sm shadow-2xl">
-
-            {regStep==='code' && (
+            {regStep === 'code' && (
               <>
-                <div className="text-center mb-4">
-                  <div className="text-4xl mb-2">📸</div>
-                  <h3 className="text-lg font-bold">إضافة بصمة وجه</h3>
-                  <p className="text-xs text-gray-500 mt-1">أدخل كود الطالب (4 أرقام)</p>
-                </div>
-
-                {/* ── اختيار الكاميرا ── */}
+                <div className="text-center mb-4"><div className="text-4xl mb-2">📸</div><h3 className="text-lg font-bold">إضافة / تحديث بصمة وجه</h3><p className="text-xs text-gray-500 mt-1">أدخل كود الطالب (4 أرقام)</p></div>
                 <div className="flex gap-2 mb-4">
-                  <button
-                    onClick={() => {
-                      if (regFacing !== 'environment') toggleRegFacing();
-                    }}
-                    className={`flex-1 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition active:scale-95 ${
-                      regFacing === 'environment'
-                        ? 'bg-purple-600 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                    <span>📷</span> خلفية
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (regFacing !== 'user') toggleRegFacing();
-                    }}
-                    className={`flex-1 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition active:scale-95 ${
-                      regFacing === 'user'
-                        ? 'bg-purple-600 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                    <span>🤳</span> أمامية
-                  </button>
+                  <button onClick={() => { if (regFacing !== 'environment') toggleRegFacing(); }} className={`flex-1 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition active:scale-95 ${regFacing === 'environment' ? 'bg-purple-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}><span>📷</span> خلفية</button>
+                  <button onClick={() => { if (regFacing !== 'user') toggleRegFacing(); }} className={`flex-1 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition active:scale-95 ${regFacing === 'user' ? 'bg-purple-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}><span>🤳</span> أمامية</button>
                 </div>
 
-                <input ref={codeInputRef} type="text" value={regCode}
-                  onChange={e=>{ const v=e.target.value.replace(/\D/g,'').slice(0,4); setRegCode(v); if(regMessage) setRegMessage(''); if(v.length===4) setTimeout(()=>handleCodeSubmit(v),100); }}
-                  placeholder="0000"
-                  className="w-full text-center text-3xl font-bold tracking-[1em] py-3 border-2 border-purple-300 rounded-xl outline-none focus:border-purple-500"
-                  maxLength={4} inputMode="numeric" autoFocus/>
-                {regMessage && (
-                  <div className="mt-3 p-2 rounded text-center text-xs font-medium bg-red-50 text-red-700 border border-red-200">
-                    {regMessage}
+                <div className={`mb-3 rounded-2xl border p-3 ${regQuality?.level === 'good' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : regQuality?.level === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2"><span className="text-xl">{regQuality?.level === 'good' ? '✅' : regQuality?.level === 'warning' ? '⚠️' : '👁️'}</span><div className="text-right"><p className="text-xs font-black">{regQuality?.message || 'وجّه وجه الطالب نحو الكاميرا'}</p><p className="text-[10px] opacity-70 mt-0.5">{regQuality ? `إضاءة: ${Math.round(regQuality.brightness)} • وجوه: ${regQuality.facesCount}` : 'انتظر قراءة الوجه...'}</p></div></div>
+                    <div className={`w-3 h-3 rounded-full ${regQuality?.level === 'good' ? 'bg-emerald-500 animate-pulse' : regQuality?.level === 'warning' ? 'bg-amber-500 animate-pulse' : 'bg-red-500'}`} />
                   </div>
-                )}
-                <div className="mt-3 p-2 bg-purple-50 border border-purple-100 rounded text-center">
-                  <p className="text-[10px] text-purple-700">💡 سيلتقط 3 ثواني ويدمج الصور لأفضل دقة</p>
                 </div>
-                <button onClick={()=>{setShowRegister(false);setRegCode('');setRegMessage('');}}
-                  className="w-full mt-3 py-2 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95 text-sm">
-                  إغلاق
-                </button>
+
+                <input ref={codeInputRef} type="text" value={regCode} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); setRegCode(v); if (regMessage) setRegMessage(''); if (v.length === 4) setTimeout(() => handleCodeSubmit(v), 100); }} placeholder="0000" className="w-full text-center text-3xl font-bold tracking-[1em] py-3 border-2 border-purple-300 rounded-xl outline-none focus:border-purple-500" maxLength={4} inputMode="numeric" autoFocus />
+                {regMessage && <div className="mt-3 p-2 rounded text-center text-xs font-medium bg-red-50 text-red-700 border border-red-200">{regMessage}</div>}
+                <div className="mt-3 p-2 bg-purple-50 border border-purple-100 rounded text-center"><p className="text-[10px] text-purple-700">💡 سيلتقط 3 ثواني ويدمج الصور لأفضل دقة</p></div>
+                <button onClick={() => { setShowRegister(false); setRegCode(''); setRegMessage(''); setRegQuality(null); }} className="w-full mt-3 py-2 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95 text-sm">إغلاق</button>
               </>
             )}
 
-            {regStep==='capturing' && regStudent && (
+            {regStep === 'capturing' && regStudent && (
               <div className="text-center">
                 <h3 className="text-lg font-bold mb-1">{regStudent.name}</h3>
-                <p className="text-xs text-gray-500 mb-1">{regStudent.code} • {regStudent.group||'-'}</p>
-
-                {/* ── عداد تنازلي ── */}
-                <div className="flex items-center justify-center gap-2 mb-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl font-black ${
-                    regCountdown > 1 ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'
-                  }`}>
-                    {regCountdown > 0 ? regCountdown : '✓'}
-                  </div>
-                  <p className="text-xs text-gray-500">ثانية متبقية</p>
-                </div>
-
-                <div className="relative inline-block mb-4">
-                  <FaceCameraPreview mirror={regFacing === 'user'}/>
-                  <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 200 200">
-                    <circle cx="100" cy="100" r="93" fill="none" stroke="rgba(139,92,246,0.15)" strokeWidth="7"/>
-                    <circle cx="100" cy="100" r="93" fill="none"
-                      stroke={regProgress>=100?'#10b981':'#8b5cf6'} strokeWidth="7" strokeLinecap="round"
-                      strokeDasharray={`${2*Math.PI*93}`}
-                      strokeDashoffset={`${2*Math.PI*93*(1-regProgress/100)}`}
-                      style={{ transition:'stroke-dashoffset 0.08s linear,stroke 0.3s' }}/>
-                  </svg>
-                  {/* ── أيقونة الكاميرا المستخدمة ── */}
-                  <div className="absolute bottom-1 right-1 bg-purple-600 text-white text-[9px] px-1.5 py-0.5 rounded-full">
-                    {regFacing === 'user' ? '🤳' : '📷'}
-                  </div>
-                </div>
-
-                <p className={`font-bold text-sm ${regProgress>=100?'text-green-600':'text-purple-700'}`}>
-                  {regProgress>=100 ? '✅ تم الدمج!' : `📸 جارٍ التقاط الوجه... ${regProgress}%`}
-                </p>
+                <p className="text-xs text-gray-500 mb-1">{regStudent.code} • {regStudent.group || '-'}</p>
+                <div className="flex items-center justify-center gap-2 mb-3"><div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl font-black ${regCountdown > 1 ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>{regCountdown > 0 ? regCountdown : '✓'}</div><p className="text-xs text-gray-500">ثانية متبقية</p></div>
+                <div className="relative inline-block mb-4"><FaceCameraPreview mirror={regFacing === 'user'} /><svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 200 200"><circle cx="100" cy="100" r="93" fill="none" stroke="rgba(139,92,246,0.15)" strokeWidth="7" /><circle cx="100" cy="100" r="93" fill="none" stroke={regProgress >= 100 ? '#10b981' : '#8b5cf6'} strokeWidth="7" strokeLinecap="round" strokeDasharray={2 * Math.PI * 93} strokeDashoffset={2 * Math.PI * 93 * (1 - regProgress / 100)} style={{ transition: 'stroke-dashoffset 0.08s linear,stroke 0.3s' }} /></svg><div className="absolute bottom-1 right-1 bg-purple-600 text-white text-[9px] px-1.5 py-0.5 rounded-full">{regFacing === 'user' ? '🤳' : '📷'}</div></div>
+                <p className={`font-bold text-sm ${regProgress >= 100 ? 'text-green-600' : 'text-purple-700'}`}>{regProgress >= 100 ? '✅ تم الدمج!' : `📸 جارٍ التقاط الوجه... ${regProgress}%`}</p>
                 <p className="text-xs text-gray-400 mt-1">انظر مباشرة للكاميرا • التقاط متعدد ودمج تلقائي</p>
               </div>
             )}
 
-            {regStep==='success' && regStudent && (
-              <div className="text-center py-6">
-                <div className="text-6xl mb-3 animate-bounce">🎉</div>
-                <h3 className="text-xl font-bold text-green-700 mb-1">تم بنجاح!</h3>
-                <p className="text-gray-800 font-bold text-lg">{regStudent.name}</p>
-                <p className="text-xs text-gray-500 mt-1">{regStudent.code} • {regStudent.group||'-'}</p>
-                <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3">
-                  <p className="text-xs text-green-700 font-medium">✨ بصمة مدمجة محفوظة • جاهز للطالب التالي...</p>
-                </div>
-              </div>
+            {regStep === 'success' && regStudent && (
+              <div className="text-center py-6"><div className="text-6xl mb-3 animate-bounce">🎉</div><h3 className="text-xl font-bold text-green-700 mb-1">تم بنجاح!</h3><p className="text-gray-800 font-bold text-lg">{regStudent.name}</p><p className="text-xs text-gray-500 mt-1">{regStudent.code} • {regStudent.group || '-'}</p><div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3"><p className="text-xs text-green-700 font-medium">✨ بصمة مدمجة محفوظة • جاهز للطالب التالي...</p></div></div>
             )}
           </div>
         </div>
       )}
 
-      {/* ══ CSS ══ */}
+      {updateFaceStudent && (
+        <div className="fixed inset-0 z-[10004] bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-white text-gray-900 rounded-3xl p-5 w-full max-w-sm shadow-2xl text-center">
+            <div className="text-5xl mb-3">👤</div><h3 className="text-lg font-black mb-1">الطالب لديه بصمة بالفعل</h3><p className="font-bold text-gray-800">{updateFaceStudent.name}</p><p className="text-xs text-gray-500 mt-1">{updateFaceStudent.code} • {updateFaceStudent.group || '-'}</p>
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 mt-4"><p className="text-sm text-amber-800 font-bold">هل تريد تحديث البصمة القديمة؟</p><p className="text-xs text-amber-700 mt-1">سيتم استبدال البصمة السابقة ببصمة جديدة.</p></div>
+            <div className="grid grid-cols-2 gap-2 mt-5"><button onClick={() => { setUpdateFaceStudent(null); setRegCode(''); setRegStudent(null); setTimeout(() => codeInputRef.current?.focus(), 100); }} className="py-3 rounded-xl bg-gray-200 text-gray-700 font-bold active:scale-95">إلغاء</button><button onClick={async () => { const s = updateFaceStudent; setUpdateFaceStudent(null); setRegStudent(s); await captureFace(s); }} className="py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold active:scale-95 shadow-lg">تحديث البصمة</button></div>
+          </div>
+        </div>
+      )}
+
+      {showLogs && (
+        <div className="fixed inset-0 z-[10005] bg-black/90 flex items-center justify-center p-4">
+          <div className="bg-gray-950 text-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col border border-white/10 shadow-2xl">
+            <div className="p-4 border-b border-white/10 flex items-center justify-between"><div><h3 className="font-black text-lg">📜 سجل التعرف</h3><p className="text-xs text-gray-400">آخر {matchLogs.length} عملية</p></div><button onClick={() => setShowLogs(false)} className="bg-red-600 px-3 py-1.5 rounded-lg text-xs font-bold">إغلاق</button></div>
+            <div className="p-3 flex gap-2 border-b border-white/10"><button onClick={() => exportFaceMatchLogsCsv()} className="bg-emerald-600 px-3 py-2 rounded-lg text-xs font-bold">⬇️ تصدير CSV</button><button onClick={() => { clearFaceMatchLogs(); setMatchLogs([]); }} className="bg-gray-700 px-3 py-2 rounded-lg text-xs font-bold">🗑️ مسح السجل</button></div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              {matchLogs.length === 0 ? <div className="text-center text-gray-500 py-10 text-sm">لا يوجد سجل بعد</div> : matchLogs.map(log => (
+                <div key={log.id} className={`rounded-xl p-3 border text-xs ${log.status === 'accepted' ? 'bg-emerald-900/30 border-emerald-600/30' : log.status === 'already' ? 'bg-amber-900/30 border-amber-600/30' : log.status === 'uncertain' ? 'bg-blue-900/30 border-blue-600/30' : 'bg-red-900/20 border-red-600/25'}`}>
+                  <div className="flex items-center justify-between gap-2"><div className="font-bold truncate">{log.status === 'accepted' ? '✅' : log.status === 'already' ? '🟡' : log.status === 'uncertain' ? '⚠️' : '❓'} {log.studentName || 'غير معروف'}</div><div className="text-[10px] text-gray-400">{new Date(log.time).toLocaleTimeString('ar-IQ')}</div></div>
+                  <div className="grid grid-cols-2 gap-1 mt-2 text-[10px] text-gray-300"><div>الوضع: {log.mode}</div><div>الحالة: {log.status}</div><div>distance: {log.distance?.toFixed?.(3) ?? '-'}</div><div>second: {log.secondDistance?.toFixed?.(3) ?? '-'}</div><div>gap: {log.gap?.toFixed?.(3) ?? '-'}</div><div>threshold: {log.threshold ?? '-'}</div></div>
+                  {log.reason && <div className="mt-2 text-[10px] text-gray-400">{log.reason}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
-        @keyframes toastSlideDown {
-          0%   { opacity: 0; transform: translateY(-100%) scale(0.92); }
-          60%  { opacity: 1; transform: translateY(6px) scale(1.02); }
-          100% { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        .animate-toast-slide-down {
-          animation: toastSlideDown 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
-        }
-
-        /* ── نافذة "لديه بصمة بالفعل" — من المركز ── */
-        @keyframes alreadyPopupCenter {
-          0%   { opacity: 0; transform: scale(0.6); }
-          55%  { opacity: 1; transform: scale(1.07); }
-          75%  { transform: scale(0.97); }
-          100% { opacity: 1; transform: scale(1); }
-        }
-        .animate-already-popup-center {
-          animation: alreadyPopupCenter 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-        }
-
-        /* ── شريط تقدم ينتهي خلال 3 ثواني ── */
-        @keyframes shrinkBar {
-          0%   { width: 100%; }
-          100% { width: 0%; }
-        }
-        .animate-shrink-bar {
-          animation: shrinkBar 3s linear forwards;
-        }
-
-        @keyframes scanLine {
-          0%,100% { top:8%;  opacity:0.5; }
-          50%      { top:88%; opacity:1;   }
-        }
-        .animate-scan-line { animation:scanLine 1.8s ease-in-out infinite; position:absolute; }
-
-        .mirror-video video { transform: scaleX(-1) !important; }
-
-        #${QR_REGION_ID} { border-radius:0.75rem; overflow:hidden; background:#111; }
-        #${QR_REGION_ID} video {
-          width:100% !important; height:auto !important;
-          min-height:260px !important; object-fit:cover !important; display:block !important;
-        }
-        #${QR_REGION_ID} img[alt="Info icon"],
-        #${QR_REGION_ID} button,
-        #${QR_REGION_ID} > div:last-child:not(:first-child) { display:none !important; }
-
-        ::-webkit-scrollbar { width:3px; }
-        ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.15); border-radius:99px; }
-
-        input[type="range"] { -webkit-appearance:none; background:rgba(255,255,255,0.1); border-radius:99px; height:6px; }
-        input[type="range"]::-webkit-slider-thumb {
-          -webkit-appearance:none; width:26px; height:26px; border-radius:50%;
-          background:#10b981; cursor:pointer; box-shadow:0 0 10px rgba(16,185,129,0.6);
-        }
+        @keyframes toastSlideDown { 0%{opacity:0;transform:translateY(-100%) scale(.92)} 60%{opacity:1;transform:translateY(6px) scale(1.02)} 100%{opacity:1;transform:translateY(0) scale(1)} }
+        .animate-toast-slide-down{animation:toastSlideDown .42s cubic-bezier(.22,1,.36,1) both}
+        @keyframes scanLine{0%,100%{top:8%;opacity:.5}50%{top:88%;opacity:1}}
+        .animate-scan-line{animation:scanLine 1.8s ease-in-out infinite;position:absolute}
+        .mirror-video video{transform:scaleX(-1)!important}
+        #${QR_REGION_ID}{border-radius:.75rem;overflow:hidden;background:#111}
+        #${QR_REGION_ID} video{width:100%!important;height:auto!important;min-height:260px!important;object-fit:cover!important;display:block!important}
+        #${QR_REGION_ID} img[alt="Info icon"], #${QR_REGION_ID} button, #${QR_REGION_ID} > div:last-child:not(:first-child){display:none!important}
+        ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:99px}
+        input[type="range"]{-webkit-appearance:none;background:rgba(255,255,255,.1);border-radius:99px;height:6px}
+        input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;background:#10b981;cursor:pointer;box-shadow:0 0 10px rgba(16,185,129,.6)}
       `}</style>
     </div>
   );
 };
 
-/* ══════════════════════════════════════════════════════════
-   FaceCameraPreview
-══════════════════════════════════════════════════════════ */
-const FaceCameraPreview: React.FC<{ mirror?: boolean }> = ({ mirror=true }) => {
-  const canvasRef = useRef<HTMLCanvasElement|null>(null);
+const FaceCameraPreview: React.FC<{ mirror?: boolean }> = ({ mirror = true }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  useEffect(()=>{
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    let animId: number; let active=true;
 
-    const draw=()=>{
+    let animId = 0;
+    let active = true;
+
+    const draw = () => {
       if (!active) return;
-      const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement|null;
-      if (video && video.readyState>=2) {
-        const size=200; canvas.width=size; canvas.height=size;
+      const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
+      if (video && video.readyState >= 2) {
+        const size = 200;
+        canvas.width = size;
+        canvas.height = size;
         ctx.save();
-        ctx.beginPath(); ctx.arc(size/2,size/2,size/2-4,0,Math.PI*2); ctx.clip();
-        const vw=video.videoWidth,vh=video.videoHeight,md=Math.min(vw,vh);
-        const sx=(vw-md)/2,sy=(vh-md)/2;
-        if (mirror) { ctx.translate(size,0); ctx.scale(-1,1); }
-        ctx.drawImage(video,sx,sy,md,md,0,0,size,size);
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
+        ctx.clip();
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        const md = Math.min(vw, vh);
+        const sx = (vw - md) / 2;
+        const sy = (vh - md) / 2;
+        if (mirror) { ctx.translate(size, 0); ctx.scale(-1, 1); }
+        ctx.drawImage(video, sx, sy, md, md, 0, 0, size, size);
         ctx.restore();
       } else {
-        canvas.width=200; canvas.height=200;
-        ctx.fillStyle='#1f2937'; ctx.beginPath(); ctx.arc(100,100,96,0,Math.PI*2); ctx.fill();
-        ctx.fillStyle='#6b7280'; ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.font='40px Arial'; ctx.fillText('📷',100,100);
+        canvas.width = 200;
+        canvas.height = 200;
+        ctx.fillStyle = '#1f2937';
+        ctx.beginPath();
+        ctx.arc(100, 100, 96, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#6b7280';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '40px Arial';
+        ctx.fillText('📷', 100, 100);
       }
-      animId=requestAnimationFrame(draw);
+      animId = requestAnimationFrame(draw);
     };
 
     draw();
-    return ()=>{ active=false; if(animId) cancelAnimationFrame(animId); };
-  },[mirror]);
+    return () => { active = false; if (animId) cancelAnimationFrame(animId); };
+  }, [mirror]);
 
-  return <canvas ref={canvasRef} width={200} height={200} className="w-48 h-48 rounded-full bg-gray-900 shadow-xl"/>;
+  return <canvas ref={canvasRef} width={200} height={200} className="w-48 h-48 rounded-full bg-gray-900 shadow-xl" />;
 };
 
 export default QRAttendance;

@@ -8,6 +8,7 @@ let modelsLoaded = false;
 let loadingPromise: Promise<void> | null = null;
 
 const MODEL_URLS = [
+  '/models',
   'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights',
   'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights',
 ];
@@ -17,32 +18,27 @@ export const loadFaceModels = async (): Promise<void> => {
   if (loadingPromise) return loadingPromise;
 
   loadingPromise = (async () => {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const url = MODEL_URLS[attempt % MODEL_URLS.length];
+    for (let attempt = 0; attempt < MODEL_URLS.length; attempt++) {
+      const url = MODEL_URLS[attempt];
 
       try {
         await Promise.all([
           faceapi.nets.tinyFaceDetector.loadFromUri(url),
           faceapi.nets.faceLandmark68TinyNet.loadFromUri(url),
-
-          // مهم: الشبكة الكاملة أدق للتسجيل
           faceapi.nets.faceLandmark68Net.loadFromUri(url),
-
           faceapi.nets.faceRecognitionNet.loadFromUri(url),
           faceapi.nets.ssdMobilenetv1.loadFromUri(url),
         ]);
 
         modelsLoaded = true;
         loadingPromise = null;
-
         console.log('✅ موديلات الوجه من:', url);
         return;
       } catch (e) {
-        console.warn(`⚠️ محاولة ${attempt + 1} فشلت:`, e);
+        console.warn(`⚠️ محاولة تحميل الموديلات ${attempt + 1} فشلت:`, e);
         loadingPromise = null;
-
-        if (attempt < 2) {
-          await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
+        if (attempt < MODEL_URLS.length - 1) {
+          await new Promise(r => setTimeout(r, 1200 * (attempt + 1)));
         }
       }
     }
@@ -61,27 +57,30 @@ export const resetModels = () => {
 
 export const areModelsLoaded = () => modelsLoaded;
 
-/* ─── قدرة الجهاز ─── */
+export interface RegistrationQualityResult {
+  ok: boolean;
+  level: 'good' | 'warning' | 'bad';
+  message: string;
+  facesCount: number;
+  brightness: number;
+  box?: { x: number; y: number; width: number; height: number };
+}
+
 const getDeviceInputSize = (): 160 | 224 | 320 | 416 | 512 | 608 => {
   const cores = navigator.hardwareConcurrency || 2;
   const memory = (navigator as any).deviceMemory || 2;
-
   if (cores >= 8 && memory >= 6) return 608;
   if (cores >= 4 && memory >= 3) return 416;
   return 320;
 };
 
-/* ─── إعدادات ديناميكية حسب الجهاز ─── */
 const getDetectorOptions = () => {
-  const inputSize = getDeviceInputSize();
-
   return new faceapi.TinyFaceDetectorOptions({
-    inputSize,
+    inputSize: getDeviceInputSize(),
     scoreThreshold: 0.38,
   });
 };
 
-/* ─── إعدادات أخف للتسجيل ─── */
 const getRegisterDetectorOptions = () => {
   return new faceapi.TinyFaceDetectorOptions({
     inputSize: 416,
@@ -89,7 +88,6 @@ const getRegisterDetectorOptions = () => {
   });
 };
 
-/* ─── fallback للتسجيل ─── */
 const getRegisterFallbackDetectorOptions = () => {
   return new faceapi.TinyFaceDetectorOptions({
     inputSize: 320,
@@ -97,13 +95,11 @@ const getRegisterFallbackDetectorOptions = () => {
   });
 };
 
-/* ─── SSD فقط للأجهزة القوية ─── */
 const detectorOptionsSSD = new faceapi.SsdMobilenetv1Options({
   minConfidence: 0.35,
   maxResults: 10,
 });
 
-/* ─── Canvas مُشترك ─── */
 let sharedCanvas: HTMLCanvasElement | null = null;
 let sharedCtx: CanvasRenderingContext2D | null = null;
 
@@ -115,7 +111,6 @@ const getSharedCanvas = (width: number, height: number): HTMLCanvasElement => {
 
   sharedCanvas.width = width;
   sharedCanvas.height = height;
-
   return sharedCanvas;
 };
 
@@ -125,23 +120,18 @@ const preprocessFrame = (
 ): HTMLCanvasElement => {
   const vw = 'videoWidth' in input ? input.videoWidth : input.width;
   const vh = 'videoHeight' in input ? input.videoHeight : input.height;
-
   if (!vw || !vh) return input as HTMLCanvasElement;
 
   const scale = Math.min(1, targetWidth / vw);
   const w = Math.round(vw * scale);
   const h = Math.round(vh * scale);
-
   const canvas = getSharedCanvas(w, h);
 
   if (!sharedCtx) return input as HTMLCanvasElement;
 
   sharedCtx.clearRect(0, 0, w, h);
-
   sharedCtx.imageSmoothingEnabled = true;
   sharedCtx.imageSmoothingQuality = 'high';
-
-  // تحسين بسيط للصورة
   sharedCtx.filter = 'contrast(1.12) brightness(1.04)';
   sharedCtx.drawImage(input, 0, 0, w, h);
   sharedCtx.filter = 'none';
@@ -149,12 +139,75 @@ const preprocessFrame = (
   return canvas;
 };
 
-/* ─── اختيار الوجه الأفضل أثناء التسجيل ─── */
-/*
-  الفكرة:
-  - لا نعتمد على detectSingleFace لأن ممكن يختار وجه شخص آخر.
-  - نختار الوجه الأكبر والقريب من وسط الصورة.
-*/
+const estimateBrightness = (canvas: HTMLCanvasElement): number => {
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return 128;
+
+  const sampleW = Math.min(120, canvas.width);
+  const sampleH = Math.min(90, canvas.height);
+  const data = ctx.getImageData(0, 0, sampleW, sampleH).data;
+
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < data.length; i += 16) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    sum += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    count++;
+  }
+
+  return count ? sum / count : 128;
+};
+
+export const analyzeRegistrationFrame = async (
+  input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
+): Promise<RegistrationQualityResult> => {
+  if (!modelsLoaded) await loadFaceModels();
+
+  const processed = preprocessFrame(input, 640);
+  const brightness = estimateBrightness(processed);
+
+  const faces = await faceapi
+    .detectAllFaces(processed, getRegisterDetectorOptions())
+    .withFaceLandmarks(false);
+
+  if (!faces.length) {
+    return { ok: false, level: 'bad', message: 'لا يوجد وجه واضح', facesCount: 0, brightness };
+  }
+
+  if (faces.length > 1) {
+    return { ok: false, level: 'bad', message: 'يوجد أكثر من وجه، خلي طالب واحد فقط', facesCount: faces.length, brightness };
+  }
+
+  const box = faces[0].detection.box;
+  const frameW = processed.width || 640;
+  const frameH = processed.height || 480;
+  const areaRatio = (box.width * box.height) / (frameW * frameH);
+  const faceCx = box.x + box.width / 2;
+  const faceCy = box.y + box.height / 2;
+  const offCenterX = Math.abs(faceCx - frameW / 2) / frameW;
+  const offCenterY = Math.abs(faceCy - frameH / 2) / frameH;
+
+  if (brightness < 45) {
+    return { ok: false, level: 'bad', message: 'الإضاءة ضعيفة، زيد الإضاءة', facesCount: 1, brightness, box };
+  }
+
+  if (areaRatio < 0.055) {
+    return { ok: false, level: 'warning', message: 'اقترب قليلاً من الكاميرا', facesCount: 1, brightness, box };
+  }
+
+  if (areaRatio > 0.42) {
+    return { ok: false, level: 'warning', message: 'ابتعد قليلاً عن الكاميرا', facesCount: 1, brightness, box };
+  }
+
+  if (offCenterX > 0.23 || offCenterY > 0.25) {
+    return { ok: false, level: 'warning', message: 'خلي وجهك بوسط الدائرة', facesCount: 1, brightness, box };
+  }
+
+  return { ok: true, level: 'good', message: 'ممتاز، الوجه واضح', facesCount: 1, brightness, box };
+};
+
 const pickBestRegistrationFace = <T extends { detection: { box: any } }>(
   faces: T[],
   frameWidth: number,
@@ -169,89 +222,48 @@ const pickBestRegistrationFace = <T extends { detection: { box: any } }>(
 
   const scored = faces.map(face => {
     const box = face.detection.box;
-
     const area = box.width * box.height;
     const faceCx = box.x + box.width / 2;
     const faceCy = box.y + box.height / 2;
-
-    const dist = Math.sqrt(
-      Math.pow(faceCx - cx, 2) + Math.pow(faceCy - cy, 2)
-    );
-
+    const dist = Math.sqrt(Math.pow(faceCx - cx, 2) + Math.pow(faceCy - cy, 2));
     const centerScore = 1 - Math.min(1, dist / maxDist);
-
-    // الأكبر أهم، والقرب للوسط يساعد
-    const score = area * (0.75 + centerScore * 0.25);
-
-    return { face, area, score };
+    return { face, area, score: area * (0.75 + centerScore * 0.25) };
   });
 
   scored.sort((a, b) => b.score - a.score);
 
-  /*
-    إذا يوجد وجهين متقاربين بالحجم جداً، نتجاهل هذه اللقطة
-    حتى لا تدخل بصمة شخص ثاني بالدمج.
-  */
-  if (scored.length >= 2) {
-    const firstArea = scored[0].area;
-    const secondArea = scored[1].area;
-
-    if (secondArea > firstArea * 0.75) {
-      console.warn('⚠️ أكثر من وجه واضح أثناء التسجيل، تم تجاهل هذه اللقطة');
-      return null;
-    }
+  if (scored.length >= 2 && scored[1].area > scored[0].area * 0.75) {
+    console.warn('⚠️ أكثر من وجه واضح أثناء التسجيل، تم تجاهل اللقطة');
+    return null;
   }
 
   return scored[0].face;
 };
 
-/* ─── فلترة البصمات قبل الدمج ─── */
-const filterStableDescriptors = (
-  descriptors: Float32Array[],
-  minCount = 3
-): Float32Array[] => {
+const filterStableDescriptors = (descriptors: Float32Array[], minCount = 3): Float32Array[] => {
   if (descriptors.length < minCount) return [];
 
-  /*
-    نحسب متوسط بُعد كل بصمة عن باقي البصمات.
-    البصمة الجيدة تكون قريبة من المجموعة.
-    البصمة الشاذة تكون بعيدة.
-  */
   const scored = descriptors.map((descriptor, index) => {
     let sum = 0;
     let count = 0;
 
     for (let i = 0; i < descriptors.length; i++) {
       if (i === index) continue;
-
       sum += faceapi.euclideanDistance(descriptor, descriptors[i]);
       count++;
     }
 
-    return {
-      descriptor,
-      avgDistance: count > 0 ? sum / count : 999,
-    };
+    return { descriptor, avgDistance: count ? sum / count : 999 };
   });
 
   scored.sort((a, b) => a.avgDistance - b.avgDistance);
-
   const bestAvg = scored[0].avgDistance;
 
-  /*
-    القيم المقترحة:
-    - x.avgDistance < 0.42: يمنع اللقطات الضعيفة جداً.
-    - bestAvg + 0.08: يسمح باختلاف بسيط لكن يرفض الشاذ.
-  */
   let clean = scored
     .filter(x => x.avgDistance <= bestAvg + 0.08 && x.avgDistance < 0.42)
     .slice(0, 7)
     .map(x => x.descriptor);
 
-  /*
-    إذا كانت الكاميرا أو الإضاءة صعبة، ممكن تكون الفلترة صارمة.
-    هنا fallback نأخذ أفضل 3 إذا كانت مقبولة نسبياً.
-  */
   if (clean.length < minCount) {
     clean = scored
       .filter(x => x.avgDistance < 0.50)
@@ -259,36 +271,21 @@ const filterStableDescriptors = (
       .map(x => x.descriptor);
   }
 
-  if (clean.length < minCount) return [];
-
-  return clean;
+  return clean.length >= minCount ? clean : [];
 };
 
-/* ─── دمج البصمات بدون normalization ─── */
 const mergeDescriptors = (descriptors: Float32Array[]): Float32Array => {
   const merged = new Float32Array(128);
 
   for (let i = 0; i < 128; i++) {
     let sum = 0;
-
-    for (const d of descriptors) {
-      sum += d[i];
-    }
-
+    for (const d of descriptors) sum += d[i];
     merged[i] = sum / descriptors.length;
   }
-
-  /*
-    مهم:
-    لا نسوي normalization هنا.
-    لأن face-api يرجع descriptor بصيغة معينة،
-    وإذا طبّعنا المخزون فقط راح تختلف المسافات أثناء المقارنة.
-  */
 
   return merged;
 };
 
-/* ─── بصمة واحدة ─── */
 export const extractFaceDescriptor = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ): Promise<Float32Array | null> => {
@@ -303,13 +300,7 @@ export const extractFaceDescriptor = async (
 
   if (!result) {
     result = await faceapi
-      .detectSingleFace(
-        processed,
-        new faceapi.TinyFaceDetectorOptions({
-          inputSize: 320,
-          scoreThreshold: 0.32,
-        })
-      )
+      .detectSingleFace(processed, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.32 }))
       .withFaceLandmarks(true)
       .withFaceDescriptor();
   }
@@ -317,7 +308,6 @@ export const extractFaceDescriptor = async (
   return result?.descriptor || null;
 };
 
-/* ─── التقاط متعدد ودمج البصمات ─── */
 export const extractFaceDescriptorMultiCapture = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
   onProgress?: (progress: number) => void
@@ -327,7 +317,6 @@ export const extractFaceDescriptorMultiCapture = async (
   const CAPTURE_DURATION_MS = 3000;
   const CAPTURE_INTERVAL_MS = 250;
   const MIN_GOOD_DESCRIPTORS = 3;
-
   const startTime = Date.now();
   const descriptors: Float32Array[] = [];
 
@@ -335,37 +324,21 @@ export const extractFaceDescriptorMultiCapture = async (
 
   while (Date.now() - startTime < CAPTURE_DURATION_MS) {
     const elapsed = Date.now() - startTime;
-    const progress = Math.min(
-      90,
-      Math.round((elapsed / CAPTURE_DURATION_MS) * 90)
-    );
-
-    onProgress?.(progress);
+    onProgress?.(Math.min(90, Math.round((elapsed / CAPTURE_DURATION_MS) * 90)));
 
     try {
-      if (
-        input instanceof HTMLVideoElement &&
-        input.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
-      ) {
+      if (input instanceof HTMLVideoElement && input.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
         await new Promise(r => setTimeout(r, CAPTURE_INTERVAL_MS));
         continue;
       }
 
       const processed = preprocessFrame(input, 640);
 
-      /*
-        مهم:
-        نستخدم detectAllFaces بدل detectSingleFace حتى نعرف إذا أكثر من وجه موجود.
-        ونستخدم full landmarks false حتى تكون البصمة أدق.
-      */
       let results = await faceapi
         .detectAllFaces(processed, getRegisterDetectorOptions())
         .withFaceLandmarks(false)
         .withFaceDescriptors();
 
-      /*
-        fallback إذا ما لقى وجه
-      */
       if (!results.length) {
         results = await faceapi
           .detectAllFaces(processed, getRegisterFallbackDetectorOptions())
@@ -373,20 +346,8 @@ export const extractFaceDescriptorMultiCapture = async (
           .withFaceDescriptors();
       }
 
-      if (!results.length) {
-        await new Promise(r => setTimeout(r, CAPTURE_INTERVAL_MS));
-        continue;
-      }
-
-      const bestFace = pickBestRegistrationFace(
-        results,
-        processed.width,
-        processed.height
-      );
-
-      if (bestFace?.descriptor) {
-        descriptors.push(bestFace.descriptor);
-      }
+      const bestFace = pickBestRegistrationFace(results, processed.width, processed.height);
+      if (bestFace?.descriptor) descriptors.push(bestFace.descriptor);
     } catch (e) {
       console.warn('capture frame error:', e);
     }
@@ -397,41 +358,26 @@ export const extractFaceDescriptorMultiCapture = async (
   onProgress?.(95);
 
   if (descriptors.length < MIN_GOOD_DESCRIPTORS) {
-    console.warn(
-      `❌ عدد البصمات قليل: ${descriptors.length}/${MIN_GOOD_DESCRIPTORS}`
-    );
+    console.warn(`❌ عدد البصمات قليل: ${descriptors.length}/${MIN_GOOD_DESCRIPTORS}`);
     return null;
   }
 
-  const cleanDescriptors = filterStableDescriptors(
-    descriptors,
-    MIN_GOOD_DESCRIPTORS
-  );
-
+  const cleanDescriptors = filterStableDescriptors(descriptors, MIN_GOOD_DESCRIPTORS);
   if (cleanDescriptors.length < MIN_GOOD_DESCRIPTORS) {
-    console.warn(
-      `❌ البصمات غير ثابتة: ${cleanDescriptors.length}/${descriptors.length}`
-    );
+    console.warn(`❌ البصمات غير ثابتة: ${cleanDescriptors.length}/${descriptors.length}`);
     return null;
   }
 
   const merged = mergeDescriptors(cleanDescriptors);
-
   onProgress?.(100);
-
-  console.log(
-    `✅ دُمجت ${cleanDescriptors.length} بصمة نظيفة من أصل ${descriptors.length} لقطة`
-  );
-
+  console.log(`✅ دُمجت ${cleanDescriptors.length} بصمة نظيفة من أصل ${descriptors.length} لقطة`);
   return merged;
 };
 
-/* ─── كل الوجوه - الطريقة الأساسية ─── */
 export const extractAllFaceDescriptors = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ) => {
   if (!modelsLoaded) await loadFaceModels();
-
   const processed = preprocessFrame(input, 1280);
 
   return faceapi
@@ -440,7 +386,6 @@ export const extractAllFaceDescriptors = async (
     .withFaceDescriptors();
 };
 
-/* ─── كشف هجين - بالتسلسل مو بالتوازي ─── */
 export const extractAllFaceDescriptorsHybrid = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ) => {
@@ -449,15 +394,11 @@ export const extractAllFaceDescriptorsHybrid = async (
   const cores = navigator.hardwareConcurrency || 2;
   const memory = (navigator as any).deviceMemory || 2;
   const isHighEnd = cores >= 8 && memory >= 6;
-
-  const targetWidth = isHighEnd ? 1280 : 960;
-  const processed = preprocessFrame(input, targetWidth);
-
+  const processed = preprocessFrame(input, isHighEnd ? 1280 : 960);
   const options = getDetectorOptions();
 
   if (isHighEnd) {
     let tiny: any[] = [];
-
     try {
       tiny = await faceapi
         .detectAllFaces(processed, options)
@@ -468,8 +409,6 @@ export const extractAllFaceDescriptorsHybrid = async (
     }
 
     const merged = [...tiny];
-    const IOU_THRESHOLD = 0.4;
-
     let ssd: any[] = [];
 
     try {
@@ -482,10 +421,7 @@ export const extractAllFaceDescriptorsHybrid = async (
     }
 
     ssd.forEach((face: any) => {
-      const isDup = merged.some(
-        m => calculateIoU(m.detection.box, face.detection.box) > IOU_THRESHOLD
-      );
-
+      const isDup = merged.some(m => calculateIoU(m.detection.box, face.detection.box) > 0.4);
       if (!isDup) merged.push(face);
     });
 
@@ -502,7 +438,6 @@ export const extractAllFaceDescriptorsHybrid = async (
   }
 };
 
-/* ─── IoU ─── */
 function calculateIoU(
   box1: { x: number; y: number; width: number; height: number },
   box2: { x: number; y: number; width: number; height: number }
@@ -515,19 +450,15 @@ function calculateIoU(
   if (x2 < x1 || y2 < y1) return 0;
 
   const inter = (x2 - x1) * (y2 - y1);
-  const union =
-    box1.width * box1.height + box2.width * box2.height - inter;
-
+  const union = box1.width * box1.height + box2.width * box2.height - inter;
   return union > 0 ? inter / union : 0;
 }
 
-/* ─── مقارنة بصمتين ─── */
 export const compareFaces = (
   desc1: Float32Array | number[],
   desc2: Float32Array | number[] | string
 ): number => {
-  const a =
-    desc1 instanceof Float32Array ? desc1 : new Float32Array(desc1);
+  const a = desc1 instanceof Float32Array ? desc1 : new Float32Array(desc1);
 
   const desc2Array =
     typeof desc2 === 'string' ||
@@ -538,11 +469,9 @@ export const compareFaces = (
         : Array.from(desc2 as Float32Array);
 
   const b = new Float32Array(desc2Array);
-
   return faceapi.euclideanDistance(a, b);
 };
 
-/* ─── أفضل تطابق ─── */
 export interface FaceMatchResult<T> {
   item: T;
   distance: number;
@@ -558,36 +487,101 @@ export const findBestMatch = <T extends { faceDescriptor?: number[] | string }>(
 
   for (const item of items) {
     if (!item.faceDescriptor) continue;
-
     const distance = compareFaces(queryDescriptor, item.faceDescriptor as any);
 
-    if (distance < threshold) {
-      if (!best || distance < best.distance) {
-        best = {
-          item,
-          distance,
-          confidence: Math.max(
-            0,
-            Math.min(100, Math.round((1 - distance / threshold) * 100))
-          ),
-        };
-      }
+    if (distance < threshold && (!best || distance < best.distance)) {
+      best = {
+        item,
+        distance,
+        confidence: Math.max(0, Math.min(100, Math.round((1 - distance / threshold) * 100))),
+      };
     }
   }
 
   return best;
 };
 
-/* ─── تحويل البصمة ─── */
+export interface SmartFaceMatchResult<T> {
+  item: T;
+  distance: number;
+  confidence: number;
+  secondDistance: number | null;
+  gap: number | null;
+  status: 'accepted' | 'uncertain' | 'rejected';
+  reason?: string;
+}
+
+export interface SmartFaceMatchOptions {
+  threshold: number;
+  minGap: number;
+  uncertainMargin?: number;
+}
+
+export const findBestMatchSmart = <T extends { faceDescriptor?: number[] | string }>(
+  queryDescriptor: Float32Array,
+  items: T[],
+  options: SmartFaceMatchOptions
+): SmartFaceMatchResult<T> | null => {
+  const { threshold, minGap, uncertainMargin = 0.04 } = options;
+
+  const matches: Array<{ item: T; distance: number }> = [];
+
+  for (const item of items) {
+    if (!item.faceDescriptor) continue;
+    const distance = compareFaces(queryDescriptor, item.faceDescriptor as any);
+    if (Number.isFinite(distance)) matches.push({ item, distance });
+  }
+
+  if (!matches.length) return null;
+
+  matches.sort((a, b) => a.distance - b.distance);
+  const best = matches[0];
+  const second = matches[1];
+  const secondDistance = second ? second.distance : null;
+  const gap = second ? second.distance - best.distance : null;
+  const confidence = Math.max(0, Math.min(100, Math.round((1 - best.distance / threshold) * 100)));
+
+  if (best.distance < threshold) {
+    if (gap !== null && gap < minGap) {
+      return {
+        item: best.item,
+        distance: best.distance,
+        confidence,
+        secondDistance,
+        gap,
+        status: 'uncertain',
+        reason: 'أفضل تطابق قريب جداً من ثاني أفضل تطابق',
+      };
+    }
+
+    return { item: best.item, distance: best.distance, confidence, secondDistance, gap, status: 'accepted' };
+  }
+
+  if (best.distance < threshold + uncertainMargin) {
+    return {
+      item: best.item,
+      distance: best.distance,
+      confidence,
+      secondDistance,
+      gap,
+      status: 'uncertain',
+      reason: 'المسافة قريبة من الحد لكنها غير كافية للتسجيل التلقائي',
+    };
+  }
+
+  return {
+    item: best.item,
+    distance: best.distance,
+    confidence,
+    secondDistance,
+    gap,
+    status: 'rejected',
+    reason: 'لا يوجد تطابق كافي',
+  };
+};
+
 export const descriptorToArray = (descriptor: Float32Array): number[] =>
   compressFaceDescriptor(descriptor);
 
-/*
-  استخدم هذا مؤقتاً إذا تحب تختبر بدون ضغط:
-  export const descriptorToArray = (descriptor: Float32Array): number[] =>
-    Array.from(descriptor);
-*/
-
-export const descriptorToArrayUncompressed = (
-  descriptor: Float32Array
-): number[] => Array.from(descriptor);
+export const descriptorToArrayUncompressed = (descriptor: Float32Array): number[] =>
+  Array.from(descriptor);
