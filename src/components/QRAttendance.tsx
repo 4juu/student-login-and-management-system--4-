@@ -34,7 +34,6 @@ interface QRAttendanceProps {
 type ToastType    = 'success' | 'error' | 'info' | 'warning';
 type ScanMode     = 'qr' | 'bulk';
 type CameraFacing = 'environment' | 'user';
-
 type BulkSensitivity = 'far' | 'extreme';
 
 interface ToastMessage {
@@ -50,12 +49,6 @@ interface DetectedFaceBox {
   status: 'recognized' | 'already' | 'unknown';
   confidence: number;
   timestamp: number;
-}
-
-/* ── نافذة "لديه بصمة بالفعل" ── */
-interface AlreadyFacePopup {
-  id: number;
-  studentName: string;
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -123,20 +116,17 @@ const beep = (freq: number, dur: number, vol = 0.05) => {
   } catch {}
 };
 
-/* ── صوت أجمل وأعلى للبصمة الجماعية ── */
+/* ── صوت أجمل وأعلى عند نجاح البصمة الجماعية ── */
 const playFaceSuccess = () => {
   try {
     const AC = window.AudioContext || (window as any).webkitAudioContext;
     if (!AC) return;
     const ctx = new AC();
-
-    // نغمة صاعدة جميلة: ثلاث نبضات
     const notes = [
-      { freq: 523, start: 0,    dur: 0.12, vol: 0.18 },   // C5
-      { freq: 659, start: 0.10, dur: 0.12, vol: 0.20 },   // E5
-      { freq: 784, start: 0.20, dur: 0.22, vol: 0.22 },   // G5
+      { freq: 523, start: 0,    dur: 0.12, vol: 0.18 },
+      { freq: 659, start: 0.10, dur: 0.12, vol: 0.20 },
+      { freq: 784, start: 0.20, dur: 0.22, vol: 0.22 },
     ];
-
     notes.forEach(({ freq, start, dur, vol }) => {
       const osc = ctx.createOscillator();
       const g   = ctx.createGain();
@@ -145,35 +135,40 @@ const playFaceSuccess = () => {
       g.gain.setValueAtTime(0, ctx.currentTime + start);
       g.gain.linearRampToValueAtTime(vol, ctx.currentTime + start + 0.03);
       g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
-      osc.connect(g);
-      g.connect(ctx.destination);
+      osc.connect(g); g.connect(ctx.destination);
       osc.start(ctx.currentTime + start);
       osc.stop(ctx.currentTime + start + dur + 0.05);
     });
-
     setTimeout(() => ctx.close(), 700);
     navigator.vibrate?.([40, 20, 40]);
   } catch {}
 };
 
 /* ── صوت "لديه بصمة بالفعل" ── */
-const playAlreadyFace = () => {
+const playAlreadyHasFace = () => {
   try {
     const AC = window.AudioContext || (window as any).webkitAudioContext;
     if (!AC) return;
     const ctx = new AC();
-    const osc = ctx.createOscillator();
-    const g   = ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.value = 440;
-    g.gain.setValueAtTime(0.15, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-    osc.connect(g);
-    g.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.3);
-    setTimeout(() => ctx.close(), 500);
-    navigator.vibrate?.([30]);
+    // نغمتين: تنبيه لطيف
+    const notes = [
+      { freq: 600, start: 0,    dur: 0.15, vol: 0.16 },
+      { freq: 400, start: 0.12, dur: 0.20, vol: 0.14 },
+    ];
+    notes.forEach(({ freq, start, dur, vol }) => {
+      const osc = ctx.createOscillator();
+      const g   = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      g.gain.setValueAtTime(0, ctx.currentTime + start);
+      g.gain.linearRampToValueAtTime(vol, ctx.currentTime + start + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + dur + 0.05);
+    });
+    setTimeout(() => ctx.close(), 600);
+    navigator.vibrate?.([50, 30, 50]);
   } catch {}
 };
 
@@ -220,7 +215,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const toastCounterRef  = useRef(0);
   const codeInputRef     = useRef<HTMLInputElement|null>(null);
   const qrCodeInputRef   = useRef<HTMLInputElement|null>(null);
-  const alreadyPopupCounterRef = useRef(0);
 
   /* ─── State ─── */
   const [mode,            setMode]            = useState<ScanMode>('qr');
@@ -248,7 +242,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const [sensitivity,     setSensitivity]     = useState<BulkSensitivity>('far');
 
   /* ── نافذة "لديه بصمة بالفعل" ── */
-  const [alreadyFacePopups, setAlreadyFacePopups] = useState<AlreadyFacePopup[]>([]);
+  const [alreadyFacePopup, setAlreadyFacePopup] = useState<{name: string; visible: boolean}>({name:'', visible:false});
 
   /* Face Register */
   const [showRegister, setShowRegister] = useState(false);
@@ -280,12 +274,12 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), ms);
   }, []);
 
-  /* ── إظهار نافذة "لديه بصمة بالفعل" ── */
-  const showAlreadyFacePopup = useCallback((studentName: string) => {
-    const id = ++alreadyPopupCounterRef.current;
-    setAlreadyFacePopups(prev => [...prev, { id, studentName }]);
+  /* ── إظهار نافذة "لديه بصمة بالفعل" لمدة ثانيتين ── */
+  const showAlreadyHasFacePopup = useCallback((studentName: string) => {
+    setAlreadyFacePopup({ name: studentName, visible: true });
+    playAlreadyHasFace();
     setTimeout(() => {
-      setAlreadyFacePopups(prev => prev.filter(p => p.id !== id));
+      setAlreadyFacePopup({ name: '', visible: false });
     }, 2000);
   }, []);
 
@@ -675,13 +669,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             const recentlySeen= now-(lastScansRef.current[`bulk_${s.id}`]||0)<BULK_FACE_BLOCK_MS;
 
             if (alrPresent || recentlySeen) {
-              /* ── إظهار نافذة "لديه بصمة بالفعل" فقط عند الاكتشاف الجديد ── */
-              const lastShown = lastScansRef.current[`popup_${s.id}`] || 0;
-              if (now - lastShown > 5000) {
-                lastScansRef.current[`popup_${s.id}`] = now;
-                showAlreadyFacePopup(s.name);
-                playAlreadyFace();
-              }
               detectedFacesRef.current.set(boxKey, {
                 box:{x:box.x,y:box.y,width:box.width,height:box.height},
                 student:s, status:'already', confidence:match.confidence, timestamp:now,
@@ -718,7 +705,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     };
 
     faceTimerRef.current = setTimeout(loop, 600) as any;
-  }, [device, stopFaceLoop, alreadyPresentIds, onMarkAttendance, showToast, showRegister, showAlreadyFacePopup]); // eslint-disable-line
+  }, [device, stopFaceLoop, alreadyPresentIds, onMarkAttendance, showToast, showRegister]); // eslint-disable-line
 
   /* ─── تفعيل / إيقاف ─── */
   useEffect(() => {
@@ -797,15 +784,11 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
      Face Register — يحافظ على الكاميرا الحالية
   ══════════════════════════════════════════════════════ */
   const openRegister = useCallback(async ()=>{
-    // إذا الكاميرا الأمامية مفتوحة نبقى عليها، وإلا نفتح الأمامية
-    if (facing !== 'user') {
-      setFacing('user');
-      await startCamera('user');
-    }
+    // ← يبقى على نفس الكاميرا الحالية (أمامية أو خلفية)
     setRegCode(''); setRegStep('code'); setRegStudent(null); setRegMessage(''); setRegProgress(0);
     setShowRegister(true);
     setTimeout(()=>codeInputRef.current?.focus(), 300);
-  }, [facing, startCamera]);
+  }, []);
 
   const captureFace = useCallback(async (student: Student)=>{
     if (!onUpdateStudent) return;
@@ -845,18 +828,28 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     }
   }, [onUpdateStudent]);
 
+  /* ══════════════════════════════════════════════════════
+     handleCodeSubmit — مع فحص "لديه بصمة بالفعل"
+  ══════════════════════════════════════════════════════ */
   const handleCodeSubmit = useCallback(async (code: string)=>{
     if (code.length!==4) return;
     const student=students.find(s=>s.code===code);
     if (!student) { setRegMessage('❌ لا يوجد طالب'); playError(); setRegCode(''); setTimeout(()=>codeInputRef.current?.focus(),100); return; }
     setRegStudent(student);
 
-    /* ── هل الطالب لديه بصمة بالفعل ── */
+    /* ══ فحص: هل الطالب لديه بصمة بالفعل؟ ══ */
     if (student.faceDescriptor && student.faceDescriptor.length > 0) {
-      setRegMessage(`♻️ تحديث بصمة: ${student.name}`);
+      // ← أظهر النافذة المنبثقة لمدة ثانيتين ولا يكمل التسجيل
+      showAlreadyHasFacePopup(student.name);
+      setRegCode('');
+      setRegStudent(null);
+      setRegMessage('');
+      setTimeout(()=>codeInputRef.current?.focus(), 100);
+      return; // ← لا يسجل بصمة جديدة
     }
+
     await captureFace(student);
-  }, [students, captureFace]);
+  }, [students, captureFace, showAlreadyHasFacePopup]);
 
   /* ══════════════════════════════════════════════════════
      Render
@@ -1041,7 +1034,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               </div>
             )}
 
-            {/* ── زر إضافة بصمة داخل الكاميرا — فقط في وضع الجماعي ── */}
+            {/* ── زر إضافة بصمة — فقط في وضع الجماعي ── */}
             {isBulk && cameraReady && onUpdateStudent && (
               <button onClick={openRegister}
                 className="absolute top-2 left-12 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg z-10 shadow-lg active:scale-95">
@@ -1060,24 +1053,21 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                     className={`px-4 py-2.5 rounded-xl text-sm font-bold active:scale-95 min-w-[52px] ${
                       Math.abs(zoom-v)<0.15
                         ? 'bg-emerald-600 text-white shadow-md'
-                        : 'bg-white/10 text-gray-300'}`}>
+                        : 'bg-white/10 text-gray-300 hover:bg-white/15'}`}>
                     {v}x
                   </button>
                 ))}
                 {hasTorch && (
                   <button onClick={toggleTorch}
                     className={`px-4 py-2.5 rounded-xl text-sm font-bold active:scale-95 ${
-                      torchOn ? 'bg-yellow-500 text-black' : 'bg-white/10 text-gray-300'}`}>
+                      torchOn ? 'bg-yellow-500 text-black' : 'bg-white/10 text-gray-300 hover:bg-white/15'}`}>
                     {torchOn ? '💡 إطفاء' : '🔦 فلاش'}
                   </button>
                 )}
-                {/* زر إضافة بصمة في QR محذوف — انتقل للجماعي */}
               </div>
               {canZoom && (
-                <div className="bg-white/5 rounded-lg p-2">
-                  <p className="text-[10px] text-emerald-300 font-bold mb-1.5">
-                    🔍 {zoom.toFixed(1)}x
-                  </p>
+                <div className="bg-white/5 rounded-lg p-2.5">
+                  <p className="text-[11px] text-emerald-300 font-bold mb-1.5">🔍 {zoom.toFixed(1)}x</p>
                   <input type="range" min={minZoom} max={maxZoom} step={0.1} value={zoom}
                     onChange={e=>applyZoom(parseFloat(e.target.value))}
                     className="w-full h-2 accent-emerald-400 cursor-pointer"/>
@@ -1185,21 +1175,23 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         ))}
       </div>
 
-      {/* ══ نافذة "لديه بصمة بالفعل" ══ */}
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 z-[10002] flex flex-col items-center gap-2 pointer-events-none"
-        style={{ paddingTop: `calc(env(safe-area-inset-top) + ${toasts.length > 0 ? '80px' : '16px'})` }}>
-        {alreadyFacePopups.map(p=>(
-          <div key={p.id}
-            className="animate-already-popup bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-2xl px-5 py-3 shadow-2xl flex items-center gap-3 border border-amber-300/30">
-            <span className="text-2xl">👤</span>
-            <div className="text-center">
-              <p className="font-bold text-sm">{p.studentName}</p>
-              <p className="text-xs opacity-90 font-medium">لديه بصمة بالفعل</p>
+      {/* ══ نافذة "الطالب لديه بصمة بالفعل" ══ */}
+      {alreadyFacePopup.visible && (
+        <div className="fixed top-0 left-0 right-0 z-[10002] flex justify-center pointer-events-none"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}>
+          <div className="animate-already-popup bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white rounded-2xl px-6 py-4 shadow-2xl border border-amber-300/40 max-w-[90%]">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-2xl">👤</span>
+              </div>
+              <div className="text-right min-w-0">
+                <p className="font-bold text-base truncate">{alreadyFacePopup.name}</p>
+                <p className="text-sm opacity-95 font-medium mt-0.5">لديه بصمة بالفعل ✅</p>
+              </div>
             </div>
-            <span className="text-xl">✅</span>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
 
       {/* ══ QR Link Modal ══ */}
       {pendingQrId && (
@@ -1245,7 +1237,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               <>
                 <div className="text-center mb-4">
                   <div className="text-4xl mb-2">📸</div>
-                  <h3 className="text-lg font-bold">إضافة / تحديث بصمة</h3>
+                  <h3 className="text-lg font-bold">إضافة بصمة وجه</h3>
                   <p className="text-xs text-gray-500 mt-1">أدخل كود الطالب (4 أرقام)</p>
                 </div>
                 <input ref={codeInputRef} type="text" value={regCode}
@@ -1254,7 +1246,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                   className="w-full text-center text-3xl font-bold tracking-[1em] py-3 border-2 border-purple-300 rounded-xl outline-none focus:border-purple-500"
                   maxLength={4} inputMode="numeric" autoFocus/>
                 {regMessage && (
-                  <div className={`mt-3 p-2 rounded text-center text-xs font-medium ${regMessage.includes('♻️')?'bg-blue-50 text-blue-800 border border-blue-200':'bg-red-50 text-red-700 border border-red-200'}`}>
+                  <div className="mt-3 p-2 rounded text-center text-xs font-medium bg-red-50 text-red-700 border border-red-200">
                     {regMessage}
                   </div>
                 )}
@@ -1309,43 +1301,23 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       <style>{`
         /* ── Toast: من فوق إلى أسفل بسلاسة ── */
         @keyframes toastSlideDown {
-          from {
-            opacity: 0;
-            transform: translateY(-100%) scale(0.92);
-          }
-          60% {
-            opacity: 1;
-            transform: translateY(6px) scale(1.02);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
+          0%   { opacity: 0; transform: translateY(-100%) scale(0.92); }
+          60%  { opacity: 1; transform: translateY(6px) scale(1.02); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
         }
         .animate-toast-slide-down {
           animation: toastSlideDown 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
         }
 
-        /* ── نافذة "لديه بصمة بالفعل" — من فوق إلى أسفل ── */
+        /* ── نافذة "لديه بصمة بالفعل" — من فوق بسلاسة ── */
         @keyframes alreadyPopup {
-          0% {
-            opacity: 0;
-            transform: translateY(-100%) scale(0.88);
-          }
-          55% {
-            opacity: 1;
-            transform: translateY(8px) scale(1.04);
-          }
-          75% {
-            transform: translateY(-2px) scale(1.01);
-          }
-          100% {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
+          0%   { opacity: 0; transform: translateY(-120%) scale(0.85); }
+          50%  { opacity: 1; transform: translateY(10px) scale(1.05); }
+          70%  { transform: translateY(-3px) scale(1.01); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
         }
         .animate-already-popup {
-          animation: alreadyPopup 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+          animation: alreadyPopup 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
         }
 
         @keyframes scanLine {
