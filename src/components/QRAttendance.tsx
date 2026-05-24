@@ -58,7 +58,7 @@ const QR_REGION_ID        = 'qr-reader-v3';
 const DUPLICATE_BLOCK_MS  = 30_000;
 const BULK_FACE_BLOCK_MS  = 120_000;
 const BOX_FADE_MS         = 4000;
-const CONFIDENCE_THRESHOLD = 0.44;
+const CONFIDENCE_THRESHOLD = 0.50;
 
 /* ══════════════════════════════════════════════════════════
    Device capability detection
