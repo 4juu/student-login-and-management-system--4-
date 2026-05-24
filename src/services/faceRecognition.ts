@@ -59,7 +59,6 @@ const getDeviceInputSize = (): 160 | 224 | 320 | 416 | 512 | 608 => {
   return 320;
 };
 
-/* ─── إعدادات ديناميكية حسب الجهاز ─── */
 const getDetectorOptions = () => {
   const inputSize = getDeviceInputSize();
   return new faceapi.TinyFaceDetectorOptions({
@@ -68,7 +67,6 @@ const getDetectorOptions = () => {
   });
 };
 
-/* ─── SSD فقط للأجهزة القوية ─── */
 const detectorOptionsSSD = new faceapi.SsdMobilenetv1Options({
   minConfidence: 0.35,
   maxResults: 10,
@@ -83,7 +81,7 @@ const getSharedCanvas = (width: number, height: number): HTMLCanvasElement => {
     sharedCanvas = document.createElement('canvas');
     sharedCtx = sharedCanvas.getContext('2d', { willReadFrequently: true });
   }
-  sharedCanvas.width = width;
+  sharedCanvas.width  = width;
   sharedCanvas.height = height;
   return sharedCanvas;
 };
@@ -92,7 +90,7 @@ const preprocessFrame = (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
   targetWidth = 1280
 ): HTMLCanvasElement => {
-  const vw = 'videoWidth' in input ? input.videoWidth : input.width;
+  const vw = 'videoWidth'  in input ? input.videoWidth  : input.width;
   const vh = 'videoHeight' in input ? input.videoHeight : input.height;
   if (!vw || !vh) return input as HTMLCanvasElement;
 
@@ -112,7 +110,87 @@ const preprocessFrame = (
   return canvas;
 };
 
-/* ─── بصمة واحدة ─── */
+/* ─── معالجة الإطار مع إعدادات مرنة ─── */
+const preprocessFrameVariant = (
+  input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
+  targetWidth: number,
+  contrast: number,
+  brightness: number,
+): HTMLCanvasElement => {
+  const vw = 'videoWidth'  in input ? input.videoWidth  : input.width;
+  const vh = 'videoHeight' in input ? input.videoHeight : input.height;
+  if (!vw || !vh) return input as HTMLCanvasElement;
+
+  const scale = Math.min(1, targetWidth / vw);
+  const w = Math.round(vw * scale);
+  const h = Math.round(vh * scale);
+
+  const canvas = document.createElement('canvas');
+  canvas.width  = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return input as HTMLCanvasElement;
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.filter = `contrast(${contrast}) brightness(${brightness})`;
+  ctx.drawImage(input, 0, 0, w, h);
+  ctx.filter = 'none';
+
+  return canvas;
+};
+
+/* ─── متوسط مصفوفة بصمات ─── */
+export const averageDescriptors = (descriptors: Float32Array[]): Float32Array => {
+  if (descriptors.length === 0) throw new Error('لا توجد بصمات');
+  if (descriptors.length === 1) return descriptors[0];
+
+  const len = descriptors[0].length;
+  const avg = new Float32Array(len);
+
+  for (const desc of descriptors) {
+    for (let i = 0; i < len; i++) avg[i] += desc[i];
+  }
+  for (let i = 0; i < len; i++) avg[i] /= descriptors.length;
+
+  return avg;
+};
+
+/* ─── استخراج بصمة مع تعزيز للحجاب والنظارات ─── */
+export const extractFaceDescriptorRich = async (
+  input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
+): Promise<Float32Array | null> => {
+  if (!modelsLoaded) await loadFaceModels();
+
+  const variants = [
+    preprocessFrameVariant(input, 640, 1.0,  1.0),
+    preprocessFrameVariant(input, 640, 1.25, 1.08),
+    preprocessFrameVariant(input, 640, 1.1,  1.18),
+  ];
+
+  for (const canvas of variants) {
+    let result = await faceapi
+      .detectSingleFace(canvas, getDetectorOptions())
+      .withFaceLandmarks(true)
+      .withFaceDescriptor();
+
+    if (result?.descriptor) return result.descriptor;
+
+    result = await faceapi
+      .detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions({
+        inputSize:      320,
+        scoreThreshold: 0.28,
+      }))
+      .withFaceLandmarks(true)
+      .withFaceDescriptor();
+
+    if (result?.descriptor) return result.descriptor;
+  }
+
+  return null;
+};
+
+/* ─── بصمة واحدة (الأصلية) ─── */
 export const extractFaceDescriptor = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ): Promise<Float32Array | null> => {
@@ -127,7 +205,7 @@ export const extractFaceDescriptor = async (
   if (!result) {
     result = await faceapi
       .detectSingleFace(processed, new faceapi.TinyFaceDetectorOptions({
-        inputSize: 320,
+        inputSize:      320,
         scoreThreshold: 0.32,
       }))
       .withFaceLandmarks(true)
@@ -137,7 +215,7 @@ export const extractFaceDescriptor = async (
   return result?.descriptor || null;
 };
 
-/* ─── كل الوجوه - الطريقة الأساسية (متوازن) ─── */
+/* ─── كل الوجوه ─── */
 export const extractAllFaceDescriptors = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ) => {
@@ -150,47 +228,39 @@ export const extractAllFaceDescriptors = async (
     .withFaceDescriptors();
 };
 
-/* ─── كشف هجين - بالتسلسل مو بالتوازي ─── */
+/* ─── كشف هجين ─── */
 export const extractAllFaceDescriptorsHybrid = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ) => {
   if (!modelsLoaded) await loadFaceModels();
 
-  const cores  = navigator.hardwareConcurrency || 2;
-  const memory = (navigator as any).deviceMemory || 2;
+  const cores     = navigator.hardwareConcurrency || 2;
+  const memory    = (navigator as any).deviceMemory || 2;
   const isHighEnd = cores >= 8 && memory >= 6;
 
   const targetWidth = isHighEnd ? 1280 : 960;
   const processed   = preprocessFrame(input, targetWidth);
+  const options     = getDetectorOptions();
 
-  const options = getDetectorOptions();
-
-  /* الجهاز القوي: موديلين بالتسلسل (مو بالتوازي) */
   if (isHighEnd) {
-    // موديل 1: TinyFaceDetector
     let tiny: any[] = [];
     try {
       tiny = await faceapi
         .detectAllFaces(processed, options)
         .withFaceLandmarks(true)
         .withFaceDescriptors();
-    } catch {
-      tiny = [];
-    }
+    } catch { tiny = []; }
 
-    const merged = [...tiny];
+    const merged        = [...tiny];
     const IOU_THRESHOLD = 0.4;
 
-    // موديل 2: SSD — بالتسلسل بعد الأول
     let ssd: any[] = [];
     try {
       ssd = await faceapi
         .detectAllFaces(processed, detectorOptionsSSD)
         .withFaceLandmarks(true)
         .withFaceDescriptors();
-    } catch {
-      ssd = [];
-    }
+    } catch { ssd = []; }
 
     ssd.forEach((face: any) => {
       const isDup = merged.some(m =>
@@ -202,7 +272,6 @@ export const extractAllFaceDescriptorsHybrid = async (
     return merged;
   }
 
-  /* الجهاز المتوسط/الضعيف: موديل واحد فقط */
   try {
     return await faceapi
       .detectAllFaces(processed, options)
@@ -224,7 +293,7 @@ function calculateIoU(
   const y2 = Math.min(box1.y + box1.height, box2.y + box2.height);
   if (x2 < x1 || y2 < y1) return 0;
   const inter = (x2 - x1) * (y2 - y1);
-  const union = box1.width * box1.height + box2.width * box2.height - inter;
+  const union  = box1.width * box1.height + box2.width * box2.height - inter;
   return inter / union;
 }
 
