@@ -52,13 +52,14 @@ export const areModelsLoaded = () => modelsLoaded;
 
 /* ─── قدرة الجهاز ─── */
 const getDeviceInputSize = (): 160 | 224 | 320 | 416 | 512 | 608 => {
-  const cores  = navigator.hardwareConcurrency || 2;
+  const cores = navigator.hardwareConcurrency || 2;
   const memory = (navigator as any).deviceMemory || 2;
   if (cores >= 8 && memory >= 6) return 608;
   if (cores >= 4 && memory >= 3) return 416;
   return 320;
 };
 
+/* ─── إعدادات ديناميكية حسب الجهاز ─── */
 const getDetectorOptions = () => {
   const inputSize = getDeviceInputSize();
   return new faceapi.TinyFaceDetectorOptions({
@@ -67,12 +68,27 @@ const getDetectorOptions = () => {
   });
 };
 
+/* ─── SSD للأجهزة القوية ─── */
 const detectorOptionsSSD = new faceapi.SsdMobilenetv1Options({
   minConfidence: 0.35,
   maxResults: 10,
 });
 
-/* ─── Canvas مُشترك ─── */
+/* ─── Canvas Pool (إعادة استخدام بدل إنشاء جديد) ─── */
+const canvasPool: HTMLCanvasElement[] = [];
+
+const getPooledCanvas = (): HTMLCanvasElement => {
+  if (canvasPool.length > 0) return canvasPool.pop()!;
+  const c = document.createElement('canvas');
+  c.getContext('2d', { willReadFrequently: true });
+  return c;
+};
+
+const returnCanvas = (c: HTMLCanvasElement) => {
+  if (canvasPool.length < 5) canvasPool.push(c);
+};
+
+/* ─── Canvas مشترك للمعالجة الأساسية ─── */
 let sharedCanvas: HTMLCanvasElement | null = null;
 let sharedCtx: CanvasRenderingContext2D | null = null;
 
@@ -81,7 +97,7 @@ const getSharedCanvas = (width: number, height: number): HTMLCanvasElement => {
     sharedCanvas = document.createElement('canvas');
     sharedCtx = sharedCanvas.getContext('2d', { willReadFrequently: true });
   }
-  sharedCanvas.width  = width;
+  sharedCanvas.width = width;
   sharedCanvas.height = height;
   return sharedCanvas;
 };
@@ -90,7 +106,7 @@ const preprocessFrame = (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
   targetWidth = 1280
 ): HTMLCanvasElement => {
-  const vw = 'videoWidth'  in input ? input.videoWidth  : input.width;
+  const vw = 'videoWidth' in input ? input.videoWidth : input.width;
   const vh = 'videoHeight' in input ? input.videoHeight : input.height;
   if (!vw || !vh) return input as HTMLCanvasElement;
 
@@ -110,14 +126,14 @@ const preprocessFrame = (
   return canvas;
 };
 
-/* ─── معالجة الإطار مع إعدادات مرنة ─── */
+/* ─── معالجة إطار بإعدادات مرنة (للبصمة) ─── */
 const preprocessFrameVariant = (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
   targetWidth: number,
   contrast: number,
-  brightness: number,
+  brightness: number
 ): HTMLCanvasElement => {
-  const vw = 'videoWidth'  in input ? input.videoWidth  : input.width;
+  const vw = 'videoWidth' in input ? input.videoWidth : input.width;
   const vh = 'videoHeight' in input ? input.videoHeight : input.height;
   if (!vw || !vh) return input as HTMLCanvasElement;
 
@@ -125,11 +141,11 @@ const preprocessFrameVariant = (
   const w = Math.round(vw * scale);
   const h = Math.round(vh * scale);
 
-  const canvas = document.createElement('canvas');
-  canvas.width  = w;
+  const canvas = getPooledCanvas();
+  canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return input as HTMLCanvasElement;
+  if (!ctx) { returnCanvas(canvas); return input as HTMLCanvasElement; }
 
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
@@ -140,7 +156,7 @@ const preprocessFrameVariant = (
   return canvas;
 };
 
-/* ─── متوسط مصفوفة بصمات ─── */
+/* ─── متوسط البصمات (لدقة أعلى) ─── */
 export const averageDescriptors = (descriptors: Float32Array[]): Float32Array => {
   if (descriptors.length === 0) throw new Error('لا توجد بصمات');
   if (descriptors.length === 1) return descriptors[0];
@@ -156,41 +172,46 @@ export const averageDescriptors = (descriptors: Float32Array[]): Float32Array =>
   return avg;
 };
 
-/* ─── استخراج بصمة مع تعزيز للحجاب والنظارات ─── */
+/* ─── استخراج بصمة مع تعزيز (حجاب + نظارات) ─── */
 export const extractFaceDescriptorRich = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ): Promise<Float32Array | null> => {
   if (!modelsLoaded) await loadFaceModels();
 
-  const variants = [
-    preprocessFrameVariant(input, 640, 1.0,  1.0),
-    preprocessFrameVariant(input, 640, 1.25, 1.08),
-    preprocessFrameVariant(input, 640, 1.1,  1.18),
+  const variants: [number, number, number][] = [
+    [640, 1.0, 1.0],
+    [640, 1.25, 1.08],
+    [640, 1.1, 1.18],
   ];
 
-  for (const canvas of variants) {
-    let result = await faceapi
-      .detectSingleFace(canvas, getDetectorOptions())
-      .withFaceLandmarks(true)
-      .withFaceDescriptor();
+  for (const [tw, c, b] of variants) {
+    const canvas = preprocessFrameVariant(input, tw, c, b);
+    try {
+      let result = await faceapi
+        .detectSingleFace(canvas, getDetectorOptions())
+        .withFaceLandmarks(true)
+        .withFaceDescriptor();
 
-    if (result?.descriptor) return result.descriptor;
+      if (result?.descriptor) return result.descriptor;
 
-    result = await faceapi
-      .detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions({
-        inputSize:      320,
-        scoreThreshold: 0.28,
-      }))
-      .withFaceLandmarks(true)
-      .withFaceDescriptor();
+      result = await faceapi
+        .detectSingleFace(
+          canvas,
+          new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.28 })
+        )
+        .withFaceLandmarks(true)
+        .withFaceDescriptor();
 
-    if (result?.descriptor) return result.descriptor;
+      if (result?.descriptor) return result.descriptor;
+    } finally {
+      if (canvas !== input) returnCanvas(canvas);
+    }
   }
 
   return null;
 };
 
-/* ─── بصمة واحدة (الأصلية) ─── */
+/* ─── بصمة واحدة (أصلية) ─── */
 export const extractFaceDescriptor = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ): Promise<Float32Array | null> => {
@@ -204,10 +225,10 @@ export const extractFaceDescriptor = async (
 
   if (!result) {
     result = await faceapi
-      .detectSingleFace(processed, new faceapi.TinyFaceDetectorOptions({
-        inputSize:      320,
-        scoreThreshold: 0.32,
-      }))
+      .detectSingleFace(
+        processed,
+        new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.32 })
+      )
       .withFaceLandmarks(true)
       .withFaceDescriptor();
   }
@@ -215,7 +236,7 @@ export const extractFaceDescriptor = async (
   return result?.descriptor || null;
 };
 
-/* ─── كل الوجوه ─── */
+/* ─── كل الوجوه (أساسي) ─── */
 export const extractAllFaceDescriptors = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ) => {
@@ -228,19 +249,19 @@ export const extractAllFaceDescriptors = async (
     .withFaceDescriptors();
 };
 
-/* ─── كشف هجين ─── */
+/* ─── كشف هجين (بالتسلسل) ─── */
 export const extractAllFaceDescriptorsHybrid = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ) => {
   if (!modelsLoaded) await loadFaceModels();
 
-  const cores     = navigator.hardwareConcurrency || 2;
-  const memory    = (navigator as any).deviceMemory || 2;
+  const cores = navigator.hardwareConcurrency || 2;
+  const memory = (navigator as any).deviceMemory || 2;
   const isHighEnd = cores >= 8 && memory >= 6;
 
   const targetWidth = isHighEnd ? 1280 : 960;
-  const processed   = preprocessFrame(input, targetWidth);
-  const options     = getDetectorOptions();
+  const processed = preprocessFrame(input, targetWidth);
+  const options = getDetectorOptions();
 
   if (isHighEnd) {
     let tiny: any[] = [];
@@ -249,9 +270,11 @@ export const extractAllFaceDescriptorsHybrid = async (
         .detectAllFaces(processed, options)
         .withFaceLandmarks(true)
         .withFaceDescriptors();
-    } catch { tiny = []; }
+    } catch {
+      tiny = [];
+    }
 
-    const merged        = [...tiny];
+    const merged = [...tiny];
     const IOU_THRESHOLD = 0.4;
 
     let ssd: any[] = [];
@@ -260,11 +283,13 @@ export const extractAllFaceDescriptorsHybrid = async (
         .detectAllFaces(processed, detectorOptionsSSD)
         .withFaceLandmarks(true)
         .withFaceDescriptors();
-    } catch { ssd = []; }
+    } catch {
+      ssd = [];
+    }
 
     ssd.forEach((face: any) => {
-      const isDup = merged.some(m =>
-        calculateIoU(m.detection.box, face.detection.box) > IOU_THRESHOLD
+      const isDup = merged.some(
+        (m) => calculateIoU(m.detection.box, face.detection.box) > IOU_THRESHOLD
       );
       if (!isDup) merged.push(face);
     });
@@ -289,11 +314,11 @@ function calculateIoU(
 ): number {
   const x1 = Math.max(box1.x, box2.x);
   const y1 = Math.max(box1.y, box2.y);
-  const x2 = Math.min(box1.x + box1.width,  box2.x + box2.width);
+  const x2 = Math.min(box1.x + box1.width, box2.x + box2.width);
   const y2 = Math.min(box1.y + box1.height, box2.y + box2.height);
   if (x2 < x1 || y2 < y1) return 0;
   const inter = (x2 - x1) * (y2 - y1);
-  const union  = box1.width * box1.height + box2.width * box2.height - inter;
+  const union = box1.width * box1.height + box2.width * box2.height - inter;
   return inter / union;
 }
 
@@ -305,7 +330,7 @@ export const compareFaces = (
   const a = desc1 instanceof Float32Array ? desc1 : new Float32Array(desc1);
   const desc2Array =
     typeof desc2 === 'string' ||
-    (Array.isArray(desc2) && desc2.every(v => Number.isInteger(v)))
+    (Array.isArray(desc2) && desc2.every((v) => Number.isInteger(v)))
       ? ensureDecompressed(desc2)
       : Array.isArray(desc2)
       ? desc2
@@ -314,12 +339,32 @@ export const compareFaces = (
   return faceapi.euclideanDistance(a, b);
 };
 
-/* ─── أفضل تطابق ─── */
+/* ─── أفضل تطابق مع Cache ─── */
 export interface FaceMatchResult<T> {
   item: T;
   distance: number;
   confidence: number;
 }
+
+// cache للبصمات المحولة
+const descriptorCache = new WeakMap<object, Float32Array>();
+
+const getOrConvertDescriptor = (item: { faceDescriptor?: number[] | string }): Float32Array | null => {
+  if (!item.faceDescriptor) return null;
+
+  const cached = descriptorCache.get(item);
+  if (cached) return cached;
+
+  const arr =
+    typeof item.faceDescriptor === 'string' ||
+    (Array.isArray(item.faceDescriptor) && item.faceDescriptor.every((v: any) => Number.isInteger(v)))
+      ? ensureDecompressed(item.faceDescriptor)
+      : item.faceDescriptor;
+
+  const fa = new Float32Array(arr as number[]);
+  descriptorCache.set(item, fa);
+  return fa;
+};
 
 export const findBestMatch = <T extends { faceDescriptor?: number[] | string }>(
   queryDescriptor: Float32Array,
@@ -327,9 +372,12 @@ export const findBestMatch = <T extends { faceDescriptor?: number[] | string }>(
   threshold = 0.5
 ): FaceMatchResult<T> | null => {
   let best: FaceMatchResult<T> | null = null;
+
   for (const item of items) {
-    if (!item.faceDescriptor) continue;
-    const distance = compareFaces(queryDescriptor, item.faceDescriptor as any);
+    const stored = getOrConvertDescriptor(item);
+    if (!stored) continue;
+
+    const distance = faceapi.euclideanDistance(queryDescriptor, stored);
     if (distance < threshold) {
       if (!best || distance < best.distance) {
         best = {
