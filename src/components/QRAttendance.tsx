@@ -12,7 +12,7 @@ import {
   loadFaceModels,
   extractAllFaceDescriptorsHybrid,
   extractAllFaceDescriptors,
-  extractFaceDescriptorMultiCapture,
+  extractFaceDescriptor,
   findBestMatch,
   descriptorToArray,
   areModelsLoaded,
@@ -34,6 +34,8 @@ interface QRAttendanceProps {
 type ToastType    = 'success' | 'error' | 'info' | 'warning';
 type ScanMode     = 'qr' | 'bulk';
 type CameraFacing = 'environment' | 'user';
+
+// ← فقط متوازن وبعيد
 type BulkSensitivity = 'far' | 'extreme';
 
 interface ToastMessage {
@@ -58,7 +60,7 @@ const QR_REGION_ID        = 'qr-reader-v3';
 const DUPLICATE_BLOCK_MS  = 30_000;
 const BULK_FACE_BLOCK_MS  = 120_000;
 const BOX_FADE_MS         = 4000;
-const CONFIDENCE_THRESHOLD = 0.50;
+const CONFIDENCE_THRESHOLD = 0.44;
 
 /* ══════════════════════════════════════════════════════════
    Device capability detection
@@ -76,6 +78,7 @@ interface DeviceTier {
 const detectDeviceTier = (): DeviceTier => {
   const cores  = navigator.hardwareConcurrency || 2;
   const memory = (navigator as any).deviceMemory || 2;
+
   if (cores >= 8 && memory >= 6)
     return { tier:'high', cores, memory, fps:30, maxFaces:8, intervalMs:300, useHybrid:true  };
   if (cores >= 4 && memory >= 3)
@@ -114,64 +117,10 @@ const beep = (freq: number, dur: number, vol = 0.05) => {
     setTimeout(()=>ctx.close(), dur+100);
   } catch {}
 };
-
-const playFaceSuccess = () => {
-  try {
-    const AC = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AC) return;
-    const ctx = new AC();
-    const notes = [
-      { freq: 523, start: 0,    dur: 0.12, vol: 0.18 },
-      { freq: 659, start: 0.10, dur: 0.12, vol: 0.20 },
-      { freq: 784, start: 0.20, dur: 0.22, vol: 0.22 },
-    ];
-    notes.forEach(({ freq, start, dur, vol }) => {
-      const osc = ctx.createOscillator();
-      const g   = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      g.gain.setValueAtTime(0, ctx.currentTime + start);
-      g.gain.linearRampToValueAtTime(vol, ctx.currentTime + start + 0.03);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
-      osc.connect(g); g.connect(ctx.destination);
-      osc.start(ctx.currentTime + start);
-      osc.stop(ctx.currentTime + start + dur + 0.05);
-    });
-    setTimeout(() => ctx.close(), 700);
-    navigator.vibrate?.([40, 20, 40]);
-  } catch {}
-};
-
-/* ── صوت تنبيهي "لديه بصمة بالفعل" ── */
-const playAlreadyHasFace = () => {
-  try {
-    const AC = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AC) return;
-    const ctx = new AC();
-    const notes = [
-      { freq: 600, start: 0,    dur: 0.15, vol: 0.16 },
-      { freq: 400, start: 0.12, dur: 0.20, vol: 0.14 },
-    ];
-    notes.forEach(({ freq, start, dur, vol }) => {
-      const osc = ctx.createOscillator();
-      const g   = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.value = freq;
-      g.gain.setValueAtTime(0, ctx.currentTime + start);
-      g.gain.linearRampToValueAtTime(vol, ctx.currentTime + start + 0.03);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
-      osc.connect(g); g.connect(ctx.destination);
-      osc.start(ctx.currentTime + start);
-      osc.stop(ctx.currentTime + start + dur + 0.05);
-    });
-    setTimeout(() => ctx.close(), 600);
-    navigator.vibrate?.([50, 30, 50]);
-  } catch {}
-};
-
-const playSuccess     = () => { navigator.vibrate?.([50,30,50]); beep(880,100,0.15); };
-const playCapture     = () => { navigator.vibrate?.(30);         beep(1200,50,0.08); };
-const playError       = () => { navigator.vibrate?.([150]);      beep(200,200,0.10); };
+const playSuccess     = () => { navigator.vibrate?.([50,30,50]); beep(880,100); };
+const playBulkSuccess = () => { navigator.vibrate?.(40);         beep(1000,80,0.04); };
+const playCapture     = () => { navigator.vibrate?.(30);         beep(1200,50,0.04); };
+const playError       = () => { navigator.vibrate?.([150]);      beep(200,200,0.05); };
 
 /* ─── Canvas ─── */
 function drawRoundedRect(
@@ -236,10 +185,9 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const [bulkStudents,    setBulkStudents]    = useState<Student[]>([]);
   const [bulkDetected,    setBulkDetected]    = useState(0);
   const [bulkSidebar,     setBulkSidebar]     = useState(false);
-  const [sensitivity,     setSensitivity]     = useState<BulkSensitivity>('far');
 
-  /* ── نافذة "لديه بصمة بالفعل" ── */
-  const [alreadyFacePopup, setAlreadyFacePopup] = useState<{name: string; visible: boolean}>({name:'', visible:false});
+  // ← القيمة الافتراضية 'far' (متوازن) والخيار الثاني 'extreme' (بعيد)
+  const [sensitivity, setSensitivity] = useState<BulkSensitivity>('far');
 
   /* Face Register */
   const [showRegister, setShowRegister] = useState(false);
@@ -248,8 +196,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const [regStudent,   setRegStudent]   = useState<Student|null>(null);
   const [regMessage,   setRegMessage]   = useState('');
   const [regProgress,  setRegProgress]  = useState(0);
-  const [regFacing,    setRegFacing]    = useState<CameraFacing>('environment');
-  const [regCountdown, setRegCountdown] = useState(3);
 
   /* ─── Maps ─── */
   const studentMap = useMemo(() => {
@@ -271,15 +217,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     const id = ++toastCounterRef.current;
     setToasts(prev => [{ ...msg, id }, ...prev].slice(0, 4));
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), ms);
-  }, []);
-
-  /* ── إظهار نافذة "لديه بصمة بالفعل" لمدة 3 ثواني ── */
-  const showAlreadyHasFacePopup = useCallback((studentName: string) => {
-    setAlreadyFacePopup({ name: studentName, visible: true });
-    playAlreadyHasFace();
-    setTimeout(() => {
-      setAlreadyFacePopup({ name: '', visible: false });
-    }, 3000);
   }, []);
 
   /* ══════════════════════════════════════════════════════
@@ -617,7 +554,9 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     stopFaceLoop();
     faceRunningRef.current = true;
 
+    // متوازن = intervalMs الأساسي، بعيد = أسرع بـ 40%
     const intervalMs = sens==='extreme' ? device.intervalMs*0.6 : device.intervalMs;
+
     const FRAME_TIMEOUT = 3000;
 
     const loop = async () => {
@@ -644,6 +583,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       faceBlockedUntil.current = Date.now()+FRAME_TIMEOUT;
 
       try {
+        // متوازن → hybrid بس إذا الجهاز يدعم، بعيد → دائماً hybrid
         const useH = sens==='extreme' ? true : device.useHybrid;
 
         const detections = await Promise.race([
@@ -682,7 +622,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               setScanCount(c=>c+1);
               setBulkStudents(prev=>[s,...prev.filter(x=>x.id!==s.id)]);
               setRecentStudents(prev=>[s,...prev.filter(x=>x.id!==s.id)].slice(0,8));
-              playFaceSuccess();
+              playBulkSuccess();
               showToast({ type:'success', title:`✅ ${s.name}`, text:`${s.group||''} • ${match.confidence}%` }, 2000);
             }
           } else {
@@ -780,143 +720,68 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   }, [pendingQrId, onUpdateStudent, students, alreadyPresentIds, onMarkAttendance, showToast]);
 
   /* ══════════════════════════════════════════════════════
-     Face Register — مع دعم الكاميرا الأمامية/الخلفية
-     والتقاط 3 ثواني ودمج البصمات
+     Face Register
   ══════════════════════════════════════════════════════ */
   const openRegister = useCallback(async ()=>{
-    setRegCode('');
-    setRegStep('code');
-    setRegStudent(null);
-    setRegMessage('');
-    setRegProgress(0);
-    setRegFacing(facing); // ← يستخدم نفس اتجاه الكاميرا الحالي
+    if (facing!=='user') { setFacing('user'); await startCamera('user'); }
+    setRegCode(''); setRegStep('code'); setRegStudent(null); setRegMessage(''); setRegProgress(0);
     setShowRegister(true);
     setTimeout(()=>codeInputRef.current?.focus(), 300);
-  }, [facing]);
+  }, [facing, startCamera]);
 
-  /* ─── تبديل كاميرا التسجيل ─── */
-  const toggleRegFacing = useCallback(async () => {
-    if (startingRef.current) return;
-    const nf: CameraFacing = regFacing === 'environment' ? 'user' : 'environment';
-    setRegFacing(nf);
-    setFacing(nf);
-    await startCamera(nf);
-  }, [regFacing, startCamera]);
-
-  /* ─── التقاط البصمة (3 ثواني + دمج) ─── */
   const captureFace = useCallback(async (student: Student)=>{
     if (!onUpdateStudent) return;
-
-    const getVid = () => document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement|null;
-    const vid = getVid();
-
-    if (!vid || vid.readyState < 2) {
+    const getVid=()=>document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement|null;
+    const vid=getVid();
+    if (!vid || vid.readyState<2) {
       setRegMessage('❌ الكاميرا غير جاهزة...');
-      setTimeout(()=>{
-        const v2 = getVid();
-        if (v2 && v2.readyState >= 2) captureFace(student);
-        else { setRegStep('code'); setRegMessage('❌ الكاميرا لم تستجب'); }
-      }, 1500);
+      setTimeout(()=>{ const v2=getVid(); if(v2&&v2.readyState>=2) captureFace(student); else { setRegStep('code'); setRegMessage('❌ الكاميرا لم تستجب'); } }, 1500);
       return;
     }
-
-    setRegStep('capturing');
-    setRegProgress(0);
-    setRegCountdown(3);
-
-    /* ─── عداد تنازلي 3 ثواني ─── */
-    let countdownVal = 3;
-    const countdownInterval = window.setInterval(() => {
-      countdownVal -= 1;
-      setRegCountdown(countdownVal);
-    }, 1000);
-
+    setRegStep('capturing'); setRegProgress(0);
+    let prog=0;
+    const pi=window.setInterval(()=>{ prog=Math.min(prog+10,88); setRegProgress(prog); },50);
     try {
       playCapture();
-
-      /* ─── التقاط متعدد لمدة 3 ثواني مع دمج ─── */
-      const descriptor = await extractFaceDescriptorMultiCapture(
-        vid,
-        (progress) => {
-          if (mountedRef.current) setRegProgress(progress);
-        }
-      );
-
-      clearInterval(countdownInterval);
-
-      if (!descriptor) {
-        setRegProgress(0);
-        setRegStep('code');
-        setRegMessage('❌ لم يُرَ الوجه - ابتعد قليلاً وانظر للكاميرا مباشرة');
-        playError();
-        setTimeout(()=>codeInputRef.current?.focus(), 100);
-        return;
+      let descriptor: Float32Array|null=null;
+      for (let i=0;i<6;i++) {
+        const v=getVid(); if(v&&v.readyState>=2) { descriptor=await extractFaceDescriptor(v); if(descriptor) break; }
+        await new Promise(r=>setTimeout(r,250));
       }
-
+      clearInterval(pi);
+      if (!descriptor) {
+        setRegProgress(0); setRegStep('code');
+        setRegMessage('❌ لم يُرَ الوجه - ابتعد قليلاً وانظر للكاميرا');
+        playError(); setTimeout(()=>codeInputRef.current?.focus(),100); return;
+      }
       setRegProgress(100);
-      onUpdateStudent(student.id, {
-        faceDescriptor: descriptorToArray(descriptor),
-        faceRegisteredAt: new Date().toISOString(),
-      });
-
-      playSuccess();
-      setRegStep('success');
-
+      onUpdateStudent(student.id, { faceDescriptor:descriptorToArray(descriptor), faceRegisteredAt:new Date().toISOString() });
+      playSuccess(); setRegStep('success');
       setTimeout(()=>{
-        if (!mountedRef.current) return;
-        setRegCode('');
-        setRegStudent(null);
-        setRegMessage('');
-        setRegProgress(0);
-        setRegCountdown(3);
-        setRegStep('code');
-        setTimeout(()=>codeInputRef.current?.focus(), 100);
-      }, 1800);
-
+        if(!mountedRef.current) return;
+        setRegCode(''); setRegStudent(null); setRegMessage(''); setRegProgress(0); setRegStep('code');
+        setTimeout(()=>codeInputRef.current?.focus(),100);
+      },1500);
     } catch {
-      clearInterval(countdownInterval);
-      setRegProgress(0);
-      setRegStep('code');
-      setRegMessage('❌ حدث خطأ - حاول مجدداً');
-      playError();
+      clearInterval(pi); setRegProgress(0); setRegStep('code'); setRegMessage('❌ حدث خطأ - حاول مجدداً'); playError();
     }
   }, [onUpdateStudent]);
 
-  /* ══════════════════════════════════════════════════════
-     handleCodeSubmit — مع فحص "لديه بصمة بالفعل"
-  ══════════════════════════════════════════════════════ */
   const handleCodeSubmit = useCallback(async (code: string)=>{
     if (code.length!==4) return;
-    const student = students.find(s=>s.code===code);
-    if (!student) {
-      setRegMessage('❌ لا يوجد طالب بهذا الكود');
-      playError();
-      setRegCode('');
-      setTimeout(()=>codeInputRef.current?.focus(), 100);
-      return;
-    }
+    const student=students.find(s=>s.code===code);
+    if (!student) { setRegMessage('❌ لا يوجد طالب'); playError(); setRegCode(''); setTimeout(()=>codeInputRef.current?.focus(),100); return; }
     setRegStudent(student);
-
-    /* ══ فحص: هل الطالب لديه بصمة بالفعل؟ ══ */
-    if (student.faceDescriptor && student.faceDescriptor.length > 0) {
-      /* ← أغلق نافذة التسجيل وأظهر النافذة المنبثقة 3 ثواني */
-      setShowRegister(false);
-      setRegCode('');
-      setRegStudent(null);
-      setRegMessage('');
-      showAlreadyHasFacePopup(student.name);
-      return;
-    }
-
+    setRegMessage(student.faceDescriptor?.length ? `♻️ تحديث بصمة: ${student.name}` : '');
     await captureFace(student);
-  }, [students, captureFace, showAlreadyHasFacePopup]);
+  }, [students, captureFace]);
 
   /* ══════════════════════════════════════════════════════
      Render
   ══════════════════════════════════════════════════════ */
   const isBulk  = mode==='bulk';
   const isFront = facing==='user';
-  const doMirror = isFront;
+  const doMirror = isFront; // الخلفية لا تُعكس أبداً
 
   const toastBg: Record<ToastType,string> = {
     success:'from-emerald-500 to-green-600', error:'from-red-500 to-rose-600',
@@ -995,23 +860,13 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               </p>
               <p className="text-[10px] text-orange-300">🟢 معروف &nbsp;•&nbsp; 🟡 مسجّل &nbsp;•&nbsp; 🔴 مجهول</p>
             </div>
-            <div className="flex gap-1.5">
-              {/* ── زر إضافة بصمة في الشريط العلوي للجماعي ── */}
-              {onUpdateStudent && (
-                <button
-                  onClick={openRegister}
-                  className="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-[11px] font-bold px-3 py-2 rounded-lg shadow-lg active:scale-95 flex items-center gap-1.5">
-                  <span className="text-base">➕</span>
-                  <span>بصمة</span>
-                </button>
-              )}
-              <button onClick={()=>setBulkSidebar(s=>!s)}
-                className="bg-white/10 hover:bg-white/20 px-2 py-1 rounded text-[10px] font-bold">
-                {bulkSidebar?'◀':'▶'} قائمة
-              </button>
-            </div>
+            <button onClick={()=>setBulkSidebar(s=>!s)}
+              className="bg-white/10 hover:bg-white/20 px-2 py-1 rounded text-[10px] font-bold">
+              {bulkSidebar?'◀':'▶'} قائمة
+            </button>
           </div>
 
+          {/* ← فقط زرّين: متوازن وبعيد */}
           <div className="flex gap-1.5 text-[10px]">
             <button
               onClick={()=>setSensitivity('far')}
@@ -1036,7 +891,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       {isBulk && faceModelsReady && cameraReady && studentsWithFace.length===0 && (
         <div className="mx-3 mt-2 p-3 bg-amber-900/40 border border-amber-500/30 rounded-lg text-center">
           <p className="text-xs text-amber-200 font-bold">⚠️ لا توجد بصمات مسجلة</p>
-          <p className="text-[10px] text-amber-300 mt-1">أضف بصمات من زر "➕ بصمة" أعلاه</p>
+          <p className="text-[10px] text-amber-300 mt-1">أضف بصمات من زر "➕ إضافة بصمة"</p>
         </div>
       )}
 
@@ -1081,22 +936,18 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               </div>
             )}
 
-            {/* ── زر تبديل الكاميرا ── */}
             {cameraReady && (
               <button onClick={toggleCamera}
-                className="absolute top-2 left-2 bg-black/60 hover:bg-black/80 text-white p-2.5 rounded-full z-10 active:scale-95 text-lg">
+                className="absolute top-2 left-2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full z-10 active:scale-95">
                 🔄
               </button>
             )}
-
-            {/* ── مؤشر الكاميرا ── */}
             {cameraReady && (
               <div className="absolute top-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-full z-10">
                 {isFront ? '📱 أمامية' : '📷 خلفية'}{isBulk && ' • 1080p'}
               </div>
             )}
 
-            {/* ── عداد المسجلين (جماعي) ── */}
             {isBulk && cameraReady && (
               <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-orange-600 to-red-600 px-4 py-2 rounded-full shadow-xl z-10">
                 <div className="flex items-center gap-2 text-white">
@@ -1108,41 +959,44 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                 </div>
               </div>
             )}
+
+            {isBulk && cameraReady && onUpdateStudent && (
+              <button onClick={openRegister}
+                className="absolute top-2 left-12 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg z-10 shadow-lg active:scale-95">
+                ➕ بصمة
+              </button>
+            )}
           </div>
 
-          {/* ── أدوات الكاميرا (زوم وفلاش أكبر) ── */}
+          {/* ── أدوات ── */}
           {cameraReady && (
-            <div className="w-full max-w-lg mx-auto space-y-2.5">
-              <div className="flex gap-2 flex-wrap items-center">
-                {/* ── أزرار الزوم — أكبر ── */}
-                {canZoom && [1, 1.5, 2, 2.5, 3].filter(v => v <= maxZoom).map(v => (
-                  <button key={v} onClick={() => applyZoom(v)}
-                    className={`px-5 py-3 rounded-xl text-sm font-bold active:scale-95 min-w-[58px] shadow-md ${
-                      Math.abs(zoom - v) < 0.15
-                        ? 'bg-emerald-600 text-white shadow-emerald-900/40'
-                        : 'bg-white/12 text-gray-200 hover:bg-white/20'}`}>
+            <div className="w-full max-w-lg mx-auto space-y-2">
+              <div className="flex gap-1.5 flex-wrap items-center">
+                {canZoom && [1,1.5,2,2.5,3].filter(v=>v<=maxZoom).map(v=>(
+                  <button key={v} onClick={()=>applyZoom(v)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95 ${Math.abs(zoom-v)<0.15 ? 'bg-emerald-600 text-white' : 'bg-white/10 text-gray-300'}`}>
                     {v}x
                   </button>
                 ))}
-                {/* ── زر الفلاش — أكبر ── */}
                 {hasTorch && (
                   <button onClick={toggleTorch}
-                    className={`px-5 py-3 rounded-xl text-sm font-bold active:scale-95 shadow-md flex items-center gap-2 ${
-                      torchOn
-                        ? 'bg-yellow-500 text-black shadow-yellow-900/40'
-                        : 'bg-white/12 text-gray-200 hover:bg-white/20'}`}>
-                    <span className="text-lg">{torchOn ? '💡' : '🔦'}</span>
-                    <span>{torchOn ? 'إطفاء' : 'فلاش'}</span>
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95 ${torchOn ? 'bg-yellow-500 text-black' : 'bg-white/10 text-gray-300'}`}>
+                    {torchOn ? '💡 إطفاء' : '🔦 فلاش'}
+                  </button>
+                )}
+                {!isBulk && onUpdateStudent && (
+                  <button onClick={openRegister}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95 bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md mr-auto">
+                    ➕ إضافة بصمة
                   </button>
                 )}
               </div>
-              {/* ── شريط الزوم ── */}
               {canZoom && (
-                <div className="bg-white/5 rounded-xl p-3">
-                  <p className="text-[11px] text-emerald-300 font-bold mb-2">🔍 {zoom.toFixed(1)}x</p>
+                <div className="bg-white/5 rounded-lg p-2">
+                  <p className="text-[10px] text-emerald-300 font-bold mb-1">🔍 {zoom.toFixed(1)}x</p>
                   <input type="range" min={minZoom} max={maxZoom} step={0.1} value={zoom}
-                    onChange={e => applyZoom(parseFloat(e.target.value))}
-                    className="w-full h-2.5 accent-emerald-400 cursor-pointer"/>
+                    onChange={e=>applyZoom(parseFloat(e.target.value))}
+                    className="w-full h-1.5 accent-emerald-400 cursor-pointer"/>
                 </div>
               )}
             </div>
@@ -1234,8 +1088,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       <div className="fixed top-0 left-1/2 -translate-x-1/2 z-[10001] flex flex-col gap-2 w-[92%] max-w-md pointer-events-none"
         style={{ paddingTop:'env(safe-area-inset-top)' }}>
         {toasts.map(t=>(
-          <div key={t.id}
-            className={`bg-gradient-to-r ${toastBg[t.type]} rounded-xl px-4 py-3 shadow-2xl animate-toast-slide-down`}>
+          <div key={t.id} className={`bg-gradient-to-r ${toastBg[t.type]} rounded-xl px-4 py-3 shadow-2xl animate-toast-drop`}>
             <div className="flex items-center gap-3">
               <span className="text-2xl flex-shrink-0">{toastIcon[t.type]}</span>
               <div className="min-w-0 flex-1">
@@ -1246,29 +1099,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           </div>
         ))}
       </div>
-
-      {/* ══ نافذة "الطالب لديه بصمة بالفعل" — 3 ثواني ══ */}
-      {alreadyFacePopup.visible && (
-        <div className="fixed inset-0 z-[10003] flex items-center justify-center pointer-events-none px-6">
-          <div className="animate-already-popup-center bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 text-white rounded-3xl px-8 py-7 shadow-2xl border-2 border-amber-300/50 max-w-xs w-full text-center">
-            {/* أيقونة كبيرة */}
-            <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-              <span className="text-4xl">👤</span>
-            </div>
-            {/* اسم الطالب */}
-            <p className="font-bold text-xl mb-2 leading-snug">{alreadyFacePopup.name}</p>
-            {/* الرسالة */}
-            <div className="bg-white/20 rounded-2xl px-4 py-3 mt-2">
-              <p className="text-base font-semibold opacity-95">لديه بصمة بالفعل ✅</p>
-              <p className="text-sm opacity-80 mt-1">لا يمكن إضافة بصمة جديدة</p>
-            </div>
-            {/* شريط التقدم 3 ثواني */}
-            <div className="mt-4 bg-white/20 rounded-full h-1.5 overflow-hidden">
-              <div className="h-full bg-white rounded-full animate-shrink-bar"/>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ══ QR Link Modal ══ */}
       {pendingQrId && (
@@ -1314,46 +1144,21 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               <>
                 <div className="text-center mb-4">
                   <div className="text-4xl mb-2">📸</div>
-                  <h3 className="text-lg font-bold">إضافة بصمة وجه</h3>
+                  <h3 className="text-lg font-bold">إضافة / تحديث بصمة</h3>
                   <p className="text-xs text-gray-500 mt-1">أدخل كود الطالب (4 أرقام)</p>
                 </div>
-
-                {/* ── اختيار الكاميرا ── */}
-                <div className="flex gap-2 mb-4">
-                  <button
-                    onClick={() => {
-                      if (regFacing !== 'environment') toggleRegFacing();
-                    }}
-                    className={`flex-1 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition active:scale-95 ${
-                      regFacing === 'environment'
-                        ? 'bg-purple-600 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                    <span>📷</span> خلفية
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (regFacing !== 'user') toggleRegFacing();
-                    }}
-                    className={`flex-1 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition active:scale-95 ${
-                      regFacing === 'user'
-                        ? 'bg-purple-600 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                    <span>🤳</span> أمامية
-                  </button>
-                </div>
-
                 <input ref={codeInputRef} type="text" value={regCode}
                   onChange={e=>{ const v=e.target.value.replace(/\D/g,'').slice(0,4); setRegCode(v); if(regMessage) setRegMessage(''); if(v.length===4) setTimeout(()=>handleCodeSubmit(v),100); }}
                   placeholder="0000"
                   className="w-full text-center text-3xl font-bold tracking-[1em] py-3 border-2 border-purple-300 rounded-xl outline-none focus:border-purple-500"
                   maxLength={4} inputMode="numeric" autoFocus/>
                 {regMessage && (
-                  <div className="mt-3 p-2 rounded text-center text-xs font-medium bg-red-50 text-red-700 border border-red-200">
+                  <div className={`mt-3 p-2 rounded text-center text-xs font-medium ${regMessage.includes('♻️')?'bg-blue-50 text-blue-800 border border-blue-200':'bg-red-50 text-red-700 border border-red-200'}`}>
                     {regMessage}
                   </div>
                 )}
                 <div className="mt-3 p-2 bg-purple-50 border border-purple-100 rounded text-center">
-                  <p className="text-[10px] text-purple-700">💡 سيلتقط 3 ثواني ويدمج الصور لأفضل دقة</p>
+                  <p className="text-[10px] text-purple-700">💡 الالتقاط فوري بعد إدخال الكود</p>
                 </div>
                 <button onClick={()=>{setShowRegister(false);setRegCode('');setRegMessage('');}}
                   className="w-full mt-3 py-2 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95 text-sm">
@@ -1365,20 +1170,9 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             {regStep==='capturing' && regStudent && (
               <div className="text-center">
                 <h3 className="text-lg font-bold mb-1">{regStudent.name}</h3>
-                <p className="text-xs text-gray-500 mb-1">{regStudent.code} • {regStudent.group||'-'}</p>
-
-                {/* ── عداد تنازلي ── */}
-                <div className="flex items-center justify-center gap-2 mb-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl font-black ${
-                    regCountdown > 1 ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'
-                  }`}>
-                    {regCountdown > 0 ? regCountdown : '✓'}
-                  </div>
-                  <p className="text-xs text-gray-500">ثانية متبقية</p>
-                </div>
-
+                <p className="text-xs text-gray-500 mb-3">{regStudent.code} • {regStudent.group||'-'}</p>
                 <div className="relative inline-block mb-4">
-                  <FaceCameraPreview mirror={regFacing === 'user'}/>
+                  <FaceCameraPreview mirror={isFront}/>
                   <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 200 200">
                     <circle cx="100" cy="100" r="93" fill="none" stroke="rgba(139,92,246,0.15)" strokeWidth="7"/>
                     <circle cx="100" cy="100" r="93" fill="none"
@@ -1387,16 +1181,11 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                       strokeDashoffset={`${2*Math.PI*93*(1-regProgress/100)}`}
                       style={{ transition:'stroke-dashoffset 0.08s linear,stroke 0.3s' }}/>
                   </svg>
-                  {/* ── أيقونة الكاميرا المستخدمة ── */}
-                  <div className="absolute bottom-1 right-1 bg-purple-600 text-white text-[9px] px-1.5 py-0.5 rounded-full">
-                    {regFacing === 'user' ? '🤳' : '📷'}
-                  </div>
                 </div>
-
                 <p className={`font-bold text-sm ${regProgress>=100?'text-green-600':'text-purple-700'}`}>
-                  {regProgress>=100 ? '✅ تم الدمج!' : `📸 جارٍ التقاط الوجه... ${regProgress}%`}
+                  {regProgress>=100 ? '✅ تم الالتقاط!' : '📸 جارٍ التقاط الوجه...'}
                 </p>
-                <p className="text-xs text-gray-400 mt-1">انظر مباشرة للكاميرا • التقاط متعدد ودمج تلقائي</p>
+                <p className="text-xs text-gray-400 mt-1">انظر مباشرة للكاميرا</p>
               </div>
             )}
 
@@ -1407,7 +1196,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                 <p className="text-gray-800 font-bold text-lg">{regStudent.name}</p>
                 <p className="text-xs text-gray-500 mt-1">{regStudent.code} • {regStudent.group||'-'}</p>
                 <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3">
-                  <p className="text-xs text-green-700 font-medium">✨ بصمة مدمجة محفوظة • جاهز للطالب التالي...</p>
+                  <p className="text-xs text-green-700 font-medium">✨ البصمة محفوظة • جاهز للطالب التالي...</p>
                 </div>
               </div>
             )}
@@ -1417,34 +1206,11 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
       {/* ══ CSS ══ */}
       <style>{`
-        @keyframes toastSlideDown {
-          0%   { opacity: 0; transform: translateY(-100%) scale(0.92); }
-          60%  { opacity: 1; transform: translateY(6px) scale(1.02); }
-          100% { opacity: 1; transform: translateY(0) scale(1); }
+        @keyframes toastDrop {
+          from { opacity:0; transform:translateY(-24px) scale(0.95); }
+          to   { opacity:1; transform:translateY(0) scale(1); }
         }
-        .animate-toast-slide-down {
-          animation: toastSlideDown 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
-        }
-
-        /* ── نافذة "لديه بصمة بالفعل" — من المركز ── */
-        @keyframes alreadyPopupCenter {
-          0%   { opacity: 0; transform: scale(0.6); }
-          55%  { opacity: 1; transform: scale(1.07); }
-          75%  { transform: scale(0.97); }
-          100% { opacity: 1; transform: scale(1); }
-        }
-        .animate-already-popup-center {
-          animation: alreadyPopupCenter 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-        }
-
-        /* ── شريط تقدم ينتهي خلال 3 ثواني ── */
-        @keyframes shrinkBar {
-          0%   { width: 100%; }
-          100% { width: 0%; }
-        }
-        .animate-shrink-bar {
-          animation: shrinkBar 3s linear forwards;
-        }
+        .animate-toast-drop { animation: toastDrop 0.35s cubic-bezier(0.34,1.56,0.64,1); }
 
         @keyframes scanLine {
           0%,100% { top:8%;  opacity:0.5; }
@@ -1466,10 +1232,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         ::-webkit-scrollbar { width:3px; }
         ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.15); border-radius:99px; }
 
-        input[type="range"] { -webkit-appearance:none; background:rgba(255,255,255,0.1); border-radius:99px; height:6px; }
+        input[type="range"] { -webkit-appearance:none; background:rgba(255,255,255,0.1); border-radius:99px; height:4px; }
         input[type="range"]::-webkit-slider-thumb {
-          -webkit-appearance:none; width:26px; height:26px; border-radius:50%;
-          background:#10b981; cursor:pointer; box-shadow:0 0 10px rgba(16,185,129,0.6);
+          -webkit-appearance:none; width:18px; height:18px; border-radius:50%;
+          background:#10b981; cursor:pointer; box-shadow:0 0 6px rgba(16,185,129,0.5);
         }
       `}</style>
     </div>
