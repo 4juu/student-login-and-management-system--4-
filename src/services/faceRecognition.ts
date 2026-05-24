@@ -59,7 +59,6 @@ const getDeviceInputSize = (): 160 | 224 | 320 | 416 | 512 | 608 => {
   return 320;
 };
 
-/* ─── إعدادات ديناميكية حسب الجهاز ─── */
 const getDetectorOptions = () => {
   const inputSize = getDeviceInputSize();
   return new faceapi.TinyFaceDetectorOptions({
@@ -68,7 +67,6 @@ const getDetectorOptions = () => {
   });
 };
 
-/* ─── SSD فقط للأجهزة القوية ─── */
 const detectorOptionsSSD = new faceapi.SsdMobilenetv1Options({
   minConfidence: 0.35,
   maxResults: 10,
@@ -142,7 +140,7 @@ const preprocessFrameVariant = (
   return canvas;
 };
 
-/* ─── متوسط مصفوفة بصمات (لدقة أعلى) ─── */
+/* ─── متوسط مصفوفة بصمات ─── */
 export const averageDescriptors = (descriptors: Float32Array[]): Float32Array => {
   if (descriptors.length === 0) throw new Error('لا توجد بصمات');
   if (descriptors.length === 1) return descriptors[0];
@@ -164,15 +162,13 @@ export const extractFaceDescriptorRich = async (
 ): Promise<Float32Array | null> => {
   if (!modelsLoaded) await loadFaceModels();
 
-  // معالجات متعددة لتعويض الحجاب والنظارات
   const variants = [
-    preprocessFrameVariant(input, 640, 1.0,  1.0),   // طبيعي
-    preprocessFrameVariant(input, 640, 1.25, 1.08),  // تعزيز التباين
-    preprocessFrameVariant(input, 640, 1.1,  1.18),  // تعزيز السطوع
+    preprocessFrameVariant(input, 640, 1.0,  1.0),
+    preprocessFrameVariant(input, 640, 1.25, 1.08),
+    preprocessFrameVariant(input, 640, 1.1,  1.18),
   ];
 
   for (const canvas of variants) {
-    // محاولة 1: Tiny سريع
     let result = await faceapi
       .detectSingleFace(canvas, getDetectorOptions())
       .withFaceLandmarks(true)
@@ -180,7 +176,6 @@ export const extractFaceDescriptorRich = async (
 
     if (result?.descriptor) return result.descriptor;
 
-    // محاولة 2: حساسية أعلى
     result = await faceapi
       .detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions({
         inputSize:      320,
@@ -220,7 +215,7 @@ export const extractFaceDescriptor = async (
   return result?.descriptor || null;
 };
 
-/* ─── كل الوجوه - الطريقة الأساسية (متوازن) ─── */
+/* ─── كل الوجوه ─── */
 export const extractAllFaceDescriptors = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ) => {
@@ -233,7 +228,7 @@ export const extractAllFaceDescriptors = async (
     .withFaceDescriptors();
 };
 
-/* ─── كشف هجين - بالتسلسل ─── */
+/* ─── كشف هجين ─── */
 export const extractAllFaceDescriptorsHybrid = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ) => {
@@ -256,7 +251,7 @@ export const extractAllFaceDescriptorsHybrid = async (
         .withFaceDescriptors();
     } catch { tiny = []; }
 
-    const merged      = [...tiny];
+    const merged        = [...tiny];
     const IOU_THRESHOLD = 0.4;
 
     let ssd: any[] = [];
