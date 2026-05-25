@@ -7,7 +7,7 @@ import { getAnalytics } from "firebase/analytics";
 const firebaseConfig = {
   apiKey: "AIzaSyDP_kzHoZnMvi0mE4uDF5-zgRTM1QLZHdE",
   authDomain: "student-system-ai-d3487.firebaseapp.com",
-  databaseURL: "https://student-system-ai-d3487-default-rtdb.firebaseio.com",
+  databaseURL: "https://student-system-ai-d3487-default-rtdb.firebaseio.com/",
   projectId: "student-system-ai-d3487",
   storageBucket: "student-system-ai-d3487.firebasestorage.app",
   messagingSenderId: "38392100329",
