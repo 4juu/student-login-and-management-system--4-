@@ -10,69 +10,94 @@ import { ref, set, get, update, remove } from "firebase/database";
 import { auth, database } from "./config";
 import { User, TeacherPermissions } from "../types/user";
 
-// Admin email
+// ⚠️ غيّر هذا الايميل لايميل الأدمن الجديد
 const ADMIN_EMAIL = "mujtabahaitham@gmail.com";
 
-// Sign in with support for admin-changed passwords
+// ============================================================
+// 🔐 تسجيل الدخول
+// ============================================================
 export const signIn = async (email: string, password: string): Promise<User> => {
   try {
-    console.log('🔐 Attempting to sign in...');
+    console.log('🔐 محاولة تسجيل الدخول...', email);
     
-    const usersRef = ref(database, 'users');
-    const usersSnapshot = await get(usersRef);
-    
+    // 🆕 سجّل دخول مباشرة أولاً (قبل أي قراءة من DB)
+    let userCredential;
     let actualPassword = password;
     let needsPasswordUpdate = false;
-    let userId = '';
+    let storedPasswordForUpdate = '';
     
-    if (usersSnapshot.exists()) {
-      const allUsers = usersSnapshot.val();
-      const userEntry = Object.entries(allUsers).find(([_, user]: [string, any]) => 
-        user.email.toLowerCase() === email.toLowerCase()
-      );
+    try {
+      userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log('✅ تسجيل دخول مباشر نجح');
+    } catch (firstError: any) {
+      // إذا فشل، شوف هل الأدمن غيّر كلمة المرور
+      console.log('⚠️ فشل تسجيل دخول مباشر، جاري التحقق من كلمة مرور بديلة...');
       
-      if (userEntry) {
-        const [uid]: [string, any] = userEntry;
-        userId = uid;
+      try {
+        const usersRef = ref(database, 'users');
+        const usersSnapshot = await get(usersRef);
         
-        const teacherAccountRef = ref(database, `teacherAccounts/${uid}`);
-        const teacherSnapshot = await get(teacherAccountRef);
-        
-        if (teacherSnapshot.exists()) {
-          const teacherData = teacherSnapshot.val();
+        if (usersSnapshot.exists()) {
+          const allUsers = usersSnapshot.val();
+          const userEntry = Object.entries(allUsers).find(([_, user]: [string, any]) => 
+            user.email?.toLowerCase() === email.toLowerCase()
+          );
           
-          if (teacherData.newPassword && password === teacherData.newPassword) {
-            if (teacherData.storedPassword) {
-              actualPassword = teacherData.storedPassword;
-              needsPasswordUpdate = true;
-              console.log('🔑 Using admin-set temporary password');
+          if (userEntry) {
+            const [uid] = userEntry as [string, any];
+            const teacherAccountRef = ref(database, `teacherAccounts/${uid}`);
+            const teacherSnapshot = await get(teacherAccountRef);
+            
+            if (teacherSnapshot.exists()) {
+              const teacherData = teacherSnapshot.val();
+              
+              if (teacherData.newPassword && password === teacherData.newPassword && teacherData.storedPassword) {
+                actualPassword = teacherData.storedPassword;
+                storedPasswordForUpdate = password;
+                needsPasswordUpdate = true;
+                console.log('🔑 استخدام كلمة المرور القديمة لتحديثها');
+                
+                userCredential = await signInWithEmailAndPassword(auth, email, actualPassword);
+                console.log('✅ تسجيل الدخول نجح بكلمة المرور القديمة');
+              } else {
+                throw firstError;
+              }
+            } else {
+              throw firstError;
             }
+          } else {
+            throw firstError;
           }
+        } else {
+          throw firstError;
         }
+      } catch {
+        throw firstError;
       }
     }
     
-    const userCredential = await signInWithEmailAndPassword(auth, email, actualPassword);
+    if (!userCredential) {
+      throw new Error('فشل تسجيل الدخول');
+    }
+    
     const firebaseUser = userCredential.user;
     
-    console.log('✅ Firebase authentication successful');
-    
-    if (needsPasswordUpdate && userId) {
+    // 🔄 تحديث كلمة المرور إذا لزم الأمر
+    if (needsPasswordUpdate && firebaseUser) {
       try {
-        await updatePassword(firebaseUser, password);
-        
-        await update(ref(database, `teacherAccounts/${userId}`), {
+        await updatePassword(firebaseUser, storedPasswordForUpdate);
+        await update(ref(database, `teacherAccounts/${firebaseUser.uid}`), {
           newPassword: null,
-          storedPassword: password,
+          storedPassword: storedPasswordForUpdate,
           passwordLastUpdated: new Date().toISOString()
         });
-        
-        console.log('🔄 Password updated to new admin-set password');
+        console.log('🔄 تم تحديث كلمة المرور');
       } catch (error) {
-        console.error("⚠️ Error updating password:", error);
+        console.error("⚠️ خطأ في تحديث كلمة المرور:", error);
       }
     }
     
+    // 📥 جلب أو إنشاء بروفايل المستخدم
     const userRef = ref(database, `users/${firebaseUser.uid}`);
     const snapshot = await get(userRef);
     
@@ -80,68 +105,59 @@ export const signIn = async (email: string, password: string): Promise<User> => 
     
     if (snapshot.exists()) {
       user = snapshot.val();
-      console.log('✅ Loaded user profile from Firebase:', {
-        displayName: user.displayName,
-        email: user.email,
-        role: user.role,
-        active: user.active,
-        hasPhoto: !!user.photoURL,
-        hasBio: !!user.bio,
-        hasPermissions: !!user.permissions
-      });
+      console.log('✅ تم تحميل بروفايل المستخدم');
       
-      // 🆕 تحقق من حالة التفعيل للتدريسيين
       if (user.role === 'teacher' && user.active === false) {
-        console.warn('⚠️ Teacher account is deactivated (after academic year reset)');
-        // ما نمنع الدخول، بس نبلغ المستخدم
-        // الصلاحيات الفارغة راح تمنعه من رؤية أي شي
+        console.warn('⚠️ حساب التدريسي معطّل');
       }
     } else {
-      let role: 'admin' | 'teacher' = 'teacher';
+      // 🆕 المستخدم موجود بـ Auth بس مو بـ DB → ننشئه
+      console.log('🆕 إنشاء بروفايل جديد للمستخدم');
       
-      if (email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-        role = 'admin';
-      }
+      const role: 'admin' | 'teacher' = 
+        email.toLowerCase() === ADMIN_EMAIL.toLowerCase() ? 'admin' : 'teacher';
       
       user = {
         uid: firebaseUser.uid,
         email: firebaseUser.email || email,
         displayName: firebaseUser.displayName || email.split('@')[0],
         role,
-        active: true, // 🆕 الأدمن دائماً مفعّل
+        active: true,
         createdAt: new Date().toISOString(),
         lastLogin: new Date().toISOString()
       };
       
-      console.log('✅ Created new user profile');
+      console.log(`✅ إنشاء حساب ${role === 'admin' ? 'أدمن' : 'تدريسي'}`);
     }
     
     user.lastLogin = new Date().toISOString();
-    
     await set(userRef, user);
     
-    console.log('✅ Sign in successful! User data saved to Firebase');
-    
+    console.log('✅ تسجيل الدخول مكتمل!');
     return user;
+    
   } catch (error: any) {
-    console.error("❌ Sign in error:", error);
-    throw new Error(getErrorMessage(error.code));
+    console.error("❌ خطأ تسجيل الدخول:", error.code, error.message);
+    throw new Error(getErrorMessage(error.code) || error.message || 'حدث خطأ');
   }
 };
 
-// Sign out
+// ============================================================
+// 👋 تسجيل الخروج
+// ============================================================
 export const signOut = async (): Promise<void> => {
   try {
-    console.log('👋 Signing out...');
     await firebaseSignOut(auth);
-    console.log('✅ Sign out successful');
+    console.log('✅ تم تسجيل الخروج');
   } catch (error) {
-    console.error("❌ Sign out error:", error);
+    console.error("❌ خطأ تسجيل الخروج:", error);
     throw error;
   }
 };
 
-// Create teacher account using SECONDARY app
+// ============================================================
+// 👨‍🏫 إنشاء حساب تدريسي
+// ============================================================
 export const createTeacherAccount = async (
   email: string,
   password: string,
@@ -149,15 +165,11 @@ export const createTeacherAccount = async (
   adminUid: string
 ): Promise<void> => {
   try {
-    console.log('👨‍🏫 Creating teacher account using secondary app...');
-    
     const { secondaryAuth } = await import('./config');
     const { signOut: secondarySignOut } = await import('firebase/auth');
     
     const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
     const user = userCredential.user;
-    
-    console.log('✅ Firebase Auth account created (in secondary app)');
     
     await updateProfile(user, { displayName });
     
@@ -167,7 +179,7 @@ export const createTeacherAccount = async (
       displayName,
       role: 'teacher',
       adminId: adminUid,
-      active: true, // 🆕 مفعّل افتراضياً
+      active: true,
       lastActivatedAt: new Date().toISOString(),
       permissions: {
         allowedStages: {},
@@ -179,7 +191,6 @@ export const createTeacherAccount = async (
     };
     
     await set(ref(database, `users/${user.uid}`), teacherData);
-    console.log('✅ Teacher user data saved');
     
     await set(ref(database, `teacherAccounts/${user.uid}`), {
       email,
@@ -190,49 +201,42 @@ export const createTeacherAccount = async (
       passwordLastReset: new Date().toISOString()
     });
     
-    console.log('✅ Teacher account info saved');
-    
     await secondarySignOut(secondaryAuth);
-    console.log('✅ Signed out from secondary app, admin session intact');
+    console.log('✅ تم إنشاء حساب التدريسي');
     
   } catch (error: any) {
-    console.error("❌ Create teacher error:", error);
+    console.error("❌ خطأ إنشاء التدريسي:", error);
     throw new Error(getErrorMessage(error.code) || error.message);
   }
 };
 
-// Update teacher permissions (admin only)
+// ============================================================
+// 🔐 تحديث صلاحيات التدريسي
+// ============================================================
 export const updateTeacherPermissions = async (
   teacherUid: string,
   permissions: TeacherPermissions
 ): Promise<void> => {
   try {
-    console.log('🔐 Updating teacher permissions for:', teacherUid);
-    console.log('📋 New permissions:', permissions);
-    
     await update(ref(database, `users/${teacherUid}`), {
       permissions,
       lastUpdated: new Date().toISOString()
     });
-    
-    console.log('✅ Teacher permissions updated successfully');
+    console.log('✅ تم تحديث الصلاحيات');
   } catch (error: any) {
-    console.error('❌ Update permissions error:', error);
+    console.error('❌ خطأ تحديث الصلاحيات:', error);
     throw new Error('فشل تحديث الصلاحيات');
   }
 };
 
-/**
- * 🆕 إعادة تفعيل تدريسي بعد التصفير السنوي
- * الأدمن يستخدمها لإعطاء التدريسي صلاحيات السنة الجديدة
- */
+// ============================================================
+// 🔓 إعادة تفعيل تدريسي
+// ============================================================
 export const reactivateTeacher = async (
   teacherUid: string,
   permissions: TeacherPermissions
 ): Promise<void> => {
   try {
-    console.log('🔓 Reactivating teacher:', teacherUid);
-    
     await update(ref(database, `users/${teacherUid}`), {
       active: true,
       lastActivatedAt: new Date().toISOString(),
@@ -240,17 +244,16 @@ export const reactivateTeacher = async (
       permissions,
       lastUpdated: new Date().toISOString()
     });
-    
-    console.log('✅ Teacher reactivated successfully');
+    console.log('✅ تم إعادة تفعيل التدريسي');
   } catch (error: any) {
-    console.error('❌ Reactivate teacher error:', error);
+    console.error('❌ خطأ إعادة التفعيل:', error);
     throw new Error('فشل إعادة تفعيل التدريسي');
   }
 };
 
-/**
- * 🆕 الحصول على كل التدريسيين التابعين للأدمن
- */
+// ============================================================
+// 📋 جلب كل التدريسيين
+// ============================================================
 export const getAllTeachers = async (adminUid: string): Promise<User[]> => {
   try {
     const snap = await get(ref(database, 'users'));
@@ -267,19 +270,19 @@ export const getAllTeachers = async (adminUid: string): Promise<User[]> => {
     
     return teachers;
   } catch (error) {
-    console.error('❌ Get teachers error:', error);
+    console.error('❌ خطأ جلب التدريسيين:', error);
     return [];
   }
 };
 
-// Update teacher password directly (admin only)
+// ============================================================
+// 🔑 تحديث كلمة مرور تدريسي
+// ============================================================
 export const updateTeacherPassword = async (
   uid: string,
   newPassword: string
 ): Promise<void> => {
   try {
-    console.log('🔑 Updating teacher password...');
-    
     await update(ref(database, `teacherAccounts/${uid}`), {
       newPassword: newPassword,
       passwordLastReset: new Date().toISOString(),
@@ -290,101 +293,79 @@ export const updateTeacherPassword = async (
       passwordLastReset: new Date().toISOString()
     });
     
-    console.log('✅ Teacher password updated successfully');
+    console.log('✅ تم تحديث كلمة المرور');
   } catch (error: any) {
-    console.error("❌ Update password error:", error);
+    console.error("❌ خطأ تحديث كلمة المرور:", error);
     throw new Error('حدث خطأ أثناء تحديث كلمة المرور');
   }
 };
 
-// Delete teacher account (admin only)
+// ============================================================
+// 🗑️ حذف حساب تدريسي
+// ============================================================
 export const deleteTeacherAccount = async (uid: string): Promise<void> => {
   try {
-    console.log('🗑️ Deleting teacher account...');
-    
     await remove(ref(database, `users/${uid}`));
-    console.log('✅ User data deleted');
-    
     await remove(ref(database, `teacherAccounts/${uid}`));
-    console.log('✅ Teacher account data deleted');
-    
     await remove(ref(database, `userData/${uid}`));
-    console.log('✅ User data (students, records) deleted');
     
     await set(ref(database, `deletedAccounts/${uid}`), {
       deletedAt: new Date().toISOString()
     });
     
-    console.log('✅ Teacher account deleted successfully');
+    console.log('✅ تم حذف الحساب');
   } catch (error: any) {
-    console.error("❌ Delete teacher error:", error);
+    console.error("❌ خطأ حذف الحساب:", error);
     throw new Error('حدث خطأ أثناء حذف الحساب');
   }
 };
 
-// Update user profile
+// ============================================================
+// 📝 تحديث البروفايل
+// ============================================================
 export const updateUserProfile = async (
   uid: string,
-  updates: {
-    displayName?: string;
-    photoURL?: string;
-    bio?: string;
-  }
+  updates: { displayName?: string; photoURL?: string; bio?: string; }
 ): Promise<void> => {
   try {
-    console.log('📝 Updating user profile...', updates);
-    
-    const userRef = ref(database, `users/${uid}`);
-    
-    await update(userRef, {
+    await update(ref(database, `users/${uid}`), {
       ...updates,
       lastUpdated: new Date().toISOString()
     });
-    
-    console.log('✅ User profile updated in Firebase');
+    console.log('✅ تم تحديث البروفايل');
   } catch (error: any) {
-    console.error("❌ Update profile error:", error);
+    console.error("❌ خطأ تحديث البروفايل:", error);
     throw new Error('حدث خطأ أثناء تحديث الملف الشخصي');
   }
 };
 
-// Get user profile from database
+// ============================================================
+// 📥 جلب البروفايل
+// ============================================================
 export const getUserProfile = async (uid: string): Promise<User | null> => {
   try {
-    console.log('📥 Loading user profile...');
-    
-    const userRef = ref(database, `users/${uid}`);
-    const snapshot = await get(userRef);
-    
-    if (snapshot.exists()) {
-      const userData = snapshot.val();
-      console.log('✅ User profile loaded:', {
-        displayName: userData.displayName,
-        hasPhoto: !!userData.photoURL,
-        hasBio: !!userData.bio
-      });
-      return userData;
-    }
-    
-    console.log('⚠️ No user profile found');
-    return null;
+    const snap = await get(ref(database, `users/${uid}`));
+    return snap.exists() ? snap.val() : null;
   } catch (error: any) {
-    console.error("❌ Get profile error:", error);
+    console.error("❌ خطأ جلب البروفايل:", error);
     return null;
   }
 };
 
-// Get current user
+// ============================================================
+// 👤 المستخدم الحالي
+// ============================================================
 export const getCurrentUser = (): FirebaseUser | null => {
   return auth.currentUser;
 };
 
-// Check if user is admin
 export const isAdmin = (email: string): boolean => {
   return email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
 };
 
-// Error messages in Arabic
+// ============================================================
+// ⚠️ رسائل الأخطاء
+// ============================================================
 const getErrorMessage = (code: string): string => {
   const errorMessages: { [key: string]: string } = {
     'auth/invalid-email': 'البريد الإلكتروني غير صحيح',
@@ -392,40 +373,31 @@ const getErrorMessage = (code: string): string => {
     'auth/user-not-found': 'البريد الإلكتروني أو كلمة المرور غير صحيحة',
     'auth/wrong-password': 'البريد الإلكتروني أو كلمة المرور غير صحيحة',
     'auth/email-already-in-use': 'هذا البريد الإلكتروني مستخدم بالفعل',
-    'auth/weak-password': 'كلمة المرور ضعيفة جداً (6 أحرف على الأقل)',
-    'auth/too-many-requests': 'محاولات كثيرة. حاول مرة أخرى لاحقاً',
+    'auth/weak-password': 'كلمة المرور ضعيفة (6 أحرف على الأقل)',
+    'auth/too-many-requests': 'محاولات كثيرة. حاول لاحقاً',
     'auth/network-request-failed': 'خطأ في الاتصال بالإنترنت',
     'auth/invalid-credential': 'البريد الإلكتروني أو كلمة المرور غير صحيحة',
-    'auth/requires-recent-login': 'يجب تسجيل الدخول مرة أخرى لإجراء هذا التغيير',
-    'auth/operation-not-allowed': 'هذه العملية غير مسموح بها',
+    'auth/requires-recent-login': 'يجب تسجيل الدخول مرة أخرى',
+    'auth/operation-not-allowed': 'هذه العملية غير مسموح بها. فعّل Email/Password من Firebase Console',
+    'auth/configuration-not-found': 'إعدادات Firebase خاطئة. تحقق من config.ts',
+    'PERMISSION_DENIED': 'صلاحيات Firebase خاطئة. تحقق من Rules',
   };
   
-  return errorMessages[code] || 'حدث خطأ. حاول مرة أخرى';
+  return errorMessages[code] || `حدث خطأ: ${code}`;
 };
 
-// Verify user session
+// ============================================================
+// ✅ التحقق من الجلسة
+// ============================================================
 export const verifyUserSession = async (): Promise<User | null> => {
   try {
     const currentUser = auth.currentUser;
-    
-    if (!currentUser) {
-      console.log('⚠️ No user session found');
-      return null;
-    }
-    
-    console.log('🔍 Verifying user session...');
+    if (!currentUser) return null;
     
     const userProfile = await getUserProfile(currentUser.uid);
-    
-    if (userProfile) {
-      console.log('✅ User session verified');
-      return userProfile;
-    }
-    
-    console.log('⚠️ User profile not found in database');
-    return null;
+    return userProfile;
   } catch (error: any) {
-    console.error("❌ Verify session error:", error);
+    console.error("❌ خطأ التحقق من الجلسة:", error);
     return null;
   }
 };
