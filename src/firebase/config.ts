@@ -5,14 +5,14 @@ import { getStorage } from "firebase/storage";
 import { getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCIrOxhpgn9xRF7tAJZqByvl_8sllSbMck",
-  authDomain: "student-system-login-nust-muj.firebaseapp.com",
-  databaseURL: "https://student-system-login-nust-muj-default-rtdb.firebaseio.com",
-  projectId: "student-system-login-nust-muj",
-  storageBucket: "student-system-login-nust-muj.firebasestorage.app",
-  messagingSenderId: "698150905447",
-  appId: "1:698150905447:web:89345791765760437256c2",
-  measurementId: "G-NZNKFS0K7Q"
+  apiKey: "AIzaSyDP_kzHoZnMvi0mE4uDF5-zgRTM1QLZHdE",
+  authDomain: "student-system-ai-d3487.firebaseapp.com",
+  databaseURL: "https://student-system-ai-d3487-default-rtdb.firebaseio.com",
+  projectId: "student-system-ai-d3487",
+  storageBucket: "student-system-ai-d3487.firebasestorage.app",
+  messagingSenderId: "38392100329",
+  appId: "1:38392100329:web:cdcd0e7e993505872c4778",
+  measurementId: "G-CQQCGL9HCS"
 };
 
 // ============================================================
