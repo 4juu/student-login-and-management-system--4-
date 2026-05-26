@@ -5,11 +5,15 @@ export interface Student {
   group?: string;
   universityId?: string;
   qrCodeId?: string;
-  faceDescriptor?: number[]; // 🆕 الآن يدعم المضغوطة (Int8) والعادية (Float32) معاً
+  faceDescriptor?: number[] | any; // 🆕 يدعم Int8 و Float32 و MultiDescriptor
   faceRegisteredAt?: string;
-  faceCompressed?: boolean; // 🆕 علامة للإشارة لأن البصمة مضغوطة
+  faceCompressed?: boolean;
   createdAt: string;
   academicYear?: string;
+  
+  // 🆕 معلومات التسجيل الذاتي
+  selfRegisteredAt?: string;
+  selfRegistrationApproved?: boolean;
 }
 
 export interface AttendanceRecord {

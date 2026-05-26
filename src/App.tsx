@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
+import { ref as dbRef, onValue, off } from 'firebase/database';
 import { Student, AttendanceRecord, AttendanceSession, College, Stage } from './types/student';
 import { User } from './types/user';
 import { StudentManager } from './components/StudentManager';
@@ -15,7 +16,13 @@ import { Settings } from './components/Settings';
 import { CollegeManager } from './components/CollegeManager';
 import { StageSelector } from './components/StageSelector';
 import { SmartChatBot } from './components/SmartChatBot';
-import { auth } from './firebase/config';
+
+// 🆕 نظام التسجيل الذاتي
+import { SelfRegisterPage } from './components/SelfRegister/SelfRegisterPage';
+import { SendRegisterLink } from './components/Admin/SendRegisterLink';
+import { PendingRegistrations } from './components/Admin/PendingRegistrations';
+
+import { auth, database } from './firebase/config';
 import { signIn, signOut } from './firebase/authService';
 import {
   loadColleges,
@@ -23,6 +30,7 @@ import {
   loadStages,
   saveStages,
   loadStageData,
+  loadStudents as loadStudentsForStage,
   saveStudents,
   saveAttendanceRecords,
   saveSessions,
@@ -44,6 +52,13 @@ interface AllStagesData {
 }
 
 function App() {
+  // 🆕 كشف توكن التسجيل الذاتي من URL (أول شي قبل أي شي)
+  const [registerToken, setRegisterToken] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('reg');
+  });
+
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [dataLoaded, setDataLoaded] = useState(false);
@@ -67,7 +82,12 @@ function App() {
 
   const [activeTab, setActiveTab] = useState<Tab>('stage-selector');
 
-  // 🆕 السنة الأكاديمية الحالية (للعرض في الـ Header)
+  // 🆕 نظام التسجيل الذاتي - حالات الأدمن
+  const [showSendLink, setShowSendLink] = useState(false);
+  const [showPendingRegistrations, setShowPendingRegistrations] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+
+  // 🆕 السنة الأكاديمية الحالية
   const currentAcademicYear = getCurrentAcademicYear();
 
   const intentionalDeleteRef = useRef({
@@ -100,12 +120,17 @@ function App() {
   }, []);
 
   useEffect(() => {
+    // 🆕 لا نسجل المستخدم تلقائياً إذا كان في صفحة التسجيل الذاتي
+    if (registerToken) {
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          const { ref: dbRef, get, set } = await import('firebase/database');
-          const { database } = await import('./firebase/config');
-          const userRef = dbRef(database, `users/${firebaseUser.uid}`);
+          const { ref: dbRefImport, get, set } = await import('firebase/database');
+          const userRef = dbRefImport(database, `users/${firebaseUser.uid}`);
           const snapshot = await get(userRef);
 
           let userData: User;
@@ -117,7 +142,7 @@ function App() {
               email: firebaseUser.email || '',
               displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
               role: firebaseUser.email?.toLowerCase() === 'mujtabahaitham@gmail.com' ? 'admin' : 'teacher',
-              active: true, // 🆕
+              active: true,
               createdAt: firebaseUser.metadata.creationTime || new Date().toISOString(),
               lastLogin: new Date().toISOString()
             };
@@ -137,7 +162,37 @@ function App() {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [registerToken]);
+
+  // 🆕 الاستماع لعدد طلبات التسجيل الذاتي المعلقة (للأدمن)
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'admin') {
+      setPendingCount(0);
+      return;
+    }
+
+    const path = `registrationSystem/pending/${currentUser.uid}`;
+    const requestsRef = dbRef(database, path);
+
+    const handleSnapshot = (snapshot: any) => {
+      if (!snapshot.exists()) {
+        setPendingCount(0);
+        return;
+      }
+      const data = snapshot.val();
+      const count = Object.values(data).filter((r: any) => r.status === 'pending').length;
+      setPendingCount(count);
+    };
+
+    const unsubscribe = onValue(requestsRef, handleSnapshot, (error) => {
+      console.warn('⚠️ فشل الاستماع لطلبات التسجيل:', error);
+    });
+
+    return () => {
+      off(requestsRef);
+      unsubscribe();
+    };
+  }, [currentUser]);
 
   const loadInitialData = async (user: User) => {
     setDataLoaded(false);
@@ -155,9 +210,8 @@ function App() {
 
       if (user.role === 'admin') {
         try {
-          const { ref: dbRef, get } = await import('firebase/database');
-          const { database } = await import('./firebase/config');
-          const usersSnap = await get(dbRef(database, 'users'));
+          const { ref: dbRefImport, get } = await import('firebase/database');
+          const usersSnap = await get(dbRefImport(database, 'users'));
           if (usersSnap.exists()) {
             const teachersList = (Object.values(usersSnap.val()) as User[]).filter(
               u => u.role === 'teacher' && u.adminId === user.uid
@@ -180,21 +234,19 @@ function App() {
 
     setUniversityDataLoading(true);
     try {
-      const { ref: dbRef, get } = await import('firebase/database');
-      const { database } = await import('./firebase/config');
+      const { ref: dbRefImport, get } = await import('firebase/database');
       const adminUid = currentUser.uid;
 
       const allUserIds = [adminUid, ...allTeachers.map(t => t.uid)];
       const stagesDataMap: AllStagesData = {};
 
-      // 🆕 المسار الجديد فيه السنة الأكاديمية
       const yearPath = `academicYears/${currentAcademicYear}/userData/${adminUid}`;
 
       await Promise.all(
         stages.map(async (stage) => {
           try {
             const studentsSnap = await get(
-              dbRef(database, `${yearPath}/stageData/${stage.id}/students`)
+              dbRefImport(database, `${yearPath}/stageData/${stage.id}/students`)
             );
             let stageStudents: Student[] = [];
             if (studentsSnap.exists()) {
@@ -209,7 +261,7 @@ function App() {
               allUserIds.map(async (userId) => {
                 try {
                   const recSnap = await get(
-                    dbRef(database, `${yearPath}/stageData/${stage.id}/teacherRecords/${userId}/records`)
+                    dbRefImport(database, `${yearPath}/stageData/${stage.id}/teacherRecords/${userId}/records`)
                   );
                   if (recSnap.exists()) {
                     const data = recSnap.val();
@@ -218,7 +270,7 @@ function App() {
                   }
 
                   const sesSnap = await get(
-                    dbRef(database, `${yearPath}/stageData/${stage.id}/teacherRecords/${userId}/sessions`)
+                    dbRefImport(database, `${yearPath}/stageData/${stage.id}/teacherRecords/${userId}/sessions`)
                   );
                   if (sesSnap.exists()) {
                     const data = sesSnap.val();
@@ -301,7 +353,6 @@ function App() {
     setActiveTab('stage-selector');
   };
 
-  // 🆕 callback بعد التصفير السنوي
   const handleResetComplete = () => {
     resetData();
   };
@@ -454,7 +505,6 @@ function App() {
 
   const handleAddStudent = (student: Student) => setStudents(prev => [...prev, student]);
 
-  // 🆕 إضافة دفعة طلاب (للاستيراد من Excel)
   const handleAddMultipleStudents = (newStudents: Student[]) => {
     setStudents(prev => [...prev, ...newStudents]);
   };
@@ -534,8 +584,28 @@ function App() {
 
   const handleUpdateProfile = (updatedUser: User) => setCurrentUser(updatedUser);
 
+  // 🆕 معالجة خروج الطالب من صفحة التسجيل الذاتي
+  const handleExitSelfRegister = () => {
+    setRegisterToken(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('reg');
+    window.history.replaceState({}, '', url.toString());
+  };
+
   const canEditStudents = currentUser?.role === 'admin';
   const isAdmin = currentUser?.role === 'admin';
+
+  // ════════════════════════════════════════════════════════════
+  // 🆕 صفحة التسجيل الذاتي - تظهر بمعزل تام عن باقي النظام
+  // ════════════════════════════════════════════════════════════
+  if (registerToken) {
+    return (
+      <SelfRegisterPage
+        token={registerToken}
+        onExit={handleExitSelfRegister}
+      />
+    );
+  }
 
   if (loading) {
     return (
@@ -590,28 +660,19 @@ function App() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {/* 🆕 شارة السنة الأكاديمية */}
+            <div className="flex items-center gap-3">
+              <ThemeToggle size="md" />
+
               <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-indigo-100 text-indigo-800 rounded-lg text-sm font-medium">
                 🎓 {currentAcademicYear.replace('_', ' - ')}
               </div>
-              
-              <div className="flex items-center gap-3">
-  {/* 🆕 زر الوضع الليلي/النهاري */}
-  <ThemeToggle size="md" />
-  
-  {/* شارة السنة الأكاديمية */}
-  <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-indigo-100 text-indigo-800 rounded-lg text-sm font-medium">
-    🎓 {currentAcademicYear.replace('_', ' - ')}
-  </div>
-  
-  <button 
-    onClick={handleLogout} 
-    className="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md flex items-center gap-2"
-  >
-    تسجيل الخروج
-  </button>
-</div>
+
+              <button
+                onClick={handleLogout}
+                className="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md flex items-center gap-2"
+              >
+                تسجيل الخروج
+              </button>
             </div>
           </div>
 
@@ -619,7 +680,6 @@ function App() {
             نظام إدارة الحضور
           </h1>
 
-          {/* 🆕 السنة الأكاديمية للموبايل */}
           <div className="md:hidden text-center mb-2">
             <span className="inline-block px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-xs font-medium">
               🎓 السنة الأكاديمية: {currentAcademicYear.replace('_', ' - ')}
@@ -662,7 +722,28 @@ function App() {
                   >
                     👨‍🏫 التدريسيين
                   </button>
-                  {/* 🆕 تبويب إعدادات النظام */}
+
+                  {/* 🆕 زر إرسال روابط التسجيل الذاتي */}
+                  <button
+                    onClick={() => setShowSendLink(true)}
+                    className="px-5 py-2 rounded-lg font-medium bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md hover:from-purple-700 hover:to-pink-700 transition"
+                  >
+                    📨 إرسال روابط تسجيل
+                  </button>
+
+                  {/* 🆕 زر مراجعة طلبات التسجيل */}
+                  <button
+                    onClick={() => setShowPendingRegistrations(true)}
+                    className="relative px-5 py-2 rounded-lg font-medium bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:from-amber-600 hover:to-orange-600 transition"
+                  >
+                    📋 طلبات التسجيل
+                    {pendingCount > 0 && (
+                      <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center animate-pulse shadow-lg">
+                        {pendingCount > 99 ? '99+' : pendingCount}
+                      </span>
+                    )}
+                  </button>
+
                   <button
                     onClick={() => setActiveTab('system-settings')}
                     className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'system-settings' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
@@ -740,7 +821,6 @@ function App() {
               <TeacherManagement currentUser={currentUser} colleges={colleges} stages={stages} />
             )}
 
-            {/* 🆕 إعدادات النظام (مع زر التصفير) */}
             {activeTab === 'system-settings' && isAdmin && (
               <Settings
                 students={students}
@@ -874,6 +954,27 @@ function App() {
         universityDataLoaded={universityDataLoaded}
         universityDataLoading={universityDataLoading}
       />
+
+      {/* 🆕 نافذة إرسال روابط التسجيل الذاتي */}
+      {showSendLink && currentUser && isAdmin && (
+        <SendRegisterLink
+          adminUid={currentUser.uid}
+          colleges={colleges}
+          stages={stages}
+          loadStudents={async (stageId: string) => {
+            return await loadStudentsForStage(currentUser.uid, stageId);
+          }}
+          onClose={() => setShowSendLink(false)}
+        />
+      )}
+
+      {/* 🆕 نافذة مراجعة طلبات التسجيل الذاتي */}
+      {showPendingRegistrations && currentUser && isAdmin && (
+        <PendingRegistrations
+          adminUid={currentUser.uid}
+          onClose={() => setShowPendingRegistrations(false)}
+        />
+      )}
     </div>
   );
 }

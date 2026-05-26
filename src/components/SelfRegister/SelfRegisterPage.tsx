@@ -1,0 +1,471 @@
+// src/components/SelfRegister/SelfRegisterPage.tsx
+import React, { useState, useEffect } from 'react';
+import { ref, get, push, set } from 'firebase/database';
+import { database } from '../../firebase/config';
+import { Student } from '../../types/student';
+import {
+  RegistrationLink,
+  PendingRegistration,
+  IDExtractionResult,
+} from '../../types/registration';
+import {
+  getRegistrationLink,
+  validateLink,
+  markLinkAsUsed,
+} from '../../services/tokenService';
+import {
+  matchArabicNames,
+  classifyMatch,
+  getMatchDescription,
+  MIN_ACCEPTABLE_THRESHOLD,
+} from '../../services/nameMatching';
+import { terminateOCR } from '../../services/ocrService';
+import { IDCardUpload } from './IDCardUpload';
+import { FaceCaptureStep } from './FaceCaptureStep';
+import { RegistrationSuccess } from './RegistrationSuccess';
+import { getActiveAcademicYear } from '../../firebase/dataService';
+
+type Step =
+  | 'loading'
+  | 'invalid-link'
+  | 'enter-code'
+  | 'upload-id'
+  | 'name-mismatch'
+  | 'capture-face'
+  | 'submitting'
+  | 'success'
+  | 'error';
+
+interface SelfRegisterPageProps {
+  token: string;
+  onExit: () => void;
+}
+
+export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExit }) => {
+  const [step, setStep] = useState<Step>('loading');
+  const [link, setLink] = useState<RegistrationLink | null>(null);
+  const [student, setStudent] = useState<Student | null>(null);
+  const [enteredCode, setEnteredCode] = useState('');
+  const [codeError, setCodeError] = useState('');
+  
+  const [idData, setIdData] = useState<IDExtractionResult | null>(null);
+  const [matchPercentage, setMatchPercentage] = useState(0);
+  const [errorMsg, setErrorMsg] = useState('');
+  
+  // ──────────────────────────────────────────
+  // 🔍 تحميل بيانات الرابط عند الفتح
+  // ──────────────────────────────────────────
+  useEffect(() => {
+    let mounted = true;
+    
+    (async () => {
+      try {
+        const linkData = await getRegistrationLink(token);
+        if (!mounted) return;
+        
+        const validation = validateLink(linkData);
+        if (!validation.valid) {
+          setErrorMsg(validation.reason || 'الرابط غير صالح');
+          setStep('invalid-link');
+          return;
+        }
+        
+        setLink(linkData);
+        
+        // إذا الرابط مخصص لطالب معين، نجيب بياناته
+        if (linkData!.studentId) {
+          await loadStudent(linkData!.adminUid, linkData!.stageId, linkData!.studentId);
+          setStep('upload-id'); // ينتقل مباشرة لرفع الهوية
+        } else {
+          // رابط جماعي → الطالب يدخل كوده
+          setStep('enter-code');
+        }
+      } catch (e: any) {
+        console.error(e);
+        setErrorMsg('فشل تحميل بيانات الرابط');
+        setStep('invalid-link');
+      }
+    })();
+    
+    return () => {
+      mounted = false;
+      terminateOCR(); // تحرير ذاكرة OCR عند الخروج
+    };
+  }, [token]);
+  
+  // ──────────────────────────────────────────
+  // 📥 جلب بيانات طالب من Firebase
+  // ──────────────────────────────────────────
+  const loadStudent = async (adminUid: string, stageId: string, studentId: string): Promise<Student | null> => {
+    try {
+      const year = await getActiveAcademicYear();
+      const path = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}/students`;
+      const snap = await get(ref(database, path));
+      
+      if (!snap.exists()) {
+        setErrorMsg('لم نجد بيانات الطلاب');
+        setStep('invalid-link');
+        return null;
+      }
+      
+      const data = snap.val();
+      const studentsArr: Student[] = Array.isArray(data) ? data : Object.values(data);
+      const found = studentsArr.find(s => s.id === studentId);
+      
+      if (!found) {
+        setErrorMsg('لم نجد بياناتك في النظام');
+        setStep('invalid-link');
+        return null;
+      }
+      
+      setStudent(found);
+      return found;
+    } catch (e) {
+      console.error(e);
+      setErrorMsg('فشل جلب بيانات الطالب');
+      setStep('invalid-link');
+      return null;
+    }
+  };
+  
+  // ──────────────────────────────────────────
+  // 🔢 الطالب يدخل كوده (للروابط الجماعية)
+  // ──────────────────────────────────────────
+  const handleCodeSubmit = async () => {
+    if (!link) return;
+    setCodeError('');
+    
+    if (!/^\d{4}$/.test(enteredCode)) {
+      setCodeError('الرمز يجب أن يكون 4 أرقام');
+      return;
+    }
+    
+    try {
+      const year = await getActiveAcademicYear();
+      const path = `academicYears/${year}/userData/${link.adminUid}/stageData/${link.stageId}/students`;
+      const snap = await get(ref(database, path));
+      
+      if (!snap.exists()) {
+        setCodeError('لم نجد بيانات الطلاب');
+        return;
+      }
+      
+      const data = snap.val();
+      const studentsArr: Student[] = Array.isArray(data) ? data : Object.values(data);
+      const found = studentsArr.find(s => s.code === enteredCode);
+      
+      if (!found) {
+        setCodeError('❌ الرمز غير صحيح. تأكد من إدخال رمزك الصحيح.');
+        return;
+      }
+      
+      setStudent(found);
+      setStep('upload-id');
+    } catch (e) {
+      console.error(e);
+      setCodeError('فشل التحقق من الرمز');
+    }
+  };
+  
+  // ──────────────────────────────────────────
+  // 📷 معالجة بيانات الهوية المستخرجة
+  // ──────────────────────────────────────────
+  const handleIDExtracted = (result: IDExtractionResult) => {
+    if (!result.success || !result.name || !result.qrId || !student) {
+      setErrorMsg(result.error || 'فشل قراءة الهوية');
+      setStep('error');
+      return;
+    }
+    
+    setIdData(result);
+    
+    // مطابقة الاسم
+    const percentage = matchArabicNames(result.name, student.name);
+    setMatchPercentage(percentage);
+    
+    const matchLevel = classifyMatch(percentage);
+    
+    if (matchLevel === 'rejected') {
+      setStep('name-mismatch');
+    } else {
+      // التطابق مقبول → ننتقل لتسجيل الوجه
+      setStep('capture-face');
+    }
+  };
+  
+  // ──────────────────────────────────────────
+  // 😊 معالجة بصمة الوجه وإرسال الطلب
+  // ──────────────────────────────────────────
+  const handleFaceCaptured = async (faceDescriptor: any) => {
+    if (!student || !link || !idData) return;
+    
+    setStep('submitting');
+    
+    try {
+      const matchLevel = classifyMatch(matchPercentage);
+      const status: PendingRegistration['status'] =
+        matchLevel === 'auto-approve' ? 'auto-approved' : 'pending';
+      
+      // إنشاء طلب التسجيل
+      const registrationData: Omit<PendingRegistration, 'id'> = {
+        adminUid: link.adminUid,
+        stageId: link.stageId,
+        studentId: student.id,
+        studentCode: student.code,
+        nameFromID: idData.name!,
+        nameInSystem: student.name,
+        matchPercentage,
+        qrCodeUrl: idData.qrUrl!,
+        qrCodeId: idData.qrId!,
+        faceDescriptor,
+        status,
+        createdAt: new Date().toISOString(),
+        hasExistingQr: !!student.qrCodeId,
+        hasExistingFace: !!student.faceDescriptor,
+      };
+      
+      // حفظ طلب التسجيل
+      const pendingRef = push(ref(database, `registrationSystem/pending/${link.adminUid}`));
+      await set(pendingRef, { ...registrationData, id: pendingRef.key });
+      
+      // إذا التطابق عالي → نطبق التغييرات فوراً على الطالب
+      if (status === 'auto-approved') {
+        const year = await getActiveAcademicYear();
+        const studentsPath = `academicYears/${year}/userData/${link.adminUid}/stageData/${link.stageId}/students`;
+        const snap = await get(ref(database, studentsPath));
+        
+        if (snap.exists()) {
+          const data = snap.val();
+          const studentsArr: Student[] = Array.isArray(data) ? data : Object.values(data);
+          const idx = studentsArr.findIndex(s => s.id === student.id);
+          
+          if (idx !== -1) {
+            studentsArr[idx] = {
+              ...studentsArr[idx],
+              qrCodeId: idData.qrId!,
+              faceDescriptor,
+              faceRegisteredAt: new Date().toISOString(),
+              faceCompressed: true,
+            } as Student;
+            
+            await set(ref(database, studentsPath), studentsArr);
+          }
+        }
+      }
+      
+      // تعليم الرابط كمستخدم
+      await markLinkAsUsed(token, student.id);
+      
+      setStep('success');
+    } catch (e: any) {
+      console.error(e);
+      setErrorMsg(e.message || 'فشل إرسال طلب التسجيل');
+      setStep('error');
+    }
+  };
+  
+  // ──────────────────────────────────────────
+  // 🎨 RENDER
+  // ──────────────────────────────────────────
+  
+  if (step === 'loading') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4" dir="rtl">
+        <div className="text-center">
+          <div className="inline-block w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4" />
+          <p className="text-gray-600 font-medium">جاري تحميل البيانات...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (step === 'invalid-link') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4" dir="rtl">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-red-700 mb-2">رابط غير صالح</h2>
+          <p className="text-gray-600 mb-6">{errorMsg}</p>
+          <button
+            onClick={onExit}
+            className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg w-full"
+          >
+            العودة للرئيسية
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
+  if (step === 'enter-code') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4" dir="rtl">
+        <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 max-w-md w-full">
+          <div className="text-center mb-6">
+            <div className="text-5xl mb-3">🔐</div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">التحقق من الهوية</h2>
+            <p className="text-sm text-gray-600">أدخل رمزك المكون من 4 أرقام للبدء</p>
+          </div>
+          
+          <input
+            type="text"
+            value={enteredCode}
+            onChange={(e) => {
+              const v = e.target.value.replace(/\D/g, '').slice(0, 4);
+              setEnteredCode(v);
+              setCodeError('');
+            }}
+            placeholder="0000"
+            maxLength={4}
+            inputMode="numeric"
+            className="w-full text-center text-4xl font-bold tracking-[1em] py-4 border-2 border-purple-300 rounded-xl focus:border-purple-500 outline-none"
+            autoFocus
+          />
+          
+          {codeError && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm text-center">
+              {codeError}
+            </div>
+          )}
+          
+          <button
+            onClick={handleCodeSubmit}
+            disabled={enteredCode.length !== 4}
+            className="w-full mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-40 text-white font-bold py-3 rounded-lg transition active:scale-95"
+          >
+            ✓ متابعة
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
+  if (step === 'upload-id' && student) {
+    return (
+      <IDCardUpload
+        student={student}
+        onExtracted={handleIDExtracted}
+        onCancel={onExit}
+      />
+    );
+  }
+  
+  if (step === 'name-mismatch' && student && idData) {
+    const desc = getMatchDescription(matchPercentage);
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4" dir="rtl">
+        <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 max-w-md w-full">
+          <div className="text-center mb-6">
+            <div className="text-5xl mb-3">{desc.emoji}</div>
+            <h2 className="text-2xl font-bold text-red-700 mb-2">عدم تطابق الاسم</h2>
+            <p className="text-sm text-gray-600">{desc.text}</p>
+          </div>
+          
+          <div className="space-y-3 mb-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-xs text-blue-600 font-medium mb-1">الاسم في الهوية:</p>
+              <p className="font-bold text-blue-900">{idData.name}</p>
+            </div>
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+              <p className="text-xs text-purple-600 font-medium mb-1">الاسم المسجل في النظام:</p>
+              <p className="font-bold text-purple-900">{student.name}</p>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+              <p className="text-sm text-red-700 font-bold">نسبة التطابق: {matchPercentage}%</p>
+              <p className="text-xs text-red-600 mt-1">يجب أن تكون {MIN_ACCEPTABLE_THRESHOLD}% على الأقل</p>
+            </div>
+          </div>
+          
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-xs text-amber-800">
+            💡 تأكد من أن:
+            <ul className="list-disc list-inside mt-1 space-y-0.5">
+              <li>الهوية التي رفعتها هي هويتك أنت</li>
+              <li>الرمز الذي أدخلته هو رمزك الصحيح</li>
+              <li>صورة الهوية واضحة وقابلة للقراءة</li>
+            </ul>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={onExit}
+              className="py-3 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95"
+            >
+              إلغاء
+            </button>
+            <button
+              onClick={() => setStep('upload-id')}
+              className="py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg active:scale-95"
+            >
+              🔄 إعادة المحاولة
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  if (step === 'capture-face' && student) {
+    return (
+      <FaceCaptureStep
+        student={student}
+        matchPercentage={matchPercentage}
+        onCaptured={handleFaceCaptured}
+        onCancel={() => setStep('upload-id')}
+      />
+    );
+  }
+  
+  if (step === 'submitting') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4" dir="rtl">
+        <div className="text-center">
+          <div className="inline-block w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4" />
+          <p className="text-gray-700 font-bold text-lg">جاري إرسال البيانات...</p>
+          <p className="text-sm text-gray-500 mt-2">لا تغلق الصفحة</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (step === 'success' && student) {
+    const matchLevel = classifyMatch(matchPercentage);
+    return (
+      <RegistrationSuccess
+        student={student}
+        matchPercentage={matchPercentage}
+        autoApproved={matchLevel === 'auto-approve'}
+        onExit={onExit}
+      />
+    );
+  }
+  
+  if (step === 'error') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4" dir="rtl">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+          <div className="text-6xl mb-4">❌</div>
+          <h2 className="text-2xl font-bold text-red-700 mb-2">حدث خطأ</h2>
+          <p className="text-gray-600 mb-6">{errorMsg}</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={onExit}
+              className="py-3 bg-gray-200 text-gray-700 font-bold rounded-lg"
+            >
+              خروج
+            </button>
+            <button
+              onClick={() => setStep('upload-id')}
+              className="py-3 bg-purple-600 text-white font-bold rounded-lg"
+            >
+              🔄 إعادة
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  return null;
+};
+
+export default SelfRegisterPage;
