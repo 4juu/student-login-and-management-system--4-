@@ -24,6 +24,7 @@ import { IDCardUpload } from './IDCardUpload';
 import { FaceCaptureStep } from './FaceCaptureStep';
 import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear } from '../../firebase/dataService';
+import type { MultiDescriptor } from '../../services/faceRecognition';
 
 type Step =
   | 'loading'
@@ -42,114 +43,43 @@ interface SelfRegisterPageProps {
 }
 
 // ============================================================
-// 🔄 تحويل البصمة لصيغة قابلة للحفظ في Firebase
-// ============================================================
-const sanitizeFaceDescriptor = (desc: any): any => {
-  if (!desc) {
-    console.warn('⚠️ faceDescriptor فارغ');
-    return null;
-  }
-
-  console.log('🔍 نوع faceDescriptor:', typeof desc);
-  console.log('🔍 محتوى faceDescriptor:', desc);
-
-  // إذا كان Float32Array مباشرة
-  if (desc instanceof Float32Array) {
-    return {
-      descriptor: Array.from(desc),
-      version: 'v1',
-      savedAt: new Date().toISOString(),
-    };
-  }
-
-  // إذا كان Array من الأرقام
-  if (Array.isArray(desc) && typeof desc[0] === 'number') {
-    return {
-      descriptor: desc,
-      version: 'v1',
-      savedAt: new Date().toISOString(),
-    };
-  }
-
-  // إذا object فيه descriptor
-  const result: any = {
-    version: 'v1',
-    savedAt: new Date().toISOString(),
-  };
-
-  // 1️⃣ descriptor الأساسي
-  if (desc.descriptor) {
-    if (desc.descriptor instanceof Float32Array) {
-      result.descriptor = Array.from(desc.descriptor);
-    } else if (Array.isArray(desc.descriptor)) {
-      result.descriptor = desc.descriptor.map((n: any) => Number(n));
-    }
-  }
-
-  // 2️⃣ angleDescs (array of Float32Array)
-  if (desc.angleDescs && Array.isArray(desc.angleDescs)) {
-    result.angleDescs = desc.angleDescs
-      .filter((a: any) => a)
-      .map((a: any) => {
-        if (a instanceof Float32Array) return Array.from(a);
-        if (Array.isArray(a)) return a.map((n: any) => Number(n));
-        return null;
-      })
-      .filter((a: any) => a !== null);
-  }
-
-  // 3️⃣ directions (Set → Array)
-  if (desc.directions) {
-    if (desc.directions instanceof Set) {
-      result.directions = Array.from(desc.directions);
-    } else if (Array.isArray(desc.directions)) {
-      result.directions = desc.directions;
-    }
-  }
-
-  // 4️⃣ quality
-  if (typeof desc.quality === 'number') {
-    result.quality = desc.quality;
-  }
-
-  // 5️⃣ أي حقول أخرى آمنة
-  Object.keys(desc).forEach((key) => {
-    if (
-      !['descriptor', 'angleDescs', 'directions', 'quality'].includes(key) &&
-      desc[key] !== undefined &&
-      desc[key] !== null &&
-      typeof desc[key] !== 'function' &&
-      !(desc[key] instanceof Set) &&
-      !(desc[key] instanceof Map) &&
-      !(desc[key] instanceof Float32Array)
-    ) {
-      result[key] = desc[key];
-    }
-  });
-
-  return result;
-};
-
-// ============================================================
-// 🔍 تنظيف عميق لأي قيمة قبل الحفظ
-// (يحذف undefined ويحول Set و Float32Array)
+// 🧹 تنظيف عميق - يحذف undefined ويحول كل القيم لصيغ آمنة
 // ============================================================
 const deepSanitize = (obj: any): any => {
   if (obj === null || obj === undefined) return null;
-  if (typeof obj !== 'object') return obj;
+  if (typeof obj === 'number' || typeof obj === 'string' || typeof obj === 'boolean') return obj;
+  if (typeof obj === 'function') return null;
   if (obj instanceof Float32Array) return Array.from(obj);
   if (obj instanceof Set) return Array.from(obj);
   if (obj instanceof Map) return Object.fromEntries(obj);
-  if (Array.isArray(obj)) return obj.map(deepSanitize);
-
-  const cleaned: any = {};
-  for (const key in obj) {
-    const val = obj[key];
-    if (val !== undefined && typeof val !== 'function') {
-      cleaned[key] = deepSanitize(val);
-    }
+  if (Array.isArray(obj)) {
+    return obj
+      .map(deepSanitize)
+      .filter(v => v !== undefined && v !== null);
   }
-  return cleaned;
+  if (typeof obj === 'object') {
+    const cleaned: any = {};
+    for (const key in obj) {
+      const val = obj[key];
+      if (val === undefined) continue;
+      const sanitized = deepSanitize(val);
+      if (sanitized !== undefined) {
+        cleaned[key] = sanitized;
+      }
+    }
+    return cleaned;
+  }
+  return obj;
+};
+
+// ============================================================
+// ✅ التحقق من صحة MultiDescriptor
+// ============================================================
+const validateMultiDescriptor = (desc: any): desc is MultiDescriptor => {
+  if (!desc || typeof desc !== 'object') return false;
+  if (!desc.main || !Array.isArray(desc.main)) return false;
+  if (desc.main.length === 0) return false;
+  return true;
 };
 
 export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExit }) => {
@@ -304,11 +234,13 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   };
 
   // ──────────────────────────────────────────
-  // 😊 معالجة بصمة الوجه - الأهم!
+  // 😊 معالجة بصمة الوجه - النسخة النهائية
   // ──────────────────────────────────────────
-  const handleFaceCaptured = async (faceDescriptor: any) => {
+  const handleFaceCaptured = async (faceDescriptor: MultiDescriptor) => {
     if (!student || !link || !idData) {
       console.error('❌ بيانات ناقصة:', { student, link, idData });
+      setErrorMsg('بيانات ناقصة');
+      setStep('error');
       return;
     }
 
@@ -318,29 +250,29 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       console.log('═══════════════════════════════════════');
       console.log('🎯 بدء حفظ التسجيل');
       console.log('═══════════════════════════════════════');
+      console.log('📦 faceDescriptor المستلم:', faceDescriptor);
+      console.log('📊 main length:', faceDescriptor?.main?.length);
+      console.log('📊 angles length:', faceDescriptor?.angles?.length);
+      console.log('📊 quality:', faceDescriptor?.quality);
+      console.log('📊 directions:', faceDescriptor?.directions);
 
-      // 🔑 1) تنظيف البصمة بشكل آمن
-      const cleanFaceDescriptor = sanitizeFaceDescriptor(faceDescriptor);
+      // 1️⃣ التحقق من صحة البصمة
+      if (!validateMultiDescriptor(faceDescriptor)) {
+        throw new Error('صيغة بصمة الوجه غير صحيحة');
+      }
 
-      console.log('💾 البصمة الأصلية:', faceDescriptor);
+      // 2️⃣ تنظيف عميق للبصمة (للأمان)
+      const cleanFaceDescriptor = deepSanitize(faceDescriptor);
       console.log('✅ البصمة بعد التنظيف:', cleanFaceDescriptor);
-      console.log('📊 طول descriptor:', cleanFaceDescriptor?.descriptor?.length);
-
-      if (!cleanFaceDescriptor || !cleanFaceDescriptor.descriptor) {
-        throw new Error('فشل معالجة بصمة الوجه - descriptor فارغ');
-      }
-
-      if (!Array.isArray(cleanFaceDescriptor.descriptor) || cleanFaceDescriptor.descriptor.length === 0) {
-        throw new Error('البصمة بصيغة غير صحيحة');
-      }
 
       const matchLevel = classifyMatch(matchPercentage);
       const status: PendingRegistration['status'] =
         matchLevel === 'auto-approve' ? 'auto-approved' : 'pending';
 
       console.log('📌 status:', status);
+      console.log('📌 matchPercentage:', matchPercentage);
 
-      // 🔑 2) بناء بيانات الطلب
+      // 3️⃣ بناء بيانات الطلب
       const registrationData = {
         adminUid: link.adminUid,
         stageId: link.stageId,
@@ -358,18 +290,17 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
         hasExistingFace: !!student.faceDescriptor,
       };
 
-      // تنظيف نهائي عميق
-      const cleanData = deepSanitize(registrationData);
+      const cleanRegData = deepSanitize(registrationData);
 
-      // 🔑 3) حفظ طلب التسجيل في pending
+      // 4️⃣ حفظ في pending
       console.log('💾 جاري حفظ pending...');
       const pendingRef = push(ref(database, `registrationSystem/pending/${link.adminUid}`));
       const requestId = pendingRef.key!;
 
-      await set(pendingRef, { ...cleanData, id: requestId });
+      await set(pendingRef, { ...cleanRegData, id: requestId });
       console.log('✅ تم حفظ pending:', requestId);
 
-      // 🔑 4) إذا التطابق عالي → نحفظ على الطالب
+      // 5️⃣ إذا التطابق عالي → حفظ على الطالب
       if (status === 'auto-approved') {
         console.log('🚀 auto-approved: جاري التحديث على الطالب...');
 
@@ -386,11 +317,12 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
           console.log('📍 index الطالب:', idx);
 
           if (idx !== -1) {
+            // ✅ تحديث الطالب بالبصمة والـ QR
             const updatedStudent = deepSanitize({
               ...studentsArr[idx],
               qrCodeId: idData.qrId!,
               qrCodeUrl: idData.qrUrl!,
-              faceDescriptor: cleanFaceDescriptor,
+              faceDescriptor: cleanFaceDescriptor, // ← MultiDescriptor جاهز
               faceRegisteredAt: new Date().toISOString(),
               faceCompressed: true,
             });
@@ -398,24 +330,28 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
             studentsArr[idx] = updatedStudent as Student;
 
             console.log('💾 جاري حفظ الطالب المحدث...');
-            console.log('📦 بيانات الحفظ:', updatedStudent);
+            console.log('📦 faceDescriptor المحفوظ:', updatedStudent.faceDescriptor);
+            console.log('📦 qrCodeId المحفوظ:', updatedStudent.qrCodeId);
+
+            // التحقق النهائي قبل الحفظ
+            if (!updatedStudent.faceDescriptor?.main) {
+              throw new Error('faceDescriptor.main مفقود قبل الحفظ!');
+            }
 
             await set(ref(database, studentsPath), studentsArr);
 
             console.log('✅✅✅ تم حفظ البصمة والـ QR على الطالب بنجاح!');
           } else {
-            console.error('❌ لم نجد الطالب في القائمة!');
-            throw new Error('لم نجد بياناتك في النظام');
+            throw new Error('لم نجد بياناتك في قائمة الطلاب');
           }
         } else {
-          console.error('❌ لا توجد بيانات طلاب في Firebase!');
           throw new Error('قاعدة بيانات الطلاب فارغة');
         }
       } else {
         console.log('⏳ pending: في انتظار موافقة الأدمن');
       }
 
-      // 🔑 5) تعليم الرابط كمستخدم
+      // 6️⃣ تعليم الرابط كمستخدم
       await markLinkAsUsed(token, student.id);
       console.log('✅ تم تعليم الرابط كمستخدم');
 
@@ -429,15 +365,16 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       console.error('❌ فشل حفظ التسجيل:');
       console.error('Error:', e);
       console.error('Message:', e.message);
+      console.error('Stack:', e.stack);
       console.error('Code:', e.code);
       console.error('═══════════════════════════════════════');
 
       let userMessage = 'فشل إرسال طلب التسجيل';
 
       if (e.code === 'PERMISSION_DENIED') {
-        userMessage = 'لا توجد صلاحية للحفظ. تواصل مع الإدارة لتحديث الأذونات.';
-      } else if (e.message?.includes('descriptor')) {
-        userMessage = 'فشل معالجة بصمة الوجه. حاول مرة ثانية.';
+        userMessage = 'لا توجد صلاحية للحفظ. تواصل مع الإدارة لتحديث أذونات Firebase.';
+      } else if (e.message?.includes('descriptor') || e.message?.includes('بصمة')) {
+        userMessage = e.message;
       } else if (e.message) {
         userMessage = e.message;
       }
