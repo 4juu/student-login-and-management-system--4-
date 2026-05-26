@@ -11,7 +11,6 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    // ❌ احذف viteSingleFile - يخرّب على Vercel والموبايل
   ],
   resolve: {
     alias: {
@@ -19,8 +18,9 @@ export default defineConfig({
     },
   },
   build: {
-    target: "esnext",
-    // ✅ تقسيم ذكي للملفات لتسريع التحميل
+    // ✅ متوافق مع Safari 14+ وكل المتصفحات الحديثة
+    target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
+    
     rollupOptions: {
       output: {
         manualChunks: {
