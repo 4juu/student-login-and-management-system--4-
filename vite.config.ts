@@ -11,6 +11,7 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    // ❌ لا يوجد viteSingleFile هنا!
   ],
   resolve: {
     alias: {
@@ -18,9 +19,7 @@ export default defineConfig({
     },
   },
   build: {
-    // ✅ متوافق مع Safari 14+ وكل المتصفحات الحديثة
     target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
-    
     rollupOptions: {
       output: {
         manualChunks: {
