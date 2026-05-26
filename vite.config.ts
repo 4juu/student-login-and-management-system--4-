@@ -22,12 +22,18 @@ export default defineConfig({
   },
 
   optimizeDeps: {
-    exclude: ["tesseract.js"],
+    exclude: ["face-api.js", "html5-qrcode"],
   },
 
   build: {
+    target: "esnext",
+    assetsInlineLimit: 100000000,
+    chunkSizeWarningLimit: 100000000,
+    cssCodeSplit: false,
     rollupOptions: {
-      external: [],
+      output: {
+        inlineDynamicImports: true,
+      },
     },
   },
 });
