@@ -7,7 +7,6 @@ import Fuse from 'fuse.js';
 
 /**
  * 📝 قائمة الأسماء المركبة الشائعة
- * هذه الأسماء تتكون من كلمتين لكن تُعامل كاسم واحد
  */
 const COMPOUND_NAMES: string[] = [
   'نور الهدى',
@@ -75,23 +74,13 @@ export const normalizeArabicName = (name: string): string => {
 
   return name
     .trim()
-    // إزالة التشكيل
     .replace(/[\u064B-\u065F\u0670]/g, '')
-    // توحيد الألف (أ، إ، آ، ٱ → ا)
     .replace(/[أإآٱ]/g, 'ا')
-    // توحيد الياء (ى → ي)
     .replace(/ى/g, 'ي')
-    // الهمزة على الواو (ؤ → و) - مهم لـ "مؤيد" → "مويد"
     .replace(/ؤ/g, 'و')
-    // الهمزة على الياء (ئ → ي)
     .replace(/ئ/g, 'ي')
-    // الهمزة المفردة
     .replace(/ء/g, '')
-    // التاء المربوطة → هاء (اختياري)
     .replace(/ة/g, 'ه')
-    // إزالة أل التعريف الشمسية والقمرية للمقارنة
-    // لا نشيلها هنا - نشيلها فقط عند المقارنة
-    // إزالة المسافات الزائدة
     .replace(/\s+/g, ' ')
     .trim();
 };
@@ -101,7 +90,6 @@ export const normalizeArabicName = (name: string): string => {
  */
 const deepNormalize = (name: string): string => {
   return normalizeArabicName(name)
-    // إزالة "ال" التعريف من بداية كل كلمة
     .replace(/\bال/g, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -109,13 +97,6 @@ const deepNormalize = (name: string): string => {
 
 /**
  * 📊 تقسيم الاسم لأجزاء ذكية
- * يتعامل مع الأسماء المركبة مثل "نور الهدى" كجزء واحد
- *
- * مثال:
- * "نور الهدى مؤيد سالم جاسم"
- * → ["نور الهدى", "مؤيد", "سالم", "جاسم"]
- * بدل:
- * → ["نور", "الهدى", "مؤيد", "سالم", "جاسم"]
  */
 export const smartSplitName = (name: string): string[] => {
   if (!name) return [];
@@ -123,8 +104,6 @@ export const smartSplitName = (name: string): string[] => {
   let normalized = normalizeArabicName(name);
   const parts: string[] = [];
 
-  // أولاً: نبحث عن الأسماء المركبة ونستخرجها
-  // نرتب من الأطول للأقصر لتجنب التداخل
   const sortedCompounds = [...COMPOUND_NAMES]
     .map(n => normalizeArabicName(n))
     .sort((a, b) => b.length - a.length);
@@ -132,21 +111,16 @@ export const smartSplitName = (name: string): string[] => {
   for (const compound of sortedCompounds) {
     const index = normalized.indexOf(compound);
     if (index !== -1) {
-      // نضيف ما قبل الاسم المركب
       const before = normalized.substring(0, index).trim();
       if (before) {
         parts.push(...before.split(/\s+/).filter(p => p.length > 0));
       }
 
-      // نضيف الاسم المركب كوحدة واحدة
       parts.push(compound);
-
-      // نكمل مع ما بعده
       normalized = normalized.substring(index + compound.length).trim();
     }
   }
 
-  // نضيف الباقي
   if (normalized.length > 0) {
     parts.push(...normalized.split(/\s+/).filter(p => p.length > 0));
   }
@@ -155,7 +129,7 @@ export const smartSplitName = (name: string): string[] => {
 };
 
 /**
- * 📐 حساب التشابه بين كلمتين (Levenshtein-based)
+ * 📐 حساب التشابه بين كلمتين
  */
 const stringSimilarity = (a: string, b: string): number => {
   if (a === b) return 1;
@@ -207,41 +181,24 @@ const levenshteinDistance = (a: string, b: string): number => {
 
 /**
  * 🔧 إصلاح أخطاء OCR الشائعة بالعربي
- * 
- * OCR يخطئ كثيراً في:
- * - النقاط (ب/ت/ث، ج/ح/خ)
- * - الهمزات
- * - ال التعريف
- * - المسافات
  */
 export const fixOCRErrors = (ocrText: string): string => {
   if (!ocrText) return '';
 
   return ocrText
-    // إصلاح مسافات خاطئة
     .replace(/\s+/g, ' ')
-    // إزالة أحرف غريبة
     .replace(/[^\u0600-\u06FF\u0750-\u077F\s]/g, '')
-    // إصلاح "نور ا لهدى" → "نور الهدى"
     .replace(/ا\s+ل/g, 'ال')
-    // إصلاح "عبدال" → "عبد ال"
     .replace(/عبدال/g, 'عبد ال')
     .trim();
 };
 
 /**
  * 🎯 استخراج الاسم من نص OCR للهوية
- * 
- * يبحث عن النمط: "الاسم :" أو "الاسم:" ثم يأخذ ما بعده
- * 
- * مثال من الهوية:
- * "الاسم :نور الهدى مؤيد سالم جاسم"
- * → "نور الهدى مؤيد سالم جاسم"
  */
 export const extractNameFromOCR = (ocrText: string): string | null => {
   if (!ocrText) return null;
 
-  // أنماط البحث عن الاسم العربي
   const arabicPatterns = [
     /الاسم\s*[:\-]\s*(.+?)(?:\n|$)/,
     /الأسم\s*[:\-]\s*(.+?)(?:\n|$)/,
@@ -249,14 +206,12 @@ export const extractNameFromOCR = (ocrText: string): string | null => {
     /اسم\s*[:\-]\s*(.+?)(?:\n|$)/,
   ];
 
-  // أنماط البحث عن الاسم الإنجليزي
   const englishPatterns = [
     /Name\s*[:\-]\s*(.+?)(?:\n|$)/i,
   ];
 
   const fixedText = fixOCRErrors(ocrText);
 
-  // نجرب العربي أولاً
   for (const pattern of arabicPatterns) {
     const match = fixedText.match(pattern) || ocrText.match(pattern);
     if (match && match[1]) {
@@ -267,7 +222,6 @@ export const extractNameFromOCR = (ocrText: string): string | null => {
     }
   }
 
-  // نجرب الإنجليزي
   for (const pattern of englishPatterns) {
     const match = ocrText.match(pattern);
     if (match && match[1]) {
@@ -282,19 +236,6 @@ export const extractNameFromOCR = (ocrText: string): string | null => {
 // 🔍 المطابقة الرئيسية
 // ============================================================
 
-/**
- * 🔍 مطابقة اسم الهوية مع اسم النظام
- * 
- * أمثلة:
- * ┌─────────────────────────────┬────────────────────────┬────────┐
- * │ اسم الهوية                 │ اسم النظام             │ النسبة │
- * ├─────────────────────────────┼────────────────────────┼────────┤
- * │ نور الهدى مؤيد سالم جاسم   │ نور الهدى مؤيد سالم    │ 96%    │
- * │ نور الهدى مؤيد سالم جاسم   │ نور الهدى مؤيد سالم جاسم│ 100%  │
- * │ نور الهدي مويد سالم        │ نور الهدى مؤيد سالم    │ 95%+   │
- * │ احمد علي حسن               │ نور الهدى مؤيد سالم    │ 0-10%  │
- * └─────────────────────────────┴────────────────────────┴────────┘
- */
 export const matchArabicNames = (
   nameFromID: string,
   nameInSystem: string
@@ -305,10 +246,7 @@ export const matchArabicNames = (
   const norm1 = normalizeArabicName(nameFromID);
   const norm2 = normalizeArabicName(nameInSystem);
 
-  // تطابق كامل بعد التنظيف
   if (norm1 === norm2) return 100;
-
-  // تطابق بعد التنظيف العميق
   if (deepNormalize(norm1) === deepNormalize(norm2)) return 99;
 
   // ===== المرحلة 2: التقسيم الذكي =====
@@ -321,9 +259,7 @@ export const matchArabicNames = (
   const minLen = Math.min(parts1.length, parts2.length);
   const maxLen = Math.max(parts1.length, parts2.length);
 
-  // مصفوفة التشابه بين كل جزء من الاسم الأول وكل جزء من الثاني
   const similarityMatrix: number[][] = [];
-
   for (let i = 0; i < parts1.length; i++) {
     similarityMatrix[i] = [];
     for (let j = 0; j < parts2.length; j++) {
@@ -331,16 +267,12 @@ export const matchArabicNames = (
     }
   }
 
-  // ===== المرحلة 4: المطابقة بالترتيب (الأهم) =====
-  // الأسماء العربية لازم تكون بنفس الترتيب
-  // اسم الأب ما يصير يجي قبل اسم الشخص
-
+  // ===== المرحلة 4: المطابقة بالترتيب =====
   let orderedMatchScore = 0;
   let orderedMatches = 0;
 
-  // نمشي بالترتيب على الاسم الأقصر
   const shorter = parts1.length <= parts2.length ? parts1 : parts2;
-  const longer = parts1.length <= parts2.length ? parts2 : parts1;
+  const longer  = parts1.length <= parts2.length ? parts2 : parts1;
 
   let longerIndex = 0;
   const matchDetails: { part: string; matchedWith: string; score: number }[] = [];
@@ -349,7 +281,6 @@ export const matchArabicNames = (
     let bestScore = 0;
     let bestJ = -1;
 
-    // نبحث في الأجزاء المتبقية من الاسم الأطول
     for (let j = longerIndex; j < longer.length; j++) {
       const sim = stringSimilarity(shorter[i], longer[j]);
       if (sim > bestScore) {
@@ -375,21 +306,29 @@ export const matchArabicNames = (
   let percentage = 0;
 
   if (orderedMatches === 0) {
-    // لا يوجد أي تطابق
     percentage = 0;
   } else if (orderedMatches === minLen && minLen === maxLen) {
-    // كل الأجزاء متطابقة وبنفس العدد
     percentage = Math.round((orderedMatchScore / orderedMatches) * 100);
   } else if (orderedMatches === minLen) {
-    // كل أجزاء الاسم الأقصر موجودة بالأطول
     const avgScore = orderedMatchScore / orderedMatches;
-    const lengthPenalty = (maxLen - minLen) * 2; // خصم بسيط لكل جزء زائد
+    const lengthPenalty = (maxLen - minLen) * 2;
     percentage = Math.round(avgScore * 100 - lengthPenalty);
   } else {
-    // مطابقة جزئية
     const avgScore = orderedMatchScore / orderedMatches;
     const coverageRatio = orderedMatches / maxLen;
     percentage = Math.round(avgScore * coverageRatio * 100);
+  }
+
+  // ===== 🎁 Bonus: الأسماء المركبة =====
+  // إذا كل أجزاء الاسم الأقصر متطابقة، وفيه اسم مركب مشترك
+  if (orderedMatches === minLen && minLen >= 3) {
+    const hasCompoundMatch = parts1.some(p1 =>
+      p1.startsWith('ال') && parts2.some(p2 => p2.includes(p1))
+    );
+    if (hasCompoundMatch) {
+      percentage = Math.min(100, percentage + 5);
+      console.log('🎁 Bonus +5% للاسم المركب المشترك');
+    }
   }
 
   // ===== المرحلة 6: تعزيز بـ Fuse.js =====
@@ -404,7 +343,6 @@ export const matchArabicNames = (
     const fuseResult = fuse.search(norm1);
     if (fuseResult.length > 0 && fuseResult[0].score !== undefined) {
       const fuseScore = Math.round((1 - fuseResult[0].score) * 100);
-      // ناخذ الأعلى مع وزن أكبر لمطابقة الأجزاء
       percentage = Math.round(
         Math.max(percentage, percentage * 0.75 + fuseScore * 0.25)
       );
@@ -420,13 +358,9 @@ export const matchArabicNames = (
 // ⚙️ إعدادات وعتبات
 // ============================================================
 
-/** فوق هذي → موافقة تلقائية */
 export const AUTO_APPROVE_THRESHOLD = 90;
-
-/** تحت هذي → رفض مباشر */
 export const MIN_ACCEPTABLE_THRESHOLD = 60;
 
-/** تصنيف النتيجة */
 export type MatchLevel = 'auto-approve' | 'review-needed' | 'rejected';
 
 export const classifyMatch = (percentage: number): MatchLevel => {
@@ -435,7 +369,6 @@ export const classifyMatch = (percentage: number): MatchLevel => {
   return 'rejected';
 };
 
-/** وصف النتيجة بالعربي */
 export const getMatchDescription = (percentage: number): {
   emoji: string;
   text: string;
@@ -457,16 +390,9 @@ export const getMatchDescription = (percentage: number): {
 };
 
 // ============================================================
-// 🧪 اختبار سريع (يمكن حذفه)
+// 🧪 اختبار سريع
 // ============================================================
 
-/**
- * تشغيل اختبارات للتأكد من صحة المطابقة
- * 
- * يمكنك استدعاء هذه الدالة في console:
- * import { runMatchTests } from './nameMatching';
- * runMatchTests();
- */
 export const runMatchTests = () => {
   const tests = [
     {

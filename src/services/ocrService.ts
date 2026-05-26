@@ -24,9 +24,8 @@ const getWorker = async (): Promise<Tesseract.Worker> => {
       },
     });
 
-    // إعدادات إضافية لتحسين دقة العربي
     await worker.setParameters({
-      tessedit_pageseg_mode: '6' as any, // Uniform block of text
+      tessedit_pageseg_mode: '6' as any,
       preserve_interword_spaces: '1',
     });
 
@@ -49,7 +48,7 @@ export const terminateOCR = async (): Promise<void> => {
 };
 
 /**
- * 🖼️ تحسين الصورة قبل OCR - نسخة محسّنة
+ * 🖼️ تحسين الصورة قبل OCR
  */
 const preprocessImage = (file: File): Promise<Blob> => {
   return new Promise((resolve, reject) => {
@@ -65,7 +64,6 @@ const preprocessImage = (file: File): Promise<Blob> => {
           return;
         }
 
-        // تكبير أقوى للصور الصغيرة
         const minWidth = 2000;
         let scale = 1;
         if (img.width < minWidth) {
@@ -82,13 +80,11 @@ const preprocessImage = (file: File): Promise<Blob> => {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = imageData.data;
 
-        // تحسين متقدم: Grayscale + Contrast + Binarization خفيف
         for (let i = 0; i < data.length; i += 4) {
           const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-          const contrast = 1.5; // تباين أعلى
+          const contrast = 1.5;
           let adjusted = ((gray - 128) * contrast) + 128;
 
-          // Sharpen: تنقية الأبيض والأسود
           if (adjusted > 180) adjusted = 255;
           else if (adjusted < 80) adjusted = 0;
 
@@ -120,31 +116,101 @@ const preprocessImage = (file: File): Promise<Blob> => {
  */
 const fixCommonOCRErrors = (text: string): string => {
   return text
-    // إصلاح "ا ل" → "ال"
     .replace(/ا\s+ل([\u0600-\u06FF])/g, 'ال$1')
-    // إصلاح "نور ا لهدى" → "نور الهدى"
     .replace(/(\S)\s+ل([\u0600-\u06FF])/g, (_, before, after) => {
       return `${before} ال${after}`;
     })
-    // إزالة مسافات متعددة
     .replace(/[ \t]+/g, ' ')
-    // إصلاح الأسطر الفارغة
     .replace(/\n\s*\n/g, '\n')
     .trim();
 };
 
 /**
- * 🎯 استخراج الاسم من نص OCR - الدالة الرئيسية الذكية
+ * 🧹 تنظيف الاسم المستخرج
+ */
+const cleanExtractedName = (text: string): string => {
+  return text
+    .split(/[:|]/)[0]
+    .replace(/\d+/g, '')
+    .replace(/[a-zA-Z]/g, '')
+    .replace(/[^\u0600-\u06FF\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+/**
+ * ✅ التحقق من أن الاسم منطقي
+ */
+const isValidName = (name: string): boolean => {
+  if (!name) return false;
+  // ✅ السماح بكلمات من حرفين (مثل "نور")
+  const words = name.split(/\s+/).filter(w => w.length >= 2);
+  return words.length >= 2 && words.every(w => /^[\u0600-\u06FF]+$/.test(w));
+};
+
+/**
+ * 🔗 دمج الأسماء المركبة
  *
- * الاستراتيجية:
- * 1️⃣ البحث عن "الاسم :" أو "الاسم:" → استخراج ما بعدها
- * 2️⃣ البحث عن "Name:" بالإنجليزي → تحويله للعربي
- * 3️⃣ Fallback: البحث عن أطول تتابع عربي في سطر واحد
+ * أمثلة:
+ * "عبد الله احمد محمد"  → "عبد الله احمد محمد"
+ * "صلاح الدين خالد"     → "صلاح الدين خالد"
+ * "نور الهدى مؤيد سالم" → "نور الهدى مؤيد سالم"
+ */
+const mergeArabicCompoundNames = (name: string): string => {
+  if (!name) return name;
+
+  // الجزء الثاني من الأسماء المركبة المعروفة
+  const compoundSecondParts = new Set([
+    'الله', 'الرحمن', 'الرحيم', 'الكريم', 'الامير', 'الحسين', 'الحسن',
+    'العزيز', 'الواحد', 'الجبار', 'الرزاق', 'الستار', 'السلام', 'القادر',
+    'اللطيف', 'المجيد', 'المحسن', 'الهادي', 'الباقي', 'الخالق', 'الصمد',
+    'العظيم', 'الغفور', 'الغني', 'الفتاح', 'المنعم', 'الوهاب',
+    'الهدى', 'الهدي', 'الدين', 'الاسلام',
+    'العابدين', 'العالي',
+  ]);
+
+  // الجزء الأول من الأسماء المركبة المعروفة
+  const compoundFirstParts = new Set([
+    'عبد', 'ابو', 'ام', 'زين', 'صلاح', 'علاء', 'عماد', 'سيف', 'حسام',
+    'بهاء', 'شمس', 'محي', 'تاج', 'فخر', 'شرف', 'جمال', 'كمال', 'بدر',
+    'ضياء', 'ركن', 'عز', 'معين', 'ناصر', 'قمر', 'نور', 'ضوء', 'سراج',
+  ]);
+
+  const words = name.split(/\s+/).filter(Boolean);
+  const result: string[] = [];
+
+  let i = 0;
+  while (i < words.length) {
+    const current = words[i];
+    const next = words[i + 1];
+
+    // الجزء الأول معروف + التالي يبدأ بـ "ال"
+    if (next && next.startsWith('ال') && compoundFirstParts.has(current)) {
+      result.push(current + ' ' + next);
+      i += 2;
+      continue;
+    }
+
+    // التالي موجود في قائمة الأجزاء الثانية المعروفة
+    if (next && compoundSecondParts.has(next)) {
+      result.push(current + ' ' + next);
+      i += 2;
+      continue;
+    }
+
+    result.push(current);
+    i++;
+  }
+
+  return result.join(' ');
+};
+
+/**
+ * 🎯 استخراج الاسم من نص OCR - نسخة محسّنة
  */
 export const extractArabicName = (rawText: string): string | null => {
   if (!rawText) return null;
 
-  // 🧹 إصلاح الأخطاء الشائعة أولاً
   const fixedText = fixCommonOCRErrors(rawText);
   const lines = fixedText.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean);
 
@@ -175,7 +241,6 @@ export const extractArabicName = (rawText: string): string | null => {
 
   // ============================================================
   // الاستراتيجية 2: السطر اللي بعد سطر يحوي "الاسم"
-  // (أحياناً OCR يفصل الكلمة المفتاحية عن القيمة)
   // ============================================================
   for (let i = 0; i < lines.length; i++) {
     if (/^(الاسم|الأسم|الإسم|اسم)\s*[:\-]?\s*$/.test(lines[i])) {
@@ -191,7 +256,6 @@ export const extractArabicName = (rawText: string): string | null => {
 
   // ============================================================
   // الاستراتيجية 3: البحث في كل سطر عن اسم محتمل
-  // (نأخذ أطول سلسلة كلمات عربية صحيحة من **سطر واحد**)
   // ============================================================
   const ignoreWords = new Set([
     'الاسم', 'اسم', 'الأسم', 'الإسم',
@@ -213,10 +277,10 @@ export const extractArabicName = (rawText: string): string | null => {
     'المرحله', 'النفاذ', 'الانتهاء',
   ]);
 
+  // ✅ السماح بأسماء من 2 أحرف (مثل "نور")
   const isArabicWord = (w: string) => /^[\u0600-\u06FF]+$/.test(w) && w.length >= 2;
   const isLikelyNamePart = (w: string) => isArabicWord(w) && !ignoreWords.has(w);
 
-  // نبحث **داخل كل سطر** عن أطول تتابع
   const candidates: { text: string; lineIndex: number; wordCount: number }[] = [];
 
   for (let i = 0; i < lines.length; i++) {
@@ -253,7 +317,6 @@ export const extractArabicName = (rawText: string): string | null => {
 
   if (candidates.length === 0) return null;
 
-  // نختار الأطول
   candidates.sort((a, b) => {
     if (a.wordCount !== b.wordCount) return b.wordCount - a.wordCount;
     return b.text.length - a.text.length;
@@ -262,35 +325,12 @@ export const extractArabicName = (rawText: string): string | null => {
   const best = candidates[0];
   if (best.wordCount < 2) return null;
 
+  // ✅ دمج الأسماء المركبة (عبد الله، نور الهدى، صلاح الدين...)
+  const processed = mergeArabicCompoundNames(best.text);
+
   console.log('✅ أفضل مرشح:', best.text);
-  return best.text;
-};
-
-/**
- * 🧹 تنظيف الاسم المستخرج
- */
-const cleanExtractedName = (text: string): string => {
-  return text
-    // إزالة أي شيء بعد ":" ثانية (في حالة وجود حقول إضافية)
-    .split(/[:|]/)[0]
-    // إزالة الأرقام
-    .replace(/\d+/g, '')
-    // إزالة الأحرف اللاتينية
-    .replace(/[a-zA-Z]/g, '')
-    // إزالة الرموز
-    .replace(/[^\u0600-\u06FF\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-};
-
-/**
- * ✅ التحقق من أن الاسم منطقي
- */
-const isValidName = (name: string): boolean => {
-  if (!name) return false;
-  const words = name.split(/\s+/).filter(w => w.length >= 2);
-  // على الأقل كلمتين، كل كلمة عربية
-  return words.length >= 2 && words.every(w => /^[\u0600-\u06FF]+$/.test(w));
+  console.log('✅ بعد دمج الأسماء المركبة:', processed);
+  return processed;
 };
 
 /**
@@ -303,15 +343,12 @@ export const extractIDData = async (
   try {
     onProgress?.('🔍 جاري تحليل الصورة...', 5);
 
-    // 1️⃣ QR (متوازي)
     onProgress?.('📷 جاري قراءة رمز QR...', 15);
     const qrPromise = extractQRFromImageFile(imageFile).catch(() => null);
 
-    // 2️⃣ تحسين الصورة
     onProgress?.('✨ جاري تحسين جودة الصورة...', 25);
     const enhanced = await preprocessImage(imageFile);
 
-    // 3️⃣ OCR
     onProgress?.('📖 جاري قراءة النص العربي...', 40);
     const worker = await getWorker();
 
@@ -325,7 +362,6 @@ export const extractIDData = async (
 
     console.log('🎯 الاسم المستخرج:', extractedName);
 
-    // 4️⃣ QR
     onProgress?.('🔳 جاري معالجة رمز QR...', 90);
     const qrText = await qrPromise;
 
