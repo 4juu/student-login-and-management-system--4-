@@ -53,51 +53,8 @@ interface AllStagesData {
 
 function App() {
   // 🆕 كشف توكن التسجيل الذاتي من URL - بطرق متعددة لدعم كل المتصفحات
-  const [registerToken, setRegisterToken] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null;
-
-    try {
-      // 1️⃣ من Query String العادي (?reg=xxx)
-      const params = new URLSearchParams(window.location.search);
-      let token = params.get('reg');
-
-      // 2️⃣ من Hash (#reg=xxx) - لبعض الـ in-app browsers
-      if (!token && window.location.hash) {
-        const hashStr = window.location.hash.replace(/^#\/?/, '');
-        const hashParams = new URLSearchParams(hashStr);
-        token = hashParams.get('reg');
-      }
-
-      // 3️⃣ من URL كامل بـ regex (آخر حل احتياطي)
-      if (!token) {
-        const fullUrl = window.location.href;
-        const match = fullUrl.match(/[?&#]reg=([^&#]+)/);
-        if (match && match[1]) {
-          token = decodeURIComponent(match[1]);
-        }
-      }
-
-      // 4️⃣ من sessionStorage (إذا حُفظ سابقاً)
-      if (!token) {
-        token = sessionStorage.getItem('pendingRegToken');
-      }
-
-      // ✅ حفظ التوكن في sessionStorage لمنع فقدانه عند Refresh
-      if (token) {
-        sessionStorage.setItem('pendingRegToken', token);
-        console.log('🔗 ✅ Register Token detected:', token);
-        console.log('🔗 URL:', window.location.href);
-      } else {
-        console.log('🔗 ❌ No register token in URL');
-        console.log('🔗 URL:', window.location.href);
-      }
-
-      return token;
-    } catch (e) {
-      console.error('❌ خطأ في قراءة التوكن:', e);
-      return null;
-    }
-  });
+const [registerToken, setRegisterToken] = useState<string | null>(null);
+const [tokenChecked, setTokenChecked] = useState(false);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -149,51 +106,87 @@ function App() {
   };
 
   // 🆕 فحص متأخر للتوكن (للموبايل والـ in-app browsers)
-  useEffect(() => {
-    if (registerToken) return; // عندنا توكن، ما نحتاج فحص ثاني
+useEffect(() => {
+  const detectToken = () => {
+    try {
+      let token: string | null = null;
 
-    const recheckToken = () => {
-      try {
-        const params = new URLSearchParams(window.location.search);
-        let token = params.get('reg');
+      const params = new URLSearchParams(
+        window.location.search
+      );
 
-        if (!token && window.location.hash) {
-          const hashStr = window.location.hash.replace(/^#\/?/, '');
-          const hashParams = new URLSearchParams(hashStr);
-          token = hashParams.get('reg');
-        }
+      token = params.get('reg');
 
-        if (!token) {
-          const match = window.location.href.match(/[?&#]reg=([^&#]+)/);
-          if (match && match[1]) {
-            token = decodeURIComponent(match[1]);
-          }
-        }
+      // Safari / in-app browser
+      if (!token && window.location.hash) {
+        const hashStr =
+          window.location.hash.replace(/^#\/?/, '');
 
-        if (!token) {
-          token = sessionStorage.getItem('pendingRegToken');
-        }
+        const hashParams =
+          new URLSearchParams(hashStr);
 
-        if (token) {
-          console.log('🔗 ✅ Token detected on recheck:', token);
-          sessionStorage.setItem('pendingRegToken', token);
-          setRegisterToken(token);
-        }
-      } catch (e) {
-        console.error('❌ خطأ في الفحص المتأخر للتوكن:', e);
+        token = hashParams.get('reg');
       }
-    };
 
-    // فحص فوري + بعد 100ms + بعد 500ms (للموبايل البطيء)
-    recheckToken();
-    const t1 = setTimeout(recheckToken, 100);
-    const t2 = setTimeout(recheckToken, 500);
+      // fallback
+      if (!token) {
+        const match =
+          window.location.href.match(
+            /[?&#]reg=([^&#]+)/
+          );
 
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, [registerToken]);
+        if (match?.[1]) {
+          token = decodeURIComponent(
+            match[1]
+          );
+        }
+      }
+
+      // session backup
+      if (!token) {
+        token =
+          sessionStorage.getItem(
+            'pendingRegToken'
+          );
+      }
+
+      if (token) {
+        sessionStorage.setItem(
+          'pendingRegToken',
+          token
+        );
+
+        console.log(
+          '✅ token:',
+          token
+        );
+
+        setRegisterToken(token);
+      }
+
+      setTokenChecked(true);
+
+    } catch (e) {
+      console.error(e);
+      setTokenChecked(true);
+    }
+  };
+
+  detectToken();
+
+  window.addEventListener(
+    'pageshow',
+    detectToken
+  );
+
+  return () => {
+    window.removeEventListener(
+      'pageshow',
+      detectToken
+    );
+  };
+
+}, []);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -701,8 +694,7 @@ function App() {
     );
   }
 
-  if (loading) {
-    return (
+if (loading || !tokenChecked) {    return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
           <svg className="animate-spin h-12 w-12 text-blue-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24">
