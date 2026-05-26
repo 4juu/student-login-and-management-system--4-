@@ -25,44 +25,67 @@ const TOP_DIMS = 48;
 export const compressFaceDescriptor = (
   descriptor: Float32Array | number[] | string | any
 ): number[] => {
-  // إذا جا string، نرجعه كما هو (محول من جهة ثانية)
-  if (typeof descriptor === 'string') {
-    return ensureDecompressed(descriptor);
+  if (!descriptor) return [];
+
+  // 1️⃣ إذا Float32Array → تحويل لـ Array أولاً
+  if (descriptor instanceof Float32Array) {
+    const arr = Array.from(descriptor);
+    return compressArray(arr);
   }
 
-  // إذا جا MultiDescriptor، نرجع main
-  if (descriptor && typeof descriptor === 'object' && !Array.isArray(descriptor)) {
-    if (descriptor.main && Array.isArray(descriptor.main)) {
-      return descriptor.main;
-    }
-    if (descriptor.descriptor) {
-      return compressFaceDescriptor(descriptor.descriptor);
+  // 2️⃣ إذا Array من الأرقام → ضغط مباشر
+  if (Array.isArray(descriptor)) {
+    if (descriptor.length === 0) return [];
+    // تأكد إنها أرقام
+    if (typeof descriptor[0] === 'number') {
+      return compressArray(descriptor as number[]);
     }
     return [];
   }
 
-  // تحويل Float32Array → Array عادي
-  const arr = descriptor instanceof Float32Array
-    ? Array.from(descriptor)
-    : Array.isArray(descriptor) ? descriptor : [];
-
-  if (arr.length === 0) return [];
-
-  // إذا أقل من 128، نرجعه كما هو
-  if (arr.length < 128) {
-    return arr.map(v => Math.round(v * 10000) / 10000);
+  // 3️⃣ إذا string (base64) → فك ثم ضغط
+  if (typeof descriptor === 'string') {
+    try {
+      const decoded = ensureDecompressed(descriptor);
+      return compressArray(decoded);
+    } catch {
+      return [];
+    }
   }
 
-  // اختيار أهم TOP_DIMS بُعد (أكبر قيم مطلقة)
+  // 4️⃣ إذا MultiDescriptor (object) → استخراج main أو descriptor
+  if (typeof descriptor === 'object') {
+    if (descriptor.main && Array.isArray(descriptor.main)) {
+      return descriptor.main; // مضغوط أصلاً
+    }
+    if (descriptor.descriptor) {
+      return compressFaceDescriptor(descriptor.descriptor);
+    }
+  }
+
+  return [];
+};
+
+/**
+ * Helper: ضغط array من 128 رقم
+ */
+const compressArray = (arr: number[]): number[] => {
+  if (!arr || arr.length === 0) return [];
+
+  // إذا أقل من 128، نرجعه كما هو (مع تقريب)
+  if (arr.length < 128) {
+    return arr.map(v => Math.round(Number(v) * 10000) / 10000);
+  }
+
+  // ضغط: اختيار أعلى TOP_DIMS قيمة
   const indexed = arr.slice(0, 128).map((v, i) => ({
-    v: Math.abs(v),
+    abs: Math.abs(Number(v)),
     i,
-    val: v,
+    val: Number(v),
   }));
-  indexed.sort((a, b) => b.v - a.v);
+  indexed.sort((a, b) => b.abs - a.abs);
 
   const top = indexed.slice(0, TOP_DIMS);
-  // ترتيب حسب الـ index للحفظ المنظم
   top.sort((a, b) => a.i - b.i);
 
   const result: number[] = [];

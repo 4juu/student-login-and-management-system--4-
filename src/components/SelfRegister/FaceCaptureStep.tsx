@@ -4,7 +4,6 @@ import { Student } from '../../types/student';
 import {
   loadFaceModels,
   extractFaceDescriptorMultiCapture,
-  buildMultiDescriptor,
   areModelsLoaded,
   type CaptureProgress,
   type FaceDirection,
@@ -198,80 +197,126 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
   // ──────────────────────────────────────────
   // 📸 التقاط الوجه - معدّل ليرسل MultiDescriptor جاهز
   // ──────────────────────────────────────────
-  const startActualCapture = async () => {
-    if (!videoRef.current) return;
+const startActualCapture = async () => {
+  if (!videoRef.current) return;
 
-    setCapturing(true);
-    setCapInfo(null);
+  setCapturing(true);
+  setCapInfo(null);
 
-    try {
-      const result = await extractFaceDescriptorMultiCapture(
-        videoRef.current,
-        (info) => {
-          if (mountedRef.current) setCapInfo(info);
-        }
-      );
-
-      console.log('═══════════════════════════');
-      console.log('🎯 نتيجة extractFaceDescriptorMultiCapture:');
-      console.log('result exists:', !!result);
-      console.log('result.descriptor exists:', !!result?.descriptor);
-      console.log('result.descriptor length:', result?.descriptor?.length);
-      console.log('result.descriptor is Float32Array:', result?.descriptor instanceof Float32Array);
-      console.log('result.angleDescs size:', result?.angleDescs?.size);
-      console.log('result.quality:', result?.quality);
-      console.log('result.directions:', result?.directions);
-      console.log('═══════════════════════════');
-
-      if (!result || !result.descriptor) {
-        setError('❌ لم نتمكن من التقاط وجهك بوضوح. تأكد من:\n- وجهك واضح وفي المنتصف\n- إضاءة جيدة\n- دوّر رأسك ببطء');
-        setCapturing(false);
-        setReadyToStart(true);
-        return;
+  try {
+    const result = await extractFaceDescriptorMultiCapture(
+      videoRef.current,
+      (info) => {
+        if (mountedRef.current) setCapInfo(info);
       }
+    );
 
-      // بناء MultiDescriptor (هذي صيغة جاهزة للحفظ - بدون Float32Array أو Set)
-      const multiDesc: MultiDescriptor = buildMultiDescriptor(
-        result.descriptor,
-        result.angleDescs,
-        result.quality,
-        result.directions
-      );
+    console.log('═══════════════════════════');
+    console.log('🎯 نتيجة extractFaceDescriptorMultiCapture:');
+    console.log('result:', result);
+    console.log('descriptor type:', result?.descriptor?.constructor?.name);
+    console.log('descriptor length:', result?.descriptor?.length);
+    console.log('═══════════════════════════');
 
-      console.log('═══════════════════════════');
-      console.log('✅ MultiDescriptor النهائي:');
-      console.log('multiDesc:', multiDesc);
-      console.log('main length:', multiDesc.main?.length);
-      console.log('angles length:', multiDesc.angles?.length);
-      console.log('quality:', multiDesc.quality);
-      console.log('directions:', multiDesc.directions);
-      console.log('version:', multiDesc.version);
-      console.log('main is array:', Array.isArray(multiDesc.main));
-      console.log('JSON safe test:', JSON.stringify(multiDesc).length, 'bytes');
-      console.log('═══════════════════════════');
-
-      // التحقق إن البيانات صحيحة
-      if (!multiDesc.main || !Array.isArray(multiDesc.main) || multiDesc.main.length === 0) {
-        throw new Error('فشل بناء البصمة - main فارغ');
-      }
-
-      // 🧹 إيقاف الكاميرا
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(t => t.stop());
-        streamRef.current = null;
-      }
-
-      setTimeout(() => {
-        onCaptured(multiDesc);
-      }, 1000);
-
-    } catch (e: any) {
-      console.error('❌ خطأ في التقاط الوجه:', e);
-      setError(e.message || 'فشل التقاط الوجه');
+    if (!result || !result.descriptor) {
+      setError('❌ لم نتمكن من التقاط وجهك بوضوح. تأكد من:\n- وجهك واضح وفي المنتصف\n- إضاءة جيدة\n- دوّر رأسك ببطء');
       setCapturing(false);
       setReadyToStart(true);
+      return;
     }
-  };
+
+    // 🔑 تحويل Float32Array → Array مباشرة
+    const mainArray = Array.from(result.descriptor).map(v => 
+      Math.round(v * 10000) / 10000
+    );
+
+    console.log('✅ mainArray length:', mainArray.length);
+    console.log('✅ mainArray first 5:', mainArray.slice(0, 5));
+
+    if (mainArray.length === 0) {
+      throw new Error('فشل تحويل البصمة الرئيسية');
+    }
+
+    // 🔑 تحويل angleDescs (Map<FaceDirection, Float32Array[]>)
+    const anglesArray: number[] = [];
+    const dirOrder: FaceDirection[] = ['center', 'right', 'left', 'up', 'down'];
+
+    for (const dir of dirOrder) {
+      const descs = result.angleDescs?.get(dir);
+      if (descs && descs.length > 0) {
+        // ناخذ متوسط كل اتجاه
+        const avg = new Float32Array(128);
+        for (const d of descs) {
+          for (let i = 0; i < 128; i++) {
+            avg[i] += d[i];
+          }
+        }
+        for (let i = 0; i < 128; i++) {
+          avg[i] /= descs.length;
+        }
+
+        // ضغط: أعلى 32 قيمة مطلقة
+        const TOP = 32;
+        const indexed = Array.from(avg).map((v, i) => ({ 
+          abs: Math.abs(v), 
+          i, 
+          val: v 
+        }));
+        indexed.sort((a, b) => b.abs - a.abs);
+        const top = indexed.slice(0, TOP).sort((a, b) => a.i - b.i);
+
+        for (const t of top) {
+          anglesArray.push(t.i);
+          anglesArray.push(Math.round(t.val * 10000) / 10000);
+        }
+      }
+    }
+
+    // 🔑 تحويل directions (Set<FaceDirection> → string)
+    const directionsStr = result.directions 
+      ? Array.from(result.directions).join(',')
+      : 'center';
+
+    // 🎯 بناء MultiDescriptor يدوياً (بدون الاعتماد على buildMultiDescriptor)
+    const multiDesc = {
+      main: mainArray,
+      angles: anglesArray.length > 0 ? anglesArray : undefined,
+      quality: Math.round((result.quality || 0) * 100) / 100,
+      directions: directionsStr,
+      version: 2,
+    };
+
+    console.log('═══════════════════════════');
+    console.log('✅ MultiDescriptor المبني يدوياً:');
+    console.log('main length:', multiDesc.main.length);
+    console.log('angles length:', multiDesc.angles?.length || 0);
+    console.log('quality:', multiDesc.quality);
+    console.log('directions:', multiDesc.directions);
+    console.log('JSON size:', JSON.stringify(multiDesc).length, 'bytes');
+    console.log('═══════════════════════════');
+
+    // التحقق النهائي
+    if (!multiDesc.main || multiDesc.main.length === 0) {
+      throw new Error('فشل بناء البصمة - main فارغ');
+    }
+
+    // 🧹 إيقاف الكاميرا
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+
+    setTimeout(() => {
+      onCaptured(multiDesc as any);
+    }, 1000);
+
+  } catch (e: any) {
+    console.error('❌ خطأ في التقاط الوجه:', e);
+    setError(e.message || 'فشل التقاط الوجه');
+    setCapturing(false);
+    setReadyToStart(true);
+  }
+};
 
   const handleRetry = () => {
     setError('');
