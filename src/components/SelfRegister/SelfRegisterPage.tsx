@@ -41,43 +41,152 @@ interface SelfRegisterPageProps {
   onExit: () => void;
 }
 
+// ============================================================
+// 🔄 تحويل البصمة لصيغة قابلة للحفظ في Firebase
+// ============================================================
+const sanitizeFaceDescriptor = (desc: any): any => {
+  if (!desc) {
+    console.warn('⚠️ faceDescriptor فارغ');
+    return null;
+  }
+
+  console.log('🔍 نوع faceDescriptor:', typeof desc);
+  console.log('🔍 محتوى faceDescriptor:', desc);
+
+  // إذا كان Float32Array مباشرة
+  if (desc instanceof Float32Array) {
+    return {
+      descriptor: Array.from(desc),
+      version: 'v1',
+      savedAt: new Date().toISOString(),
+    };
+  }
+
+  // إذا كان Array من الأرقام
+  if (Array.isArray(desc) && typeof desc[0] === 'number') {
+    return {
+      descriptor: desc,
+      version: 'v1',
+      savedAt: new Date().toISOString(),
+    };
+  }
+
+  // إذا object فيه descriptor
+  const result: any = {
+    version: 'v1',
+    savedAt: new Date().toISOString(),
+  };
+
+  // 1️⃣ descriptor الأساسي
+  if (desc.descriptor) {
+    if (desc.descriptor instanceof Float32Array) {
+      result.descriptor = Array.from(desc.descriptor);
+    } else if (Array.isArray(desc.descriptor)) {
+      result.descriptor = desc.descriptor.map((n: any) => Number(n));
+    }
+  }
+
+  // 2️⃣ angleDescs (array of Float32Array)
+  if (desc.angleDescs && Array.isArray(desc.angleDescs)) {
+    result.angleDescs = desc.angleDescs
+      .filter((a: any) => a)
+      .map((a: any) => {
+        if (a instanceof Float32Array) return Array.from(a);
+        if (Array.isArray(a)) return a.map((n: any) => Number(n));
+        return null;
+      })
+      .filter((a: any) => a !== null);
+  }
+
+  // 3️⃣ directions (Set → Array)
+  if (desc.directions) {
+    if (desc.directions instanceof Set) {
+      result.directions = Array.from(desc.directions);
+    } else if (Array.isArray(desc.directions)) {
+      result.directions = desc.directions;
+    }
+  }
+
+  // 4️⃣ quality
+  if (typeof desc.quality === 'number') {
+    result.quality = desc.quality;
+  }
+
+  // 5️⃣ أي حقول أخرى آمنة
+  Object.keys(desc).forEach((key) => {
+    if (
+      !['descriptor', 'angleDescs', 'directions', 'quality'].includes(key) &&
+      desc[key] !== undefined &&
+      desc[key] !== null &&
+      typeof desc[key] !== 'function' &&
+      !(desc[key] instanceof Set) &&
+      !(desc[key] instanceof Map) &&
+      !(desc[key] instanceof Float32Array)
+    ) {
+      result[key] = desc[key];
+    }
+  });
+
+  return result;
+};
+
+// ============================================================
+// 🔍 تنظيف عميق لأي قيمة قبل الحفظ
+// (يحذف undefined ويحول Set و Float32Array)
+// ============================================================
+const deepSanitize = (obj: any): any => {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj !== 'object') return obj;
+  if (obj instanceof Float32Array) return Array.from(obj);
+  if (obj instanceof Set) return Array.from(obj);
+  if (obj instanceof Map) return Object.fromEntries(obj);
+  if (Array.isArray(obj)) return obj.map(deepSanitize);
+
+  const cleaned: any = {};
+  for (const key in obj) {
+    const val = obj[key];
+    if (val !== undefined && typeof val !== 'function') {
+      cleaned[key] = deepSanitize(val);
+    }
+  }
+  return cleaned;
+};
+
 export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExit }) => {
   const [step, setStep] = useState<Step>('loading');
   const [link, setLink] = useState<RegistrationLink | null>(null);
   const [student, setStudent] = useState<Student | null>(null);
   const [enteredCode, setEnteredCode] = useState('');
   const [codeError, setCodeError] = useState('');
-  
+
   const [idData, setIdData] = useState<IDExtractionResult | null>(null);
   const [matchPercentage, setMatchPercentage] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
-  
+
   // ──────────────────────────────────────────
-  // 🔍 تحميل بيانات الرابط عند الفتح
+  // 🔍 تحميل بيانات الرابط
   // ──────────────────────────────────────────
   useEffect(() => {
     let mounted = true;
-    
+
     (async () => {
       try {
         const linkData = await getRegistrationLink(token);
         if (!mounted) return;
-        
+
         const validation = validateLink(linkData);
         if (!validation.valid) {
           setErrorMsg(validation.reason || 'الرابط غير صالح');
           setStep('invalid-link');
           return;
         }
-        
+
         setLink(linkData);
-        
-        // إذا الرابط مخصص لطالب معين، نجيب بياناته
+
         if (linkData!.studentId) {
           await loadStudent(linkData!.adminUid, linkData!.stageId, linkData!.studentId);
-          setStep('upload-id'); // ينتقل مباشرة لرفع الهوية
+          setStep('upload-id');
         } else {
-          // رابط جماعي → الطالب يدخل كوده
           setStep('enter-code');
         }
       } catch (e: any) {
@@ -86,38 +195,42 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
         setStep('invalid-link');
       }
     })();
-    
+
     return () => {
       mounted = false;
-      terminateOCR(); // تحرير ذاكرة OCR عند الخروج
+      terminateOCR();
     };
   }, [token]);
-  
+
   // ──────────────────────────────────────────
-  // 📥 جلب بيانات طالب من Firebase
+  // 📥 جلب بيانات طالب
   // ──────────────────────────────────────────
-  const loadStudent = async (adminUid: string, stageId: string, studentId: string): Promise<Student | null> => {
+  const loadStudent = async (
+    adminUid: string,
+    stageId: string,
+    studentId: string
+  ): Promise<Student | null> => {
     try {
       const year = await getActiveAcademicYear();
       const path = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}/students`;
       const snap = await get(ref(database, path));
-      
+
       if (!snap.exists()) {
         setErrorMsg('لم نجد بيانات الطلاب');
         setStep('invalid-link');
         return null;
       }
-      
+
       const data = snap.val();
       const studentsArr: Student[] = Array.isArray(data) ? data : Object.values(data);
-      const found = studentsArr.find(s => s.id === studentId);
-      
+      const found = studentsArr.find((s) => s.id === studentId);
+
       if (!found) {
         setErrorMsg('لم نجد بياناتك في النظام');
         setStep('invalid-link');
         return null;
       }
-      
+
       setStudent(found);
       return found;
     } catch (e) {
@@ -127,38 +240,38 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       return null;
     }
   };
-  
+
   // ──────────────────────────────────────────
-  // 🔢 الطالب يدخل كوده (للروابط الجماعية)
+  // 🔢 إدخال الكود
   // ──────────────────────────────────────────
   const handleCodeSubmit = async () => {
     if (!link) return;
     setCodeError('');
-    
+
     if (!/^\d{4}$/.test(enteredCode)) {
       setCodeError('الرمز يجب أن يكون 4 أرقام');
       return;
     }
-    
+
     try {
       const year = await getActiveAcademicYear();
       const path = `academicYears/${year}/userData/${link.adminUid}/stageData/${link.stageId}/students`;
       const snap = await get(ref(database, path));
-      
+
       if (!snap.exists()) {
         setCodeError('لم نجد بيانات الطلاب');
         return;
       }
-      
+
       const data = snap.val();
       const studentsArr: Student[] = Array.isArray(data) ? data : Object.values(data);
-      const found = studentsArr.find(s => s.code === enteredCode);
-      
+      const found = studentsArr.find((s) => s.code === enteredCode);
+
       if (!found) {
         setCodeError('❌ الرمز غير صحيح. تأكد من إدخال رمزك الصحيح.');
         return;
       }
-      
+
       setStudent(found);
       setStep('upload-id');
     } catch (e) {
@@ -166,9 +279,9 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       setCodeError('فشل التحقق من الرمز');
     }
   };
-  
+
   // ──────────────────────────────────────────
-  // 📷 معالجة بيانات الهوية المستخرجة
+  // 📷 معالجة بيانات الهوية
   // ──────────────────────────────────────────
   const handleIDExtracted = (result: IDExtractionResult) => {
     if (!result.success || !result.name || !result.qrId || !student) {
@@ -176,38 +289,59 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       setStep('error');
       return;
     }
-    
+
     setIdData(result);
-    
-    // مطابقة الاسم
     const percentage = matchArabicNames(result.name, student.name);
     setMatchPercentage(percentage);
-    
+
     const matchLevel = classifyMatch(percentage);
-    
+
     if (matchLevel === 'rejected') {
       setStep('name-mismatch');
     } else {
-      // التطابق مقبول → ننتقل لتسجيل الوجه
       setStep('capture-face');
     }
   };
-  
+
   // ──────────────────────────────────────────
-  // 😊 معالجة بصمة الوجه وإرسال الطلب
+  // 😊 معالجة بصمة الوجه - الأهم!
   // ──────────────────────────────────────────
   const handleFaceCaptured = async (faceDescriptor: any) => {
-    if (!student || !link || !idData) return;
-    
+    if (!student || !link || !idData) {
+      console.error('❌ بيانات ناقصة:', { student, link, idData });
+      return;
+    }
+
     setStep('submitting');
-    
+
     try {
+      console.log('═══════════════════════════════════════');
+      console.log('🎯 بدء حفظ التسجيل');
+      console.log('═══════════════════════════════════════');
+
+      // 🔑 1) تنظيف البصمة بشكل آمن
+      const cleanFaceDescriptor = sanitizeFaceDescriptor(faceDescriptor);
+
+      console.log('💾 البصمة الأصلية:', faceDescriptor);
+      console.log('✅ البصمة بعد التنظيف:', cleanFaceDescriptor);
+      console.log('📊 طول descriptor:', cleanFaceDescriptor?.descriptor?.length);
+
+      if (!cleanFaceDescriptor || !cleanFaceDescriptor.descriptor) {
+        throw new Error('فشل معالجة بصمة الوجه - descriptor فارغ');
+      }
+
+      if (!Array.isArray(cleanFaceDescriptor.descriptor) || cleanFaceDescriptor.descriptor.length === 0) {
+        throw new Error('البصمة بصيغة غير صحيحة');
+      }
+
       const matchLevel = classifyMatch(matchPercentage);
       const status: PendingRegistration['status'] =
         matchLevel === 'auto-approve' ? 'auto-approved' : 'pending';
-      
-      // إنشاء طلب التسجيل
-      const registrationData: Omit<PendingRegistration, 'id'> = {
+
+      console.log('📌 status:', status);
+
+      // 🔑 2) بناء بيانات الطلب
+      const registrationData = {
         adminUid: link.adminUid,
         stageId: link.stageId,
         studentId: student.id,
@@ -217,57 +351,106 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
         matchPercentage,
         qrCodeUrl: idData.qrUrl!,
         qrCodeId: idData.qrId!,
-        faceDescriptor,
+        faceDescriptor: cleanFaceDescriptor,
         status,
         createdAt: new Date().toISOString(),
         hasExistingQr: !!student.qrCodeId,
         hasExistingFace: !!student.faceDescriptor,
       };
-      
-      // حفظ طلب التسجيل
+
+      // تنظيف نهائي عميق
+      const cleanData = deepSanitize(registrationData);
+
+      // 🔑 3) حفظ طلب التسجيل في pending
+      console.log('💾 جاري حفظ pending...');
       const pendingRef = push(ref(database, `registrationSystem/pending/${link.adminUid}`));
-      await set(pendingRef, { ...registrationData, id: pendingRef.key });
-      
-      // إذا التطابق عالي → نطبق التغييرات فوراً على الطالب
+      const requestId = pendingRef.key!;
+
+      await set(pendingRef, { ...cleanData, id: requestId });
+      console.log('✅ تم حفظ pending:', requestId);
+
+      // 🔑 4) إذا التطابق عالي → نحفظ على الطالب
       if (status === 'auto-approved') {
+        console.log('🚀 auto-approved: جاري التحديث على الطالب...');
+
         const year = await getActiveAcademicYear();
         const studentsPath = `academicYears/${year}/userData/${link.adminUid}/stageData/${link.stageId}/students`;
+
         const snap = await get(ref(database, studentsPath));
-        
+
         if (snap.exists()) {
           const data = snap.val();
           const studentsArr: Student[] = Array.isArray(data) ? data : Object.values(data);
-          const idx = studentsArr.findIndex(s => s.id === student.id);
-          
+          const idx = studentsArr.findIndex((s) => s.id === student.id);
+
+          console.log('📍 index الطالب:', idx);
+
           if (idx !== -1) {
-            studentsArr[idx] = {
+            const updatedStudent = deepSanitize({
               ...studentsArr[idx],
               qrCodeId: idData.qrId!,
-              faceDescriptor,
+              qrCodeUrl: idData.qrUrl!,
+              faceDescriptor: cleanFaceDescriptor,
               faceRegisteredAt: new Date().toISOString(),
               faceCompressed: true,
-            } as Student;
-            
+            });
+
+            studentsArr[idx] = updatedStudent as Student;
+
+            console.log('💾 جاري حفظ الطالب المحدث...');
+            console.log('📦 بيانات الحفظ:', updatedStudent);
+
             await set(ref(database, studentsPath), studentsArr);
+
+            console.log('✅✅✅ تم حفظ البصمة والـ QR على الطالب بنجاح!');
+          } else {
+            console.error('❌ لم نجد الطالب في القائمة!');
+            throw new Error('لم نجد بياناتك في النظام');
           }
+        } else {
+          console.error('❌ لا توجد بيانات طلاب في Firebase!');
+          throw new Error('قاعدة بيانات الطلاب فارغة');
         }
+      } else {
+        console.log('⏳ pending: في انتظار موافقة الأدمن');
       }
-      
-      // تعليم الرابط كمستخدم
+
+      // 🔑 5) تعليم الرابط كمستخدم
       await markLinkAsUsed(token, student.id);
-      
+      console.log('✅ تم تعليم الرابط كمستخدم');
+
+      console.log('═══════════════════════════════════════');
+      console.log('🎉 تم بنجاح كامل!');
+      console.log('═══════════════════════════════════════');
+
       setStep('success');
     } catch (e: any) {
-      console.error(e);
-      setErrorMsg(e.message || 'فشل إرسال طلب التسجيل');
+      console.error('═══════════════════════════════════════');
+      console.error('❌ فشل حفظ التسجيل:');
+      console.error('Error:', e);
+      console.error('Message:', e.message);
+      console.error('Code:', e.code);
+      console.error('═══════════════════════════════════════');
+
+      let userMessage = 'فشل إرسال طلب التسجيل';
+
+      if (e.code === 'PERMISSION_DENIED') {
+        userMessage = 'لا توجد صلاحية للحفظ. تواصل مع الإدارة لتحديث الأذونات.';
+      } else if (e.message?.includes('descriptor')) {
+        userMessage = 'فشل معالجة بصمة الوجه. حاول مرة ثانية.';
+      } else if (e.message) {
+        userMessage = e.message;
+      }
+
+      setErrorMsg(userMessage);
       setStep('error');
     }
   };
-  
+
   // ──────────────────────────────────────────
   // 🎨 RENDER
   // ──────────────────────────────────────────
-  
+
   if (step === 'loading') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4" dir="rtl">
@@ -278,7 +461,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       </div>
     );
   }
-  
+
   if (step === 'invalid-link') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4" dir="rtl">
@@ -296,7 +479,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       </div>
     );
   }
-  
+
   if (step === 'enter-code') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4" dir="rtl">
@@ -306,7 +489,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
             <h2 className="text-2xl font-bold text-gray-800 mb-2">التحقق من الهوية</h2>
             <p className="text-sm text-gray-600">أدخل رمزك المكون من 4 أرقام للبدء</p>
           </div>
-          
+
           <input
             type="text"
             value={enteredCode}
@@ -321,13 +504,13 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
             className="w-full text-center text-4xl font-bold tracking-[1em] py-4 border-2 border-purple-300 rounded-xl focus:border-purple-500 outline-none"
             autoFocus
           />
-          
+
           {codeError && (
             <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm text-center">
               {codeError}
             </div>
           )}
-          
+
           <button
             onClick={handleCodeSubmit}
             disabled={enteredCode.length !== 4}
@@ -339,7 +522,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       </div>
     );
   }
-  
+
   if (step === 'upload-id' && student) {
     return (
       <IDCardUpload
@@ -349,7 +532,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       />
     );
   }
-  
+
   if (step === 'name-mismatch' && student && idData) {
     const desc = getMatchDescription(matchPercentage);
     return (
@@ -360,7 +543,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
             <h2 className="text-2xl font-bold text-red-700 mb-2">عدم تطابق الاسم</h2>
             <p className="text-sm text-gray-600">{desc.text}</p>
           </div>
-          
+
           <div className="space-y-3 mb-6">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <p className="text-xs text-blue-600 font-medium mb-1">الاسم في الهوية:</p>
@@ -375,7 +558,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
               <p className="text-xs text-red-600 mt-1">يجب أن تكون {MIN_ACCEPTABLE_THRESHOLD}% على الأقل</p>
             </div>
           </div>
-          
+
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-xs text-amber-800">
             💡 تأكد من أن:
             <ul className="list-disc list-inside mt-1 space-y-0.5">
@@ -384,7 +567,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
               <li>صورة الهوية واضحة وقابلة للقراءة</li>
             </ul>
           </div>
-          
+
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={onExit}
@@ -403,7 +586,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       </div>
     );
   }
-  
+
   if (step === 'capture-face' && student) {
     return (
       <FaceCaptureStep
@@ -414,7 +597,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       />
     );
   }
-  
+
   if (step === 'submitting') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4" dir="rtl">
@@ -426,7 +609,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       </div>
     );
   }
-  
+
   if (step === 'success' && student) {
     const matchLevel = classifyMatch(matchPercentage);
     return (
@@ -438,7 +621,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       />
     );
   }
-  
+
   if (step === 'error') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4" dir="rtl">
@@ -464,7 +647,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       </div>
     );
   }
-  
+
   return null;
 };
 
