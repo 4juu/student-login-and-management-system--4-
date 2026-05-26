@@ -49,7 +49,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const mountedRef = useRef(true);
-  
+
   const [modelsReady, setModelsReady] = useState(areModelsLoaded());
   const [modelsLoading, setModelsLoading] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
@@ -58,25 +58,52 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
   const [capInfo, setCapInfo] = useState<CaptureProgress | null>(null);
   const [readyToStart, setReadyToStart] = useState(false);
   const [countdown, setCountdown] = useState(0);
-  
+
   // ──────────────────────────────────────────
-  // 🔧 تحميل الموديلات + فتح الكاميرا
+  // 1️⃣ تحميل الموديلات (مرة وحدة بس)
   // ──────────────────────────────────────────
   useEffect(() => {
     mountedRef.current = true;
-    
+
+    if (areModelsLoaded()) {
+      setModelsReady(true);
+      return;
+    }
+
     (async () => {
       try {
-        // تحميل الموديلات
-        if (!modelsReady) {
-          setModelsLoading(true);
-          await loadFaceModels();
-          if (!mountedRef.current) return;
-          setModelsReady(true);
+        setModelsLoading(true);
+        await loadFaceModels();
+        if (!mountedRef.current) return;
+        setModelsReady(true);
+      } catch (e: any) {
+        console.error('فشل تحميل الموديلات:', e);
+        if (mountedRef.current) {
+          setError('فشل تحميل نظام التعرف على الوجوه');
+        }
+      } finally {
+        if (mountedRef.current) {
           setModelsLoading(false);
         }
-        
-        // فتح الكاميرا
+      }
+    })();
+
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []); // ← فقط مرة وحدة!
+
+  // ──────────────────────────────────────────
+  // 2️⃣ فتح الكاميرا بعد ما تجهز الموديلات
+  // ──────────────────────────────────────────
+  useEffect(() => {
+    if (!modelsReady) return;
+
+    let localStream: MediaStream | null = null;
+    let cancelled = false;
+
+    (async () => {
+      try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: 'user',
@@ -85,60 +112,78 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
           },
           audio: false,
         });
-        
-        if (!mountedRef.current) {
+
+        if (cancelled) {
           stream.getTracks().forEach(t => t.stop());
           return;
         }
-        
+
+        localStream = stream;
         streamRef.current = stream;
-        
+
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          await videoRef.current.play();
+
+          // 🔑 الحل: نتعامل مع play() بشكل آمن
+          try {
+            await videoRef.current.play();
+          } catch (playErr: any) {
+            // نتجاهل AbortError لأنه طبيعي عند unmount
+            if (playErr.name !== 'AbortError' && !cancelled) {
+              throw playErr;
+            }
+            return;
+          }
         }
-        
-        // انتظار ثانية حتى تستقر الكاميرا
+
+        // انتظار حتى تستقر الكاميرا
         setTimeout(() => {
-          if (mountedRef.current) {
+          if (!cancelled && mountedRef.current) {
             setCameraReady(true);
             setReadyToStart(true);
           }
         }, 1000);
-        
+
       } catch (e: any) {
-        console.error(e);
-        if (!mountedRef.current) return;
-        
+        if (cancelled) return;
+        console.error('فشل فتح الكاميرا:', e);
+
         if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
           setError('يرجى السماح للموقع باستخدام الكاميرا من إعدادات المتصفح');
         } else if (e.name === 'NotFoundError') {
           setError('لم يتم العثور على كاميرا في جهازك');
-        } else {
+        } else if (e.name === 'NotReadableError') {
+          setError('الكاميرا مستخدمة من تطبيق آخر. أغلق التطبيقات الأخرى وحاول مرة ثانية');
+        } else if (e.name !== 'AbortError') {
           setError(e.message || 'فشل فتح الكاميرا');
         }
-        setModelsLoading(false);
       }
     })();
-    
+
     return () => {
-      mountedRef.current = false;
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(t => t.stop());
+      cancelled = true;
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+      }
+      if (streamRef.current === localStream) {
         streamRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
       }
     };
   }, [modelsReady]);
-  
+
   // ──────────────────────────────────────────
   // 🎬 بدء التسجيل مع عد تنازلي
   // ──────────────────────────────────────────
   const handleStartCapture = useCallback(() => {
     if (!videoRef.current || !cameraReady || capturing) return;
-    
+
     setReadyToStart(false);
+    setError('');
     setCountdown(3);
-    
+
     let count = 3;
     const interval = setInterval(() => {
       count--;
@@ -151,16 +196,16 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
       }
     }, 1000);
   }, [cameraReady, capturing]);
-  
+
   // ──────────────────────────────────────────
   // 📸 التقاط الوجه الفعلي
   // ──────────────────────────────────────────
   const startActualCapture = async () => {
     if (!videoRef.current) return;
-    
+
     setCapturing(true);
     setCapInfo(null);
-    
+
     try {
       const result = await extractFaceDescriptorMultiCapture(
         videoRef.current,
@@ -168,14 +213,14 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
           if (mountedRef.current) setCapInfo(info);
         }
       );
-      
+
       if (!result) {
         setError('❌ لم نتمكن من التقاط وجهك بوضوح. تأكد من:\n- وجهك واضح وفي المنتصف\n- إضاءة جيدة\n- دوّر رأسك ببطء');
         setCapturing(false);
         setReadyToStart(true);
         return;
       }
-      
+
       // بناء البصمة المضغوطة
       const multiDesc = buildMultiDescriptor(
         result.descriptor,
@@ -183,18 +228,18 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
         result.quality,
         result.directions
       );
-      
+
       // 🧹 إيقاف الكاميرا فوراً (الخصوصية)
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());
         streamRef.current = null;
       }
-      
+
       // إرسال البصمة (أرقام فقط، بدون صور)
       setTimeout(() => {
         onCaptured(multiDesc);
       }, 1000);
-      
+
     } catch (e: any) {
       console.error(e);
       setError(e.message || 'فشل التقاط الوجه');
@@ -202,15 +247,23 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
       setReadyToStart(true);
     }
   };
-  
+
+  // ──────────────────────────────────────────
+  // 🔄 إعادة المحاولة عند خطأ
+  // ──────────────────────────────────────────
+  const handleRetry = () => {
+    setError('');
+    setReadyToStart(true);
+  };
+
   // ──────────────────────────────────────────
   // 🎨 RENDER
   // ──────────────────────────────────────────
-  
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50 flex items-center justify-center p-4" dir="rtl">
       <div className="bg-white rounded-2xl shadow-xl p-5 md:p-6 max-w-md w-full">
-        
+
         {/* Header */}
         <div className="text-center mb-4">
           <div className="text-4xl mb-2">😊</div>
@@ -224,18 +277,18 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
             </div>
           )}
         </div>
-        
+
         {/* تنبيه الخصوصية */}
         <div className="mb-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
           <div className="flex items-start gap-2">
             <span className="text-base">🔒</span>
             <p className="text-xs text-emerald-800">
-              <strong>خصوصيتك محمية:</strong> الكاميرا تعمل محلياً، ولا يتم حفظ أي صورة. 
+              <strong>خصوصيتك محمية:</strong> الكاميرا تعمل محلياً، ولا يتم حفظ أي صورة.
               فقط أرقام رياضية (128 رقم) تُحفظ لتمييز وجهك.
             </p>
           </div>
         </div>
-        
+
         {/* حالات التحميل والخطأ */}
         {modelsLoading && (
           <div className="text-center py-6">
@@ -244,13 +297,13 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
             <p className="text-xs text-gray-400 mt-1">قد يستغرق 5-10 ثوانٍ</p>
           </div>
         )}
-        
+
         {error && !capturing && (
           <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm whitespace-pre-line">
             {error}
           </div>
         )}
-        
+
         {/* عرض الكاميرا */}
         {modelsReady && !modelsLoading && (
           <div className="relative mb-4">
@@ -263,15 +316,15 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
                 className="w-full h-full object-cover"
                 style={{ transform: 'scaleX(-1)' }}
               />
-              
+
               {/* إطار الوجه */}
               {cameraReady && !capturing && countdown === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-56 h-56 border-4 border-purple-400/70 rounded-full" 
+                  <div className="w-56 h-56 border-4 border-purple-400/70 rounded-full"
                        style={{ boxShadow: '0 0 40px rgba(168,85,247,0.4)' }} />
                 </div>
               )}
-              
+
               {/* العد التنازلي */}
               {countdown > 0 && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/40">
@@ -280,7 +333,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
                   </div>
                 </div>
               )}
-              
+
               {/* SVG للدائرة التقدمية */}
               {capturing && capInfo && (
                 <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 200 200">
@@ -297,8 +350,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
                       transformOrigin: 'center',
                     }}
                   />
-                  
-                  {/* نقطة الاتجاه الحالي */}
+
                   {capInfo.phase === 'capture' && capInfo.faceDetected && (() => {
                     const angle = (capInfo.rotationAngle - 90) * (Math.PI / 180);
                     const cx = 100 + 92 * Math.cos(angle);
@@ -312,8 +364,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
                       </>
                     );
                   })()}
-                  
-                  {/* علامات الاتجاهات المكتملة */}
+
                   {ALL_DIRS.map((dir) => {
                     const angles: Record<FaceDirection, number> = {
                       right: 0, down: 90, left: 180, up: 270, center: 315
@@ -334,8 +385,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
                   })}
                 </svg>
               )}
-              
-              {/* مؤشر اكتشاف الوجه */}
+
               {capturing && capInfo && capInfo.phase === 'capture' && (
                 <div className={`absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-bold shadow-lg ${
                   capInfo.faceDetected ? 'bg-green-500 text-white' : 'bg-red-500 text-white animate-pulse'
@@ -346,20 +396,20 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
             </div>
           </div>
         )}
-        
+
         {/* معلومات التقدم أثناء التسجيل */}
         {capturing && capInfo && (
           <div className="space-y-2 mb-4">
             <div className={`py-3 px-4 rounded-xl font-bold text-center text-base ${
-              capInfo.phase === 'stabilize' 
-                ? 'bg-blue-50 text-blue-700' 
-                : capInfo.faceDetected 
-                  ? 'bg-green-50 text-green-700' 
+              capInfo.phase === 'stabilize'
+                ? 'bg-blue-50 text-blue-700'
+                : capInfo.faceDetected
+                  ? 'bg-green-50 text-green-700'
                   : 'bg-red-50 text-red-700'
             }`}>
               {capInfo.phase === 'stabilize' ? '🔍 جاري التثبيت...' : capInfo.directionLabel}
             </div>
-            
+
             <div className="flex justify-center gap-2 flex-wrap">
               <span className={`text-xs font-bold px-2 py-1 rounded-full ${QUALITY_COLORS[capInfo.qualityLevel]}`}>
                 {QUALITY_LABELS[capInfo.qualityLevel]}
@@ -368,7 +418,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
                 {LIGHT_LABELS[capInfo.lightLevel]}
               </span>
             </div>
-            
+
             <div className="flex justify-center gap-2 items-center">
               <span className="text-xs text-gray-500">🔄 تغطية الدوران:</span>
               <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -379,13 +429,12 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
               </div>
               <span className="text-xs font-bold text-purple-600">{capInfo.rotationCoverage}%</span>
             </div>
-            
+
             <div className="flex justify-center gap-4 text-xs text-gray-500">
               <span>📷 لقطات: {capInfo.totalGood}</span>
               <span>📊 التقدم: {capInfo.progress}%</span>
             </div>
-            
-            {/* الاتجاهات المكتملة */}
+
             <div className="flex justify-center gap-2">
               {ALL_DIRS.map(dir => (
                 <span
@@ -400,7 +449,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
             </div>
           </div>
         )}
-        
+
         {/* تعليمات البداية */}
         {readyToStart && !capturing && !error && (
           <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-xl">
@@ -413,7 +462,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
             </ul>
           </div>
         )}
-        
+
         {/* أزرار التحكم */}
         {!capturing && !modelsLoading && (
           <div className="grid grid-cols-2 gap-2">
@@ -423,13 +472,22 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
             >
               إلغاء
             </button>
-            <button
-              onClick={handleStartCapture}
-              disabled={!cameraReady || !!error}
-              className="py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-40 text-white font-bold rounded-lg active:scale-95"
-            >
-              📸 بدء التسجيل
-            </button>
+            {error ? (
+              <button
+                onClick={handleRetry}
+                className="py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold rounded-lg active:scale-95"
+              >
+                🔄 إعادة المحاولة
+              </button>
+            ) : (
+              <button
+                onClick={handleStartCapture}
+                disabled={!cameraReady}
+                className="py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-40 text-white font-bold rounded-lg active:scale-95"
+              >
+                📸 بدء التسجيل
+              </button>
+            )}
           </div>
         )}
       </div>
