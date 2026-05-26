@@ -65,7 +65,7 @@ const generateExcel = (
 
   const studentRows = links.map((link, idx) => `
     <tr>
-      <td class="num">${idx + 1}</td>
+      <td class="num" x:num>${idx + 1}</td>
       <td class="name">${escape(link.studentName)}</td>
       <td class="code">${escape(link.studentCode)}</td>
       <td class="link">${escape(link.url)}</td>
@@ -110,7 +110,6 @@ td, th {
   font-family: Calibri, Arial, Tahoma, sans-serif;
   padding: 10px 12px;
   border: 1px solid #C7D2FE;
-  mso-number-format: "\\@";
 }
 .title {
   font-size: 22pt;
@@ -120,6 +119,7 @@ td, th {
   text-align: center;
   height: 50px;
   border: 2px solid #3730A3;
+  mso-number-format: "\\@";
 }
 .header {
   font-size: 14pt;
@@ -129,6 +129,7 @@ td, th {
   text-align: center;
   height: 36px;
   border: 1px solid #4338CA;
+  mso-number-format: "\\@";
 }
 .num {
   text-align: center;
@@ -137,6 +138,8 @@ td, th {
   color: #4F46E5;
   background-color: #E0E7FF;
   width: 50px;
+  mso-number-format: "0";
+  vnd.ms-excel.numberformat: 0;
 }
 .name {
   text-align: right;
@@ -145,6 +148,7 @@ td, th {
   color: #111827;
   background-color: #FFFFFF;
   width: 220px;
+  mso-number-format: "\\@";
 }
 .code {
   text-align: center;
@@ -154,6 +158,7 @@ td, th {
   color: #059669;
   background-color: #ECFDF5;
   width: 120px;
+  mso-number-format: "\\@";
 }
 .link {
   text-align: left;
@@ -163,6 +168,7 @@ td, th {
   background-color: #EFF6FF;
   width: 450px;
   word-break: break-all;
+  mso-number-format: "\\@";
 }
 .expiry {
   text-align: center;
@@ -171,6 +177,7 @@ td, th {
   color: #D97706;
   background-color: #FEF3C7;
   width: 100px;
+  mso-number-format: "\\@";
 }
 .empty {
   height: 10px;
@@ -198,7 +205,6 @@ td, th {
 </body>
 </html>`;
 
-  // BOM للدعم العربي + المحتوى
   const bom = '\uFEFF';
   return new Blob([bom + html], {
     type: 'application/vnd.ms-excel;charset=utf-8',
