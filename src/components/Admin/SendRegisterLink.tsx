@@ -44,20 +44,19 @@ const getFormattedDate = () => {
 
 const getFileName = (collegeName: string, stageName: string): string => {
   const { timestamp } = getFormattedDate();
-  // تنظيف الأسماء من الرموز الخاصة
   const cleanCollege = collegeName.replace(/[^\u0600-\u06FFa-zA-Z0-9]/g, '_');
   const cleanStage = stageName.replace(/[^\u0600-\u06FFa-zA-Z0-9]/g, '_');
-  return `${FILE_PREFIX}_${cleanCollege}_${cleanStage}_${timestamp}.xls`;
+  // ✅ امتداد .xml يفتح بـ Excel بدون تحذير
+  return `${FILE_PREFIX}_${cleanCollege}_${cleanStage}_${timestamp}.xml`;
 };
 
 // ============================================================
-// 📊 توليد Excel - بصيغة Excel XML 2003 (يفتح بدون تحذيرات)
+// 📊 توليد Excel - بصيغة SpreadsheetML (RTL + بدون تحذيرات)
 // ============================================================
 const generateExcel = (
   links: GeneratedLink[],
   expiryDays: number
 ): Blob => {
-  // ── دالة Escape آمنة لـ XML ──
   const xml = (str: string): string => {
     return String(str)
       .replace(/&/g, '&amp;')
@@ -67,7 +66,6 @@ const generateExcel = (
       .replace(/'/g, '&apos;');
   };
 
-  // ── بناء صفوف الطلاب ──
   const studentRows = links.map((link, idx) => `
     <Row ss:Height="32">
       <Cell ss:StyleID="numCell"><Data ss:Type="Number">${idx + 1}</Data></Cell>
@@ -78,7 +76,6 @@ const generateExcel = (
     </Row>
   `).join('');
 
-  // ── ملف Excel XML 2003 (Microsoft Office XML) ──
   const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
@@ -93,10 +90,21 @@ const generateExcel = (
   <Created>${new Date().toISOString()}</Created>
  </DocumentProperties>
 
+ <ExcelWorkbook xmlns="urn:schemas-microsoft-com:office:excel">
+  <WindowHeight>9000</WindowHeight>
+  <WindowWidth>16000</WindowWidth>
+  <ProtectStructure>False</ProtectStructure>
+  <ProtectWindows>False</ProtectWindows>
+ </ExcelWorkbook>
+
  <Styles>
-  <!-- العنوان الرئيسي -->
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Center" ss:ReadingOrder="RightToLeft"/>
+   <Font ss:FontName="Calibri" ss:Size="11"/>
+  </Style>
+
   <Style ss:ID="title">
-   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:ReadingOrder="RightToLeft"/>
    <Font ss:FontName="Calibri" ss:Size="20" ss:Bold="1" ss:Color="#FFFFFF"/>
    <Interior ss:Color="#4F46E5" ss:Pattern="Solid"/>
    <Borders>
@@ -107,9 +115,8 @@ const generateExcel = (
    </Borders>
   </Style>
 
-  <!-- عناوين الأعمدة -->
   <Style ss:ID="header">
-   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:ReadingOrder="RightToLeft"/>
    <Font ss:FontName="Calibri" ss:Size="14" ss:Bold="1" ss:Color="#FFFFFF"/>
    <Interior ss:Color="#6366F1" ss:Pattern="Solid"/>
    <Borders>
@@ -120,9 +127,8 @@ const generateExcel = (
    </Borders>
   </Style>
 
-  <!-- خلية الرقم -->
   <Style ss:ID="numCell">
-   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:ReadingOrder="RightToLeft"/>
    <Font ss:FontName="Calibri" ss:Size="13" ss:Bold="1" ss:Color="#4F46E5"/>
    <Interior ss:Color="#E0E7FF" ss:Pattern="Solid"/>
    <Borders>
@@ -133,9 +139,8 @@ const generateExcel = (
    </Borders>
   </Style>
 
-  <!-- خلية الاسم -->
   <Style ss:ID="nameCell">
-   <Alignment ss:Horizontal="Right" ss:Vertical="Center"/>
+   <Alignment ss:Horizontal="Right" ss:Vertical="Center" ss:ReadingOrder="RightToLeft"/>
    <Font ss:FontName="Calibri" ss:Size="13" ss:Bold="1" ss:Color="#111827"/>
    <Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/>
    <Borders>
@@ -146,7 +151,6 @@ const generateExcel = (
    </Borders>
   </Style>
 
-  <!-- خلية الكود -->
   <Style ss:ID="codeCell">
    <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
    <Font ss:FontName="Consolas" ss:Size="13" ss:Bold="1" ss:Color="#059669"/>
@@ -159,7 +163,6 @@ const generateExcel = (
    </Borders>
   </Style>
 
-  <!-- خلية الرابط -->
   <Style ss:ID="linkCell">
    <Alignment ss:Horizontal="Left" ss:Vertical="Center" ss:WrapText="1"/>
    <Font ss:FontName="Consolas" ss:Size="11" ss:Color="#2563EB"/>
@@ -172,9 +175,8 @@ const generateExcel = (
    </Borders>
   </Style>
 
-  <!-- خلية الصلاحية -->
   <Style ss:ID="expiryCell">
-   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:ReadingOrder="RightToLeft"/>
    <Font ss:FontName="Calibri" ss:Size="12" ss:Bold="1" ss:Color="#D97706"/>
    <Interior ss:Color="#FEF3C7" ss:Pattern="Solid"/>
    <Borders>
@@ -186,26 +188,22 @@ const generateExcel = (
   </Style>
  </Styles>
 
- <Worksheet ss:Name="روابط التسجيل">
+ <Worksheet ss:Name="روابط التسجيل" ss:RightToLeft="1">
   <Table>
-   <!-- عرض الأعمدة -->
    <Column ss:Width="50"/>
    <Column ss:Width="220"/>
    <Column ss:Width="120"/>
    <Column ss:Width="450"/>
    <Column ss:Width="100"/>
 
-   <!-- العنوان الرئيسي -->
    <Row ss:Height="50">
     <Cell ss:MergeAcross="4" ss:StyleID="title">
-     <Data ss:Type="String">📋 روابط تسجيل بصمة الوجه ورمز QR</Data>
+     <Data ss:Type="String">روابط تسجيل بصمة الوجه ورمز QR</Data>
     </Cell>
    </Row>
 
-   <!-- صف فارغ -->
    <Row ss:Height="10"></Row>
 
-   <!-- عناوين الأعمدة -->
    <Row ss:Height="36">
     <Cell ss:StyleID="header"><Data ss:Type="String">#</Data></Cell>
     <Cell ss:StyleID="header"><Data ss:Type="String">اسم الطالب</Data></Cell>
@@ -214,7 +212,6 @@ const generateExcel = (
     <Cell ss:StyleID="header"><Data ss:Type="String">صلاحية الرابط</Data></Cell>
    </Row>
 
-   <!-- بيانات الطلاب -->
    ${studentRows}
   </Table>
 
@@ -226,12 +223,23 @@ const generateExcel = (
    <SplitHorizontal>3</SplitHorizontal>
    <TopRowBottomPane>3</TopRowBottomPane>
    <ActivePane>2</ActivePane>
+   <Panes>
+    <Pane>
+     <Number>3</Number>
+     <ActiveRow>3</ActiveRow>
+    </Pane>
+    <Pane>
+     <Number>2</Number>
+     <ActiveRow>3</ActiveRow>
+    </Pane>
+   </Panes>
   </WorksheetOptions>
  </Worksheet>
 </Workbook>`;
 
+  // ✅ MIME type صحيح لـ XML
   return new Blob([xmlContent], {
-    type: 'application/vnd.ms-excel;charset=utf-8',
+    type: 'application/xml;charset=utf-8',
   });
 };
 
