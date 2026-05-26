@@ -46,200 +46,162 @@ const getFileName = (collegeName: string, stageName: string): string => {
   const { timestamp } = getFormattedDate();
   const cleanCollege = collegeName.replace(/[^\u0600-\u06FFa-zA-Z0-9]/g, '_');
   const cleanStage = stageName.replace(/[^\u0600-\u06FFa-zA-Z0-9]/g, '_');
-  // ✅ امتداد .xml يفتح بـ Excel بدون تحذير
-  return `${FILE_PREFIX}_${cleanCollege}_${cleanStage}_${timestamp}.xml`;
+  return `${FILE_PREFIX}_${cleanCollege}_${cleanStage}_${timestamp}.xls`;
 };
 
 // ============================================================
-// 📊 توليد Excel - بصيغة SpreadsheetML (RTL + بدون تحذيرات)
+// 📊 توليد Excel - HTML Table بصيغة .xls
 // ============================================================
 const generateExcel = (
   links: GeneratedLink[],
   expiryDays: number
 ): Blob => {
-  const xml = (str: string): string => {
+  const escape = (str: string): string => {
     return String(str)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&apos;');
+      .replace(/>/g, '&gt;');
   };
 
   const studentRows = links.map((link, idx) => `
-    <Row ss:Height="32">
-      <Cell ss:StyleID="numCell"><Data ss:Type="Number">${idx + 1}</Data></Cell>
-      <Cell ss:StyleID="nameCell"><Data ss:Type="String">${xml(link.studentName)}</Data></Cell>
-      <Cell ss:StyleID="codeCell"><Data ss:Type="String">${xml(link.studentCode)}</Data></Cell>
-      <Cell ss:StyleID="linkCell"><Data ss:Type="String">${xml(link.url)}</Data></Cell>
-      <Cell ss:StyleID="expiryCell"><Data ss:Type="String">${expiryDays} يوم</Data></Cell>
-    </Row>
+    <tr>
+      <td class="num">${idx + 1}</td>
+      <td class="name">${escape(link.studentName)}</td>
+      <td class="code">${escape(link.studentCode)}</td>
+      <td class="link">${escape(link.url)}</td>
+      <td class="expiry">${expiryDays} يوم</td>
+    </tr>
   `).join('');
 
-  const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:html="http://www.w3.org/TR/REC-html40">
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+xmlns:x="urn:schemas-microsoft-com:office:excel"
+xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta http-equiv="Content-Type" content="application/vnd.ms-excel; charset=UTF-8">
+<meta charset="UTF-8">
+<title>روابط التسجيل</title>
+<!--[if gte mso 9]>
+<xml>
+<x:ExcelWorkbook>
+  <x:ExcelWorksheets>
+    <x:ExcelWorksheet>
+      <x:Name>روابط التسجيل</x:Name>
+      <x:WorksheetOptions>
+        <x:DisplayRightToLeft/>
+        <x:Selected/>
+        <x:FreezePanes/>
+        <x:FrozenNoSplit/>
+        <x:SplitHorizontal>3</x:SplitHorizontal>
+        <x:TopRowBottomPane>3</x:TopRowBottomPane>
+        <x:ActivePane>2</x:ActivePane>
+      </x:WorksheetOptions>
+    </x:ExcelWorksheet>
+  </x:ExcelWorksheets>
+</x:ExcelWorkbook>
+</xml>
+<![endif]-->
+<style>
+table {
+  border-collapse: collapse;
+  direction: rtl;
+  mso-table-dir: rtl;
+}
+td, th {
+  font-family: Calibri, Arial, Tahoma, sans-serif;
+  padding: 10px 12px;
+  border: 1px solid #C7D2FE;
+  mso-number-format: "\\@";
+}
+.title {
+  font-size: 22pt;
+  font-weight: bold;
+  color: #FFFFFF;
+  background-color: #4F46E5;
+  text-align: center;
+  height: 50px;
+  border: 2px solid #3730A3;
+}
+.header {
+  font-size: 14pt;
+  font-weight: bold;
+  color: #FFFFFF;
+  background-color: #6366F1;
+  text-align: center;
+  height: 36px;
+  border: 1px solid #4338CA;
+}
+.num {
+  text-align: center;
+  font-size: 13pt;
+  font-weight: bold;
+  color: #4F46E5;
+  background-color: #E0E7FF;
+  width: 50px;
+}
+.name {
+  text-align: right;
+  font-size: 13pt;
+  font-weight: bold;
+  color: #111827;
+  background-color: #FFFFFF;
+  width: 220px;
+}
+.code {
+  text-align: center;
+  font-family: Consolas, monospace;
+  font-size: 13pt;
+  font-weight: bold;
+  color: #059669;
+  background-color: #ECFDF5;
+  width: 120px;
+}
+.link {
+  text-align: left;
+  font-family: Consolas, monospace;
+  font-size: 11pt;
+  color: #2563EB;
+  background-color: #EFF6FF;
+  width: 450px;
+  word-break: break-all;
+}
+.expiry {
+  text-align: center;
+  font-size: 12pt;
+  font-weight: bold;
+  color: #D97706;
+  background-color: #FEF3C7;
+  width: 100px;
+}
+.empty {
+  height: 10px;
+  border: none;
+}
+</style>
+</head>
+<body>
+<table>
+  <tr>
+    <td class="title" colspan="5">روابط تسجيل بصمة الوجه ورمز QR</td>
+  </tr>
+  <tr>
+    <td class="empty" colspan="5"></td>
+  </tr>
+  <tr>
+    <td class="header">#</td>
+    <td class="header">اسم الطالب</td>
+    <td class="header">كود الطالب</td>
+    <td class="header">رابط التسجيل</td>
+    <td class="header">صلاحية الرابط</td>
+  </tr>
+  ${studentRows}
+</table>
+</body>
+</html>`;
 
- <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
-  <Title>روابط التسجيل</Title>
-  <Author>نظام إدارة الطلاب</Author>
-  <Created>${new Date().toISOString()}</Created>
- </DocumentProperties>
-
- <ExcelWorkbook xmlns="urn:schemas-microsoft-com:office:excel">
-  <WindowHeight>9000</WindowHeight>
-  <WindowWidth>16000</WindowWidth>
-  <ProtectStructure>False</ProtectStructure>
-  <ProtectWindows>False</ProtectWindows>
- </ExcelWorkbook>
-
- <Styles>
-  <Style ss:ID="Default" ss:Name="Normal">
-   <Alignment ss:Vertical="Center" ss:ReadingOrder="RightToLeft"/>
-   <Font ss:FontName="Calibri" ss:Size="11"/>
-  </Style>
-
-  <Style ss:ID="title">
-   <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:ReadingOrder="RightToLeft"/>
-   <Font ss:FontName="Calibri" ss:Size="20" ss:Bold="1" ss:Color="#FFFFFF"/>
-   <Interior ss:Color="#4F46E5" ss:Pattern="Solid"/>
-   <Borders>
-    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#3730A3"/>
-    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#3730A3"/>
-    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#3730A3"/>
-    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#3730A3"/>
-   </Borders>
-  </Style>
-
-  <Style ss:ID="header">
-   <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:ReadingOrder="RightToLeft"/>
-   <Font ss:FontName="Calibri" ss:Size="14" ss:Bold="1" ss:Color="#FFFFFF"/>
-   <Interior ss:Color="#6366F1" ss:Pattern="Solid"/>
-   <Borders>
-    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#4338CA"/>
-    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#4338CA"/>
-    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#4338CA"/>
-    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#4338CA"/>
-   </Borders>
-  </Style>
-
-  <Style ss:ID="numCell">
-   <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:ReadingOrder="RightToLeft"/>
-   <Font ss:FontName="Calibri" ss:Size="13" ss:Bold="1" ss:Color="#4F46E5"/>
-   <Interior ss:Color="#E0E7FF" ss:Pattern="Solid"/>
-   <Borders>
-    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-   </Borders>
-  </Style>
-
-  <Style ss:ID="nameCell">
-   <Alignment ss:Horizontal="Right" ss:Vertical="Center" ss:ReadingOrder="RightToLeft"/>
-   <Font ss:FontName="Calibri" ss:Size="13" ss:Bold="1" ss:Color="#111827"/>
-   <Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/>
-   <Borders>
-    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-   </Borders>
-  </Style>
-
-  <Style ss:ID="codeCell">
-   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
-   <Font ss:FontName="Consolas" ss:Size="13" ss:Bold="1" ss:Color="#059669"/>
-   <Interior ss:Color="#ECFDF5" ss:Pattern="Solid"/>
-   <Borders>
-    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-   </Borders>
-  </Style>
-
-  <Style ss:ID="linkCell">
-   <Alignment ss:Horizontal="Left" ss:Vertical="Center" ss:WrapText="1"/>
-   <Font ss:FontName="Consolas" ss:Size="11" ss:Color="#2563EB"/>
-   <Interior ss:Color="#EFF6FF" ss:Pattern="Solid"/>
-   <Borders>
-    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-   </Borders>
-  </Style>
-
-  <Style ss:ID="expiryCell">
-   <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:ReadingOrder="RightToLeft"/>
-   <Font ss:FontName="Calibri" ss:Size="12" ss:Bold="1" ss:Color="#D97706"/>
-   <Interior ss:Color="#FEF3C7" ss:Pattern="Solid"/>
-   <Borders>
-    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
-   </Borders>
-  </Style>
- </Styles>
-
- <Worksheet ss:Name="روابط التسجيل" ss:RightToLeft="1">
-  <Table>
-   <Column ss:Width="50"/>
-   <Column ss:Width="220"/>
-   <Column ss:Width="120"/>
-   <Column ss:Width="450"/>
-   <Column ss:Width="100"/>
-
-   <Row ss:Height="50">
-    <Cell ss:MergeAcross="4" ss:StyleID="title">
-     <Data ss:Type="String">روابط تسجيل بصمة الوجه ورمز QR</Data>
-    </Cell>
-   </Row>
-
-   <Row ss:Height="10"></Row>
-
-   <Row ss:Height="36">
-    <Cell ss:StyleID="header"><Data ss:Type="String">#</Data></Cell>
-    <Cell ss:StyleID="header"><Data ss:Type="String">اسم الطالب</Data></Cell>
-    <Cell ss:StyleID="header"><Data ss:Type="String">كود الطالب</Data></Cell>
-    <Cell ss:StyleID="header"><Data ss:Type="String">رابط التسجيل</Data></Cell>
-    <Cell ss:StyleID="header"><Data ss:Type="String">صلاحية الرابط</Data></Cell>
-   </Row>
-
-   ${studentRows}
-  </Table>
-
-  <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">
-   <DisplayRightToLeft/>
-   <Selected/>
-   <FreezePanes/>
-   <FrozenNoSplit/>
-   <SplitHorizontal>3</SplitHorizontal>
-   <TopRowBottomPane>3</TopRowBottomPane>
-   <ActivePane>2</ActivePane>
-   <Panes>
-    <Pane>
-     <Number>3</Number>
-     <ActiveRow>3</ActiveRow>
-    </Pane>
-    <Pane>
-     <Number>2</Number>
-     <ActiveRow>3</ActiveRow>
-    </Pane>
-   </Panes>
-  </WorksheetOptions>
- </Worksheet>
-</Workbook>`;
-
-  // ✅ MIME type صحيح لـ XML
-  return new Blob([xmlContent], {
-    type: 'application/xml;charset=utf-8',
+  // BOM للدعم العربي + المحتوى
+  const bom = '\uFEFF';
+  return new Blob([bom + html], {
+    type: 'application/vnd.ms-excel;charset=utf-8',
   });
 };
 
