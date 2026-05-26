@@ -14,26 +14,15 @@ export default defineConfig({
     tailwindcss(),
     viteSingleFile(),
   ],
-
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
     },
   },
-
-  optimizeDeps: {
-    exclude: ["face-api.js", "html5-qrcode"],
-  },
-
   build: {
     target: "esnext",
-    assetsInlineLimit: 100000000,
-    chunkSizeWarningLimit: 100000000,
-    cssCodeSplit: false,
     rollupOptions: {
-      output: {
-        inlineDynamicImports: true,
-      },
+      external: [],
     },
   },
 });
