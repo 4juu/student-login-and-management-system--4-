@@ -42,172 +42,297 @@ const getFormattedDate = () => {
   };
 };
 
+import * as XLSX from 'xlsx-js-style';
+
+// ============================================================
+// 📁 توليد اسم الملف
+// ============================================================
 const getFileName = (collegeName: string, stageName: string): string => {
   const { timestamp } = getFormattedDate();
   const cleanCollege = collegeName.replace(/[^\u0600-\u06FFa-zA-Z0-9]/g, '_');
   const cleanStage = stageName.replace(/[^\u0600-\u06FFa-zA-Z0-9]/g, '_');
-  return `${FILE_PREFIX}_${cleanCollege}_${cleanStage}_${timestamp}.xls`;
+  return `${FILE_PREFIX}_${cleanCollege}_${cleanStage}_${timestamp}.xlsx`;
 };
 
 // ============================================================
-// 📊 توليد Excel - HTML Table بصيغة .xls
+// 📊 توليد Excel XLSX حقيقي مع تنسيقات كاملة
 // ============================================================
 const generateExcel = (
   links: GeneratedLink[],
   expiryDays: number
 ): Blob => {
-  const escape = (str: string): string => {
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+  // ── بناء البيانات ──
+  const data: any[][] = [];
+
+  // الصف 1: العنوان
+  data.push(['روابط تسجيل بصمة الوجه ورمز QR', '', '', '', '']);
+
+  // الصف 2: فارغ
+  data.push(['', '', '', '', '']);
+
+  // الصف 3: عناوين الأعمدة
+  data.push(['#', 'اسم الطالب', 'كود الطالب', 'رابط التسجيل', 'صلاحية الرابط']);
+
+  // صفوف البيانات
+  links.forEach((link, idx) => {
+    data.push([
+      idx + 1,
+      link.studentName,
+      link.studentCode,
+      link.url,
+      `${expiryDays} يوم`,
+    ]);
+  });
+
+  // ── إنشاء ورقة العمل ──
+  const ws = XLSX.utils.aoa_to_sheet(data);
+
+  // ── دمج خلية العنوان ──
+  ws['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }, // العنوان من A1 إلى E1
+  ];
+
+  // ── عرض الأعمدة ──
+  ws['!cols'] = [
+    { wch: 6 },    // #
+    { wch: 30 },   // اسم الطالب
+    { wch: 15 },   // كود الطالب
+    { wch: 60 },   // رابط التسجيل
+    { wch: 15 },   // صلاحية الرابط
+  ];
+
+  // ── ارتفاع الصفوف ──
+  ws['!rows'] = [];
+  ws['!rows'][0] = { hpt: 45 };  // العنوان
+  ws['!rows'][1] = { hpt: 10 };  // فارغ
+  ws['!rows'][2] = { hpt: 32 };  // العناوين
+  for (let i = 3; i < data.length; i++) {
+    ws['!rows'][i] = { hpt: 28 }; // بيانات
+  }
+
+  // ── ✅ اتجاه RTL ──
+  if (!ws['!sheetView']) ws['!sheetView'] = [];
+  (ws as any)['!sheetView'] = [{ RTL: true }];
+
+  // ── 🎨 التنسيقات (Styles) ──
+
+  // 1. خلية العنوان
+  const titleStyle = {
+    font: {
+      name: 'Calibri',
+      sz: 20,
+      bold: true,
+      color: { rgb: 'FFFFFF' },
+    },
+    fill: {
+      patternType: 'solid',
+      fgColor: { rgb: '4F46E5' },
+    },
+    alignment: {
+      horizontal: 'center',
+      vertical: 'center',
+      readingOrder: 2, // RTL
+    },
+    border: {
+      top: { style: 'medium', color: { rgb: '3730A3' } },
+      bottom: { style: 'medium', color: { rgb: '3730A3' } },
+      left: { style: 'medium', color: { rgb: '3730A3' } },
+      right: { style: 'medium', color: { rgb: '3730A3' } },
+    },
   };
 
-  const studentRows = links.map((link, idx) => `
-    <tr>
-      <td class="num" x:num>${idx + 1}</td>
-      <td class="name">${escape(link.studentName)}</td>
-      <td class="code">${escape(link.studentCode)}</td>
-      <td class="link">${escape(link.url)}</td>
-      <td class="expiry">${expiryDays} يوم</td>
-    </tr>
-  `).join('');
+  // 2. عناوين الأعمدة
+  const headerStyle = {
+    font: {
+      name: 'Calibri',
+      sz: 14,
+      bold: true,
+      color: { rgb: 'FFFFFF' },
+    },
+    fill: {
+      patternType: 'solid',
+      fgColor: { rgb: '6366F1' },
+    },
+    alignment: {
+      horizontal: 'center',
+      vertical: 'center',
+      readingOrder: 2,
+    },
+    border: {
+      top: { style: 'thin', color: { rgb: '4338CA' } },
+      bottom: { style: 'thin', color: { rgb: '4338CA' } },
+      left: { style: 'thin', color: { rgb: '4338CA' } },
+      right: { style: 'thin', color: { rgb: '4338CA' } },
+    },
+  };
 
-  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
-xmlns:x="urn:schemas-microsoft-com:office:excel"
-xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-<meta http-equiv="Content-Type" content="application/vnd.ms-excel; charset=UTF-8">
-<meta charset="UTF-8">
-<title>روابط التسجيل</title>
-<!--[if gte mso 9]>
-<xml>
-<x:ExcelWorkbook>
-  <x:ExcelWorksheets>
-    <x:ExcelWorksheet>
-      <x:Name>روابط التسجيل</x:Name>
-      <x:WorksheetOptions>
-        <x:DisplayRightToLeft/>
-        <x:Selected/>
-        <x:FreezePanes/>
-        <x:FrozenNoSplit/>
-        <x:SplitHorizontal>3</x:SplitHorizontal>
-        <x:TopRowBottomPane>3</x:TopRowBottomPane>
-        <x:ActivePane>2</x:ActivePane>
-      </x:WorksheetOptions>
-    </x:ExcelWorksheet>
-  </x:ExcelWorksheets>
-</x:ExcelWorkbook>
-</xml>
-<![endif]-->
-<style>
-table {
-  border-collapse: collapse;
-  direction: rtl;
-  mso-table-dir: rtl;
-}
-td, th {
-  font-family: Calibri, Arial, Tahoma, sans-serif;
-  padding: 10px 12px;
-  border: 1px solid #C7D2FE;
-}
-.title {
-  font-size: 22pt;
-  font-weight: bold;
-  color: #FFFFFF;
-  background-color: #4F46E5;
-  text-align: center;
-  height: 50px;
-  border: 2px solid #3730A3;
-  mso-number-format: "\\@";
-}
-.header {
-  font-size: 14pt;
-  font-weight: bold;
-  color: #FFFFFF;
-  background-color: #6366F1;
-  text-align: center;
-  height: 36px;
-  border: 1px solid #4338CA;
-  mso-number-format: "\\@";
-}
-.num {
-  text-align: center;
-  font-size: 13pt;
-  font-weight: bold;
-  color: #4F46E5;
-  background-color: #E0E7FF;
-  width: 50px;
-  mso-number-format: "0";
-  vnd.ms-excel.numberformat: 0;
-}
-.name {
-  text-align: right;
-  font-size: 13pt;
-  font-weight: bold;
-  color: #111827;
-  background-color: #FFFFFF;
-  width: 220px;
-  mso-number-format: "\\@";
-}
-.code {
-  text-align: center;
-  font-family: Consolas, monospace;
-  font-size: 13pt;
-  font-weight: bold;
-  color: #059669;
-  background-color: #ECFDF5;
-  width: 120px;
-  mso-number-format: "\\@";
-}
-.link {
-  text-align: left;
-  font-family: Consolas, monospace;
-  font-size: 11pt;
-  color: #2563EB;
-  background-color: #EFF6FF;
-  width: 450px;
-  word-break: break-all;
-  mso-number-format: "\\@";
-}
-.expiry {
-  text-align: center;
-  font-size: 12pt;
-  font-weight: bold;
-  color: #D97706;
-  background-color: #FEF3C7;
-  width: 100px;
-  mso-number-format: "\\@";
-}
-.empty {
-  height: 10px;
-  border: none;
-}
-</style>
-</head>
-<body>
-<table>
-  <tr>
-    <td class="title" colspan="5">روابط تسجيل بصمة الوجه ورمز QR</td>
-  </tr>
-  <tr>
-    <td class="empty" colspan="5"></td>
-  </tr>
-  <tr>
-    <td class="header">#</td>
-    <td class="header">اسم الطالب</td>
-    <td class="header">كود الطالب</td>
-    <td class="header">رابط التسجيل</td>
-    <td class="header">صلاحية الرابط</td>
-  </tr>
-  ${studentRows}
-</table>
-</body>
-</html>`;
+  // 3. خلية الرقم
+  const numStyle = {
+    font: {
+      name: 'Calibri',
+      sz: 13,
+      bold: true,
+      color: { rgb: '4F46E5' },
+    },
+    fill: {
+      patternType: 'solid',
+      fgColor: { rgb: 'E0E7FF' },
+    },
+    alignment: {
+      horizontal: 'center',
+      vertical: 'center',
+    },
+    border: {
+      top: { style: 'thin', color: { rgb: 'C7D2FE' } },
+      bottom: { style: 'thin', color: { rgb: 'C7D2FE' } },
+      left: { style: 'thin', color: { rgb: 'C7D2FE' } },
+      right: { style: 'thin', color: { rgb: 'C7D2FE' } },
+    },
+  };
 
-  const bom = '\uFEFF';
-  return new Blob([bom + html], {
-    type: 'application/vnd.ms-excel;charset=utf-8',
+  // 4. خلية الاسم
+  const nameStyle = {
+    font: {
+      name: 'Calibri',
+      sz: 13,
+      bold: true,
+      color: { rgb: '111827' },
+    },
+    fill: {
+      patternType: 'solid',
+      fgColor: { rgb: 'FFFFFF' },
+    },
+    alignment: {
+      horizontal: 'right',
+      vertical: 'center',
+      readingOrder: 2,
+    },
+    border: {
+      top: { style: 'thin', color: { rgb: 'C7D2FE' } },
+      bottom: { style: 'thin', color: { rgb: 'C7D2FE' } },
+      left: { style: 'thin', color: { rgb: 'C7D2FE' } },
+      right: { style: 'thin', color: { rgb: 'C7D2FE' } },
+    },
+  };
+
+  // 5. خلية الكود
+  const codeStyle = {
+    font: {
+      name: 'Consolas',
+      sz: 13,
+      bold: true,
+      color: { rgb: '059669' },
+    },
+    fill: {
+      patternType: 'solid',
+      fgColor: { rgb: 'ECFDF5' },
+    },
+    alignment: {
+      horizontal: 'center',
+      vertical: 'center',
+    },
+    border: {
+      top: { style: 'thin', color: { rgb: 'C7D2FE' } },
+      bottom: { style: 'thin', color: { rgb: 'C7D2FE' } },
+      left: { style: 'thin', color: { rgb: 'C7D2FE' } },
+      right: { style: 'thin', color: { rgb: 'C7D2FE' } },
+    },
+  };
+
+  // 6. خلية الرابط
+  const linkStyle = {
+    font: {
+      name: 'Consolas',
+      sz: 11,
+      color: { rgb: '2563EB' },
+    },
+    fill: {
+      patternType: 'solid',
+      fgColor: { rgb: 'EFF6FF' },
+    },
+    alignment: {
+      horizontal: 'left',
+      vertical: 'center',
+      wrapText: true,
+    },
+    border: {
+      top: { style: 'thin', color: { rgb: 'C7D2FE' } },
+      bottom: { style: 'thin', color: { rgb: 'C7D2FE' } },
+      left: { style: 'thin', color: { rgb: 'C7D2FE' } },
+      right: { style: 'thin', color: { rgb: 'C7D2FE' } },
+    },
+  };
+
+  // 7. خلية الصلاحية
+  const expiryStyle = {
+    font: {
+      name: 'Calibri',
+      sz: 12,
+      bold: true,
+      color: { rgb: 'D97706' },
+    },
+    fill: {
+      patternType: 'solid',
+      fgColor: { rgb: 'FEF3C7' },
+    },
+    alignment: {
+      horizontal: 'center',
+      vertical: 'center',
+      readingOrder: 2,
+    },
+    border: {
+      top: { style: 'thin', color: { rgb: 'C7D2FE' } },
+      bottom: { style: 'thin', color: { rgb: 'C7D2FE' } },
+      left: { style: 'thin', color: { rgb: 'C7D2FE' } },
+      right: { style: 'thin', color: { rgb: 'C7D2FE' } },
+    },
+  };
+
+  // ── تطبيق التنسيقات على الخلايا ──
+
+  // خلية العنوان (A1)
+  ws['A1'].s = titleStyle;
+
+  // خلايا العناوين (A3 → E3)
+  ['A3', 'B3', 'C3', 'D3', 'E3'].forEach(cell => {
+    if (ws[cell]) ws[cell].s = headerStyle;
+  });
+
+  // خلايا البيانات
+  for (let i = 0; i < links.length; i++) {
+    const rowNum = i + 4; // البيانات تبدأ من الصف 4
+    const numCell = `A${rowNum}`;
+    const nameCell = `B${rowNum}`;
+    const codeCell = `C${rowNum}`;
+    const linkCell = `D${rowNum}`;
+    const expiryCell = `E${rowNum}`;
+
+    if (ws[numCell]) ws[numCell].s = numStyle;
+    if (ws[nameCell]) ws[nameCell].s = nameStyle;
+    if (ws[codeCell]) ws[codeCell].s = codeStyle;
+    if (ws[linkCell]) ws[linkCell].s = linkStyle;
+    if (ws[expiryCell]) ws[expiryCell].s = expiryStyle;
+  }
+
+  // ── تجميد الصفوف العلوية ──
+  ws['!freeze'] = { xSplit: 0, ySplit: 3 };
+
+  // ── إنشاء الـ Workbook ──
+  const wb = XLSX.utils.book_new();
+  wb.Workbook = {
+    Views: [{ RTL: true }],
+  };
+  XLSX.utils.book_append_sheet(wb, ws, 'روابط التسجيل');
+
+  // ── تحويل لـ Blob ──
+  const wbout = XLSX.write(wb, {
+    bookType: 'xlsx',
+    type: 'array',
+    cellStyles: true,
+  });
+
+  return new Blob([wbout], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
 };
 
