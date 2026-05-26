@@ -336,7 +336,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
           placeholder={
             currentUser.role === 'admin'
               ? 'مدير النظام - مسؤول عن إدارة جميع حسابات التدريسيين'
-              : 'مثال: أستاذ مادة الرياضيات للمرحلة الثانية'
+              : 'مثال: أستاذ لمادة الكيمياء العضوية للمرحلة الثانية'
           }
           dir="rtl"
         />
@@ -469,10 +469,8 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
           <div className="text-sm text-blue-800">
             <p className="font-medium mb-1">   معلومات </p>
             <ul className="list-disc list-inside space-y-1">
-              <li>الصورة تُحفظ في قاعدة البيانات مباشرة</li>
               <li>الحد الأقصى للصورة 1MB لأفضل أداء</li>
               <li>البايو يستخدم لتعريف التدريسيين والمواد</li>
-              <li>جميع التغييرات محفوظة في Firebase بشكل آمن</li>
               <li>
                 <strong>البيانات تُحمّل تلقائياً عند تسجيل الدخول ✓</strong>
               </li>
@@ -490,7 +488,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
               متصل بـ Firebase
             </p>
           </div>
-          <p className="text-xs text-gray-600">البيانات محفوظة في السحابة ☁️</p>
+          <p className="text-xs text-gray-600"></p>
         </div>
       </div>
     </div>

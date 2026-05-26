@@ -42,7 +42,7 @@ export const CollegeManager: React.FC<CollegeManagerProps> = ({
     { name: 'indigo', class: 'from-indigo-500 to-indigo-700', label: 'نيلي' },
   ];
 
-  const iconOptions = ['🏛️', '💊', '⚕️', '🏥', '🦷', '👁️', '🧪', '🔬', '📚', '⚖️', '💻', '🎓'];
+  const iconOptions = ['🏛️', '💊', '⚕️', '🏥', '🦷', '👁️', '🧪', '🔬', '🔍', '⚖️', '💻', '🎓'];
 
   const getColorClass = (color?: string) => {
     const found = colorOptions.find(c => c.name === color);
@@ -279,14 +279,14 @@ export const CollegeManager: React.FC<CollegeManagerProps> = ({
                     <div className="flex flex-wrap gap-2 mb-4">
                       <button
                         onClick={() => setShowAddStage(showAddStage === college.id ? null : college.id)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition flex items-center gap-2"
+                        className="bg-blue-600 hover:bg-blue-700 text-red font-medium py-2 px-4 rounded-md transition flex items-center gap-2"
                       >
                         ➕ إضافة مرحلة
                       </button>
                       {collegeStages.length === 0 && (
                         <button
                           onClick={() => handleQuickAdd5Stages(college.id)}
-                          className="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-md transition flex items-center gap-2"
+                          className="bg-purple-600 hover:bg-purple-700 text-red font-medium py-2 px-4 rounded-md transition flex items-center gap-2"
                         >
                           ⚡ إضافة 5 مراحل دفعة واحدة
                         </button>
