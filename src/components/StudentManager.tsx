@@ -6,6 +6,7 @@ import {
   compressFaceDescriptor,
   detectDescriptorFormat,
   getCompressionStats,
+  hasFaceDescriptor,
 } from '../services/faceCompression';
 
 interface StudentManagerProps {
@@ -452,7 +453,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     }
 
     const stats = getCompressionStats(students);
-    
+
     if (!window.confirm(
       `🗜️ سيتم ضغط ${uncompressedStudents.length} بصمة\n\n` +
       `💾 توفير متوقع: ~${stats.potentialSavingsKB.toFixed(1)} KB\n` +
@@ -467,17 +468,16 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       let count = 0;
       for (const student of uncompressedStudents) {
         if (!student.faceDescriptor) continue;
-        
+
         const compressed = compressFaceDescriptor(student.faceDescriptor);
         onUpdateStudent(student.id, {
           faceDescriptor: compressed,
           faceCompressed: true,
         });
-        
+
         count++;
         setCompressionProgress({ current: count, total: uncompressedStudents.length });
-        
-        // فاصل صغير لتحديث الواجهة
+
         if (count % 10 === 0) {
           await new Promise(r => setTimeout(r, 50));
         }
@@ -535,10 +535,11 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   const studentsWithoutUniId = students.length - studentsWithUniId;
   const studentsWithQr = students.filter(s => s.qrCodeId).length;
   const studentsWithoutQr = students.length - studentsWithQr;
-  const studentsWithFace = students.filter(s => s.faceDescriptor && s.faceDescriptor.length > 0).length;
+
+  // ✅ التعديل المهم: استخدام hasFaceDescriptor
+  const studentsWithFace = students.filter(s => hasFaceDescriptor(s.faceDescriptor)).length;
   const studentsWithoutFace = students.length - studentsWithFace;
 
-  // 🆕 إحصائيات الضغط
   const compressionStats = useMemo(() => getCompressionStats(students), [students]);
 
   const pageIds = paginatedStudents.map(s => s.id);
@@ -759,7 +760,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             </span>
           </h3>
 
-          {/* الإحصائيات الأساسية - 4 خانات */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
             <div className="bg-white rounded-lg p-2 text-center border border-purple-200">
               <div className="text-2xl font-bold text-purple-600">{studentsWithFace}</div>
@@ -775,10 +775,9 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               </div>
               <div className="text-xs text-pink-700">نسبة الإكمال</div>
             </div>
-            {/* 🆕 خانة الحجم */}
             <div className="bg-white rounded-lg p-2 text-center border border-emerald-200">
               <div className="text-2xl font-bold text-emerald-600">
-                {compressionStats.totalSizeKB < 1024 
+                {compressionStats.totalSizeKB < 1024
                   ? `${compressionStats.totalSizeKB.toFixed(1)}`
                   : `${(compressionStats.totalSizeKB / 1024).toFixed(2)}`
                 }
@@ -789,7 +788,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             </div>
           </div>
 
-          {/* 🆕 لوحة الضغط الذكية */}
           {studentsWithFace > 0 && (
             <div className="bg-white rounded-lg p-3 mb-3 border-2 border-purple-200 shadow-sm">
               <div className="flex items-center justify-between mb-2">
@@ -802,7 +800,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                     disabled={compressing}
                     className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 text-white text-xs font-bold rounded-md transition shadow-sm"
                   >
-                    {compressing 
+                    {compressing
                       ? `⏳ ${compressionProgress.current}/${compressionProgress.total}`
                       : `🗜️ ضغط ${compressionStats.uncompressedCount} بصمة`
                     }
@@ -810,11 +808,10 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                 )}
               </div>
 
-              {/* شريط تقدم الضغط */}
               {compressing && (
                 <div className="mb-2">
                   <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                    <div 
+                    <div
                       className="bg-gradient-to-r from-emerald-500 to-teal-500 h-2 transition-all duration-200"
                       style={{ width: `${(compressionProgress.current / compressionProgress.total) * 100}%` }}
                     />
@@ -1081,9 +1078,12 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             ) : (
               paginatedStudents.map((student, index) => {
                 const globalIndex = (safeCurrentPage - 1) * pageSize + index + 1;
-                const hasFace = student.faceDescriptor && student.faceDescriptor.length > 0;
+
+                // ✅ التعديل المهم: استخدام hasFaceDescriptor
+                const hasFace = hasFaceDescriptor(student.faceDescriptor);
                 const faceFormat = hasFace ? detectDescriptorFormat(student.faceDescriptor) : null;
-                const isCompressed = faceFormat === 'compressed' || faceFormat === 'base64';
+                const isCompressed = faceFormat === 'compressed' || faceFormat === 'base64' || faceFormat === 'multi';
+
                 return (
                   <tr
                     key={student.id}
@@ -1233,7 +1233,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                       )}
                     </td>
 
-                    {/* عمود بصمة الوجه - مع علامة الضغط */}
                     <td className="px-4 py-4 whitespace-nowrap text-center">
                       <div className="flex items-center justify-center gap-1">
                         {hasFace ? (
@@ -1245,12 +1244,15 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                                   : 'bg-amber-50 text-amber-700 border-amber-200'
                               }`}
                               title={
-                                student.faceRegisteredAt 
-                                  ? `سُجلت في: ${new Date(student.faceRegisteredAt).toLocaleDateString('ar-EG')}\n${isCompressed ? '🗜️ مضغوطة' : '⚠️ غير مضغوطة'}`
+                                student.faceRegisteredAt
+                                  ? `سُجلت في: ${new Date(student.faceRegisteredAt).toLocaleDateString('ar-EG')}\n${
+                                      faceFormat === 'multi' ? '🆕 متعدد الزوايا (Multi)' :
+                                      isCompressed ? '🗜️ مضغوطة' : '⚠️ غير مضغوطة'
+                                    }`
                                   : 'مسجّلة'
                               }
                             >
-                              {isCompressed ? '✅ 🗜️' : '✅ ⚠️'}
+                              {faceFormat === 'multi' ? '✅ 🆕' : isCompressed ? '✅ 🗜️' : '✅ ⚠️'}
                             </span>
                             {onUpdateStudent && (
                               <button
@@ -1373,7 +1375,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         </div>
       )}
 
-      {/* نافذة تسجيل البصمات */}
       {showFaceRegister && onUpdateStudent && (
         <FaceRegister
           students={students}
