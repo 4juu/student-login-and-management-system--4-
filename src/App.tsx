@@ -52,11 +52,51 @@ interface AllStagesData {
 }
 
 function App() {
-  // 🆕 كشف توكن التسجيل الذاتي من URL (أول شي قبل أي شي)
+  // 🆕 كشف توكن التسجيل الذاتي من URL - بطرق متعددة لدعم كل المتصفحات
   const [registerToken, setRegisterToken] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
-    const params = new URLSearchParams(window.location.search);
-    return params.get('reg');
+
+    try {
+      // 1️⃣ من Query String العادي (?reg=xxx)
+      const params = new URLSearchParams(window.location.search);
+      let token = params.get('reg');
+
+      // 2️⃣ من Hash (#reg=xxx) - لبعض الـ in-app browsers
+      if (!token && window.location.hash) {
+        const hashStr = window.location.hash.replace(/^#\/?/, '');
+        const hashParams = new URLSearchParams(hashStr);
+        token = hashParams.get('reg');
+      }
+
+      // 3️⃣ من URL كامل بـ regex (آخر حل احتياطي)
+      if (!token) {
+        const fullUrl = window.location.href;
+        const match = fullUrl.match(/[?&#]reg=([^&#]+)/);
+        if (match && match[1]) {
+          token = decodeURIComponent(match[1]);
+        }
+      }
+
+      // 4️⃣ من sessionStorage (إذا حُفظ سابقاً)
+      if (!token) {
+        token = sessionStorage.getItem('pendingRegToken');
+      }
+
+      // ✅ حفظ التوكن في sessionStorage لمنع فقدانه عند Refresh
+      if (token) {
+        sessionStorage.setItem('pendingRegToken', token);
+        console.log('🔗 ✅ Register Token detected:', token);
+        console.log('🔗 URL:', window.location.href);
+      } else {
+        console.log('🔗 ❌ No register token in URL');
+        console.log('🔗 URL:', window.location.href);
+      }
+
+      return token;
+    } catch (e) {
+      console.error('❌ خطأ في قراءة التوكن:', e);
+      return null;
+    }
   });
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -108,6 +148,53 @@ function App() {
     return currentUser?.uid || '';
   };
 
+  // 🆕 فحص متأخر للتوكن (للموبايل والـ in-app browsers)
+  useEffect(() => {
+    if (registerToken) return; // عندنا توكن، ما نحتاج فحص ثاني
+
+    const recheckToken = () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        let token = params.get('reg');
+
+        if (!token && window.location.hash) {
+          const hashStr = window.location.hash.replace(/^#\/?/, '');
+          const hashParams = new URLSearchParams(hashStr);
+          token = hashParams.get('reg');
+        }
+
+        if (!token) {
+          const match = window.location.href.match(/[?&#]reg=([^&#]+)/);
+          if (match && match[1]) {
+            token = decodeURIComponent(match[1]);
+          }
+        }
+
+        if (!token) {
+          token = sessionStorage.getItem('pendingRegToken');
+        }
+
+        if (token) {
+          console.log('🔗 ✅ Token detected on recheck:', token);
+          sessionStorage.setItem('pendingRegToken', token);
+          setRegisterToken(token);
+        }
+      } catch (e) {
+        console.error('❌ خطأ في الفحص المتأخر للتوكن:', e);
+      }
+    };
+
+    // فحص فوري + بعد 100ms + بعد 500ms (للموبايل البطيء)
+    recheckToken();
+    const t1 = setTimeout(recheckToken, 100);
+    const t2 = setTimeout(recheckToken, 500);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [registerToken]);
+
   useEffect(() => {
     const handleBeforeUnload = () => {
       flushAllPendingSaves();
@@ -122,6 +209,7 @@ function App() {
   useEffect(() => {
     // 🆕 لا نسجل المستخدم تلقائياً إذا كان في صفحة التسجيل الذاتي
     if (registerToken) {
+      console.log('🎯 صفحة التسجيل الذاتي - تخطي auth check');
       setLoading(false);
       return;
     }
@@ -587,8 +675,14 @@ function App() {
   // 🆕 معالجة خروج الطالب من صفحة التسجيل الذاتي
   const handleExitSelfRegister = () => {
     setRegisterToken(null);
+
+    // ✅ نظف sessionStorage
+    sessionStorage.removeItem('pendingRegToken');
+
+    // ✅ نظف URL
     const url = new URL(window.location.href);
     url.searchParams.delete('reg');
+    url.hash = ''; // نظف الـ hash أيضاً
     window.history.replaceState({}, '', url.toString());
   };
 
