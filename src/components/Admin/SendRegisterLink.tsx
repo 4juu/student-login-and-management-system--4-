@@ -22,34 +22,9 @@ interface GeneratedLink {
 }
 
 // ============================================================
-// 🔒 بادئات الملفات لمنع التضارب مع ملفات استيراد الطلاب
+// 🔒 بادئة مختلفة لمنع التضارب مع ملف استيراد الطلاب
 // ============================================================
-// ملفات استيراد الطلاب: students_import_*.xlsx
-// ملفات الروابط:        links_register_*.xlsx / .xls / .csv
-// ============================================================
-
-const FILE_PREFIX = 'links_register'; // مختلف عن students_import
-
-// ============================================================
-// 🛡️ علامة تمييز داخل الملف (لمنع رفعه كملف استيراد بالغلط)
-// ============================================================
-const FILE_MARKER = '⚠️_ملف_روابط_تسجيل_ليس_ملف_استيراد_طلاب';
-
-// ============================================================
-// 📊 مساعدات
-// ============================================================
-
-const escapeHtml = (str: string): string => {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-};
-
-const csvRow = (cells: string[]): string => {
-  return cells.map(c => `"${c.replace(/"/g, '""')}"`).join(',');
-};
+const FILE_PREFIX = 'register_links';
 
 const getFormattedDate = () => {
   const now = new Date();
@@ -67,324 +42,196 @@ const getFormattedDate = () => {
   };
 };
 
-const getFileName = (
-  ext: string,
-  collegeName: string,
-  stageName: string
-): string => {
+const getFileName = (collegeName: string, stageName: string): string => {
   const { timestamp } = getFormattedDate();
-  // اسم مميز يختلف تماماً عن ملف استيراد الطلاب
-  return `${FILE_PREFIX}_${collegeName}_${stageName}_${timestamp}.${ext}`;
+  // تنظيف الأسماء من الرموز الخاصة
+  const cleanCollege = collegeName.replace(/[^\u0600-\u06FFa-zA-Z0-9]/g, '_');
+  const cleanStage = stageName.replace(/[^\u0600-\u06FFa-zA-Z0-9]/g, '_');
+  return `${FILE_PREFIX}_${cleanCollege}_${cleanStage}_${timestamp}.xls`;
 };
 
 // ============================================================
-// 📗 Excel ملوّن (.xls) - HTML Table مع تنسيقات
+// 📊 توليد Excel - بصيغة Excel XML 2003 (يفتح بدون تحذيرات)
 // ============================================================
-const generateColoredExcel = (
+const generateExcel = (
   links: GeneratedLink[],
-  collegeName: string,
-  stageName: string,
   expiryDays: number
 ): Blob => {
-  const { date, time } = getFormattedDate();
+  // ── دالة Escape آمنة لـ XML ──
+  const xml = (str: string): string => {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  };
 
-  const html = `
-    <html xmlns:o="urn:schemas-microsoft-com:office:office"
-          xmlns:x="urn:schemas-microsoft-com:office:excel"
-          xmlns="http://www.w3.org/TR/REC-html40">
-    <head>
-      <meta charset="UTF-8">
-      <!--[if gte mso 9]>
-      <xml>
-        <x:ExcelWorkbook>
-          <x:ExcelWorksheets>
-            <x:ExcelWorksheet>
-              <x:Name>روابط التسجيل</x:Name>
-              <x:WorksheetOptions>
-                <x:DisplayRightToLeft/>
-              </x:WorksheetOptions>
-            </x:ExcelWorksheet>
-          </x:ExcelWorksheets>
-        </x:ExcelWorkbook>
-      </xml>
-      <![endif]-->
-      <style>
-        body { direction: rtl; }
-        table { border-collapse: collapse; width: 100%; direction: rtl; }
-        td, th {
-          font-family: 'Calibri', 'Arial', 'Tahoma', sans-serif;
-          padding: 8px 12px;
-          text-align: right;
-        }
-        .marker { font-size: 1pt; color: #f9fafb; background: #f9fafb; }
-        .title td {
-          font-size: 22pt; font-weight: bold;
-          color: #1e1b4b; background-color: #c7d2fe;
-          text-align: center; padding: 16px;
-          border: 2px solid #818cf8;
-        }
-        .subtitle td {
-          font-size: 10pt; color: #6366f1;
-          background-color: #e0e7ff; text-align: center;
-          border: none; padding: 4px;
-        }
-        .info td {
-          font-size: 13pt; color: #1f2937;
-          background-color: #f3f4f6; border: none;
-          padding: 6px 16px;
-        }
-        .info b { color: #4338ca; }
-        .hdr th {
-          font-size: 14pt; font-weight: bold;
-          color: #ffffff; background-color: #4f46e5;
-          border: 2px solid #3730a3; text-align: center;
-          padding: 12px 8px;
-        }
-        .row td {
-          font-size: 13pt;
-          border: 1px solid #c7d2fe;
-          padding: 10px 12px;
-        }
-        .row:nth-child(even) td { background-color: #eef2ff; }
-        .row:nth-child(odd) td { background-color: #ffffff; }
-        .num {
-          text-align: center; font-weight: bold;
-          color: #4f46e5; width: 50px;
-          background-color: #e0e7ff !important;
-        }
-        .name {
-          font-weight: bold; font-size: 14pt;
-          color: #111827; min-width: 250px;
-        }
-        .code {
-          text-align: center;
-          font-family: 'Consolas', 'Courier New', monospace;
-          font-size: 13pt; color: #059669;
-          font-weight: bold; min-width: 120px;
-          direction: ltr;
-        }
-        .link {
-          font-size: 11pt; color: #2563eb;
-          font-family: 'Consolas', 'Courier New', monospace;
-          word-break: break-all; min-width: 450px;
-          direction: ltr; text-align: left;
-        }
-        .stats td {
-          font-size: 12pt; color: #1e40af;
-          background-color: #dbeafe; border: none;
-          font-weight: bold; text-align: center; padding: 10px;
-        }
-        .note td {
-          font-size: 11pt; color: #92400e;
-          border: none; background-color: #fef3c7;
-          padding: 8px 16px;
-        }
-        .sep td { border: none; height: 10px; background: white; }
-      </style>
-    </head>
-    <body>
-      <table>
-        <!-- 🔒 علامة مخفية لمنع التضارب -->
-        <tr class="marker"><td colspan="4">${FILE_MARKER}</td></tr>
+  // ── بناء صفوف الطلاب ──
+  const studentRows = links.map((link, idx) => `
+    <Row ss:Height="32">
+      <Cell ss:StyleID="numCell"><Data ss:Type="Number">${idx + 1}</Data></Cell>
+      <Cell ss:StyleID="nameCell"><Data ss:Type="String">${xml(link.studentName)}</Data></Cell>
+      <Cell ss:StyleID="codeCell"><Data ss:Type="String">${xml(link.studentCode)}</Data></Cell>
+      <Cell ss:StyleID="linkCell"><Data ss:Type="String">${xml(link.url)}</Data></Cell>
+      <Cell ss:StyleID="expiryCell"><Data ss:Type="String">${expiryDays} يوم</Data></Cell>
+    </Row>
+  `).join('');
 
-        <tr class="sep"><td colspan="4"></td></tr>
+  // ── ملف Excel XML 2003 (Microsoft Office XML) ──
+  const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
 
-        <!-- العنوان -->
-        <tr class="title">
-          <td colspan="4">📋 روابط تسجيل بصمة الوجه ورمز QR</td>
-        </tr>
-        <tr class="subtitle">
-          <td colspan="4">⚠️ هذا الملف للإرسال فقط - لا ترفعه كملف استيراد طلاب</td>
-        </tr>
+ <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
+  <Title>روابط التسجيل</Title>
+  <Author>نظام إدارة الطلاب</Author>
+  <Created>${new Date().toISOString()}</Created>
+ </DocumentProperties>
 
-        <tr class="sep"><td colspan="4"></td></tr>
+ <Styles>
+  <!-- العنوان الرئيسي -->
+  <Style ss:ID="title">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="20" ss:Bold="1" ss:Color="#FFFFFF"/>
+   <Interior ss:Color="#4F46E5" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#3730A3"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#3730A3"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#3730A3"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#3730A3"/>
+   </Borders>
+  </Style>
 
-        <!-- معلومات -->
-        <tr class="info"><td colspan="4"><b>📅 التاريخ:</b> ${date} - ${time}</td></tr>
-        <tr class="info"><td colspan="4"><b>🏛️ الكلية:</b> ${collegeName}</td></tr>
-        <tr class="info"><td colspan="4"><b>📚 المرحلة:</b> ${stageName}</td></tr>
-        <tr class="info"><td colspan="4"><b>⏳ الصلاحية:</b> ${expiryDays} يوم</td></tr>
-        <tr class="info"><td colspan="4"><b>👥 عدد الطلاب:</b> ${links.length} طالب</td></tr>
+  <!-- عناوين الأعمدة -->
+  <Style ss:ID="header">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="14" ss:Bold="1" ss:Color="#FFFFFF"/>
+   <Interior ss:Color="#6366F1" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#4338CA"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#4338CA"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#4338CA"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#4338CA"/>
+   </Borders>
+  </Style>
 
-        <tr class="sep"><td colspan="4"></td></tr>
-        <tr class="sep"><td colspan="4"></td></tr>
+  <!-- خلية الرقم -->
+  <Style ss:ID="numCell">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="13" ss:Bold="1" ss:Color="#4F46E5"/>
+   <Interior ss:Color="#E0E7FF" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+   </Borders>
+  </Style>
 
-        <!-- العناوين -->
-        <tr class="hdr">
-          <th style="width:50px">#</th>
-          <th style="width:280px">اسم الطالب</th>
-          <th style="width:140px">كود الطالب</th>
-          <th style="width:500px">رابط التسجيل</th>
-        </tr>
+  <!-- خلية الاسم -->
+  <Style ss:ID="nameCell">
+   <Alignment ss:Horizontal="Right" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="13" ss:Bold="1" ss:Color="#111827"/>
+   <Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+   </Borders>
+  </Style>
 
-        <!-- البيانات -->
-        ${links.map((l, i) => `
-          <tr class="row">
-            <td class="num">${i + 1}</td>
-            <td class="name">${escapeHtml(l.studentName)}</td>
-            <td class="code">${escapeHtml(l.studentCode)}</td>
-            <td class="link">${escapeHtml(l.url)}</td>
-          </tr>
-        `).join('')}
+  <!-- خلية الكود -->
+  <Style ss:ID="codeCell">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Font ss:FontName="Consolas" ss:Size="13" ss:Bold="1" ss:Color="#059669"/>
+   <Interior ss:Color="#ECFDF5" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+   </Borders>
+  </Style>
 
-        <tr class="sep"><td colspan="4"></td></tr>
+  <!-- خلية الرابط -->
+  <Style ss:ID="linkCell">
+   <Alignment ss:Horizontal="Left" ss:Vertical="Center" ss:WrapText="1"/>
+   <Font ss:FontName="Consolas" ss:Size="11" ss:Color="#2563EB"/>
+   <Interior ss:Color="#EFF6FF" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+   </Borders>
+  </Style>
 
-        <!-- إحصائيات -->
-        <tr class="stats">
-          <td colspan="4">
-            📊 إجمالي: ${links.length} رابط | 📅 ${date} | ⏳ تنتهي بعد ${expiryDays} يوم
-          </td>
-        </tr>
+  <!-- خلية الصلاحية -->
+  <Style ss:ID="expiryCell">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="12" ss:Bold="1" ss:Color="#D97706"/>
+   <Interior ss:Color="#FEF3C7" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C7D2FE"/>
+   </Borders>
+  </Style>
+ </Styles>
 
-        <tr class="sep"><td colspan="4"></td></tr>
+ <Worksheet ss:Name="روابط التسجيل">
+  <Table>
+   <!-- عرض الأعمدة -->
+   <Column ss:Width="50"/>
+   <Column ss:Width="220"/>
+   <Column ss:Width="120"/>
+   <Column ss:Width="450"/>
+   <Column ss:Width="100"/>
 
-        <!-- ملاحظات -->
-        <tr class="note"><td colspan="4">⚠️ كل رابط صالح لاستخدام واحد فقط</td></tr>
-        <tr class="note"><td colspan="4">🔒 لا تشارك هذا الملف مع غير المعنيين</td></tr>
-        <tr class="note"><td colspan="4">💡 أرسل لكل طالب الرابط الخاص به عبر واتساب أو تلغرام</td></tr>
-        <tr class="note"><td colspan="4">🚫 هذا الملف ليس ملف استيراد طلاب - لا ترفعه في خانة رفع الطلاب</td></tr>
-      </table>
-    </body>
-    </html>
-  `;
+   <!-- العنوان الرئيسي -->
+   <Row ss:Height="50">
+    <Cell ss:MergeAcross="4" ss:StyleID="title">
+     <Data ss:Type="String">📋 روابط تسجيل بصمة الوجه ورمز QR</Data>
+    </Cell>
+   </Row>
 
-  return new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
-};
+   <!-- صف فارغ -->
+   <Row ss:Height="10"></Row>
 
-// ============================================================
-// 📘 Excel حقيقي (.xlsx) - عبر مكتبة xlsx
-// ============================================================
-const generateXLSX = async (
-  links: GeneratedLink[],
-  collegeName: string,
-  stageName: string,
-  expiryDays: number
-): Promise<Blob> => {
-  // استيراد ديناميكي لتجنب مشاكل التحميل
-  const XLSX = await import('xlsx');
+   <!-- عناوين الأعمدة -->
+   <Row ss:Height="36">
+    <Cell ss:StyleID="header"><Data ss:Type="String">#</Data></Cell>
+    <Cell ss:StyleID="header"><Data ss:Type="String">اسم الطالب</Data></Cell>
+    <Cell ss:StyleID="header"><Data ss:Type="String">كود الطالب</Data></Cell>
+    <Cell ss:StyleID="header"><Data ss:Type="String">رابط التسجيل</Data></Cell>
+    <Cell ss:StyleID="header"><Data ss:Type="String">صلاحية الرابط</Data></Cell>
+   </Row>
 
-  const { date, time } = getFormattedDate();
+   <!-- بيانات الطلاب -->
+   ${studentRows}
+  </Table>
 
-  const rows: any[][] = [];
+  <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">
+   <DisplayRightToLeft/>
+   <Selected/>
+   <FreezePanes/>
+   <FrozenNoSplit/>
+   <SplitHorizontal>3</SplitHorizontal>
+   <TopRowBottomPane>3</TopRowBottomPane>
+   <ActivePane>2</ActivePane>
+  </WorksheetOptions>
+ </Worksheet>
+</Workbook>`;
 
-  // 🔒 علامة مخفية (صف 0)
-  rows.push([FILE_MARKER, '', '', '']);
-
-  // عنوان
-  rows.push(['', '', '', '']);
-  rows.push(['📋 روابط تسجيل بصمة الوجه ورمز QR', '', '', '']);
-  rows.push(['⚠️ هذا الملف للإرسال فقط - ليس ملف استيراد طلاب', '', '', '']);
-
-  rows.push(['', '', '', '']);
-
-  // معلومات
-  rows.push([`📅 التاريخ: ${date} - ${time}`, '', '', '']);
-  rows.push([`🏛️ الكلية: ${collegeName}`, '', '', '']);
-  rows.push([`📚 المرحلة: ${stageName}`, '', '', '']);
-  rows.push([`⏳ الصلاحية: ${expiryDays} يوم`, '', '', '']);
-  rows.push([`👥 عدد الطلاب: ${links.length}`, '', '', '']);
-
-  rows.push(['', '', '', '']);
-
-  // عناوين الأعمدة (صف 11)
-  const headerRowIdx = rows.length;
-  rows.push(['#', 'اسم الطالب', 'كود الطالب', 'رابط التسجيل']);
-
-  // بيانات
-  links.forEach((l, i) => {
-    rows.push([i + 1, l.studentName, l.studentCode, l.url]);
-  });
-
-  // ملاحظات
-  rows.push(['', '', '', '']);
-  rows.push(['', '⚠️ كل رابط صالح لاستخدام واحد فقط', '', '']);
-  rows.push(['', '🔒 لا تشارك هذا الملف مع غير المعنيين', '', '']);
-  rows.push(['', '🚫 هذا ليس ملف استيراد طلاب', '', '']);
-
-  // إنشاء الورقة
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-
-  // عرض الأعمدة
-  ws['!cols'] = [
-    { wch: 6 },
-    { wch: 38 },
-    { wch: 18 },
-    { wch: 72 },
-  ];
-
-  // ارتفاع الصفوف
-  ws['!rows'] = [];
-  ws['!rows'][0] = { hpt: 8, hidden: true }; // العلامة مخفية
-  ws['!rows'][2] = { hpt: 36 }; // العنوان
-  ws['!rows'][headerRowIdx] = { hpt: 30 }; // العناوين
-
-  for (let i = headerRowIdx + 1; i < headerRowIdx + 1 + links.length; i++) {
-    ws['!rows'][i] = { hpt: 26 };
-  }
-
-  // دمج خلايا
-  ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }, // العلامة
-    { s: { r: 2, c: 0 }, e: { r: 2, c: 3 } }, // العنوان
-    { s: { r: 3, c: 0 }, e: { r: 3, c: 3 } }, // التحذير
-    { s: { r: 5, c: 0 }, e: { r: 5, c: 3 } },
-    { s: { r: 6, c: 0 }, e: { r: 6, c: 3 } },
-    { s: { r: 7, c: 0 }, e: { r: 7, c: 3 } },
-    { s: { r: 8, c: 0 }, e: { r: 8, c: 3 } },
-    { s: { r: 9, c: 0 }, e: { r: 9, c: 3 } },
-  ];
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'روابط التسجيل');
-
-  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  return new Blob([wbout], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
-};
-
-// ============================================================
-// 📄 CSV احترافي (نفس الهيكل)
-// ============================================================
-const generateCSV = (
-  links: GeneratedLink[],
-  collegeName: string,
-  stageName: string,
-  expiryDays: number
-): Blob => {
-  const { date, time } = getFormattedDate();
-  const lines: string[] = [];
-
-  // 🔒 علامة مخفية
-  lines.push(csvRow([FILE_MARKER, '', '', '']));
-
-  lines.push(csvRow(['', '', '', '']));
-  lines.push(csvRow(['روابط تسجيل بصمة الوجه ورمز QR', '', '', '']));
-  lines.push(csvRow(['هذا الملف للإرسال فقط - ليس ملف استيراد طلاب', '', '', '']));
-  lines.push(csvRow(['', '', '', '']));
-
-  lines.push(csvRow([`التاريخ: ${date} - ${time}`, '', '', '']));
-  lines.push(csvRow([`الكلية: ${collegeName}`, '', '', '']));
-  lines.push(csvRow([`المرحلة: ${stageName}`, '', '', '']));
-  lines.push(csvRow([`الصلاحية: ${expiryDays} يوم`, '', '', '']));
-  lines.push(csvRow([`عدد الطلاب: ${links.length}`, '', '', '']));
-  lines.push(csvRow(['', '', '', '']));
-
-  // العناوين
-  lines.push(csvRow(['#', 'اسم الطالب', 'كود الطالب', 'رابط التسجيل']));
-
-  // البيانات
-  links.forEach((l, i) => {
-    lines.push(csvRow([String(i + 1), l.studentName, l.studentCode, l.url]));
-  });
-
-  lines.push(csvRow(['', '', '', '']));
-  lines.push(csvRow(['كل رابط صالح لاستخدام واحد فقط', '', '', '']));
-  lines.push(csvRow(['لا تشارك هذا الملف مع غير المعنيين', '', '', '']));
-  lines.push(csvRow(['هذا ليس ملف استيراد طلاب', '', '', '']));
-
-  return new Blob(['\uFEFF' + lines.join('\n')], {
-    type: 'text/csv;charset=utf-8',
+  return new Blob([xmlContent], {
+    type: 'application/vnd.ms-excel;charset=utf-8',
   });
 };
 
@@ -527,43 +374,20 @@ export const SendRegisterLink: React.FC<SendRegisterLinkProps> = ({
     } catch { alert('فشل النسخ'); }
   };
 
-  // ── 📥 التحميلات ──
+  // ── 📥 تحميل Excel ──
+const handleDownloadExcel = () => {
+    const collegeName = selectedCollege?.name || 'غير_محدد';
+    const stageName = selectedStage?.name || 'غير_محدد';
 
-  const collegeName = selectedCollege?.name || 'غير محدد';
-  const stageName = selectedStage?.name || 'غير محدد';
-
-  const handleDownloadXLS = () => {
-    const blob = generateColoredExcel(generatedLinks, collegeName, stageName, expiryDays);
+    // ✅ نمرر الروابط ومدة الصلاحية فقط
+    const blob = generateExcel(generatedLinks, expiryDays);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = getFileName('xls', collegeName, stageName);
+    a.download = getFileName(collegeName, stageName);
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleDownloadXLSX = async () => {
-    try {
-      const blob = await generateXLSX(generatedLinks, collegeName, stageName, expiryDays);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = getFileName('xlsx', collegeName, stageName);
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error(e);
-      alert('فشل توليد ملف XLSX');
-    }
-  };
-
-  const handleDownloadCSV = () => {
-    const blob = generateCSV(generatedLinks, collegeName, stageName, expiryDays);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = getFileName('csv', collegeName, stageName);
-    a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
@@ -616,24 +440,10 @@ export const SendRegisterLink: React.FC<SendRegisterLinkProps> = ({
               </button>
 
               <button
-                onClick={handleDownloadXLS}
+                onClick={handleDownloadExcel}
                 className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-all hover:scale-105 flex items-center gap-1.5 shadow-md"
               >
-                📗 Excel ملوّن
-              </button>
-
-              <button
-                onClick={handleDownloadXLSX}
-                className="px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-xl transition-all hover:scale-105 flex items-center gap-1.5 shadow-md"
-              >
-                📘 Excel (.xlsx)
-              </button>
-
-              <button
-                onClick={handleDownloadCSV}
-                className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-xl transition-all hover:scale-105 flex items-center gap-1.5 shadow-md"
-              >
-                📄 CSV
+                📗 تحميل Excel
               </button>
 
               <div className="flex-1" />
