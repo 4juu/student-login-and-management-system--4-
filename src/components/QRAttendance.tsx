@@ -86,7 +86,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const codeInputRef = useRef<HTMLInputElement | null>(null);
   const qrCodeInputRef = useRef<HTMLInputElement | null>(null);
   const registeringRef = useRef(false);
-  const videoRefCache = useRef<HTMLVideoElement | null>(null);
 
   // تنظيف دوري لخريطة debounce
   useEffect(() => {
@@ -269,8 +268,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   useEffect(() => {
     if (mode !== 'bulk' || !cameraReady) { if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; } return; }
     const canvas = overlayCanvasRef.current;
-    if (!videoRefCache.current) videoRefCache.current = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
-    const video = videoRefCache.current;
+    const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
     if (!canvas || !video) return;
     const isFront = facing === 'user';
     const draw = () => {
@@ -333,8 +331,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     const loop = async () => {
       if (!faceRunningRef.current || !mountedRef.current) return;
       if (document.hidden || registeringRef.current) { faceTimerRef.current = setTimeout(loop, 500) as any; return; }
-      if (!videoRefCache.current) videoRefCache.current = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
-      const video = videoRefCache.current;
+      const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
       if (!video || video.readyState < 2 || video.paused || video.ended) {
         const now = Date.now();
         if (now - lastRestartRef.current > 6000 && mountedRef.current) { lastRestartRef.current = now; setCameraStatus('restarting'); setTimeout(() => { if (mountedRef.current) startCamera(cf); }, 300); }
