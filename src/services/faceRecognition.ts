@@ -361,6 +361,12 @@ const toFloat32 = (input: number[] | string | Float32Array): Float32Array => {
   if (typeof input === 'string') return new Float32Array(ensureDecompressed(input));
   if (Array.isArray(input)) {
     if (input.length === 128) return new Float32Array(input);
+    if (input.length > 0 && input.length < 128) {
+      const looksCompressed = input.length % 2 === 0 &&
+        Number.isInteger(input[0]) && input[0] >= 0 && input[0] < 128 &&
+        Number.isInteger(input[2]) && input[2] >= 0 && input[2] < 128;
+      if (looksCompressed) return new Float32Array(ensureDecompressed(input));
+    }
     if (input.length > 0 && input.every(v => Number.isInteger(v))) {
       return new Float32Array(ensureDecompressed(input));
     }
