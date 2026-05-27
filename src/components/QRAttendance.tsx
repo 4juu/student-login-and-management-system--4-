@@ -4,7 +4,7 @@ import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { AttendanceSession, Student } from '../types/student';
 import {
   loadFaceModels, extractAllFaceDescriptorsHybrid, extractAllFaceDescriptors,
-  extractFaceDescriptorMultiCapture, findBestMatch,
+  extractFaceDescriptorMultiCapture, findBestMatch, IOUTracker,
   areModelsLoaded, resetModels, buildMultiDescriptor, checkForTamperingAsync,
   shouldAutoImprove, autoImproveDescriptor, detectFaceDirection,
   type CaptureProgress, type FaceDirection, type LightLevel, type QualityLevel,
@@ -86,6 +86,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const codeInputRef = useRef<HTMLInputElement | null>(null);
   const qrCodeInputRef = useRef<HTMLInputElement | null>(null);
   const registeringRef = useRef(false);
+  const trackerRef = useRef<IOUTracker | null>(null);
 
   // تنظيف دوري لخريطة debounce
   useEffect(() => {
@@ -322,12 +323,24 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     return () => { if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; } };
   }, [mode, cameraReady, facing]);
 
-  const stopFaceLoop = useCallback(() => { faceRunningRef.current = false; if (faceTimerRef.current) { clearTimeout(faceTimerRef.current); faceTimerRef.current = null; } }, []);
+  const stopFaceLoop = useCallback(() => { faceRunningRef.current = false; if (faceTimerRef.current) { clearTimeout(faceTimerRef.current); faceTimerRef.current = null; } if (trackerRef.current) { trackerRef.current.reset(); } }, []);
+
+  /* ─── IoU helper ─── */
+  const calculateIoU = useCallback((a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }): number => {
+    const x1 = Math.max(a.x, b.x), y1 = Math.max(a.y, b.y);
+    const x2 = Math.min(a.x + a.width, b.x + b.width), y2 = Math.min(a.y + a.height, b.y + b.height);
+    if (x2 < x1 || y2 < y1) return 0;
+    const inter = (x2 - x1) * (y2 - y1);
+    return inter / (a.width * a.height + b.width * b.height - inter);
+  }, []);
 
   const startFaceLoop = useCallback((sens: BulkSensitivity, cf: CameraFacing, faces: Student[]) => {
     stopFaceLoop(); faceRunningRef.current = true;
+    if (!trackerRef.current) trackerRef.current = new IOUTracker();
+    else trackerRef.current.reset();
     const intervalMs = sens === 'extreme' ? device.intervalMs * 0.6 : device.intervalMs;
     const useRegion = sens === 'far';
+    const matchedTrackIds = new Map<number, Student>();
     const loop = async () => {
       if (!faceRunningRef.current || !mountedRef.current) return;
       if (document.hidden || registeringRef.current) { faceTimerRef.current = setTimeout(loop, 500) as any; return; }
@@ -345,15 +358,31 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         ]) as any[];
         if (!faceRunningRef.current || !mountedRef.current) return;
 
+        const tracked = trackerRef.current.update(detections.map(d => ({ box: d.detection.box, descriptor: d.descriptor })));
+
         for (const det of detections.slice(0, device.maxFaces)) {
           if (!faceRunningRef.current) break;
           const box = det.detection.box;
           const boxKey = `${Math.round(box.x / 35)}_${Math.round(box.y / 35)}_${Math.round(box.width / 35)}`;
           const now = Date.now();
+
+          const track = tracked.find(t => calculateIoU(t.box, box) > 0.35);
+          const matchedStudent = track && matchedTrackIds.get(track.id);
+
+          if (track && matchedStudent) {
+            if (alreadyPresentIds.has(matchedStudent.id) || now - (lastScansRef.current[`bulk_${matchedStudent.id}`] || 0) < BULK_FACE_BLOCK_MS) {
+              detectedFacesRef.current.set(boxKey, { box: { x: box.x, y: box.y, width: box.width, height: box.height }, student: matchedStudent, status: 'already', confidence: 100, timestamp: now });
+            } else {
+              detectedFacesRef.current.set(boxKey, { box: { x: box.x, y: box.y, width: box.width, height: box.height }, student: matchedStudent, status: 'recognized', confidence: 100, timestamp: now });
+            }
+            continue;
+          }
+
           const match = findBestMatch(det.descriptor, faces, CONFIDENCE_THRESHOLD);
 
           if (match) {
             const s = match.item;
+            if (track) matchedTrackIds.set(track.id, s);
             if (alreadyPresentIds.has(s.id) || now - (lastScansRef.current[`bulk_${s.id}`] || 0) < BULK_FACE_BLOCK_MS) {
               detectedFacesRef.current.set(boxKey, { box: { x: box.x, y: box.y, width: box.width, height: box.height }, student: s, status: 'already', confidence: match.confidence, timestamp: now });
             } else {
@@ -381,7 +410,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     };
     faceTimerRef.current = setTimeout(loop, 600) as any;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [device, stopFaceLoop, alreadyPresentIds, onMarkAttendance, onUpdateStudent, showToast]);
+  }, [device, stopFaceLoop, alreadyPresentIds, onMarkAttendance, onUpdateStudent, showToast, calculateIoU]);
 
   useEffect(() => {
     if (mode === 'bulk' && cameraReady && faceModelsReady && studentsWithFace.length > 0) startFaceLoop(sensitivity, facing, studentsWithFace);
@@ -522,7 +551,7 @@ const handleClose = useCallback(async () => {
     captureFace(found[0]);
   }, [batchCodes, students, captureFace]);
 
-  const isBulk = mode === 'bulk', isFront = facing === 'user', doMirror = isFront;
+  const isBulk = mode === 'bulk', isFront = facing === 'user', doMirror = isBulk || isFront;
   const toastBg: Record<ToastType, string> = { success: 'from-emerald-500 to-green-600', error: 'from-red-500 to-rose-600', info: 'from-blue-500 to-cyan-600', warning: 'from-amber-500 to-orange-500' };
   const toastIcon: Record<ToastType, string> = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
   const ALL_DIRS: FaceDirection[] = ['center', 'right', 'left', 'up', 'down'];
