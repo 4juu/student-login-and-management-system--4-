@@ -57,9 +57,10 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
         setModelsReady(true);
 
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false,
-        });
+          video: {  facingMode: 'user'
+  },
+  audio: false,
+});
 
         if (!mounted) {
           stream.getTracks().forEach(t => t.stop());
