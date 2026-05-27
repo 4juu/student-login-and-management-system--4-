@@ -24,6 +24,7 @@ import { IDCardUpload } from './IDCardUpload';
 import { FaceCaptureStep } from './FaceCaptureStep';
 import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear } from '../../firebase/dataService';
+import { SkeletonCard } from '../Skeleton';
 import type { MultiDescriptor } from '../../services/faceRecognition';
 
 type Step =
@@ -86,6 +87,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   const [step, setStep] = useState<Step>('loading');
   const [link, setLink] = useState<RegistrationLink | null>(null);
   const [student, setStudent] = useState<Student | null>(null);
+  const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [enteredCode, setEnteredCode] = useState('');
   const [codeError, setCodeError] = useState('');
 
@@ -195,6 +197,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
       const data = snap.val();
       const studentsArr: Student[] = Array.isArray(data) ? data : Object.values(data);
+      setAllStudents(studentsArr);
       const found = studentsArr.find((s) => s.code === enteredCode);
 
       if (!found) {
@@ -390,10 +393,9 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   if (step === 'loading') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4" dir="rtl">
-        <div className="text-center">
-          <div className="inline-block w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4" />
-          <p className="text-gray-600 font-medium">جاري تحميل البيانات...</p>
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4" dir="rtl">
+        <div className="w-full max-w-md">
+          <SkeletonCard />
         </div>
       </div>
     );
@@ -529,6 +531,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       <FaceCaptureStep
         student={student}
         matchPercentage={matchPercentage}
+        allStudents={allStudents}
         onCaptured={handleFaceCaptured}
         onCancel={() => setStep('upload-id')}
       />

@@ -2,6 +2,32 @@ import { ref, set, get, remove, update } from "firebase/database";
 import { database } from "./config";
 import { Student, AttendanceRecord, AttendanceSession, Stage, College } from "../types/student";
 import { User } from "../types/user";
+import { TelegramConfig } from "../types/telegram";
+
+// ============================================================
+// 🔄 SAVE QUEUE مع Retry تلقائي (3 محاولات مع Exponential Backoff)
+// ============================================================
+
+const MAX_RETRIES = 3;
+const retryQueues = new Map<string, { fn: () => Promise<void>; attempts: number }>();
+
+const retryWithBackoff = async (key: string, fn: () => Promise<void>, attempt: number = 1): Promise<void> => {
+  try {
+    await fn();
+    retryQueues.delete(key);
+  } catch (e) {
+    console.warn(`⚠️ [${attempt}/${MAX_RETRIES}] فشلت محاولة الحفظ: ${key}`);
+    if (attempt < MAX_RETRIES) {
+      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+      await new Promise(r => setTimeout(r, delay));
+      return retryWithBackoff(key, fn, attempt + 1);
+    }
+    console.error(`❌ فشل الحفظ بعد ${MAX_RETRIES} محاولات: ${key}`, e);
+    retryQueues.delete(key);
+  }
+};
+
+export const getPendingSavesCount = (): number => retryQueues.size;
 
 // ============================================================
 // 🎓 ACADEMIC YEAR MANAGEMENT
@@ -128,12 +154,8 @@ const debouncedSave = (key: string, saveFn: () => Promise<void>): void => {
     pendingSaveFunctions.delete(key);
 
     if (fn) {
-      try {
-        await fn();
-        console.log(`💾 Debounced save: ${key}`);
-      } catch (e) {
-        console.warn(`⚠️ Debounced save failed: ${key}`, e);
-      }
+      retryQueues.set(key, { fn, attempts: 0 });
+      await retryWithBackoff(key, fn);
     }
   }, SAVE_DELAY);
 
@@ -142,9 +164,9 @@ const debouncedSave = (key: string, saveFn: () => Promise<void>): void => {
 
 export const flushAllPendingSaves = async (): Promise<void> => {
   const keys = Array.from(pendingSaves.keys());
-  if (keys.length === 0) return;
+  if (keys.length === 0 && retryQueues.size === 0) return;
 
-  console.log(`💾 Flushing ${keys.length} pending saves...`);
+  console.log(`💾 Flushing ${keys.length + retryQueues.size} pending saves...`);
 
   for (const key of keys) {
     const timeout = pendingSaves.get(key);
@@ -155,12 +177,14 @@ export const flushAllPendingSaves = async (): Promise<void> => {
     pendingSaveFunctions.delete(key);
 
     if (fn) {
-      try {
-        await fn();
-      } catch (e) {
-        console.warn(`⚠️ Flush save failed: ${key}`, e);
-      }
+      retryQueues.set(key, { fn, attempts: 0 });
+      await retryWithBackoff(key, fn);
     }
+  }
+
+  // Also flush any remaining retry items
+  for (const [key, { fn, attempts }] of retryQueues) {
+    await retryWithBackoff(key, fn, attempts + 1);
   }
 };
 
@@ -170,7 +194,8 @@ if (typeof window !== 'undefined') {
       clearTimeout(timeout);
       const fn = pendingSaveFunctions.get(key);
       if (fn) {
-        fn().catch(() => {});
+        retryQueues.set(key, { fn, attempts: 0 });
+        retryWithBackoff(key, fn).catch(() => {});
       }
     });
     pendingSaves.clear();
@@ -201,11 +226,7 @@ export const saveColleges = async (
   const saveKey = `colleges_${adminUid}`;
   
   debouncedSave(saveKey, async () => {
-    try {
-      await set(ref(database, getCollegesPath(year, adminUid)), colleges);
-    } catch (e) {
-      console.warn('⚠️ فشل حفظ الكليات:', e);
-    }
+    await set(ref(database, getCollegesPath(year, adminUid)), colleges);
   });
 };
 
@@ -249,11 +270,7 @@ export const saveStages = async (
   const saveKey = `stages_${adminUid}`;
   
   debouncedSave(saveKey, async () => {
-    try {
-      await set(ref(database, getStagesPath(year, adminUid)), stages);
-    } catch (e) {
-      console.warn('⚠️ فشل حفظ المراحل:', e);
-    }
+    await set(ref(database, getStagesPath(year, adminUid)), stages);
   });
 };
 
@@ -298,11 +315,7 @@ export const saveStudents = async (
   const saveKey = `students_${adminUid}_${stageId}`;
   
   debouncedSave(saveKey, async () => {
-    try {
-      await set(ref(database, getStagePath(year, adminUid, stageId, 'students')), students);
-    } catch (e) {
-      console.warn('⚠️ فشل حفظ الطلاب:', e);
-    }
+    await set(ref(database, getStagePath(year, adminUid, stageId, 'students')), students);
   });
 };
 
@@ -348,20 +361,15 @@ export const saveAttendanceRecords = async (
   const saveKey = `records_${adminUid}_${stageId}_${teacherId}`;
   
   debouncedSave(saveKey, async () => {
-    try {
-      // 🆕 استخدم الضغط الذكي تلقائياً
-      const { compressRecord } = await import('./dataServiceCompressed');
-      const compressed = records.map(compressRecord);
-      
-      await set(
-        ref(database, `${getYearBasePath(year, adminUid)}/stageData/${stageId}/teacherRecords/${teacherId}/recordsCompressed`),
-        compressed
-      );
-      
-      console.log(`💾 حفظ مضغوط: ${records.length} سجل`);
-    } catch (e) {
-      console.warn('⚠️ فشل حفظ السجلات:', e);
-    }
+    const { compressRecord } = await import('./dataServiceCompressed');
+    const compressed = records.map(compressRecord);
+    
+    await set(
+      ref(database, `${getYearBasePath(year, adminUid)}/stageData/${stageId}/teacherRecords/${teacherId}/recordsCompressed`),
+      compressed
+    );
+    
+    console.log(`💾 حفظ مضغوط: ${records.length} سجل`);
   });
 };
 
@@ -429,14 +437,10 @@ export const saveSessions = async (
   const saveKey = `sessions_${adminUid}_${stageId}_${teacherId}`;
   
   debouncedSave(saveKey, async () => {
-    try {
-      await set(
-        ref(database, getTeacherDataPath(year, adminUid, stageId, teacherId, 'sessions')),
-        sessions
-      );
-    } catch (e) {
-      console.warn('⚠️ فشل حفظ الجلسات:', e);
-    }
+    await set(
+      ref(database, getTeacherDataPath(year, adminUid, stageId, teacherId, 'sessions')),
+      sessions
+    );
   });
 };
 
@@ -599,21 +603,20 @@ export const saveUserData = async (uid: string, userData: User): Promise<void> =
   if (existing) clearTimeout(existing);
 
   pendingSaveFunctions.set(saveKey, async () => {
-    try {
-      await set(ref(database, `users/${uid}`), {
-        ...userData,
-        lastUpdated: new Date().toISOString()
-      });
-    } catch (e) {
-      console.error('❌ Error saving user data:', e);
-    }
+    await set(ref(database, `users/${uid}`), {
+      ...userData,
+      lastUpdated: new Date().toISOString()
+    });
   });
 
   const timeout = setTimeout(async () => {
     pendingSaves.delete(saveKey);
     const fn = pendingSaveFunctions.get(saveKey);
     pendingSaveFunctions.delete(saveKey);
-    if (fn) await fn();
+    if (fn) {
+      retryQueues.set(saveKey, { fn, attempts: 0 });
+      await retryWithBackoff(saveKey, fn);
+    }
   }, 3000);
 
   pendingSaves.set(saveKey, timeout);
@@ -818,6 +821,8 @@ export const getDatabaseStats = async (adminUid: string): Promise<{
   totalStudents: number;
   totalRecords: number;
   totalSessions: number;
+  totalTeachers: number;
+  totalFaceDescriptors: number;
 }> => {
   try {
     const year = await getActiveAcademicYear();
@@ -831,7 +836,9 @@ export const getDatabaseStats = async (adminUid: string): Promise<{
         stagesCount: 0,
         totalStudents: 0,
         totalRecords: 0,
-        totalSessions: 0
+        totalSessions: 0,
+        totalTeachers: 0,
+        totalFaceDescriptors: 0,
       };
     }
     
@@ -845,16 +852,24 @@ export const getDatabaseStats = async (adminUid: string): Promise<{
     let totalStudents = 0;
     let totalRecords = 0;
     let totalSessions = 0;
+    let totalTeachers = 0;
+    let totalFaceDescriptors = 0;
     
     if (data.stageData) {
       Object.values(data.stageData).forEach((stage: any) => {
         if (stage.students) {
-          totalStudents += Array.isArray(stage.students) ? stage.students.length : Object.keys(stage.students).length;
+          const students = Array.isArray(stage.students) ? stage.students : Object.values(stage.students);
+          totalStudents += students.length;
+          totalFaceDescriptors += students.filter((s: any) => s.faceDescriptor).length;
         }
         if (stage.teacherRecords) {
           Object.values(stage.teacherRecords).forEach((teacher: any) => {
+            totalTeachers++;
             if (teacher.records) {
               totalRecords += Array.isArray(teacher.records) ? teacher.records.length : Object.keys(teacher.records).length;
+            }
+            if (teacher.recordsCompressed) {
+              totalRecords += Array.isArray(teacher.recordsCompressed) ? teacher.recordsCompressed.length : Object.keys(teacher.recordsCompressed).length;
             }
             if (teacher.sessions) {
               totalSessions += Array.isArray(teacher.sessions) ? teacher.sessions.length : Object.keys(teacher.sessions).length;
@@ -871,7 +886,9 @@ export const getDatabaseStats = async (adminUid: string): Promise<{
       stagesCount: stages,
       totalStudents,
       totalRecords,
-      totalSessions
+      totalSessions,
+      totalTeachers,
+      totalFaceDescriptors,
     };
   } catch (e) {
     console.error('❌ فشل جلب الإحصائيات:', e);
@@ -890,4 +907,36 @@ export const listAllAcademicYears = async (): Promise<string[]> => {
   } catch {
     return [];
   }
+};
+
+// ============================================================
+// 🤖 TELEGRAM CONFIG
+// ============================================================
+
+export const saveTelegramConfig = async (
+  adminUid: string,
+  config: TelegramConfig
+): Promise<void> => {
+  const year = await getActiveAcademicYear();
+  const path = `${getYearBasePath(year, adminUid)}/telegramConfig`;
+  await set(ref(database, path), config);
+  saveLocal(`telegramConfig_${adminUid}`, config);
+};
+
+export const loadTelegramConfig = async (
+  adminUid: string
+): Promise<TelegramConfig | null> => {
+  const year = await getActiveAcademicYear();
+  const path = `${getYearBasePath(year, adminUid)}/telegramConfig`;
+  try {
+    const snap = await get(ref(database, path));
+    if (snap.exists()) {
+      const config = snap.val() as TelegramConfig;
+      saveLocal(`telegramConfig_${adminUid}`, config);
+      return config;
+    }
+  } catch (e) {
+    console.warn('⚠️ فشل تحميل تهيئة التلغرام:', e);
+  }
+  return loadLocal<TelegramConfig | null>(`telegramConfig_${adminUid}`, null);
 };

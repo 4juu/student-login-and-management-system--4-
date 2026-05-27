@@ -5,7 +5,7 @@ import { AttendanceSession, Student } from '../types/student';
 import {
   loadFaceModels, extractAllFaceDescriptorsHybrid, extractAllFaceDescriptors,
   extractFaceDescriptorMultiCapture, findBestMatch,
-  areModelsLoaded, resetModels, buildMultiDescriptor, checkForTampering,
+  areModelsLoaded, resetModels, buildMultiDescriptor, checkForTamperingAsync,
   shouldAutoImprove, autoImproveDescriptor, detectFaceDirection,
   type CaptureProgress, type FaceDirection, type LightLevel, type QualityLevel,
 } from '../services/faceRecognition';
@@ -86,6 +86,20 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const codeInputRef = useRef<HTMLInputElement | null>(null);
   const qrCodeInputRef = useRef<HTMLInputElement | null>(null);
   const registeringRef = useRef(false);
+  const videoRefCache = useRef<HTMLVideoElement | null>(null);
+
+  // تنظيف دوري لخريطة debounce
+  useEffect(() => {
+    const cleanup = setInterval(() => {
+      const now = Date.now();
+      const cutoff = now - 300000; // 5 دقائق
+      const map = lastScansRef.current;
+      for (const key of Object.keys(map)) {
+        if (map[key] < cutoff) delete map[key];
+      }
+    }, 60000);
+    return () => clearInterval(cleanup);
+  }, []);
 
   const [mode, setMode] = useState<ScanMode>('qr');
   const [facing, setFacing] = useState<CameraFacing>('environment');
@@ -255,7 +269,8 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   useEffect(() => {
     if (mode !== 'bulk' || !cameraReady) { if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; } return; }
     const canvas = overlayCanvasRef.current;
-    const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
+    if (!videoRefCache.current) videoRefCache.current = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
+    const video = videoRefCache.current;
     if (!canvas || !video) return;
     const isFront = facing === 'user';
     const draw = () => {
@@ -318,7 +333,8 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     const loop = async () => {
       if (!faceRunningRef.current || !mountedRef.current) return;
       if (document.hidden || registeringRef.current) { faceTimerRef.current = setTimeout(loop, 500) as any; return; }
-      const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
+      if (!videoRefCache.current) videoRefCache.current = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
+      const video = videoRefCache.current;
       if (!video || video.readyState < 2 || video.paused || video.ended) {
         const now = Date.now();
         if (now - lastRestartRef.current > 6000 && mountedRef.current) { lastRestartRef.current = now; setCameraStatus('restarting'); setTimeout(() => { if (mountedRef.current) startCamera(cf); }, 300); }
@@ -444,7 +460,7 @@ const handleClose = useCallback(async () => {
         setTimeout(() => codeInputRef.current?.focus(), 100); return;
       }
 
-      const tamper = checkForTampering(result.descriptor, students, student.id, 0.35);
+      const tamper = await checkForTamperingAsync(result.descriptor, students, student.id, 0.35);
       if (tamper.isTamper) {
         setTamperMatches(tamper.matchedStudents);
         setRegStep('tamper-alert');

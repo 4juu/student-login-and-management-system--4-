@@ -310,6 +310,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   const lastRequestTime = useRef<number>(0);
   const modelSelectorRef = useRef<HTMLDivElement>(null);
   const studentSearchRef = useRef<HTMLDivElement>(null);
+  const contextCacheRef = useRef<{ key: string; value: string }>({ key: '', value: '' });
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -518,18 +519,24 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   }, [selectedModelId, currentModelIndex]);
 
   const buildDataContext = useCallback((): string => {
+    // تخزين مؤقت — نعيد الاستخدام إذا البيانات ما تغيرت
+    const dataKey = JSON.stringify({
+      sl: students.length,
+      rl: records.length,
+      sel: sessions.length,
+      cid: currentStageId,
+      uid: user.uid,
+      m: isAdmin,
+      ul: universityDataLoaded ? '1' : '0',
+    });
+    if (contextCacheRef.current.key === dataKey) return contextCacheRef.current.value;
+
     const now = new Date();
     const todayDate = fixDate(now);
 
     const fixedSessions = sessions.map(s => ({
       ...s,
       date: fixDate((s as any).date),
-      _originalDate: (s as any).date,
-    }));
-
-    const fixedRecords = records.map(r => ({
-      ...r,
-      date: (r as any).date ? fixDate((r as any).date) : '',
     }));
 
     const sortedSessions = [...fixedSessions].sort((a, b) => {
@@ -541,138 +548,128 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     const groups = Array.from(new Set(students.map(s => s.group).filter(Boolean))) as string[];
     groups.sort((a, b) => a.localeCompare(b, 'ar'));
 
-    let context = `# قاعدة بيانات نظام الحضور\n\n`;
+    // 📊 إحصاءات اليوم
+    const todaySessionIds = new Set<string>();
+    sortedSessions.forEach(s => { if (s.date === todayDate) todaySessionIds.add(s.id); });
+    records.forEach(r => {
+      const session = sessionById.get(r.sessionId);
+      if (session && session.date === todayDate) todaySessionIds.add(r.sessionId);
+      if (r.date && r.date === todayDate) todaySessionIds.add(r.sessionId);
+    });
+    const todaySessionList = sortedSessions.filter(s => todaySessionIds.has(s.id));
+    const todayRecords = records.filter(r => todaySessionIds.has(r.sessionId));
+    const presentTodayIds = new Set(todayRecords.map(r => r.studentId));
+    const presentToday = students.filter(s => presentTodayIds.has(s.id));
+    const absentToday = students.filter(s => !presentTodayIds.has(s.id));
+
+    // 🚨 إجابات مؤكدة
+    let context = `# 🚨 إجابات مؤكدة 100% من قاعدة البيانات\n\n`;
+    context += `## 📊 إحصاءات دقيقة (محسوبة من النظام مباشرة):\n`;
+    context += `- إجمالي الطلاب: **${students.length}**\n`;
+    context += `- إجمالي المحاضرات: **${sortedSessions.length}**\n`;
+    if (todaySessionList.length > 0) {
+      context += `- حضور اليوم: ✅ **${presentToday.length}** حاضر / ❌ **${absentToday.length}** غائب\n`;
+      context += `- نسبة حضور اليوم: **${students.length > 0 ? ((presentToday.length / students.length) * 100).toFixed(1) : '0'}%**\n`;
+      context += `- محاضرات اليوم: **${todaySessionList.length}**\n`;
+    }
+    if (groups.length > 0) {
+      context += `\n### 📊 إحصاءات الكروبات:\n`;
+      groups.forEach(g => {
+        const gStudents = students.filter(s => s.group === g);
+        const gIds = new Set(gStudents.map(s => s.id));
+        const gRecs = records.filter(r => gIds.has(r.sessionId));
+        const possible = gStudents.length * sortedSessions.length;
+        const rate = possible > 0 ? ((gRecs.length / possible) * 100).toFixed(1) : '0';
+        const gp = gStudents.filter(s => presentTodayIds.has(s.id)).length;
+        context += `- **${g}**: ${gStudents.length} طالب | حضور عام ${rate}% | اليوم ✅${gp} ❌${gStudents.length - gp}\n`;
+      });
+    }
+    const totalPossible = students.length * sortedSessions.length;
+    const overallRate = totalPossible > 0 ? ((records.length / totalPossible) * 100).toFixed(2) : '0';
+    context += `\n- 📈 نسبة الحضور العامة: **${overallRate}%**\n\n`;
+    context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+    // معلومات المستخدم والتاريخ
     context += `## معلومات المستخدم:\n- الاسم: ${user.displayName}\n- الدور: ${isAdmin ? 'أدمن' : 'تدريسي'}\n\n`;
     context += `## التاريخ الحالي:\n- اليوم: ${formatDateWithDay(todayDate)}\n- التاريخ: ${todayDate}\n- الوقت: ${now.toLocaleTimeString('ar-EG')}\n\n`;
-
     if (currentCollege && currentStage) {
       context += `## الموقع الحالي:\n- الكلية: ${currentCollege.name}\n- المرحلة: ${currentStage.name}\n\n`;
     }
 
     if (currentStageId && students.length > 0) {
-      const allTodaySessionIds = new Set<string>();
-      sortedSessions.forEach(s => { if (s.date === todayDate) allTodaySessionIds.add(s.id); });
-      fixedRecords.forEach(r => {
-        const session = sessionById.get(r.sessionId);
-        if (session && session.date === todayDate) allTodaySessionIds.add(r.sessionId);
-        if (r.date && r.date === todayDate) allTodaySessionIds.add(r.sessionId);
-      });
-
-      const finalTodaySessions = sortedSessions.filter(s => allTodaySessionIds.has(s.id));
-      const finalTodayRecords = fixedRecords.filter(r => allTodaySessionIds.has(r.sessionId));
-      const presentStudentIds = new Set<string>();
-      finalTodayRecords.forEach(r => presentStudentIds.add(r.studentId));
-      const presentStudents = students.filter(s => presentStudentIds.has(s.id));
-      const absentStudents = students.filter(s => !presentStudentIds.has(s.id));
-      const hasActivity = allTodaySessionIds.size > 0;
-
-      context += `## ═══════════════════════════════════════\n## 🌟 حضور اليوم (${todayDate})\n## ═══════════════════════════════════════\n\n`;
-      context += `### 🚨🚨🚨 أرقام مؤكدة 100% 🚨🚨🚨\n`;
-      context += `- يوجد نشاط اليوم: **${hasActivity ? '✅ نعم' : '❌ لا'}**\n`;
-      context += `- عدد جلسات اليوم: **${finalTodaySessions.length}**\n`;
-      context += `- إجمالي الطلاب: **${students.length}**\n`;
-      context += `- ✅ عدد الحاضرين اليوم: **${presentStudents.length}**\n`;
-      context += `- ❌ عدد الغائبين اليوم: **${absentStudents.length}**\n`;
-      if (students.length > 0) context += `- 📊 نسبة الحضور: **${((presentStudents.length / students.length) * 100).toFixed(1)}%**\n`;
-      context += `\n`;
-
-      if (hasActivity) {
-        context += `### 📋 تفصيل كل سجل اليوم:\n\n`;
-        finalTodaySessions.forEach((session, sIdx) => {
-          const sessionRecs = fixedRecords.filter(r => r.sessionId === session.id);
-          const sessionPresentIds = new Set(sessionRecs.map(r => r.studentId));
-          const sessionPresent = students.filter(s => sessionPresentIds.has(s.id));
-          const sessionAbsent = students.filter(s => !sessionPresentIds.has(s.id));
-          const sessionRate = students.length > 0 ? ((sessionPresent.length / students.length) * 100).toFixed(1) : '0';
-
-          context += `#### 🔵 السجل ${sIdx + 1}: **${session.name}**\n`;
-          context += `- 📅 التاريخ: ${formatDateWithDay(session.date)}\n`;
-          context += `- 📊 الإحصائيات: ✅ ${sessionPresent.length} حاضر | ❌ ${sessionAbsent.length} غائب | نسبة ${sessionRate}%\n\n`;
-
-          context += `**✅ حاضرين (${sessionPresent.length}):**\n`;
-          sessionPresent.forEach((st, i) => { context += `${i + 1}. ✅ **${st.name}** | كود: ${st.code} | كروب: ${st.group || '-'}\n`; });
-          context += `\n**❌ غائبين (${sessionAbsent.length}):**\n`;
-          sessionAbsent.forEach((st, i) => { context += `${i + 1}. ❌ **${st.name}** | كود: ${st.code} | كروب: ${st.group || '-'}\n`; });
-          context += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+      // تفصيل محاضرات اليوم
+      if (todaySessionList.length > 0) {
+        context += `## 🌟 تفصيل محاضرات اليوم:\n\n`;
+        todaySessionList.forEach((session, idx) => {
+          const sRecs = records.filter(r => r.sessionId === session.id);
+          const sPresent = new Set(sRecs.map(r => r.studentId));
+          const sPresentCount = students.filter(s => sPresent.has(s.id)).length;
+          const sAbsentCount = students.length - sPresentCount;
+          const sRate = students.length > 0 ? ((sPresentCount / students.length) * 100).toFixed(1) : '0';
+          context += `**${idx + 1}. ${session.name}** | ✅${sPresentCount} ❌${sAbsentCount} | ${sRate}%\n`;
         });
+        context += `\n`;
       }
 
-      context += `## 📅 جميع الجلسات (${sortedSessions.length}):\n`;
-      sortedSessions.forEach((session, index) => {
-        const presentCount = fixedRecords.filter(r => r.sessionId === session.id).length;
-        const isToday = session.date === todayDate ? ' 🌟 اليوم' : '';
-        context += `${index + 1}. **${session.name}** | ${formatDateWithDay(session.date)} | ${presentCount}/${students.length}${isToday}\n`;
+      // جميع المحاضرات بالتفصيل — أسماء الحاضرين والغائبين لكل سجل
+      context += `## 📅 تفاصيل جميع المحاضرات:\n`;
+      sortedSessions.forEach((session, idx) => {
+        const sRecs = records.filter(r => r.sessionId === session.id);
+        const presentIds = new Set(sRecs.map(r => r.studentId));
+        const presentStudents = students.filter(s => presentIds.has(s.id));
+        const absentStudents = students.filter(s => !presentIds.has(s.id));
+        const isT = session.date === todayDate ? ' 🌟' : '';
+        context += `\n---\n### ${idx + 1}. ${session.name}${isT}\n`;
+        context += `📅 التاريخ: ${formatDateWithDay(session.date)}\n`;
+        context += `✅ الحاضرون (${presentStudents.length}): ${presentStudents.map(s => s.name).join(', ')}\n`;
+        context += `❌ الغائبون (${absentStudents.length}): ${absentStudents.map(s => s.name).join(', ')}\n`;
       });
       context += `\n`;
 
-      context += `## 👥 تفاصيل الطلاب (${students.length}):\n\n`;
+      // الطلاب — سطر واحد لكل طالب (بدون سجل كل محاضرة)
+      context += `## 👥 الطلاب:\n`;
       const sortedStudents = [...students].sort((a, b) => {
         const ga = a.group || 'ZZZ', gb = b.group || 'ZZZ';
         if (ga !== gb) return ga.localeCompare(gb, 'ar');
         return a.name.localeCompare(b.name, 'ar');
       });
-
       sortedStudents.forEach(student => {
-        const studentRecords = fixedRecords.filter(r => r.studentId === student.id);
-        const attendedSessionIds = new Set(studentRecords.map(r => r.sessionId));
-        const attendedCount = sortedSessions.filter(s => attendedSessionIds.has(s.id)).length;
+        const studentRecords = records.filter(r => r.studentId === student.id);
+        const attendedIds = new Set(studentRecords.map(r => r.sessionId));
+        const attendedCount = sortedSessions.filter(s => attendedIds.has(s.id)).length;
         const absentCount = sortedSessions.length - attendedCount;
-        const percentage = sortedSessions.length > 0 ? ((attendedCount / sortedSessions.length) * 100).toFixed(1) : '0';
-        const isPresentToday = presentStudentIds.has(student.id);
-
-        context += `### 👤 **${student.name}**\n`;
-        context += `- الكود: ${student.code}\n- الكروب: ${student.group || '-'}\n`;
-        context += `- حضور اليوم: ${isPresentToday ? '✅ حاضر' : '❌ غائب'}\n`;
-        context += `- الحضور: ${attendedCount} | الغياب: ${absentCount} | النسبة: ${percentage}%\n`;
-        context += `- سجل كامل:\n`;
-        sortedSessions.forEach(session => {
-          const isPresent = attendedSessionIds.has(session.id);
-          const isToday = session.date === todayDate ? ' 🌟' : '';
-          context += `  ${isPresent ? '✅' : '❌'} ${formatDateWithDay(session.date)} | ${session.name}${isToday}\n`;
-        });
-        context += `\n`;
+        const pct = sortedSessions.length > 0 ? ((attendedCount / sortedSessions.length) * 100).toFixed(1) : '0';
+        const isPresent = presentTodayIds.has(student.id);
+        context += `${isPresent ? '✅' : '❌'} ${student.name} | كود:${student.code || '-'} | كروب:${student.group || '-'} | حضور:${attendedCount} | غياب:${absentCount} | ${pct}%\n`;
       });
-
-      if (groups.length > 0) {
-        context += `## 📊 إحصائيات الكروبات:\n`;
-        groups.forEach(group => {
-          const groupStudents = students.filter(s => s.group === group);
-          const groupStudentIds = new Set(groupStudents.map(s => s.id));
-          const groupRecords = fixedRecords.filter(r => groupStudentIds.has(r.studentId));
-          const possible = groupStudents.length * sortedSessions.length;
-          const groupPercentage = possible > 0 ? ((groupRecords.length / possible) * 100).toFixed(1) : '0';
-          const groupPresentToday = groupStudents.filter(s => presentStudentIds.has(s.id)).length;
-          context += `- **${group}**: ${groupStudents.length} طالب | حضور عام ${groupPercentage}% | اليوم: ✅${groupPresentToday} ❌${groupStudents.length - groupPresentToday}\n`;
-        });
-        context += `\n`;
-      }
-
-      const totalPossible = students.length * sortedSessions.length;
-      const overallRate = totalPossible > 0 ? ((fixedRecords.length / totalPossible) * 100).toFixed(2) : '0';
-      context += `## 📈 الإحصائيات العامة:\n`;
-      context += `- عدد الطلاب: ${students.length}\n- عدد الجلسات: ${sortedSessions.length}\n`;
-      context += `- نسبة الحضور العامة: ${overallRate}%\n\n`;
+      context += `\n`;
     } else {
       context += `## ⚠️ لا توجد مرحلة مختارة حالياً\n`;
     }
 
+    // بيانات الجامعة للأدمن
     if (isAdmin && !currentStageId) {
-      // 🆕 رسالة عن بيانات الجامعة
       if (Object.keys(accessibleData.stagesMap).length > 0) {
-        context += `## 🏛️ ملخص المراحل (بيانات الجامعة محملة):\n`;
+        context += `## 🏛️ ملخص المراحل:\n`;
         Object.entries(accessibleData.stagesMap).forEach(([_stageId, stageData]) => {
-          const totalPossible = stageData.students.length * stageData.sessions.length;
-          const rate = totalPossible > 0 ? ((stageData.records.length / totalPossible) * 100).toFixed(1) : '0';
-          context += `- **${stageData.collegeName} / ${stageData.stageName}**: ${stageData.students.length} طالب | ${stageData.sessions.length} جلسة | ${rate}%\n`;
+          const tp = stageData.students.length * stageData.sessions.length;
+          const r = tp > 0 ? ((stageData.records.length / tp) * 100).toFixed(1) : '0';
+          context += `- **${stageData.collegeName} / ${stageData.stageName}**: ${stageData.students.length} طالب | ${stageData.sessions.length} جلسة | ${r}%\n`;
         });
       } else if (!universityDataLoaded) {
-        context += `## ⚠️ بيانات الجامعة الشاملة غير محملة\n`;
-        context += `إذا سألك المستخدم عن بيانات الجامعة كاملة (كل الكليات/المراحل)، اطلب منه الضغط على زر "📊 تحميل بيانات الجامعة" بالأعلى أولاً.\n\n`;
+        context += `## ⚠️ بيانات الجامعة غير محملة\nإذا سألك المستخدم عن الجامعة كاملة، اطلب منه الضغط على زر "📊 تحميل بيانات الجامعة" بالأعلى.\n\n`;
       }
     }
 
-    return context;
-  }, [sessions, records, students, user.displayName, isAdmin, currentCollege, currentStage, currentStageId, accessibleData, fixDate, universityDataLoaded]);
+    // 🚨 تنبيه مهم: الـ AI يلتزم بالإجابات المؤكدة
+    context += `\n## 🚨 تعليمات مهمة:\n- الإجابات المؤكدة بالأعلى صحيحة 100%\n- اعتمد عليها ولا تحاول تحسب من البيانات بنفسك\n- إذا سألك عن رقم موجود بالإجابات المؤكدة، استخدمه مباشرة\n`;
+
+    const result = context;
+    contextCacheRef.current = { key: dataKey, value: result };
+    return result;
+  }, [sessions, records, students, user.displayName, isAdmin, currentCollege, currentStage, currentStageId, accessibleData, fixDate, universityDataLoaded, user.uid]);
+
+  // 🚀 محرك الأسئلة البسيطة — رد فوري بدون API (يغطي 200+ صيغة فصحى وعراقي)
 
   const analyzeQuestion = useCallback((question: string): string => {
     let hint = '';
@@ -863,8 +860,8 @@ ${dataContext}`;
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isTyping) return;
     const now = Date.now();
-    if (now - lastRequestTime.current < 2000) {
-      const wait = Math.ceil((2000 - (now - lastRequestTime.current)) / 1000);
+    if (now - lastRequestTime.current < 500) {
+      const wait = Math.ceil((500 - (now - lastRequestTime.current)) / 1000);
       setError(`⏱️ انتظر ${wait} ثانية`);
       setTimeout(() => setError(null), 2000);
       return;
@@ -876,8 +873,9 @@ ${dataContext}`;
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     if (inputRef.current) inputRef.current.style.height = '40px';
-    setIsTyping(true);
 
+    // نرسل السؤال لـ Gemini مع كامل البيانات
+    setIsTyping(true);
     try {
       const response = await callGeminiAPI(text.trim(), messages);
       setMessages(prev => [...prev, { id: `${Date.now()}_bot`, type: 'bot', content: response, timestamp: new Date() }]);

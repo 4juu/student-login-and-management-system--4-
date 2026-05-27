@@ -24,6 +24,8 @@ import { PendingRegistrations } from './components/Admin/PendingRegistrations';
 
 import { auth, database } from './firebase/config';
 import { signIn, signOut } from './firebase/authService';
+import { TelegramConfig } from './types/telegram';
+import { sendAttendanceNotification, sendAbsenceNotification } from './services/telegramService';
 import {
   loadColleges,
   saveColleges,
@@ -83,6 +85,9 @@ const [tokenChecked, setTokenChecked] = useState(false);
   const [showSendLink, setShowSendLink] = useState(false);
   const [showPendingRegistrations, setShowPendingRegistrations] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+
+  // 🤖 تهيئة التلغرام
+  const [telegramConfig, setTelegramConfig] = useState<TelegramConfig | null>(null);
 
   // 🆕 السنة الأكاديمية الحالية
   const currentAcademicYear = getCurrentAcademicYear();
@@ -245,9 +250,8 @@ useEffect(() => {
     return () => unsubscribe();
   }, [registerToken]);
 
-  // 🆕 الاستماع لعدد طلبات التسجيل الذاتي المعلقة (للأدمن)
   useEffect(() => {
-    if (!currentUser || currentUser.role !== 'admin') {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'college_admin')) {
       setPendingCount(0);
       return;
     }
@@ -288,6 +292,15 @@ useEffect(() => {
       setColleges(collegesData);
       setStages(stagesData);
       setActiveTab('stage-selector');
+
+      // 🤖 تحميل تهيئة التلغرام
+      try {
+        const { loadTelegramConfig } = await import('./firebase/dataService');
+        const config = await loadTelegramConfig(adminUid);
+        setTelegramConfig(config);
+      } catch (e) {
+        console.warn('فشل تحميل تهيئة التلغرام:', e);
+      }
 
       if (user.role === 'admin') {
         try {
@@ -399,6 +412,11 @@ useEffect(() => {
       setSessions(data.sessions);
       setActiveSessionId(data.activeSessionId);
       setActiveTab('sessions');
+
+      // 🤖 تحميل تهيئة التلغرام
+      const { loadTelegramConfig } = await import('./firebase/dataService');
+      const config = await loadTelegramConfig(adminUid);
+      setTelegramConfig(config);
     } catch (e) {
       console.error('Error loading stage:', e);
     } finally {
@@ -609,13 +627,17 @@ useEffect(() => {
   const handleDeleteStudent = (id: string) => {
     if (window.confirm('هل أنت متأكد من حذف هذا الطالب؟')) {
       intentionalDeleteRef.current.students = true;
+      intentionalDeleteRef.current.records = true;
       setStudents(prev => prev.filter(s => s.id !== id));
+      setAttendanceRecords(prev => prev.filter(r => r.studentId !== id));
     }
   };
 
   const handleDeleteSelectedStudents = (ids: string[]) => {
     intentionalDeleteRef.current.students = true;
+    intentionalDeleteRef.current.records = true;
     setStudents(prev => prev.filter(s => !ids.includes(s.id)));
+    setAttendanceRecords(prev => prev.filter(r => !ids.includes(r.studentId)));
   };
 
   const handleSortByName = () => {
@@ -638,6 +660,21 @@ useEffect(() => {
 
   const handleAttendanceRecord = (record: AttendanceRecord) => {
     setAttendanceRecords(prev => [...prev, record]);
+
+    // 🤖 إرسال إشعار تلغرام
+    if (telegramConfig && selectedStageId) {
+      const stage = stages.find(s => s.id === selectedStageId);
+      sendAttendanceNotification(
+        telegramConfig,
+        selectedStageId,
+        record.studentName,
+        record.date,
+        record.time,
+        record.method || 'manual',
+        record.subjectName || stage?.name || selectedStage?.name,
+        record.teacherName
+      ).catch(() => {});
+    }
   };
 
   const handleClearRecords = () => {
@@ -655,6 +692,10 @@ useEffect(() => {
     setActiveSessionId(sessionId);
   };
 
+  const handleRenameSession = (sessionId: string, newName: string) => {
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, name: newName } : s));
+  };
+
   const handleDeleteSession = (sessionId: string) => {
     intentionalDeleteRef.current.sessions = true;
     intentionalDeleteRef.current.records = true;
@@ -662,6 +703,56 @@ useEffect(() => {
     setAttendanceRecords(prev => prev.filter(r => r.sessionId !== sessionId));
     if (activeSessionId === sessionId) setActiveSessionId(null);
   };
+
+  const handleMarkAbsent = async (sessionId: string, studentIds: string[]) => {
+    const stage = stages.find(s => s.id === selectedStageId);
+    const stageName = stage?.name || '';
+    const now = new Date();
+    const date = now.toLocaleDateString('ar-EG');
+    const time = now.toLocaleTimeString('ar-EG');
+
+    const newRecords: AttendanceRecord[] = studentIds.map(studentId => {
+      const student = students.find(s => s.id === studentId);
+      return {
+        id: `absent_${Date.now()}_${studentId}`,
+        studentId,
+        studentName: student?.name || '',
+        studentCode: student?.code || '',
+        studentGroup: student?.group,
+        timestamp: now.toISOString(),
+        date,
+        time,
+        sessionId,
+        status: 'absent' as const,
+        method: 'manual' as const,
+        academicYear: currentAcademicYear,
+        teacherName: currentUser?.displayName,
+        subjectName: currentUser?.bio || currentUser?.displayName,
+      };
+    });
+
+    setAttendanceRecords(prev => [...prev, ...newRecords]);
+
+    if (telegramConfig && selectedStageId) {
+      for (const record of newRecords) {
+        const absentCount = attendanceRecords.filter(
+          r => r.studentId === record.studentId && r.status === 'absent'
+        ).length + 1;
+
+        sendAbsenceNotification(
+          telegramConfig,
+          selectedStageId,
+          record.studentName,
+          date,
+          absentCount,
+          record.subjectName || stageName,
+          record.teacherName
+        ).catch(() => {});
+      }
+    }
+  };
+
+  const handleTelegramConfigChange = (config: TelegramConfig | null) => setTelegramConfig(config);
 
   const handleUpdateProfile = (updatedUser: User) => setCurrentUser(updatedUser);
 
@@ -679,8 +770,10 @@ useEffect(() => {
     window.history.replaceState({}, '', url.toString());
   };
 
-  const canEditStudents = currentUser?.role === 'admin';
   const isAdmin = currentUser?.role === 'admin';
+  const isCollegeAdmin = currentUser?.role === 'college_admin';
+  const canEditStudents = isAdmin || isCollegeAdmin;
+  const isMainAdmin = isAdmin;
 
   // ════════════════════════════════════════════════════════════
   // 🆕 صفحة التسجيل الذاتي - تظهر بمعزل تام عن باقي النظام
@@ -715,7 +808,7 @@ if (loading || !tokenChecked) {    return (
   const selectedCollege = colleges.find(c => c.id === selectedCollegeId);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100" dir="rtl">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50" dir="rtl">
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
@@ -733,12 +826,17 @@ if (loading || !tokenChecked) {    return (
               <div className="text-right">
                 <p className="text-sm text-gray-600">مرحباً،</p>
                 <p className="font-bold text-gray-800">{currentUser.displayName}</p>
-                {isAdmin && (
+                {isMainAdmin && (
                   <span className="inline-block mt-1 px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">
-                    👑 أدمن
+                    👑 أدمن رئيسي
                   </span>
                 )}
-                {!isAdmin && (
+                {isCollegeAdmin && (
+                  <span className="inline-block mt-1 px-2 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-full">
+                    🏛️ أدمن كلية
+                  </span>
+                )}
+                {currentUser?.role === 'teacher' && (
                   <span className="inline-block mt-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
                     👨‍🏫 تدريسي
                   </span>
@@ -794,7 +892,7 @@ if (loading || !tokenChecked) {    return (
               >
                 🎯 اختيار المرحلة
               </button>
-              {isAdmin && (
+              {isMainAdmin && (
                 <>
                   <button
                     onClick={() => setActiveTab('colleges')}
@@ -808,16 +906,22 @@ if (loading || !tokenChecked) {    return (
                   >
                     👨‍🏫 التدريسيين
                   </button>
-
-                  {/* 🆕 زر إرسال روابط التسجيل الذاتي */}
+                  <button
+                    onClick={() => setActiveTab('system-settings')}
+                    className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'system-settings' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                  >
+                    ⚙️ إعدادات النظام
+                  </button>
+                </>
+              )}
+              {(isMainAdmin || isCollegeAdmin) && (
+                <>
                   <button
                     onClick={() => setShowSendLink(true)}
                     className="px-5 py-2 rounded-lg font-medium bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md hover:from-purple-700 hover:to-pink-700 transition"
                   >
                     📨 إرسال روابط تسجيل
                   </button>
-
-                  {/* 🆕 زر مراجعة طلبات التسجيل */}
                   <button
                     onClick={() => setShowPendingRegistrations(true)}
                     className="relative px-5 py-2 rounded-lg font-medium bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:from-amber-600 hover:to-orange-600 transition"
@@ -829,14 +933,15 @@ if (loading || !tokenChecked) {    return (
                       </span>
                     )}
                   </button>
-
-                  <button
-                    onClick={() => setActiveTab('system-settings')}
-                    className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'system-settings' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
-                  >
-                    ⚙️ إعدادات النظام
-                  </button>
                 </>
+              )}
+              {isCollegeAdmin && (
+                <button
+                  onClick={() => setActiveTab('teachers')}
+                  className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'teachers' ? 'bg-amber-600 text-white' : 'bg-white text-gray-700'}`}
+                >
+                  👨‍🏫 صلاحيات التدريسيين
+                </button>
               )}
               <button
                 onClick={() => setActiveTab('profile')}
@@ -846,7 +951,7 @@ if (loading || !tokenChecked) {    return (
               </button>
             </div>
 
-            {isAdmin && activeTab === 'stage-selector' && (
+            {isMainAdmin && activeTab === 'stage-selector' && (
               <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-center gap-3">
@@ -886,40 +991,49 @@ if (loading || !tokenChecked) {    return (
               </div>
             )}
 
-            {activeTab === 'stage-selector' && (
-              <StageSelector user={currentUser} colleges={colleges} stages={stages} onSelect={handleSelectStage} />
-            )}
+            <div key={`tab-${activeTab}`} className="animate-pageEnter">
+              {activeTab === 'stage-selector' && (
+                <StageSelector user={currentUser} colleges={colleges} stages={stages} onSelect={handleSelectStage} />
+              )}
 
-            {activeTab === 'colleges' && isAdmin && (
-              <CollegeManager
-                colleges={colleges}
-                stages={stages}
-                adminUid={currentUser.uid}
-                onAddCollege={handleAddCollege}
-                onDeleteCollege={handleDeleteCollege}
-                onAddStage={handleAddStage}
-                onDeleteStage={handleDeleteStage}
-                onSelectStage={handleSelectStage}
-              />
-            )}
+              {activeTab === 'colleges' && isMainAdmin && (
+                <CollegeManager
+                  colleges={colleges}
+                  stages={stages}
+                  adminUid={currentUser.uid}
+                  onAddCollege={handleAddCollege}
+                  onDeleteCollege={handleDeleteCollege}
+                  onAddStage={handleAddStage}
+                  onDeleteStage={handleDeleteStage}
+                  onSelectStage={handleSelectStage}
+                />
+              )}
 
-            {activeTab === 'teachers' && isAdmin && (
-              <TeacherManagement currentUser={currentUser} colleges={colleges} stages={stages} />
-            )}
+              {activeTab === 'teachers' && (isMainAdmin || isCollegeAdmin) && (
+                <TeacherManagement 
+                  currentUser={currentUser} 
+                  colleges={isCollegeAdmin ? colleges.filter(c => c.id === currentUser.collegeId) : colleges} 
+                  stages={isCollegeAdmin ? stages.filter(s => s.collegeId === currentUser.collegeId) : stages} 
+                />
+              )}
 
-            {activeTab === 'system-settings' && isAdmin && (
-              <Settings
-                students={students}
-                attendanceRecords={attendanceRecords}
-                currentUser={currentUser}
-                onDataRestored={() => loadInitialData(currentUser)}
-                onResetComplete={handleResetComplete}
-              />
-            )}
+              {activeTab === 'system-settings' && isMainAdmin && (
+                <Settings
+                  students={students}
+                  attendanceRecords={attendanceRecords}
+                  currentUser={currentUser}
+                  onDataRestored={() => loadInitialData(currentUser)}
+                  onResetComplete={handleResetComplete}
+                  stages={stages}
+                  colleges={colleges}
+                  onTelegramConfigChange={handleTelegramConfigChange}
+                />
+              )}
 
-            {activeTab === 'profile' && (
-              <ProfileSettings currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />
-            )}
+              {activeTab === 'profile' && (
+                <ProfileSettings currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />
+              )}
+            </div>
           </div>
         )}
 
@@ -952,68 +1066,75 @@ if (loading || !tokenChecked) {    return (
               </button>
             </div>
 
-            {activeTab === 'sessions' && (
-              <SessionManager
-                sessions={sessions}
-                activeSessionId={activeSessionId}
-                onCreateSession={handleCreateSession}
-                onSelectSession={handleSelectSession}
+            <div key={`stage-tab-${activeTab}`} className="animate-pageEnter">
+              {activeTab === 'sessions' && (
+                <SessionManager
+                  sessions={sessions}
+                  activeSessionId={activeSessionId}
+                  onCreateSession={handleCreateSession}
+                  onSelectSession={handleSelectSession}
                 onDeleteSession={handleDeleteSession}
-              />
-            )}
-
-            {activeTab === 'login' && (
-              <div className="max-w-lg mx-auto">
-                {!activeSessionId ? (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-                    <p className="text-yellow-800 font-medium mb-4">لا يوجد سجل نشط!</p>
-                    <button onClick={() => setActiveTab('sessions')} className="bg-yellow-600 text-white py-2 px-6 rounded-md">
-                      انتقل لإدارة السجلات
-                    </button>
-                  </div>
-                ) : students.length === 0 ? (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-                    <p className="text-yellow-800 font-medium">لا يوجد طلاب في هذه المرحلة</p>
-                  </div>
-                ) : (
-                  <AttendanceLogin
-                    students={students}
-                    activeSessionId={activeSessionId}
-                    activeSession={sessions.find(s => s.id === activeSessionId) || null}
-                    records={attendanceRecords}
-                    onAttendanceRecord={handleAttendanceRecord}
-                    onUpdateStudent={handleUpdateStudent}
-                  />
-                )}
-              </div>
-            )}
-
-            {activeTab === 'manage' && (
-              canEditStudents ? (
-                <StudentManager
-                  students={students}
-                  onAddStudent={handleAddStudent}
-                  onAddMultipleStudents={handleAddMultipleStudents}
-                  onUpdateStudent={handleUpdateStudent}
-                  onDeleteStudent={handleDeleteStudent}
-                  onDeleteSelectedStudents={handleDeleteSelectedStudents}
-                  onSortByName={handleSortByName}
-                  onSortByGroup={handleSortByGroup}
-                />
-              ) : (
-                <StudentsViewer students={students} />
-              )
-            )}
-
-            {activeTab === 'records' && (
-              <AttendanceRecords
-                records={attendanceRecords}
-                sessions={sessions}
+                onRenameSession={handleRenameSession}
                 students={students}
-                activeSessionId={activeSessionId}
-                onClearRecords={handleClearRecords}
-              />
-            )}
+                records={attendanceRecords}
+                onMarkAbsent={handleMarkAbsent}
+                />
+              )}
+
+              {activeTab === 'login' && (
+                <div className="max-w-lg mx-auto">
+                  {!activeSessionId ? (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+                      <p className="text-yellow-800 font-medium mb-4">لا يوجد سجل نشط!</p>
+                      <button onClick={() => setActiveTab('sessions')} className="bg-yellow-600 text-white py-2 px-6 rounded-md">
+                        انتقل لإدارة السجلات
+                      </button>
+                    </div>
+                  ) : students.length === 0 ? (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+                      <p className="text-yellow-800 font-medium">لا يوجد طلاب في هذه المرحلة</p>
+                    </div>
+                  ) : (
+                    <AttendanceLogin
+                      students={students}
+                      activeSessionId={activeSessionId}
+                      activeSession={sessions.find(s => s.id === activeSessionId) || null}
+                      records={attendanceRecords}
+                      onAttendanceRecord={handleAttendanceRecord}
+                      onUpdateStudent={handleUpdateStudent}
+                      currentUser={currentUser}
+                    />
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'manage' && (
+                canEditStudents ? (
+                  <StudentManager
+                    students={students}
+                    onAddStudent={handleAddStudent}
+                    onAddMultipleStudents={handleAddMultipleStudents}
+                    onUpdateStudent={handleUpdateStudent}
+                    onDeleteStudent={handleDeleteStudent}
+                    onDeleteSelectedStudents={handleDeleteSelectedStudents}
+                    onSortByName={handleSortByName}
+                    onSortByGroup={handleSortByGroup}
+                  />
+                ) : (
+                  <StudentsViewer students={students} />
+                )
+              )}
+
+              {activeTab === 'records' && (
+                <AttendanceRecords
+                  records={attendanceRecords}
+                  sessions={sessions}
+                  students={students}
+                  activeSessionId={activeSessionId}
+                  onClearRecords={handleClearRecords}
+                />
+              )}
+            </div>
           </div>
         )}
 
@@ -1034,30 +1155,32 @@ if (loading || !tokenChecked) {    return (
         records={attendanceRecords}
         sessions={sessions}
         activeSessionId={activeSessionId}
-        allTeachers={isAdmin ? allTeachers : []}
-        allStagesData={isAdmin && universityDataLoaded ? allStagesData : {}}
+        allTeachers={isMainAdmin ? allTeachers : []}
+        allStagesData={isMainAdmin && universityDataLoaded ? allStagesData : {}}
         onRequestUniversityData={isAdmin ? loadAllAdminData : undefined}
         universityDataLoaded={universityDataLoaded}
         universityDataLoading={universityDataLoading}
       />
 
       {/* 🆕 نافذة إرسال روابط التسجيل الذاتي */}
-      {showSendLink && currentUser && isAdmin && (
+      {showSendLink && currentUser && (isMainAdmin || isCollegeAdmin) && (
         <SendRegisterLink
           adminUid={currentUser.uid}
-          colleges={colleges}
-          stages={stages}
+          colleges={isCollegeAdmin ? colleges.filter(c => c.id === currentUser.collegeId) : colleges}
+          stages={isCollegeAdmin ? stages.filter(s => s.collegeId === currentUser.collegeId) : stages}
           loadStudents={async (stageId: string) => {
-            return await loadStudentsForStage(currentUser.uid, stageId);
+            const uid = isCollegeAdmin ? getAdminUid() : currentUser.uid;
+            return await loadStudentsForStage(uid, stageId);
           }}
           onClose={() => setShowSendLink(false)}
         />
       )}
 
       {/* 🆕 نافذة مراجعة طلبات التسجيل الذاتي */}
-      {showPendingRegistrations && currentUser && isAdmin && (
+      {showPendingRegistrations && currentUser && (isMainAdmin || isCollegeAdmin) && (
         <PendingRegistrations
           adminUid={currentUser.uid}
+          dataAdminUid={isCollegeAdmin ? getAdminUid() : undefined}
           onClose={() => setShowPendingRegistrations(false)}
         />
       )}

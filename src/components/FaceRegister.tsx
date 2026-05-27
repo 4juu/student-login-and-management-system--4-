@@ -4,6 +4,8 @@ import {
   loadFaceModels,
   extractFaceDescriptor,
   descriptorToArray,
+  normalizeDescriptor,
+  checkForTamperingAsync,
 } from '../services/faceRecognition';
 
 interface FaceRegisterProps {
@@ -57,10 +59,9 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
         setModelsReady(true);
 
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: {  facingMode: 'user'
-  },
-  audio: false,
-});
+          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
 
         if (!mounted) {
           stream.getTracks().forEach(t => t.stop());
@@ -103,8 +104,19 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
         return false;
       }
 
+      const normalized = normalizeDescriptor(descriptor);
+      const tamper = await checkForTamperingAsync(normalized, students, currentStudent.id);
+      if (tamper.isTamper) {
+        setMessage({
+          type: 'error',
+          text: `⚠️ هذه البصمة مسجلة أصلاً للطالب: ${tamper.matchedStudents.map(m => m.name).join('، ')}`,
+        });
+        setTimeout(() => setMessage(null), 4000);
+        return false;
+      }
+
       onUpdateStudent(currentStudent.id, {
-        faceDescriptor: descriptorToArray(descriptor),
+        faceDescriptor: descriptorToArray(normalized),
         faceRegisteredAt: new Date().toISOString(),
       });
 

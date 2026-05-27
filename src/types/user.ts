@@ -2,7 +2,7 @@ export interface User {
   uid: string;
   email: string;
   displayName: string;
-  role: 'admin' | 'teacher';
+  role: 'admin' | 'college_admin' | 'teacher';
   lastUpdated?: string;
   createdAt: string;
   lastLogin?: string;
@@ -12,6 +12,10 @@ export interface User {
   // للتدريسي - الصلاحيات
   adminId?: string;
   permissions?: TeacherPermissions;
+  
+  // لأدمن الكلية - الكلية المسؤول عنها
+  collegeId?: string;
+  collegeName?: string;
   
   // 🆕 حالة التفعيل (للتصفير السنوي)
   active?: boolean; // true = مفعّل، false = معطّل بعد التصفير

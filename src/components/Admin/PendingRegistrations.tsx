@@ -6,9 +6,13 @@ import { Student } from '../../types/student';
 import { PendingRegistration } from '../../types/registration';
 import { getMatchDescription, AUTO_APPROVE_THRESHOLD } from '../../services/nameMatching';
 import { getActiveAcademicYear } from '../../firebase/dataService';
+import { SkeletonTable } from '../Skeleton';
+import { checkForTamperingAsync, normalizeDescriptor } from '../../services/faceRecognition';
+import { ensureDecompressed } from '../../services/faceCompression';
 
 interface PendingRegistrationsProps {
   adminUid: string;
+  dataAdminUid?: string; // للأدمن الرئيسي المسؤول عن تخزين بيانات الطلاب
   onClose: () => void;
 }
 
@@ -16,6 +20,7 @@ type FilterStatus = 'all' | 'pending' | 'approved' | 'rejected' | 'auto-approved
 
 export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
   adminUid,
+  dataAdminUid,
   onClose,
 }) => {
   const [requests, setRequests] = useState<PendingRegistration[]>([]);
@@ -88,7 +93,8 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
     try {
       // 1️⃣ تطبيق التغييرات على الطالب
       const year = await getActiveAcademicYear();
-      const studentsPath = `academicYears/${year}/userData/${adminUid}/stageData/${req.stageId}/students`;
+      const storageUid = dataAdminUid || adminUid;
+      const studentsPath = `academicYears/${year}/userData/${storageUid}/stageData/${req.stageId}/students`;
       const snap = await get(ref(database, studentsPath));
       
       if (!snap.exists()) {
@@ -98,11 +104,26 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       const data = snap.val();
       const studentsArr: Student[] = Array.isArray(data) ? data : Object.values(data);
       const idx = studentsArr.findIndex(s => s.id === req.studentId);
-      
+
       if (idx === -1) {
         throw new Error('لم نجد الطالب');
       }
-      
+
+      // 🛡️ فحص عدم تطابق البصمة مع طالب آخر
+      if (req.faceDescriptor) {
+        const descArray = ensureDecompressed(req.faceDescriptor);
+        if (descArray.length === 128) {
+          const normalized = normalizeDescriptor(new Float32Array(descArray));
+          const tamper = await checkForTamperingAsync(normalized, studentsArr, req.studentId);
+          if (tamper.isTamper) {
+            setProcessing(null);
+            const names = tamper.matchedStudents.map(m => m.name).join('، ');
+            alert(`⚠️ لا يمكن الموافقة: هذه البصمة مسجلة أصلاً للطالب:\n${names}\n\nيرجى التحقق من صحة الطلب.`);
+            return;
+          }
+        }
+      }
+
       studentsArr[idx] = {
         ...studentsArr[idx],
         qrCodeId: req.qrCodeId,
@@ -273,9 +294,8 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         {/* قائمة الطلبات */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {loading ? (
-            <div className="text-center py-8">
-              <div className="inline-block w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm text-gray-500 mt-2">جاري التحميل...</p>
+            <div className="p-4">
+              <SkeletonTable rows={4} cols={4} />
             </div>
           ) : filteredRequests.length === 0 ? (
             <div className="text-center py-12 text-gray-400">

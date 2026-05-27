@@ -194,7 +194,7 @@ export const detectDescriptorFormat = (
 
   // base64 string
   if (typeof fd === 'string') {
-    return fd.length > 0 ? 'base64' : null;
+    return fd.trim().length > 0 ? 'base64' : null;
   }
 
   // Array
@@ -284,7 +284,7 @@ export const hasFaceDescriptor = (fd: any): boolean => {
   if (Array.isArray(fd) && fd.length > 0) return true;
 
   // base64 string
-  if (typeof fd === 'string' && fd.length > 0) return true;
+  if (typeof fd === 'string' && fd.trim().length > 0) return true;
 
   return false;
 };

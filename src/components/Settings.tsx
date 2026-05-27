@@ -1,13 +1,20 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Student, AttendanceRecord } from '../types/student';
+import { Student, AttendanceRecord, Stage, College } from '../types/student';
 import { User } from '../types/user';
+import { TelegramConfig } from '../types/telegram';
 import { 
   downloadBackup, 
   resetAcademicYear, 
   getDatabaseStats, 
   listAllAcademicYears,
-  getCurrentAcademicYear 
+  getCurrentAcademicYear,
+  saveTelegramConfig,
+  loadTelegramConfig,
 } from '../firebase/dataService';
+import {
+  sendTestMessage,
+  verifyBotToken,
+} from '../services/telegramService';
 
 interface SettingsProps {
   students: Student[];
@@ -15,6 +22,9 @@ interface SettingsProps {
   onDataRestored: () => void;
   currentUser?: User;
   onResetComplete?: () => void;
+  stages?: Stage[];
+  colleges?: College[];
+  onTelegramConfigChange?: (config: TelegramConfig | null) => void;
 }
 
 export const Settings: React.FC<SettingsProps> = ({
@@ -23,6 +33,9 @@ export const Settings: React.FC<SettingsProps> = ({
   onDataRestored,
   currentUser,
   onResetComplete,
+  stages = [],
+  colleges = [],
+  onTelegramConfigChange,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -32,11 +45,21 @@ export const Settings: React.FC<SettingsProps> = ({
     totalStudents: number;
     totalRecords: number;
     totalSessions: number;
+    totalTeachers: number;
+    totalFaceDescriptors: number;
   } | null>(null);
   const [academicYears, setAcademicYears] = useState<string[]>([]);
   const [loadingStats, setLoadingStats] = useState(false);
   const [downloadingBackup, setDownloadingBackup] = useState(false);
   const [resetting, setResetting] = useState(false);
+
+  // 🤖 Telegram
+  const [telegramConfig, setTelegramConfig] = useState<TelegramConfig | null>(null);
+  const [telegramBotToken, setTelegramBotToken] = useState('');
+  const [telegramSaving, setTelegramSaving] = useState(false);
+  const [telegramMessage, setTelegramMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [botVerified, setBotVerified] = useState(false);
+  const [botUsername, setBotUsername] = useState('');
 
   const currentAcademicYear = getCurrentAcademicYear();
   const isAdmin = currentUser?.role === 'admin';
@@ -63,6 +86,137 @@ export const Settings: React.FC<SettingsProps> = ({
       loadYears();
     }
   }, [isAdmin, currentUser]);
+
+  // 🤖 تحميل تهيئة التلغرام
+  useEffect(() => {
+    if (!currentUser) return;
+    loadTelegramConfig(getAdminUid()).then(config => {
+      if (config) {
+        setTelegramConfig(config);
+        setTelegramBotToken(config.botToken);
+        if (config.botToken) {
+          verifyBotToken(config.botToken).then(r => {
+            if (r.ok) { setBotVerified(true); setBotUsername(r.username || ''); }
+          });
+        }
+      }
+    });
+  }, [currentUser]);
+
+  const getAdminUid = (): string => {
+    if (!currentUser) return '';
+    if (currentUser.role === 'admin') return currentUser.uid;
+    return currentUser.adminId || currentUser.uid;
+  };
+
+  const handleTelegramSave = async () => {
+    if (!currentUser) return;
+    if (!telegramBotToken.trim()) {
+      setTelegramMessage({ type: 'error', text: 'الرجاء إدخال توكن البوت' });
+      return;
+    }
+    setTelegramSaving(true);
+    setTelegramMessage(null);
+    try {
+      const config: TelegramConfig = telegramConfig || {
+        botToken: telegramBotToken.trim(),
+        channels: {},
+        updatedAt: new Date().toISOString(),
+      };
+      config.botToken = telegramBotToken.trim();
+      config.updatedAt = new Date().toISOString();
+      await saveTelegramConfig(getAdminUid(), config);
+      setTelegramConfig(config);
+      onTelegramConfigChange?.(config);
+      setTelegramMessage({ type: 'success', text: '✅ تم حفظ الإعدادات بنجاح!' });
+    } catch (e: any) {
+      setTelegramMessage({ type: 'error', text: '❌ فشل الحفظ: ' + (e.message || '') });
+    } finally {
+      setTelegramSaving(false);
+    }
+  };
+
+  const handleVerifyBot = async () => {
+    if (!telegramBotToken.trim()) {
+      setTelegramMessage({ type: 'error', text: 'الرجاء إدخال التوكن أولاً' });
+      return;
+    }
+    setTelegramMessage(null);
+    const result = await verifyBotToken(telegramBotToken.trim());
+    if (result.ok) {
+      setBotVerified(true);
+      setBotUsername(result.username || '');
+      setTelegramMessage({ type: 'success', text: `✅ تم التحقق! البوت: @${result.username}` });
+    } else {
+      setBotVerified(false);
+      setBotUsername('');
+      setTelegramMessage({ type: 'error', text: '❌ ' + (result.error || 'توكن غير صحيح') });
+    }
+  };
+
+  const channelDefaults = {
+    enabled: true,
+    notifyOnAttendance: true,
+    notifyOnAbsence: true,
+    sendDailyReport: false,
+  };
+
+  const getTelegramConfig = () => telegramConfig || {
+    botToken: telegramBotToken,
+    channels: {},
+    updatedAt: new Date().toISOString(),
+  };
+
+  const handleChannelToggle = (stageId: string, field: keyof typeof channelDefaults, value: boolean) => {
+    setTelegramConfig(prev => {
+      const config = prev || getTelegramConfig();
+      return {
+        ...config,
+        channels: {
+          ...config.channels,
+          [stageId]: {
+            ...config.channels[stageId],
+            [field]: value,
+          },
+        },
+      };
+    });
+  };
+
+  const handleChannelChatId = (stageId: string, chatId: string) => {
+    setTelegramConfig(prev => {
+      const config = prev || getTelegramConfig();
+      const stage = stages.find(s => s.id === stageId);
+      return {
+        ...config,
+        channels: {
+          ...config.channels,
+          [stageId]: {
+            ...channelDefaults,
+            ...config.channels[stageId],
+            chatId,
+            stageName: stage?.name || stageId,
+          },
+        },
+      };
+    });
+  };
+
+  const handleTestChannel = async (stageId: string) => {
+    if (!telegramConfig) return;
+    setTelegramMessage(null);
+    const ok = await sendTestMessage(telegramConfig, stageId);
+    if (ok) {
+      setTelegramMessage({ type: 'success', text: '✅ تم إرسال رسالة اختبار للقناة!' });
+    } else {
+      setTelegramMessage({ type: 'error', text: '❌ فشل الإرسال. تأكد من Chat ID والبوت مضاف كأدمن في القناة' });
+    }
+  };
+
+  const hasTelegramChanges = (): boolean => {
+    if (!telegramConfig) return !!telegramBotToken.trim();
+    return telegramConfig.botToken !== telegramBotToken.trim();
+  };
 
   const loadStats = async () => {
     if (!currentUser) return;
@@ -304,18 +458,26 @@ export const Settings: React.FC<SettingsProps> = ({
               </div>
 
               {/* الإحصائيات */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-white rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold text-blue-700">{stats.totalStudents}</div>
-                  <div className="text-xs text-gray-600">طالب</div>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center shadow-sm">
+                  <div className="text-2xl font-bold text-blue-700 dark:text-blue-400">{stats.totalStudents}</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">👤 طالب</div>
                 </div>
-                <div className="bg-white rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold text-purple-700">{stats.totalRecords}</div>
-                  <div className="text-xs text-gray-600">سجل حضور</div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center shadow-sm">
+                  <div className="text-2xl font-bold text-purple-700 dark:text-purple-400">{stats.totalRecords}</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">📝 سجل حضور</div>
                 </div>
-                <div className="bg-white rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold text-pink-700">{stats.totalSessions}</div>
-                  <div className="text-xs text-gray-600">جلسة</div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center shadow-sm">
+                  <div className="text-2xl font-bold text-pink-700 dark:text-pink-400">{stats.totalSessions}</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">📋 جلسة</div>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center shadow-sm">
+                  <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{stats.totalTeachers}</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">👨‍🏫 مدرس</div>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center shadow-sm">
+                  <div className="text-2xl font-bold text-amber-700 dark:text-amber-400">{stats.totalFaceDescriptors}</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">😊 بصمة وجه</div>
                 </div>
               </div>
 
@@ -511,37 +673,176 @@ export const Settings: React.FC<SettingsProps> = ({
         </div>
       )}
 
-      {/* Info Section */}
-      <div className="bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg p-4">
+      {/* 🤖 قسم التلغرام */}
+      <div className="mb-8">
         <h3 className="text-lg font-semibold mb-3 text-gray-700 flex items-center gap-2">
-          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          مميزات النظام المحدّث
+          🤖 بوت التلغرام (إشعارات الحضور)
         </h3>
-        <ul className="space-y-2 text-sm text-gray-700">
-          <li className="flex items-start gap-2">
-            <span className="text-green-500 mt-1">✓</span>
-            <span><strong>تقسيم سنوي:</strong> كل سنة أكاديمية لها بياناتها المنفصلة</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-green-500 mt-1">✓</span>
-            <span><strong>تصفير سنوي:</strong> ابدأ نظيف كل سنة دون مشاكل</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-green-500 mt-1">✓</span>
-            <span><strong>حسابات دائمة:</strong> التدريسيين يحتفظون بحساباتهم</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-green-500 mt-1">✓</span>
-            <span><strong>مجاني 100%:</strong> ضمن حدود Firebase المجانية</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-green-500 mt-1">✓</span>
-            <span><strong>Backup تلقائي:</strong> قبل أي تصفير، تنزيل JSON تلقائياً</span>
-          </li>
-        </ul>
+
+        <div className="bg-gradient-to-br from-sky-50 to-blue-50 border-2 border-sky-300 rounded-xl p-5 mb-4">
+          <div className="flex items-start gap-3 mb-4">
+            <span className="text-4xl">📢</span>
+            <div className="flex-1">
+              <h4 className="font-bold text-sky-900 text-lg mb-1">إعدادات البوت</h4>
+              <p className="text-sm text-sky-700">
+                أرسل إشعارات الحضور والغياب تلقائياً إلى قنوات التلغرام لكل مادة
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white border border-sky-200 rounded-lg p-4 mb-4">
+            <label className="block text-sm font-bold text-gray-700 mb-2">🔑 توكن البوت (Bot Token)</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={telegramBotToken}
+                onChange={e => { setTelegramBotToken(e.target.value); setBotVerified(false); setTelegramMessage(null); }}
+                placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-sky-500 font-mono text-sm"
+                dir="ltr"
+              />
+              <button
+                onClick={handleVerifyBot}
+                className="bg-sky-600 hover:bg-sky-700 text-white font-medium py-2 px-4 rounded-md transition"
+              >
+                🔍 تحقق
+              </button>
+            </div>
+            {botVerified && (
+              <p className="text-sm text-green-700 mt-2 font-medium">✅ البوت موثوق: @{botUsername}</p>
+            )}
+            <div className="mt-2 bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600">
+              <p className="font-bold mb-1">📌 كيفية الحصول على التوكن:</p>
+              <ol className="list-decimal list-inside space-y-1 mr-2">
+                <li>افتح <a href="https://t.me/BotFather" target="_blank" className="text-blue-600 underline">@BotFather</a> في تلغرام</li>
+                <li>أرسل <code className="bg-gray-200 px-1 rounded">/newbot</code> واتبع التعليمات</li>
+                <li>انسخ التوكن وألصقه هنا</li>
+              </ol>
+            </div>
+          </div>
+
+          {/* ربط القنوات */}
+          <div className="bg-white border border-sky-200 rounded-lg p-4">
+            <h4 className="font-bold text-gray-700 mb-3">📡 ربط القنوات حسب المادة</h4>
+            <p className="text-xs text-gray-500 mb-3">
+              لكل مادة (مرحلة)، أدخل Chat ID القناة الخاصة بها
+            </p>
+
+            {stages.length === 0 ? (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-700 text-center">
+                ⚠️ لا توجد مراحل مضافة. أضف المراحل أولاً من صفحة إدارة الكليات.
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-80 overflow-y-auto">
+                {stages.map(stage => {
+                  const college = colleges.find(c => c.id === stage.collegeId);
+                  const channel = telegramConfig?.channels[stage.id];
+                  const chatId = channel?.chatId || '';
+
+                  return (
+                    <div key={stage.id} className="border border-gray-200 rounded-lg p-3 hover:border-sky-300 transition">
+                      <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{college?.icon || '📚'}</span>
+                          <div>
+                            <span className="font-bold text-gray-800">{stage.name}</span>
+                            {college && (
+                              <span className="text-xs text-gray-500 mr-2">{college.name}</span>
+                            )}
+                          </div>
+                        </div>
+                        <label className="flex items-center gap-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={channel?.enabled ?? false}
+                            onChange={e => handleChannelToggle(stage.id, 'enabled', e.target.checked)}
+                            className="accent-sky-600"
+                          />
+                          مفعّل
+                        </label>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={chatId}
+                          onChange={e => handleChannelChatId(stage.id, e.target.value)}
+                          placeholder="-1001234567890"
+                          className="flex-1 px-3 py-1.5 border border-gray-300 rounded-md text-sm font-mono focus:ring-2 focus:ring-sky-500"
+                          dir="ltr"
+                        />
+                        <button
+                          onClick={() => handleTestChannel(stage.id)}
+                          disabled={!chatId || !telegramConfig?.botToken}
+                          className="bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white text-xs font-medium px-3 py-1.5 rounded-md transition"
+                        >
+                          📨 اختبار
+                        </button>
+                      </div>
+                      {chatId && (
+                        <div className="flex gap-3 mt-2 text-xs text-gray-500">
+                          <label className="flex items-center gap-1">
+                            <input type="checkbox" checked={channel?.notifyOnAttendance ?? true}
+                              onChange={e => handleChannelToggle(stage.id, 'notifyOnAttendance', e.target.checked)}
+                              className="accent-sky-600 w-3 h-3" />
+                            حضور
+                          </label>
+                          <label className="flex items-center gap-1">
+                            <input type="checkbox" checked={channel?.notifyOnAbsence ?? true}
+                              onChange={e => handleChannelToggle(stage.id, 'notifyOnAbsence', e.target.checked)}
+                              className="accent-sky-600 w-3 h-3" />
+                            غياب
+                          </label>
+                          <label className="flex items-center gap-1">
+                            <input type="checkbox" checked={channel?.sendDailyReport ?? false}
+                              onChange={e => handleChannelToggle(stage.id, 'sendDailyReport', e.target.checked)}
+                              className="accent-sky-600 w-3 h-3" />
+                            تقرير يومي
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {stages.length > 0 && (
+              <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600">
+                <p className="font-bold mb-1">📌 كيفية الحصول على Chat ID:</p>
+                <ol className="list-decimal list-inside space-y-1 mr-2">
+                  <li>أضف البوت كأدمن في القناة</li>
+                  <li>أرسل رسالة في القناة</li>
+                  <li>افتح <a href="https://t.me/GetChatID_Bot" target="_blank" className="text-blue-600 underline">@GetChatID_Bot</a></li>
+                  <li>انسخ الرقم (يبدأ بـ -100) وألصقه هنا</li>
+                </ol>
+              </div>
+            )}
+          </div>
+
+          {telegramMessage && (
+            <div className={`mt-3 p-3 rounded-lg text-sm font-medium ${
+              telegramMessage.type === 'success'
+                ? 'bg-green-100 text-green-800 border border-green-300'
+                : 'bg-red-100 text-red-800 border border-red-300'
+            }`}>
+              {telegramMessage.text}
+            </div>
+          )}
+
+          <button
+            onClick={handleTelegramSave}
+            disabled={telegramSaving || !hasTelegramChanges()}
+            className="mt-4 w-full bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-700 hover:to-blue-800 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-lg shadow-md transition flex items-center justify-center gap-2"
+          >
+            {telegramSaving ? (
+              <>⏳ جاري الحفظ...</>
+            ) : (
+              <>💾 حفظ إعدادات التلغرام</>
+            )}
+          </button>
+        </div>
       </div>
+
     </div>
   );
 };

@@ -18,7 +18,7 @@ export const StageSelector: React.FC<StageSelectorProps> = ({
   const getAllowedStages = (collegeId: string) => {
     const collegeStages = stages.filter(s => s.collegeId === collegeId);
     
-    if (user.role === 'admin') return collegeStages;
+    if (user.role === 'admin' || user.role === 'college_admin') return collegeStages;
     
     const allowedIds = user.permissions?.allowedStages[collegeId] || [];
     return collegeStages.filter(s => allowedIds.includes(s.id));
@@ -26,11 +26,11 @@ export const StageSelector: React.FC<StageSelectorProps> = ({
 
   const allowedColleges = colleges.filter(college => {
     if (user.role === 'admin') return true;
+    if (user.role === 'college_admin') return college.id === user.collegeId;
     return !!user.permissions?.allowedStages[college.id];
   });
 
-  // 🆕 رسالة خاصة للتدريسي المعطّل (بعد التصفير)
-  if (user.role === 'teacher' && user.active === false) {
+  if ((user.role === 'teacher' || user.role === 'college_admin') && user.active === false) {
     return (
       <div className="bg-white rounded-lg shadow-md p-12 text-center">
         <div className="text-6xl mb-4">🔒</div>
@@ -61,7 +61,7 @@ export const StageSelector: React.FC<StageSelectorProps> = ({
         <div className="text-6xl mb-4">🔒</div>
         <h2 className="text-2xl font-bold text-gray-800 mb-2">لا توجد صلاحيات وصول</h2>
         <p className="text-gray-600">
-          {user.role === 'admin' 
+          {user.role === 'admin' || user.role === 'college_admin'
             ? 'ابدأ بإنشاء كلية ومراحل من تبويب "إدارة الكليات"'
             : 'يرجى التواصل مع الأدمن لتحديد الكليات والمراحل المسموح لك بالوصول إليها'}
         </p>

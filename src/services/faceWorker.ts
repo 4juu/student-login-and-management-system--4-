@@ -55,6 +55,23 @@ const workerCode = `
       results.sort(function(a, b) { return a.distance - b.distance; });
       self.postMessage({ type: 'batchResult', data: results });
     }
+    
+    if (type === 'tamper') {
+      const { query, storedDescriptors, threshold } = data;
+      const q = new Float32Array(query);
+      const matches = [];
+      for (let s = 0; s < storedDescriptors.length; s++) {
+        const sd = storedDescriptors[s];
+        const stored = new Float32Array(sd.desc);
+        let dist = 0;
+        for (let i = 0; i < 128; i++) dist += (q[i] - stored[i]) * (q[i] - stored[i]);
+        dist = Math.sqrt(dist);
+        if (dist < threshold) {
+          matches.push({ id: sd.id, name: sd.name, distance: dist });
+        }
+      }
+      self.postMessage({ type: 'tamperResult', data: matches });
+    }
   };
 `;
 

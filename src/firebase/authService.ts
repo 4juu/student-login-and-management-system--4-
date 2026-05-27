@@ -162,7 +162,8 @@ export const createTeacherAccount = async (
   email: string,
   password: string,
   displayName: string,
-  adminUid: string
+  adminUid: string,
+  collegeId?: string
 ): Promise<void> => {
   try {
     const { secondaryAuth } = await import('./config');
@@ -179,6 +180,7 @@ export const createTeacherAccount = async (
       displayName,
       role: 'teacher',
       adminId: adminUid,
+      collegeId,
       active: true,
       lastActivatedAt: new Date().toISOString(),
       permissions: {
@@ -207,6 +209,47 @@ export const createTeacherAccount = async (
   } catch (error: any) {
     console.error("❌ خطأ إنشاء التدريسي:", error);
     throw new Error(getErrorMessage(error.code) || error.message);
+  }
+};
+
+// ============================================================
+// 🏛️ تعيين تدريسي كأدمن كلية / إلغاء التعيين
+// ============================================================
+export const promoteToCollegeAdmin = async (
+  teacherUid: string,
+  collegeId: string,
+  collegeName: string
+): Promise<void> => {
+  try {
+    await update(ref(database, `users/${teacherUid}`), {
+      role: 'college_admin',
+      collegeId,
+      collegeName,
+      lastUpdated: new Date().toISOString()
+    });
+    console.log('✅ تم تعيين التدريسي كأدمن كلية');
+  } catch (error: any) {
+    console.error("❌ خطأ تعيين أدمن كلية:", error);
+    throw new Error('حدث خطأ أثناء تعيين أدمن الكلية');
+  }
+};
+
+export const demoteFromCollegeAdmin = async (
+  teacherUid: string
+): Promise<void> => {
+  try {
+    const snap = await get(ref(database, `users/${teacherUid}`));
+    const existing = snap.exists() ? snap.val() : {};
+    await update(ref(database, `users/${teacherUid}`), {
+      role: 'teacher',
+      collegeId: existing.collegeId || null,
+      collegeName: existing.collegeName || null,
+      lastUpdated: new Date().toISOString()
+    });
+    console.log('✅ تم إلغاء تعيين أدمن الكلية');
+  } catch (error: any) {
+    console.error("❌ خطأ إلغاء تعيين أدمن كلية:", error);
+    throw new Error('حدث خطأ أثناء إلغاء تعيين أدمن الكلية');
   }
 };
 
@@ -263,12 +306,29 @@ export const getAllTeachers = async (adminUid: string): Promise<User[]> => {
     const teachers: User[] = [];
     
     Object.values(allUsers).forEach((user: any) => {
-      if (user.role === 'teacher' && user.adminId === adminUid) {
+      if ((user.role === 'teacher' || user.role === 'college_admin') && user.adminId === adminUid) {
         teachers.push(user);
       }
     });
     
     return teachers;
+  } catch (error) {
+    console.error('❌ خطأ جلب التدريسيين:', error);
+    return [];
+  }
+};
+
+// ============================================================
+// 📋 جلب كل التدريسيين (لأدمن الكلية)
+// ============================================================
+export const getAllTeachersForCollege = async (collegeId: string): Promise<User[]> => {
+  try {
+    const snap = await get(ref(database, 'users'));
+    if (!snap.exists()) return [];
+    
+    return Object.values(snap.val()).filter(
+      (user: any) => (user.role === 'teacher' || user.role === 'college_admin') && user.collegeId === collegeId
+    );
   } catch (error) {
     console.error('❌ خطأ جلب التدريسيين:', error);
     return [];

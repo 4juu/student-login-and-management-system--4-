@@ -70,6 +70,8 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
     }
   };
 
+  const canEditNameAndBio = currentUser.role === 'admin' || currentUser.role === 'college_admin';
+
   const handleSave = async () => {
     setError('');
     setSuccess('');
@@ -82,22 +84,23 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
     setSaving(true);
 
     try {
-      // ✅ تعريف نوع واضح يتضمن lastUpdated
-      const updates: Partial<User> & { lastUpdated: string } = {
-        displayName: displayName.trim(),
-        bio: bio.trim(),
+      const updates: Record<string, any> & { lastUpdated: string } = {
         lastUpdated: new Date().toISOString(),
         photoURL: photoURL || undefined,
       };
+      // فقط الأدمن يقدر يعدل الاسم والبايو
+      if (canEditNameAndBio) {
+        updates.displayName = displayName.trim();
+        updates.bio = bio.trim();
+      }
 
       const userRef = dbRef(database, `users/${currentUser.uid}`);
       await update(userRef, updates);
 
-      // ✅ إنشاء الكائن المحدث بدون مشاكل TypeScript
       const updatedUser: User = {
         ...currentUser,
-        displayName: updates.displayName as string,
-        bio: updates.bio,
+        displayName: canEditNameAndBio ? (updates.displayName as string) : currentUser.displayName,
+        bio: canEditNameAndBio ? updates.bio : currentUser.bio,
         photoURL: updates.photoURL,
         lastUpdated: updates.lastUpdated,
       };
@@ -105,7 +108,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
       onUpdateProfile(updatedUser);
 
       setSuccess(
-        '✅ تم حفظ التغييرات بنجاح!\n\n✓ الصورة الشخصية محفوظة\n✓ الاسم محفوظ\n✓ البايو محفوظ'
+        '✅ تم حفظ التغييرات بنجاح!\n\n✓ الصورة الشخصية محفوظة'
       );
 
       setTimeout(() => setSuccess(''), 6000);
@@ -275,10 +278,16 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={!canEditNameAndBio}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
                 placeholder="أحمد محمد"
                 dir="rtl"
               />
+              {!canEditNameAndBio && (
+                <p className="text-xs text-orange-500 mt-1">
+                  فقط الأدمن يمكنه تعديل الاسم
+                </p>
+              )}
             </div>
 
             <div>
@@ -304,7 +313,11 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
               <div>
                 {currentUser.role === 'admin' ? (
                   <span className="inline-flex items-center px-4 py-2 bg-purple-100 text-purple-800 text-sm font-medium rounded-full">
-                    👑 أدمن
+                    👑 أدمن رئيسي
+                  </span>
+                ) : currentUser.role === 'college_admin' ? (
+                  <span className="inline-flex items-center px-4 py-2 bg-amber-100 text-amber-800 text-sm font-medium rounded-full">
+                    🏛️ أدمن كلية
                   </span>
                 ) : (
                   <span className="inline-flex items-center px-4 py-2 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
@@ -330,9 +343,10 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
         <textarea
           value={bio}
           onChange={(e) => setBio(e.target.value)}
+          disabled={!canEditNameAndBio}
           rows={4}
           maxLength={500}
-          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
           placeholder={
             currentUser.role === 'admin'
               ? 'مدير النظام - مسؤول عن إدارة جميع حسابات التدريسيين'
@@ -346,6 +360,11 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
             <p className="text-xs text-orange-500">⚠️ اقتربت من الحد الأقصى</p>
           )}
         </div>
+        {!canEditNameAndBio && (
+          <p className="text-xs text-orange-500 mt-1">
+            فقط الأدمن يمكنه تعديل البايو والاسم
+          </p>
+        )}
       </div>
 
       {/* Save Buttons */}

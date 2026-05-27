@@ -1,6 +1,7 @@
 // src/services/faceRecognition.ts
 import * as faceapi from 'face-api.js';
 import { compressFaceDescriptor, ensureDecompressed } from './faceCompression';
+import { getWorker } from './faceWorker';
 
 let modelsLoaded = false;
 let loadingPromise: Promise<void> | null = null;
@@ -55,14 +56,7 @@ const getDetectorOptions = () =>
 
 const detectorOptionsSSD = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35, maxResults: 10 });
 
-/* ─── Canvas ─── */
-let sharedCanvas: HTMLCanvasElement | null = null;
-let sharedCtx: CanvasRenderingContext2D | null = null;
-const getSharedCanvas = (w: number, h: number) => {
-  if (!sharedCanvas) { sharedCanvas = document.createElement('canvas'); sharedCtx = sharedCanvas.getContext('2d', { willReadFrequently: true }); }
-  sharedCanvas.width = w; sharedCanvas.height = h;
-  return sharedCanvas;
-};
+/* ─── Canvas: كل دالة تنشئ canvas خاص بها ─── */
 
 /* ─── كشف مستوى الإضاءة ─── */
 export const detectBrightness = (input: HTMLVideoElement | HTMLCanvasElement): number => {
@@ -100,27 +94,29 @@ const preprocessFrame = (
 ): HTMLCanvasElement => {
   const vw = 'videoWidth' in input ? input.videoWidth : input.width;
   const vh = 'videoHeight' in input ? input.videoHeight : input.height;
-  if (!vw || !vh) return input as HTMLCanvasElement;
+  const canvas = document.createElement('canvas');
+  if (!vw || !vh) { canvas.width = 1; canvas.height = 1; return canvas; }
   const scale = Math.min(1, targetWidth / vw);
   const w = Math.round(vw * scale), h = Math.round(vh * scale);
-  const canvas = getSharedCanvas(w, h);
-  if (!sharedCtx) return input as HTMLCanvasElement;
-  sharedCtx.imageSmoothingEnabled = true;
-  sharedCtx.imageSmoothingQuality = 'high';
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) { canvas.width = 1; canvas.height = 1; return canvas; }
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
   if (adaptiveLight && input instanceof HTMLVideoElement) {
     const brightness = detectBrightness(input);
     const light = classifyLight(brightness);
-    if (light === 'dark') sharedCtx.filter = 'brightness(1.8) contrast(1.3)';
-    else if (light === 'dim') sharedCtx.filter = 'brightness(1.3) contrast(1.15)';
-    else if (light === 'bright') sharedCtx.filter = 'brightness(0.85) contrast(1.1)';
-    else sharedCtx.filter = 'contrast(1.1) brightness(1.05)';
+    if (light === 'dark') ctx.filter = 'brightness(1.8) contrast(1.3)';
+    else if (light === 'dim') ctx.filter = 'brightness(1.3) contrast(1.15)';
+    else if (light === 'bright') ctx.filter = 'brightness(0.85) contrast(1.1)';
+    else ctx.filter = 'contrast(1.1) brightness(1.05)';
   } else {
-    sharedCtx.filter = 'contrast(1.1) brightness(1.05)';
+    ctx.filter = 'contrast(1.1) brightness(1.05)';
   }
 
-  sharedCtx.drawImage(input, 0, 0, w, h);
-  sharedCtx.filter = 'none';
+  ctx.drawImage(input, 0, 0, w, h);
+  ctx.filter = 'none';
   return canvas;
 };
 
@@ -131,13 +127,13 @@ const preprocessForEnrollment = (
 ): HTMLCanvasElement => {
   const vw = 'videoWidth' in input ? input.videoWidth : input.width;
   const vh = 'videoHeight' in input ? input.videoHeight : input.height;
-  if (!vw || !vh) return input as HTMLCanvasElement;
+  const canvas = document.createElement('canvas');
+  if (!vw || !vh) { canvas.width = 1; canvas.height = 1; return canvas; }
   const scale = Math.min(1, targetWidth / vw);
   const w = Math.round(vw * scale), h = Math.round(vh * scale);
-  const canvas = document.createElement('canvas');
   canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return input as HTMLCanvasElement;
+  if (!ctx) { canvas.width = 1; canvas.height = 1; return canvas; }
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
 
@@ -169,13 +165,13 @@ const cropCenterRegion = (
   const canvas = document.createElement('canvas');
   canvas.width = rw; canvas.height = rh;
   const ctx = canvas.getContext('2d');
-  if (!ctx) return input as HTMLCanvasElement;
+  if (!ctx) { canvas.width = 1; canvas.height = 1; return canvas; }
   ctx.drawImage(input, ox, oy, rw, rh, 0, 0, rw, rh);
   return canvas;
 };
 
 /* ─── تطبيع ─── */
-const normalizeDescriptor = (d: Float32Array): Float32Array => {
+export const normalizeDescriptor = (d: Float32Array): Float32Array => {
   const out = new Float32Array(d);
   let norm = 0;
   for (let i = 0; i < 128; i++) norm += out[i] * out[i];
@@ -363,8 +359,12 @@ export const buildMultiDescriptor = (
 const toFloat32 = (input: number[] | string | Float32Array): Float32Array => {
   if (input instanceof Float32Array) return input;
   if (typeof input === 'string') return new Float32Array(ensureDecompressed(input));
-  if (Array.isArray(input) && input.length > 0 && input.every(v => Number.isInteger(v))) {
-    return new Float32Array(ensureDecompressed(input));
+  if (Array.isArray(input)) {
+    if (input.length === 128) return new Float32Array(input);
+    if (input.length > 0 && input.every(v => Number.isInteger(v))) {
+      return new Float32Array(ensureDecompressed(input));
+    }
+    return new Float32Array(input);
   }
   return new Float32Array(input);
 };
@@ -427,6 +427,47 @@ export const checkForTampering = <T extends { id: string; name: string; faceDesc
   }
 
   return { isTamper: matches.length > 0, matchedStudents: matches };
+};
+
+export const checkForTamperingAsync = async <T extends { id: string; name: string; faceDescriptor?: number[] | string | MultiDescriptor }>(
+  descriptor: Float32Array,
+  allStudents: T[],
+  excludeId: string,
+  threshold = 0.35
+): Promise<TamperResult> => {
+  const stored: Array<{ id: string; name: string; desc: number[] }> = [];
+  for (const s of allStudents) {
+    if (s.id === excludeId || !s.faceDescriptor) continue;
+    const arr = toFloat32(s.faceDescriptor as any);
+    stored.push({ id: s.id, name: s.name, desc: Array.from(arr) });
+  }
+
+  if (stored.length === 0) return { isTamper: false, matchedStudents: [] };
+
+  const w = getWorker();
+  if (!w) return checkForTampering(descriptor, allStudents, excludeId, threshold);
+
+  return new Promise(resolve => {
+    const handler = (e: MessageEvent) => {
+      if (e.data.type === 'tamperResult') {
+        w.removeEventListener('message', handler);
+        resolve({ isTamper: e.data.data.length > 0, matchedStudents: e.data.data });
+      }
+    };
+    w.addEventListener('message', handler);
+    w.postMessage({
+      type: 'tamper',
+      data: {
+        query: Array.from(descriptor),
+        storedDescriptors: stored,
+        threshold,
+      },
+    });
+    setTimeout(() => {
+      w.removeEventListener('message', handler);
+      resolve({ isTamper: false, matchedStudents: [] });
+    }, 15000);
+  });
 };
 
 /* ══════════════════════════════════════════════════════════ */
@@ -617,6 +658,67 @@ export const extractFaceDescriptorMultiCapture = async (
   return { descriptor: final, angleDescs, quality: avgQuality, directions: capturedDirections };
 };
 
+/* ─── IOU Tracker لتتبع الوجوه بين الفريمات ─── */
+export interface TrackedFace {
+  id: number;
+  box: { x: number; y: number; width: number; height: number };
+  descriptor?: Float32Array;
+  age: number;
+  lost: number;
+}
+
+export class IOUTracker {
+  private tracks: TrackedFace[] = [];
+  private nextId = 1;
+  private readonly iouThreshold = 0.35;
+  private readonly maxLost = 5;
+
+  update(detections: Array<{ box: { x: number; y: number; width: number; height: number }; descriptor?: Float32Array }>): TrackedFace[] {
+    const matched = new Set<number>();
+
+    for (const det of detections) {
+      let bestIdx = -1;
+      let bestIoU = this.iouThreshold;
+      for (let i = 0; i < this.tracks.length; i++) {
+        if (matched.has(i)) continue;
+        const iou = this.calculateIoU(det.box, this.tracks[i].box);
+        if (iou > bestIoU) { bestIoU = iou; bestIdx = i; }
+      }
+
+      if (bestIdx >= 0) {
+        matched.add(bestIdx);
+        this.tracks[bestIdx].box = det.box;
+        this.tracks[bestIdx].age++;
+        this.tracks[bestIdx].lost = 0;
+        if (det.descriptor) this.tracks[bestIdx].descriptor = det.descriptor;
+      } else {
+        this.tracks.push({ id: this.nextId++, box: det.box, descriptor: det.descriptor, age: 1, lost: 0 });
+      }
+    }
+
+    for (let i = 0; i < this.tracks.length; i++) {
+      if (!matched.has(i)) this.tracks[i].lost++;
+    }
+
+    this.tracks = this.tracks.filter(t => t.lost <= this.maxLost);
+    return this.tracks;
+  }
+
+  getActiveFaces(): TrackedFace[] {
+    return this.tracks.filter(t => t.lost === 0);
+  }
+
+  reset() { this.tracks = []; this.nextId = 1; }
+
+  private calculateIoU(a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }): number {
+    const x1 = Math.max(a.x, b.x), y1 = Math.max(a.y, b.y);
+    const x2 = Math.min(a.x + a.width, b.x + b.width), y2 = Math.min(a.y + a.height, b.y + b.height);
+    if (x2 < x1 || y2 < y1) return 0;
+    const inter = (x2 - x1) * (y2 - y1);
+    return inter / (a.width * a.height + b.width * b.height - inter);
+  }
+}
+
 /* ─── بصمة واحدة ─── */
 export const extractFaceDescriptor = async (input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement): Promise<Float32Array | null> => {
   if (!modelsLoaded) await loadFaceModels();
@@ -703,8 +805,20 @@ export const autoImproveDescriptor = (
   newDirection: FaceDirection,
   newQuality: number
 ): MultiDescriptor | null => {
-  if (!isMultiDescriptor(currentStored)) return null;
-  const md = currentStored;
+  let md: MultiDescriptor;
+  if (isMultiDescriptor(currentStored)) {
+    md = currentStored;
+  } else {
+    const currentArray = toFloat32(currentStored as any);
+    const newMain = compressFaceDescriptor(newDescriptor);
+    const normalized = normalizeDescriptor(new Float32Array(currentArray));
+    return {
+      main: compressFaceDescriptor(normalized),
+      quality: newQuality,
+      directions: newDirection,
+      version: 2,
+    };
+  }
   if ((md.quality || 0) >= 0.85 && (md.directions || '').split(',').length >= 5) return null;
   if (newQuality < (md.quality || 0) * 0.9) return null;
 

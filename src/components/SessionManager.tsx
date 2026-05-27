@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { AttendanceSession } from '../types/student';
+import { AttendanceSession, Student, AttendanceRecord } from '../types/student';
 import { getCurrentAcademicYear } from '../firebase/dataService';
 
 interface SessionManagerProps {
@@ -8,6 +8,10 @@ interface SessionManagerProps {
   onCreateSession: (session: AttendanceSession) => void;
   onSelectSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void;
+  onRenameSession?: (sessionId: string, newName: string) => void;
+  students?: Student[];
+  records?: AttendanceRecord[];
+  onMarkAbsent?: (sessionId: string, studentIds: string[]) => void;
 }
 
 export const SessionManager: React.FC<SessionManagerProps> = ({
@@ -16,12 +20,39 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
   onCreateSession,
   onSelectSession,
   onDeleteSession,
+  students = [],
+  records = [],
+  onMarkAbsent,
+  onRenameSession,
 }) => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [sessionName, setSessionName] = useState('');
+  const [absentSessionId, setAbsentSessionId] = useState<string | null>(null);
+  const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editSessionName, setEditSessionName] = useState('');
 
-  // 🆕 السنة الأكاديمية الحالية
   const currentAcademicYear = useMemo(() => getCurrentAcademicYear(), []);
+
+  const allGroups = useMemo(() => {
+    const groups = new Set<string>();
+    students.forEach(s => { if (s.group) groups.add(s.group); });
+    return Array.from(groups).sort((a, b) => a.localeCompare(b, 'ar'));
+  }, [students]);
+
+  const presentStudentIdsForSession = useMemo(() => {
+    if (!absentSessionId) return new Set<string>();
+    return new Set(
+      records.filter(r => r.sessionId === absentSessionId).map(r => r.studentId)
+    );
+  }, [records, absentSessionId]);
+
+  const getAbsentCandidates = useMemo(() => {
+    if (!absentSessionId || selectedGroups.size === 0) return [];
+    return students.filter(s =>
+      s.group && selectedGroups.has(s.group) && !presentStudentIdsForSession.has(s.id)
+    );
+  }, [students, selectedGroups, presentStudentIdsForSession, absentSessionId]);
 
   const handleQuickCreate = () => {
     const now = new Date();
@@ -39,7 +70,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
       date: now.toLocaleDateString('ar-EG'),
       createdAt: now.toISOString(),
       isActive: true,
-      academicYear: currentAcademicYear, // 🆕 ربط بالسنة الأكاديمية
+      academicYear: currentAcademicYear,
     };
     
     onCreateSession(newSession);
@@ -60,7 +91,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
       date: now.toLocaleDateString('ar-EG'),
       createdAt: now.toISOString(),
       isActive: true,
-      academicYear: currentAcademicYear, // 🆕 ربط بالسنة الأكاديمية
+      academicYear: currentAcademicYear,
     };
     
     onCreateSession(newSession);
@@ -74,9 +105,34 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
     }
   };
 
+  const handleOpenAbsent = (sessionId: string) => {
+    setAbsentSessionId(sessionId);
+    setSelectedGroups(new Set());
+  };
+
+  const handleGroupToggle = (group: string) => {
+    setSelectedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(group)) next.delete(group);
+      else next.add(group);
+      return next;
+    });
+  };
+
+  const handleConfirmAbsent = () => {
+    if (!absentSessionId || getAbsentCandidates.length === 0) return;
+    if (window.confirm(`تأكيد تسجيل غياب (${getAbsentCandidates.length}) طالب من الكروبات المحددة؟`)) {
+      onMarkAbsent?.(absentSessionId, getAbsentCandidates.map(s => s.id));
+      setAbsentSessionId(null);
+      setSelectedGroups(new Set());
+    }
+  };
+
+  const sessionPresentCount = (sessionId: string) =>
+    records.filter(r => r.sessionId === sessionId).length;
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
-      {/* 🆕 شريط السنة الأكاديمية */}
       <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <span className="text-2xl">🎓</span>
@@ -170,10 +226,42 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
                         نشط الآن
                       </span>
                     )}
-                    <h3 className="text-lg font-bold text-gray-800">{session.name}</h3>
+                    <h3 className="text-lg font-bold text-gray-800">
+                      {editingSessionId === session.id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={editSessionName}
+                            onChange={e => setEditSessionName(e.target.value)}
+                            className="px-3 py-1 border border-blue-400 rounded text-lg font-bold"
+                            autoFocus
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' && editSessionName.trim()) {
+                                onRenameSession?.(session.id, editSessionName.trim());
+                                setEditingSessionId(null);
+                              }
+                              if (e.key === 'Escape') setEditingSessionId(null);
+                            }}
+                            onBlur={() => setEditingSessionId(null)}
+                            dir="rtl"
+                          />
+                        </div>
+                      ) : (
+                        <span>{session.name}</span>
+                      )}
+                    </h3>
+                    {onRenameSession && editingSessionId !== session.id && (
+                      <button
+                        onClick={() => { setEditingSessionId(session.id); setEditSessionName(session.name); }}
+                        className="text-blue-500 hover:text-blue-700 text-sm"
+                        title="تعديل الاسم"
+                      >
+                        ✏️
+                      </button>
+                    )}
                   </div>
                   <p className="text-sm text-gray-600 mt-1">
-                    📅 {session.date}
+                    📅 {session.date} | ✅ {sessionPresentCount(session.id)} حاضر
                   </p>
                 </div>
                 
@@ -187,6 +275,12 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
                     </button>
                   )}
                   <button
+                    onClick={() => handleOpenAbsent(session.id)}
+                    className="bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-md transition duration-200"
+                  >
+                    🔴 غياب
+                  </button>
+                  <button
                     onClick={() => handleDelete(session.id)}
                     className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md transition duration-200"
                   >
@@ -199,6 +293,86 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
         </div>
       )}
 
+      {/* نافذة اختيار الكروبات للغياب */}
+      {absentSessionId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-800">🔴 تسجيل غياب الكروبات</h3>
+              <button onClick={() => setAbsentSessionId(null)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-4">
+              حدد الكروبات اللي عندها محاضرة اليوم. الطلاب المنتمين لهذه الكروبات واللي ما حضروا راح يسجلون غياب.
+            </p>
+
+            {allGroups.length === 0 ? (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center text-yellow-700">
+                ⚠️ لا توجد كروبات للطلاب في هذه المرحلة
+              </div>
+            ) : (
+              <div className="space-y-2 mb-4">
+                <label className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedGroups.size === allGroups.length}
+                    onChange={() => {
+                      if (selectedGroups.size === allGroups.length) setSelectedGroups(new Set());
+                      else setSelectedGroups(new Set(allGroups));
+                    }}
+                    className="accent-orange-500 w-5 h-5"
+                  />
+                  <span className="font-bold text-gray-700">تحديد الكل</span>
+                </label>
+                {allGroups.map(group => (
+                  <label key={group} className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer border border-gray-100">
+                    <input
+                      type="checkbox"
+                      checked={selectedGroups.has(group)}
+                      onChange={() => handleGroupToggle(group)}
+                      className="accent-orange-500 w-5 h-5"
+                    />
+                    <span className="font-medium text-gray-800">{group}</span>
+                    <span className="text-xs text-gray-500 mr-auto">
+                      {students.filter(s => s.group === group).length} طالب
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {getAbsentCandidates.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                <p className="text-sm font-bold text-red-700 mb-1">
+                  🚨 ({getAbsentCandidates.length}) طالب غائب
+                </p>
+                <div className="text-xs text-red-600 max-h-24 overflow-y-auto">
+                  {getAbsentCandidates.map(s => (
+                    <span key={s.id} className="inline-block ml-1">{s.name} | </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleConfirmAbsent}
+                disabled={getAbsentCandidates.length === 0}
+                className="flex-1 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-300 text-white font-bold py-3 px-4 rounded-lg transition"
+              >
+                ✅ تسجيل غياب ({getAbsentCandidates.length})
+              </button>
+              <button
+                onClick={() => setAbsentSessionId(null)}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-3 px-4 rounded-lg transition"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {sessions.length > 0 && (
         <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <div className="flex items-start gap-2">
@@ -208,8 +382,8 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
             <div className="text-sm text-yellow-800">
               <p className="font-medium mb-1">💡 ملاحظة</p>
               <p>السجل النشط هو الذي سيتم تسجيل الحضور فيه. يمكنك تبديل السجل في أي وقت.</p>
-              <p className="mt-1 text-xs">
-                🔄 <strong>التصفير السنوي:</strong> عند بداية السنة الأكاديمية الجديدة، يمكن للأدمن تصفير كل السجلات من إعدادات النظام.
+              <p className="mt-1">
+                🔴 يمكنك تسجيل غياب الكروبات بالضغط على زر <strong>"غياب"</strong> بجانب أي سجل.
               </p>
             </div>
           </div>

@@ -65,6 +65,9 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   const [editingQrStudent, setEditingQrStudent] = useState<string | null>(null);
   const [editQrCodeId, setEditQrCodeId] = useState('');
 
+  const [transferStudentId, setTransferStudentId] = useState<string | null>(null);
+  const [transferGroupValue, setTransferGroupValue] = useState('');
+
   const [showFaceRegister, setShowFaceRegister] = useState(false);
   const [compressing, setCompressing] = useState(false);
   const [compressionProgress, setCompressionProgress] = useState({ current: 0, total: 0 });
@@ -1105,12 +1108,84 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-right">{student.name}</td>
                     <td className="px-4 py-4 whitespace-nowrap text-right">
-                      {student.group ? (
-                        <span className="inline-block px-3 py-1 bg-indigo-100 text-indigo-800 text-sm font-medium rounded-full">
-                          {student.group}
-                        </span>
+                      {transferStudentId === student.id ? (
+                        <div className="flex items-center gap-1">
+                          <select
+                            value={transferGroupValue}
+                            onChange={e => {
+                              setTransferGroupValue(e.target.value);
+                              if (e.target.value !== '__custom__') {
+                                // Auto-save on selecting a regular group
+                                if (onUpdateStudent) {
+                                  onUpdateStudent(student.id, { group: e.target.value || undefined });
+                                }
+                                setTransferStudentId(null);
+                                setTransferGroupValue('');
+                              }
+                            }}
+                            className="px-2 py-1 border border-blue-400 rounded text-sm"
+                            autoFocus
+                            onKeyDown={e => {
+                              if (e.key === 'Escape') { setTransferStudentId(null); setTransferGroupValue(''); }
+                            }}
+                          >
+                            <option value="">بدون كروب</option>
+                            {uniqueGroups.filter(g => g !== student.group).map(g => (
+                              <option key={g} value={g}>{g}</option>
+                            ))}
+                            <option value="__custom__">كروب جديد...</option>
+                          </select>
+                          {transferGroupValue === '__custom__' && (
+                            <input
+                              type="text"
+                              value=""
+                              onChange={e => setTransferGroupValue(e.target.value.toUpperCase())}
+                              className="w-16 px-2 py-1 border border-blue-400 rounded text-sm text-center"
+                              placeholder="A1"
+                              autoFocus
+                            />
+                          )}
+                          <button
+                            onClick={() => {
+                              if (onUpdateStudent) {
+                                const val = transferGroupValue === '__custom__' ? '' : transferGroupValue;
+                                onUpdateStudent(student.id, { group: val || undefined });
+                              }
+                              setTransferStudentId(null);
+                              setTransferGroupValue('');
+                            }}
+                            className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs"
+                            title="حفظ"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            onClick={() => { setTransferStudentId(null); setTransferGroupValue(''); }}
+                            className="px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-xs"
+                            title="إلغاء"
+                          >
+                            ×
+                          </button>
+                        </div>
                       ) : (
-                        <span className="text-gray-400 text-sm">-</span>
+                        <div className="flex items-center gap-2">
+                          {student.group ? (
+                            <span className="inline-block px-3 py-1 bg-indigo-100 text-indigo-800 text-sm font-medium rounded-full">
+                              {student.group}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-sm">-</span>
+                          )}
+                          {onUpdateStudent && (
+                            <button
+                              onClick={() => { setTransferStudentId(student.id); setTransferGroupValue(student.group || ''); }}
+                              className="text-blue-500 hover:text-blue-700 text-xs"
+                              title="نقل إلى كروب آخر"
+                            >
+                              🔄
+                            </button>
+                          )}
+                        </div>
                       )}
                     </td>
 

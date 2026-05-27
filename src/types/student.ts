@@ -29,6 +29,8 @@ export interface AttendanceRecord {
   status?: 'present' | 'absent';
   method?: 'manual' | 'qr' | 'face';
   academicYear?: string;
+  teacherName?: string;
+  subjectName?: string;
 }
 
 export interface AttendanceSession {

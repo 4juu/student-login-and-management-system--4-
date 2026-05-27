@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
 import { Student, AttendanceRecord, AttendanceSession } from '../types/student';
+import { User } from '../types/user';
 import { QRAttendance } from './QRAttendance';
 
 interface AttendanceLoginProps {
@@ -9,6 +10,7 @@ interface AttendanceLoginProps {
   records?: AttendanceRecord[];
   onAttendanceRecord: (record: AttendanceRecord) => void;
   onUpdateStudent?: (id: string, updates: Partial<Student>) => void;
+  currentUser?: User | null;
 }
 export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
   students,
@@ -17,6 +19,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
   records = [],
   onAttendanceRecord,
   onUpdateStudent,
+  currentUser,
 }) => {
   const [code, setCode] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string; } | null>(null);
@@ -78,6 +81,8 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
         sessionId: activeSessionId,
         status: 'present',
         method: 'manual',
+        teacherName: currentUser?.displayName,
+        subjectName: currentUser?.bio || currentUser?.displayName,
       };
 
       onAttendanceRecord(record);
@@ -143,9 +148,11 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
       sessionId: activeSessionId,
       status: 'present',
       method: 'qr',
+      teacherName: currentUser?.displayName,
+      subjectName: currentUser?.bio || currentUser?.displayName,
     };
     await onAttendanceRecord(record);
-  }, [activeSessionId, onAttendanceRecord]);
+  }, [activeSessionId, onAttendanceRecord, currentUser]);
 
   const codeDigits = Array(4).fill('').map((_, i) => code[i] || '');
   const studentsWithUniId = students.filter(s => s.universityId).length;

@@ -5,6 +5,8 @@ import {
   loadFaceModels,
   extractFaceDescriptorMultiCapture,
   areModelsLoaded,
+  normalizeDescriptor,
+  checkForTamperingAsync,
   type CaptureProgress,
   type FaceDirection,
   type LightLevel,
@@ -15,6 +17,7 @@ import {
 interface FaceCaptureStepProps {
   student: Student;
   matchPercentage: number;
+  allStudents?: Student[];
   onCaptured: (faceDescriptor: MultiDescriptor) => void;
   onCancel: () => void;
 }
@@ -43,6 +46,7 @@ const ALL_DIRS: FaceDirection[] = ['center', 'right', 'left', 'up', 'down'];
 export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
   student,
   matchPercentage,
+  allStudents = [],
   onCaptured,
   onCancel,
 }) => {
@@ -183,6 +187,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
 
     let count = 3;
     const interval = setInterval(() => {
+      if (!mountedRef.current) { clearInterval(interval); return; }
       count--;
       if (count > 0) {
         setCountdown(count);
@@ -192,6 +197,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
         startActualCapture();
       }
     }, 1000);
+    return () => clearInterval(interval);
   }, [cameraReady, capturing]);
 
   // ──────────────────────────────────────────
@@ -298,6 +304,22 @@ const startActualCapture = async () => {
     // التحقق النهائي
     if (!multiDesc.main || multiDesc.main.length === 0) {
       throw new Error('فشل بناء البصمة - main فارغ');
+    }
+
+    // 🛡️ فحص عدم تطابق البصمة مع طالب آخر
+    if (allStudents.length > 1) {
+      const normalized = normalizeDescriptor(new Float32Array(result.descriptor));
+      const tamper = await checkForTamperingAsync(normalized, allStudents, student.id || '');
+      if (tamper.isTamper) {
+        setCapturing(false);
+        setReadyToStart(true);
+        setError(`⚠️ هذه البصمة مسجلة أصلاً للطالب: ${tamper.matchedStudents.map(m => m.name).join('، ')}\nلا يمكن تسجيلها لطالب آخر.`);
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(t => t.stop());
+          streamRef.current = null;
+        }
+        return;
+      }
     }
 
     // 🧹 إيقاف الكاميرا
