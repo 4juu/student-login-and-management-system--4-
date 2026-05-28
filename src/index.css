@@ -904,6 +904,83 @@
   animation: pageExit 0.25s ease-in forwards;
 }
 
+/* == تحسين انتقالات البطاقات == */
+@keyframes cardEnter {
+  from { opacity: 0; transform: translateY(20px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.animate-cardEnter {
+  animation: cardEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-cardEnter:nth-child(1) { animation-delay: 0ms; }
+.animate-cardEnter:nth-child(2) { animation-delay: 60ms; }
+.animate-cardEnter:nth-child(3) { animation-delay: 120ms; }
+.animate-cardEnter:nth-child(4) { animation-delay: 180ms; }
+.animate-cardEnter:nth-child(5) { animation-delay: 240ms; }
+.animate-cardEnter:nth-child(6) { animation-delay: 300ms; }
+.animate-cardEnter:nth-child(7) { animation-delay: 360ms; }
+.animate-cardEnter:nth-child(8) { animation-delay: 420ms; }
+.animate-cardEnter:nth-child(9) { animation-delay: 480ms; }
+.animate-cardEnter:nth-child(10) { animation-delay: 540ms; }
+.animate-cardEnter:nth-child(11) { animation-delay: 600ms; }
+.animate-cardEnter:nth-child(12) { animation-delay: 660ms; }
+
+/* == انتقالات المودالات == */
+@keyframes modalEnter {
+  from { opacity: 0; transform: scale(0.92) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.dialog-enter {
+  animation: modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ============================================ */
+/* ✨ Glow Hover Effect — لكل الأزرار           */
+/* ============================================ */
+button {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+/* طبقة التوهج — خلف النص وأمام الخلفية */
+button::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -1px;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle 200px at
+    var(--glow-x, 50%) var(--glow-y, 50%),
+    rgba(255, 248, 240, 0.55) 0%,
+    rgba(255, 235, 215, 0.2) 40%,
+    transparent 72%
+  );
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+  will-change: opacity;
+}
+
+button:not(:disabled):hover::after {
+  opacity: 1;
+}
+
+/* دارك مود — توهج مصباح */
+.dark button::after {
+  background: radial-gradient(
+    circle 220px at
+    var(--glow-x, 50%) var(--glow-y, 50%),
+    rgba(255, 252, 245, 0.55) 0%,
+    rgba(255, 240, 215, 0.25) 40%,
+    transparent 72%
+  );
+}
+
 @keyframes scanLine {
   0%, 100% { top: 8%; opacity: 0.4; }
   50%      { top: 88%; opacity: 1; }

@@ -42,6 +42,12 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
   // migratoryja: تعيين كلية للتدريسيين القدامى
   const [migrationMap, setMigrationMap] = useState<{[uid: string]: string}>({});
 
+  // 🆕 إدارة أدمن الكلية من بطاقة الكلية
+  const [showAssignAdminModal, setShowAssignAdminModal] = useState(false);
+  const [assignAdminCollegeId, setAssignAdminCollegeId] = useState<string | null>(null);
+  const [assignAdminCollegeName, setAssignAdminCollegeName] = useState('');
+  const [showRemoveAdminConfirm, setShowRemoveAdminConfirm] = useState<string | null>(null);
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -51,9 +57,6 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
   const isMainAdmin = currentUser.role === 'admin';
   const isCollegeAdmin = currentUser.role === 'college_admin';
-
-  // للأدمن الرئيسي: القادمين الجدد اللي ما عندهم collegeId
-  const unassignedTeachers = teachers.filter(t => !t.collegeId);
 
   useEffect(() => {
     loadTeachers();
@@ -374,6 +377,14 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
   const activeTeachers = teachers.filter(t => t.active !== false).length;
   const deactivatedTeachers = teachers.filter(t => t.active === false).length;
 
+  // خريطة كل كلية → أدمنها الحالي
+  const collegeAdminMap: {[collegeId: string]: User} = {};
+  teachers.forEach(t => {
+    if (t.role === 'college_admin' && t.collegeId) {
+      collegeAdminMap[t.collegeId] = t;
+    }
+  });
+
   // --- شاشة كروت الكليات للأدمن الرئيسي ---
   if (isMainAdmin && !selectedCollegeId) {
     const allTeachersFull = teachers;
@@ -425,34 +436,232 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {colleges.map(college => {
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {colleges.map((college, idx) => {
             const count = collegeTeacherCount[college.id] || 0;
+            const admin = collegeAdminMap[college.id];
             return (
-              <button
+              <div
                 key={college.id}
-                onClick={() => setSelectedCollegeId(college.id)}
-                className="p-6 border-2 border-gray-200 rounded-xl hover:border-blue-400 hover:shadow-lg transition text-right bg-gradient-to-br from-white to-blue-50"
+                className="animate-cardEnter border-2 border-gray-200 rounded-xl hover:border-blue-400 hover:shadow-lg transition-all duration-300 overflow-hidden bg-white"
+                style={{ animationDelay: `${idx * 60}ms` }}
               >
-                <div className="text-4xl mb-3">{college.icon || '🏛️'}</div>
-                <h3 className="text-xl font-bold text-gray-800">{college.name}</h3>
-                <p className="text-sm text-gray-500 mt-2">
-                  {count} تدريسي{count !== 1 ? 'ين' : ''}
-                  {count === 0 && ' — لا يوجد تدريسيين بعد'}
-                </p>
-              </button>
+                {/* رأس البطاقة - قابلة للضغط للدخول للكلية */}
+                <button
+                  onClick={() => setSelectedCollegeId(college.id)}
+                  className="w-full p-5 text-right hover:bg-blue-50/50 transition-colors"
+                >
+                  <div className="text-4xl mb-3">{college.icon || '🏛️'}</div>
+                  <h3 className="text-xl font-bold text-gray-800">{college.name}</h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {count} تدريسي{count !== 1 ? 'ين' : ''}
+                    {count === 0 && ' — لا يوجد تدريسيين بعد'}
+                  </p>
+                </button>
+
+                {/* شريط أدمن الكلية */}
+                <div className={`px-5 py-3 border-t ${admin ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'}`}>
+                  {admin ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-lg">🏛️</span>
+                        <div className="min-w-0">
+                          <p className="text-xs text-amber-700 font-medium">أدمن الكلية</p>
+                          <p className="text-sm font-bold text-amber-900 truncate">{admin.displayName}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAssignAdminCollegeId(college.id);
+                            setAssignAdminCollegeName(college.name);
+                            setShowAssignAdminModal(true);
+                          }}
+                          className="text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 px-2.5 py-1.5 rounded-md font-medium transition"
+                        >
+                          🔄 تغيير
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowRemoveAdminConfirm(college.id);
+                          }}
+                          className="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-2.5 py-1.5 rounded-md font-medium transition"
+                        >
+                          🗑️ إلغاء
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-gray-500">لا يوجد أدمن للكلية</p>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAssignAdminCollegeId(college.id);
+                          setAssignAdminCollegeName(college.name);
+                          setShowAssignAdminModal(true);
+                        }}
+                        disabled={count === 0}
+                        className={`text-xs font-medium px-3 py-1.5 rounded-md transition ${
+                          count === 0
+                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                            : 'bg-amber-100 hover:bg-amber-200 text-amber-700'
+                        }`}
+                      >
+                        تعيين أدمن
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             );
           })}
           {/* بطاقة عرض الكل */}
           <button
             onClick={() => setSelectedCollegeId('__all__')}
-            className="p-6 border-2 border-dashed border-gray-300 rounded-xl hover:border-gray-500 hover:shadow-lg transition text-center bg-gray-50"
+            className="p-6 border-2 border-dashed border-gray-300 rounded-xl hover:border-gray-500 hover:shadow-lg transition-all duration-300 text-center bg-gray-50 hover:bg-gray-100"
           >
             <div className="text-4xl mb-3">👥</div>
             <h3 className="text-xl font-bold text-gray-800">عرض الكل</h3>
             <p className="text-sm text-gray-500 mt-2">{allTeachersFull.length} تدريسي</p>
           </button>
         </div>
+
+        {/* 🆕 مودال تعيين أدمن لكلية */}
+        {showAssignAdminModal && assignAdminCollegeId && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
+            <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-800">🏛️ تعيين أدمن لكلية {assignAdminCollegeName}</h3>
+                  <p className="text-sm text-gray-500 mt-1">اختر التدريسي من القائمة لتعيينه أدمن للكلية</p>
+                </div>
+                <button onClick={() => setShowAssignAdminModal(false)} className="text-3xl text-gray-400 hover:text-gray-600 leading-none">&times;</button>
+              </div>
+
+              {(() => {
+                const collegeTeachers = allTeachersFull.filter(t => 
+                  t.collegeId === assignAdminCollegeId && t.role !== 'college_admin' && t.active !== false
+                );
+                const currentAdmin = collegeAdminMap[assignAdminCollegeId];
+
+                if (collegeTeachers.length === 0) {
+                  return (
+                    <div className="text-center py-10 text-gray-500">
+                      <div className="text-5xl mb-4">👤</div>
+                      <p className="font-medium">لا يوجد تدريسيين في هذه الكلية</p>
+                      <p className="text-sm mt-1">أضف تدريسيين أولاً من داخل الكلية</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-2">
+                    {currentAdmin && (
+                      <div className="p-3 bg-amber-50 border-2 border-amber-200 rounded-xl mb-4 flex items-center gap-3">
+                        <span className="text-2xl">👑</span>
+                        <div>
+                          <p className="text-xs text-amber-700 font-medium">الأدمن الحالي</p>
+                          <p className="font-bold text-amber-900">{currentAdmin.displayName}</p>
+                        </div>
+                      </div>
+                    )}
+                    {collegeTeachers.map(t => (
+                      <button
+                        key={t.uid}
+                        onClick={async () => {
+                          if (!window.confirm(`تعيين ${t.displayName} أدمن لكلية ${assignAdminCollegeName}؟`)) return;
+                          setLoading(true);
+                          try {
+                            await promoteToCollegeAdmin(t.uid, assignAdminCollegeId, assignAdminCollegeName);
+                            alert(`✅ تم تعيين ${t.displayName} أدمن لكلية ${assignAdminCollegeName}`);
+                            setShowAssignAdminModal(false);
+                            await loadTeachers();
+                          } catch (e: any) {
+                            alert('❌ ' + e.message);
+                          } finally {
+                            setLoading(false);
+                          }
+                        }}
+                        disabled={loading}
+                        className="w-full text-right p-4 border-2 border-gray-200 rounded-xl hover:border-amber-400 hover:bg-amber-50/50 transition-all duration-200 flex items-center gap-3 group"
+                      >
+                        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center overflow-hidden shrink-0">
+                          {t.photoURL ? (
+                            <img src={t.photoURL} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-gray-600 font-bold">{t.displayName.charAt(0)}</span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-gray-800">{t.displayName}</p>
+                          <p className="text-xs text-gray-500 truncate">{t.email}</p>
+                        </div>
+                        <span className="text-2xl text-amber-500 opacity-0 group-hover:opacity-100 transition-all duration-200">←</span>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              <div className="mt-6 pt-4 border-t border-gray-200 flex justify-end">
+                <button
+                  onClick={() => setShowAssignAdminModal(false)}
+                  className="bg-gray-400 hover:bg-gray-500 text-white font-medium py-2 px-6 rounded-lg transition"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 🆕 تأكيد إلغاء أدمن كلية */}
+        {showRemoveAdminConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
+            <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl">
+              <div className="text-center mb-6">
+                <div className="text-5xl mb-3">⚠️</div>
+                <h3 className="text-xl font-bold text-gray-800">إلغاء أدمن الكلية</h3>
+                <p className="text-sm text-gray-500 mt-2">
+                  هل أنت متأكد من إلغاء تعيين <strong className="text-gray-700">{collegeAdminMap[showRemoveAdminConfirm]?.displayName}</strong> كأدمن لكلية {colleges.find(c => c.id === showRemoveAdminConfirm)?.name}؟
+                </p>
+                <p className="text-xs text-gray-400 mt-2">سيتم تحويله إلى تدريسي عادي مع احتفاظه بنفس الصلاحيات</p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowRemoveAdminConfirm(null)}
+                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2.5 rounded-lg transition"
+                >
+                  تراجع
+                </button>
+                <button
+                  onClick={async () => {
+                    const admin = collegeAdminMap[showRemoveAdminConfirm];
+                    if (!admin) return;
+                    setLoading(true);
+                    try {
+                      await demoteFromCollegeAdmin(admin.uid);
+                      alert(`✅ تم إلغاء أدمن الكلية عن ${admin.displayName}`);
+                      setShowRemoveAdminConfirm(null);
+                      await loadTeachers();
+                    } catch (e: any) {
+                      alert('❌ ' + e.message);
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  disabled={loading}
+                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium py-2.5 rounded-lg transition"
+                >
+                  {loading ? 'جاري...' : '✅ تأكيد الإلغاء'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {showMigrationModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -516,15 +725,16 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
     : '';
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="bg-white rounded-lg shadow-md p-6 animate-cardEnter">
       <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
           {isMainAdmin && (
             <button
               onClick={() => { setSelectedCollegeId(null); setTeachers([]); }}
-              className="text-blue-600 hover:text-blue-800 text-sm font-medium underline"
+              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium hover:underline transition-colors"
             >
-              ← العودة للكليات
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
+              العودة للكليات
             </button>
           )}
           <h2 className="text-2xl font-bold text-gray-800">

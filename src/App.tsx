@@ -4,7 +4,7 @@ import { ref as dbRef, onValue, off } from 'firebase/database';
 import { Student, AttendanceRecord, AttendanceSession, College, Stage } from './types/student';
 import { User } from './types/user';
 import { StudentManager } from './components/StudentManager';
-import { ThemeToggle } from './components/ThemeToggle';
+
 import { StudentsViewer } from './components/StudentsViewer';
 import { AttendanceLogin } from './components/AttendanceLogin';
 import { AttendanceRecords } from './components/AttendanceRecords';
@@ -771,6 +771,20 @@ useEffect(() => {
     window.history.replaceState({}, '', url.toString());
   };
 
+  // ✨ متابعة الفأرة لتأثير التوهج على الأزرار
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement).closest('button');
+      if (target) {
+        const rect = target.getBoundingClientRect();
+        (target as HTMLElement).style.setProperty('--glow-x', `${e.clientX - rect.left}px`);
+        (target as HTMLElement).style.setProperty('--glow-y', `${e.clientY - rect.top}px`);
+      }
+    };
+    document.addEventListener('mousemove', handleMouseMove, { passive: true });
+    return () => document.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
   const isAdmin = currentUser?.role === 'admin';
   const isCollegeAdmin = currentUser?.role === 'college_admin';
   const canEditStudents = isAdmin || isCollegeAdmin;
@@ -790,7 +804,7 @@ useEffect(() => {
 
 if (loading || !tokenChecked) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <MorphingSquare className="w-16 h-16 bg-blue-500" />
       </div>
     );
@@ -804,7 +818,7 @@ if (loading || !tokenChecked) {
   const selectedCollege = colleges.find(c => c.id === selectedCollegeId);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50" dir="rtl">
+    <div className="min-h-screen bg-slate-900" dir="rtl">
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
@@ -841,8 +855,6 @@ if (loading || !tokenChecked) {
             </div>
 
             <div className="flex items-center gap-3">
-              <ThemeToggle size="md" />
-
               <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-indigo-100 text-indigo-800 rounded-lg text-sm font-medium">
                 🎓 {currentAcademicYear.replace('_', ' - ')}
               </div>
