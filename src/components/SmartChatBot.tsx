@@ -490,14 +490,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
 
   useEffect(() => {
     if (isOpen && messages.length === 0) {
-      if (isAdmin && !currentCollegeId) {
-        setMessages([{
-          id: Date.now().toString(),
-          type: 'bot',
-          content: '📊 اضغط على زر التحميل بالأعلى لتحميل بيانات الجامعة الشاملة',
-          timestamp: new Date(),
-        }]);
-      } else if (!isAdmin && !currentStageId) {
+      if (!isAdmin && !currentStageId) {
         setMessages([{
           id: Date.now().toString(),
           type: 'bot',
@@ -513,7 +506,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
         }]);
       }
     }
-  }, [isOpen, messages.length, user.displayName, isAdmin, currentCollegeId, currentStageId]);
+  }, [isOpen, messages.length, user.displayName, isAdmin, currentStageId]);
 
   useEffect(() => {
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 300);
