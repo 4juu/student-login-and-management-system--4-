@@ -1219,7 +1219,7 @@ ${dataContext}`;
 
               {/* ⌨️ منطقة الإدخال */}
               {(() => {
-                const isInputBlocked = (isAdmin && !currentCollegeId) || (!isAdmin && !currentStageId);
+                const isInputBlocked = !isAdmin && !currentStageId;
                 return (
                   <div className="border-t border-gray-200" style={{ backgroundColor: '#ffffff' }}>
                     <div className="px-3 py-2">
