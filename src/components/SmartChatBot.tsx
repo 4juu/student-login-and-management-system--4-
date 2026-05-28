@@ -13,6 +13,8 @@ import {
   Stage,
 } from '../types/student';
 import { User } from '../types/user';
+import { AnimatePresence, motion } from "motion/react"
+import { MorphPanel } from './MorphPanel';
 
 interface Message {
   id: string;
@@ -296,8 +298,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [currentModelIndex, setCurrentModelIndex] = useState(0);
   const [failedModels, setFailedModels] = useState<Set<string>>(new Set());
-  const [selectedModelId, setSelectedModelId] = useState<string>('auto');
-  const [showModelSelector, setShowModelSelector] = useState(false);
+  const selectedModelId = 'auto';
 
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [studentSuggestions, setStudentSuggestions] = useState<Student[]>([]);
@@ -308,15 +309,11 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastRequestTime = useRef<number>(0);
-  const modelSelectorRef = useRef<HTMLDivElement>(null);
   const studentSearchRef = useRef<HTMLDivElement>(null);
   const contextCacheRef = useRef<{ key: string; value: string }>({ key: '', value: '' });
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (modelSelectorRef.current && !modelSelectorRef.current.contains(event.target as Node)) {
-        setShowModelSelector(false);
-      }
       if (studentSearchRef.current && !studentSearchRef.current.contains(event.target as Node)) {
         setShowSuggestions(false);
       }
@@ -488,35 +485,39 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   }, []);
 
   useEffect(() => {
-    if (isOpen && messages.length === 0) {
-      // 🆕 رسالة ترحيب ذكية حسب الحالة
-      let welcomeText = `أهلاً ${user.displayName} ✨\n\nبشنو أكدر أساعدك اليوم؟`;
-
-      if (isAdmin && !universityDataLoaded && !currentStageId) {
-        welcomeText += `\n\n💡 **نصيحة:** إذا تريد تسأل عن الجامعة كاملة (كل الكليات والمراحل)، اضغط على زر **"📊 تحميل بيانات الجامعة"** بالأعلى أولاً.`;
-      }
-
-      setMessages([{
-        id: Date.now().toString(),
-        type: 'bot',
-        content: welcomeText,
-        timestamp: new Date(),
-      }]);
-    }
-  }, [isOpen, messages.length, user.displayName, isAdmin, universityDataLoaded, currentStageId]);
-
-  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
   useEffect(() => {
+    if (isOpen && messages.length === 0) {
+      if (isAdmin && !currentCollegeId) {
+        setMessages([{
+          id: Date.now().toString(),
+          type: 'bot',
+          content: '📊 اضغط على زر التحميل بالأعلى لتحميل بيانات الجامعة الشاملة',
+          timestamp: new Date(),
+        }]);
+      } else if (!isAdmin && !currentStageId) {
+        setMessages([{
+          id: Date.now().toString(),
+          type: 'bot',
+          content: '⚠️ اختر المرحلة أولاً حتى أكدر أجاوبك',
+          timestamp: new Date(),
+        }]);
+      } else {
+        setMessages([{
+          id: Date.now().toString(),
+          type: 'bot',
+          content: `اهلاً دكتور ${user.displayName} ✨\n\nبشنو أكدر أساعدك اليوم؟`,
+          timestamp: new Date(),
+        }]);
+      }
+    }
+  }, [isOpen, messages.length, user.displayName, isAdmin, currentCollegeId, currentStageId]);
+
+  useEffect(() => {
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 300);
   }, [isOpen]);
-
-  const activeModel = useMemo(() => {
-    if (selectedModelId === 'auto') return AI_MODELS[currentModelIndex] || AI_MODELS[0];
-    return AI_MODELS.find(m => m.id === selectedModelId) || AI_MODELS[0];
-  }, [selectedModelId, currentModelIndex]);
 
   const buildDataContext = useCallback((): string => {
     // تخزين مؤقت — نعيد الاستخدام إذا البيانات ما تغيرت
@@ -893,15 +894,13 @@ ${dataContext}`;
   };
 
   const handleReset = useCallback(() => {
-    if (window.confirm('متأكد من مسح المحادثة؟')) {
-      setMessages([]);
-      setError(null);
-      setCurrentModelIndex(0);
-      setFailedModels(new Set());
-      setShowStudentCard(false);
-      setStudentSearchQuery('');
-      setSelectedStudentCard(null);
-    }
+    setMessages([]);
+    setError(null);
+    setCurrentModelIndex(0);
+    setFailedModels(new Set());
+    setShowStudentCard(false);
+    setStudentSearchQuery('');
+    setSelectedStudentCard(null);
   }, []);
 
   const formatMessage = (content: string): React.ReactNode => {
@@ -935,20 +934,6 @@ ${dataContext}`;
     });
   };
 
-  const groupedModels = useMemo(() => {
-    const groups: { [key: string]: { label: string; models: AIModel[] } } = {
-      gemini: { label: '🟡 Google Gemini', models: [] },
-      groq: { label: '⚡ Groq (الأسرع)', models: [] },
-      openrouter: { label: '🌐 OpenRouter', models: [] },
-    };
-    AI_MODELS.forEach(m => {
-      if (m.provider === 'gemini') groups.gemini.models.push(m);
-      else if (m.provider === 'groq') groups.groq.models.push(m);
-      else groups.openrouter.models.push(m);
-    });
-    return Object.values(groups).filter(g => g.models.length > 0);
-  }, []);
-
   const getTodayStatus = useCallback((card: StudentQuickCard): { sessions: { name: string; present: boolean }[] } => {
     const todayKey = fixDate(new Date());
     const todaySessions = card.attendedSessions.filter(
@@ -972,366 +957,310 @@ ${dataContext}`;
 
   return (
     <>
-      {/* زر فتح الشات */}
+      {/* 🟢 الحبة المصغرة (MorphPanel المطوي) */}
       {!isOpen && (
-        <button
-          onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-br from-amber-500 via-orange-500 to-pink-600 hover:from-amber-600 hover:via-orange-600 hover:to-pink-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110 z-50 group"
-          title="المساعد الذكي"
-        >
-          <span className="text-3xl group-hover:rotate-12 transition-transform">✨</span>
-          <span className="absolute -top-2 -left-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-lg animate-pulse">AI</span>
-        </button>
+        <MorphPanel
+          isExpanded={false}
+          onToggle={() => setIsOpen(true)}
+          input={input}
+          onInputChange={setInput}
+          onSend={handleSend}
+          isTyping={isTyping}
+          inputRef={inputRef}
+          onKeyDown={handleKeyDown}
+        />
       )}
 
-      {/* نافذة الشات */}
-      {isOpen && (
-        <div className="fixed bottom-6 right-6 w-[460px] max-w-[calc(100vw-3rem)] h-[750px] max-h-[calc(100vh-3rem)] bg-white rounded-2xl shadow-2xl flex flex-col z-50 border-2 border-amber-200 overflow-hidden">
-
-          {/* Header */}
-          <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-pink-600 text-white p-3">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-xl shadow-lg border border-white border-opacity-30">✨</div>
-                <div>
-                  <h3 className="font-bold text-sm flex items-center gap-2">
-                    المساعد الذكي
-                    <span className="text-[10px] bg-white text-orange-600 px-1.5 py-0.5 rounded-full font-bold">AI</span>
-                  </h3>
-                  <p className="text-[11px] opacity-95 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-green-300 rounded-full animate-pulse"></span>
-                    {activeModel.emoji} {activeModel.name}
-                    {selectedModelId === 'auto' && <span className="text-[9px] opacity-75">(تلقائي)</span>}
-                  </p>
-                </div>
+      {/* 📄 نافذة الشات — أنيميشن انسحاب الورقة */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            key="chat-window"
+            initial={{ width: 120, height: 44, borderRadius: 20, opacity: 0 }}
+            animate={{ width: 380, height: 460, borderRadius: 16, opacity: 1 }}
+            exit={{ width: 120, height: 44, borderRadius: 20, opacity: 0 }}
+             transition={{
+               type: "spring",
+               stiffness: 80,
+               damping: 10,
+               mass: 1.0,
+             }}
+            className="fixed bottom-6 right-6 z-50 overflow-hidden border border-gray-200 shadow-2xl max-w-[calc(100vw-3rem)] max-h-[calc(100vh-3rem)]"
+            style={{ backgroundColor: '#ffffff' }}
+          >
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ delay: 0.18, duration: 0.2 }}
+              className="flex flex-col h-full"
+            >
+              {/* شريط علوي: زر الإغلاق (يمين) */}
+              <div className="absolute top-2 right-2 z-10">
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-700 text-xs transition"
+                >
+                  ✕
+                </button>
               </div>
-              <div className="flex gap-1 items-center">
-                <button onClick={handleReset} className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-1.5 transition text-sm" title="محادثة جديدة">🔄</button>
-                <button onClick={() => setIsOpen(false)} className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-1.5 transition text-lg leading-none w-7 h-7 flex items-center justify-center">×</button>
-              </div>
-            </div>
 
-            {/* 🆕 زر تحميل بيانات الجامعة (للأدمن فقط) */}
-            {isAdmin && onRequestUniversityData && !currentStageId && (
-              <button
-                onClick={handleLoadUniversityData}
-                disabled={universityDataLoading}
-                className={`w-full mt-2 flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs transition font-bold ${
-                  universityDataLoading
-                    ? 'bg-white bg-opacity-10 cursor-wait'
-                    : universityDataLoaded
-                    ? 'bg-green-500 bg-opacity-30 hover:bg-opacity-40'
-                    : 'bg-white bg-opacity-15 hover:bg-opacity-25'
-                }`}
-                title={universityDataLoaded ? 'البيانات محملة - اضغط للتحديث' : 'تحميل بيانات كل الكليات والمراحل'}
-              >
-                <span>📊</span>
-                <span>
-                  {universityDataLoading
-                    ? '⏳ جاري تحميل بيانات الجامعة...'
-                    : universityDataLoaded
-                    ? '✅ بيانات الجامعة محملة - تحديث'
-                    : '📊 تحميل بيانات الجامعة'}
-                </span>
-              </button>
-            )}
+              {/* ✅ شريط البحث — يظهر دائماً */}
+              {students.length > 0 && (
+                <div className="w-full px-4 pt-2">
+                  <div className="max-w-xl mx-auto">
+                    <div className="bg-gray-50 border-b border-gray-200">
+                      <div className="relative px-3 py-2">
+                        <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 focus-within:border-gray-400 focus-within:ring-1 focus-within:ring-gray-300 transition shadow-sm">
+                          <span className="pr-3 text-gray-400 text-sm">🔍</span>
+                          <input
+                            type="text"
+                            value={studentSearchQuery}
+                            onChange={e => handleStudentSearch(e.target.value)}
+                            onFocus={() => { if (studentSuggestions.length > 0) setShowSuggestions(true); }}
+                            placeholder="ابحث عن طالب بالاسم أو الكود..."
+                            className="flex-1 py-2 pl-3 text-sm bg-transparent outline-none text-right text-gray-900 placeholder-gray-400"
+                            dir="rtl"
+                            autoComplete="off"
+                          />
+                          {studentSearchQuery && (
+                            <button
+                              onClick={() => { setStudentSearchQuery(''); setStudentSuggestions([]); setShowSuggestions(false); setShowStudentCard(false); setSelectedStudentCard(null); }}
+                              className="pl-2 pr-1 text-gray-400 hover:text-gray-700 transition"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1 text-right">اكتب اسم الطالب لعرض سجل الحضور فوراً بدون AI</p>
 
-            {/* اختيار الموديل */}
-            <div className="relative mt-2" ref={modelSelectorRef}>
-              <button
-                onClick={() => setShowModelSelector(!showModelSelector)}
-                className="w-full flex items-center justify-between bg-white bg-opacity-15 hover:bg-opacity-25 rounded-lg px-3 py-1.5 text-xs transition"
-              >
-                <span className="flex items-center gap-1.5">
-                  <span>🤖</span>
-                  <span>{selectedModelId === 'auto' ? `تلقائي (${activeModel.name})` : activeModel.name}</span>
-                </span>
-                <span className={`transition-transform ${showModelSelector ? 'rotate-180' : ''}`}>▼</span>
-              </button>
-
-              {showModelSelector && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-200 max-h-[300px] overflow-y-auto z-[60]">
-                  <button
-                    onClick={() => { setSelectedModelId('auto'); setShowModelSelector(false); }}
-                    className={`w-full text-right px-3 py-2.5 text-sm flex items-center gap-2 transition border-b border-gray-100 ${selectedModelId === 'auto' ? 'bg-orange-50 text-orange-700 font-bold' : 'text-gray-700 hover:bg-gray-50'}`}
-                  >
-                    <span>🔄</span>
-                    <div className="flex-1">
-                      <span className="block font-semibold">تلقائي</span>
-                      <span className="block text-[10px] text-gray-400">يختار أفضل موديل متاح</span>
+                        {showSuggestions && studentSuggestions.length > 0 && (
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-200 z-[70] overflow-hidden">
+                            {studentSuggestions.map(student => (
+                              <button
+                                key={student.id}
+                                onClick={() => handleSelectStudent(student)}
+                                className="w-full text-right px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 transition border-b border-gray-100 last:border-0"
+                              >
+                                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-bold">
+                                  {student.name.charAt(0)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-gray-900 truncate">{student.name}</p>
+                                  <p className="text-[11px] text-gray-500">
+                                    {student.code && `كود: ${student.code}`}
+                                    {student.group && ` • كروب: ${student.group}`}
+                                  </p>
+                                </div>
+                                <span className="text-gray-400 text-xs">←</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    {selectedModelId === 'auto' && <span className="text-green-500">✓</span>}
-                  </button>
-                  {groupedModels.map((group, gi) => (
-                    <div key={gi}>
-                      <div className="px-3 py-1.5 bg-gray-50 text-[11px] font-bold text-gray-500 sticky top-0">{group.label}</div>
-                      {group.models.map(m => {
-                        const isFailed = failedModels.has(m.id);
-                        const isSelected = selectedModelId === m.id;
-                        const isAvailable = m.provider === 'gemini' ? !!GEMINI_API_KEY : m.provider === 'groq' ? !!GROQ_API_KEY : !!OPENROUTER_API_KEY;
-                        return (
-                          <button key={m.id} onClick={() => { if (isAvailable) { setSelectedModelId(m.id); setShowModelSelector(false); } }} disabled={!isAvailable}
-                            className={`w-full text-right px-3 py-2 text-sm flex items-center gap-2 transition ${isSelected ? 'bg-orange-50 text-orange-700 font-bold' : ''} ${isFailed ? 'bg-red-50 text-red-400' : ''} ${!isAvailable ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50'} ${!isSelected && !isFailed && isAvailable ? 'text-gray-700' : ''}`}
-                          >
-                            <span>{m.emoji}</span>
-                            <div className="flex-1">
-                              <span className="block text-[13px]">{m.name}</span>
-                              <span className="block text-[10px] text-gray-400">
-                                {m.provider === 'gemini' && 'Google API'}
-                                {m.provider === 'groq' && 'Groq API ⚡'}
-                                {m.provider === 'openrouter' && 'OpenRouter'}
-                                {isFailed && ' • ❌ فشل'}
-                                {!isAvailable && ' • 🔑 بدون مفتاح'}
-                              </span>
-                            </div>
-                            {isSelected && <span className="text-green-500">✓</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ))}
+                  </div>
                 </div>
               )}
-            </div>
-          </div>
 
-          {/* ✅ شريط البحث عن الطالب */}
-          {students.length > 0 && (
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100 px-3 py-2" ref={studentSearchRef}>
-              <div className="relative">
-                <div className="flex items-center gap-2 bg-white rounded-xl border border-blue-200 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition shadow-sm">
-                  <span className="pr-3 text-blue-400 text-sm">🔍</span>
-                  <input
-                    type="text"
-                    value={studentSearchQuery}
-                    onChange={e => handleStudentSearch(e.target.value)}
-                    onFocus={() => { if (studentSuggestions.length > 0) setShowSuggestions(true); }}
-                    placeholder="ابحث عن طالب بالاسم أو الكود..."
-                    className="flex-1 py-2 pl-3 text-sm bg-transparent outline-none text-right text-gray-700 placeholder-gray-400"
-                    dir="rtl"
-                  />
-                  {studentSearchQuery && (
-                    <button
-                      onClick={() => { setStudentSearchQuery(''); setStudentSuggestions([]); setShowSuggestions(false); setShowStudentCard(false); setSelectedStudentCard(null); }}
-                      className="pl-2 pr-1 text-gray-400 hover:text-gray-600 transition"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-                <p className="text-[10px] text-blue-500 mt-1 text-right">اكتب اسم الطالب لعرض سجل الحضور فوراً بدون AI</p>
-
-                {showSuggestions && studentSuggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-blue-100 z-[70] overflow-hidden">
-                    {studentSuggestions.map(student => (
-                      <button
-                        key={student.id}
-                        onClick={() => handleSelectStudent(student)}
-                        className="w-full text-right px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 transition border-b border-gray-50 last:border-0"
-                      >
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                          {student.name.charAt(0)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-800 truncate">{student.name}</p>
-                          <p className="text-[11px] text-gray-500">
-                            {student.code && `كود: ${student.code}`}
-                            {student.group && ` • كروب: ${student.group}`}
-                          </p>
-                        </div>
-                        <span className="text-blue-400 text-xs">←</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {showStudentCard && selectedStudentCard && (
-                <div className="mt-2 bg-white rounded-xl border border-blue-200 shadow-md overflow-hidden">
-                  <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-lg font-bold border border-white border-opacity-30">
-                          {selectedStudentCard.student.name.charAt(0)}
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-sm">{selectedStudentCard.student.name}</h4>
-                          <p className="text-[11px] opacity-90">
-                            {selectedStudentCard.student.code && `كود: ${selectedStudentCard.student.code}`}
-                            {selectedStudentCard.student.group && ` • كروب: ${selectedStudentCard.student.group}`}
-                          </p>
+                  {showStudentCard && selectedStudentCard && (
+                    <div className="mt-2 bg-white rounded-xl border border-gray-200 shadow-md overflow-hidden">
+                      <div className="bg-blue-50 px-4 py-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-lg font-bold border border-blue-200 text-blue-700">
+                              {selectedStudentCard.student.name.charAt(0)}
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-sm text-gray-900">{selectedStudentCard.student.name}</h4>
+                              <p className="text-[11px] text-gray-500">
+                                {selectedStudentCard.student.code && `كود: ${selectedStudentCard.student.code}`}
+                                {selectedStudentCard.student.group && ` • كروب: ${selectedStudentCard.student.group}`}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-left">
+                            <div className={`text-xs font-bold px-2 py-1 rounded-full ${selectedStudentCard.isPresentToday ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-red-500/10 text-red-700 dark:text-red-400'}`}>
+                              {selectedStudentCard.isPresentToday ? '✅ حاضر اليوم' : '❌ غائب اليوم'}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <div className="text-left">
-                        <div className={`text-xs font-bold px-2 py-1 rounded-full ${selectedStudentCard.isPresentToday ? 'bg-green-400 bg-opacity-30 text-green-100' : 'bg-red-400 bg-opacity-30 text-red-100'}`}>
-                          {selectedStudentCard.isPresentToday ? '✅ حاضر اليوم' : '❌ غائب اليوم'}
+
+                      <div className="grid grid-cols-3 divide-x divide-x-reverse divide-gray-200">
+                        <div className="text-center py-2.5 px-2">
+                          <p className="text-lg font-bold text-green-600">{selectedStudentCard.attendedCount}</p>
+                          <p className="text-[10px] text-gray-500">✅ حضور</p>
+                        </div>
+                        <div className="text-center py-2.5 px-2">
+                          <p className="text-lg font-bold text-red-500">{selectedStudentCard.absentCount}</p>
+                          <p className="text-[10px] text-gray-500">❌ غياب</p>
+                        </div>
+                        <div className="text-center py-2.5 px-2">
+                          <p className={`text-lg font-bold ${parseFloat(selectedStudentCard.percentage) >= 75 ? 'text-green-600' : parseFloat(selectedStudentCard.percentage) >= 50 ? 'text-yellow-600' : 'text-red-500'}`}>
+                            {selectedStudentCard.percentage}%
+                          </p>
+                          <p className="text-[10px] text-gray-500">النسبة</p>
                         </div>
                       </div>
-                    </div>
-                  </div>
 
-                  <div className="grid grid-cols-3 divide-x divide-x-reverse divide-gray-100 border-b border-gray-100">
-                    <div className="text-center py-2.5 px-2">
-                      <p className="text-lg font-bold text-green-600">{selectedStudentCard.attendedCount}</p>
-                      <p className="text-[10px] text-gray-500">✅ حضور</p>
-                    </div>
-                    <div className="text-center py-2.5 px-2">
-                      <p className="text-lg font-bold text-red-500">{selectedStudentCard.absentCount}</p>
-                      <p className="text-[10px] text-gray-500">❌ غياب</p>
-                    </div>
-                    <div className="text-center py-2.5 px-2">
-                      <p className={`text-lg font-bold ${parseFloat(selectedStudentCard.percentage) >= 75 ? 'text-green-600' : parseFloat(selectedStudentCard.percentage) >= 50 ? 'text-yellow-600' : 'text-red-500'}`}>
-                        {selectedStudentCard.percentage}%
-                      </p>
-                      <p className="text-[10px] text-gray-500">النسبة</p>
-                    </div>
-                  </div>
+                      {(() => {
+                        const todayStatus = getTodayStatus(selectedStudentCard);
+                        if (todayStatus.sessions.length > 0) {
+                          return (
+                            <div className="px-3 py-2 bg-yellow-500/5 border-b border-border">
+                              <p className="text-[11px] font-bold text-yellow-700 mb-1.5">🌟 سجلات اليوم:</p>
+                              <div className="space-y-1">
+                                {todayStatus.sessions.map((s, idx) => (
+                                  <div key={idx} className={`flex items-center gap-2 text-[11px] px-2 py-1 rounded-lg ${s.present ? 'bg-green-500/5 text-green-700 dark:text-green-400' : 'bg-red-500/5 text-red-600 dark:text-red-400'}`}>
+                                    <span>{s.present ? '✅' : '❌'}</span>
+                                    <span className="font-medium">{s.name}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
+                            <p className="text-[11px] text-gray-500 text-center">⚠️ لا توجد جلسات اليوم</p>
+                          </div>
+                        );
+                      })()}
 
-                  {(() => {
-                    const todayStatus = getTodayStatus(selectedStudentCard);
-                    if (todayStatus.sessions.length > 0) {
-                      return (
-                        <div className="px-3 py-2 bg-yellow-50 border-b border-yellow-100">
-                          <p className="text-[11px] font-bold text-yellow-700 mb-1.5">🌟 سجلات اليوم:</p>
-                          <div className="space-y-1">
-                            {todayStatus.sessions.map((s, idx) => (
-                              <div key={idx} className={`flex items-center gap-2 text-[11px] px-2 py-1 rounded-lg ${s.present ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
-                                <span>{s.present ? '✅' : '❌'}</span>
-                                <span className="font-medium">{s.name}</span>
+                      <div className="max-h-[140px] overflow-y-auto">
+                        {selectedStudentCard.attendedSessions.length === 0 ? (
+                          <div className="text-center py-3 text-muted-foreground text-xs">لا توجد جلسات مسجلة</div>
+                        ) : (
+                          <div className="divide-y divide-gray-200">
+                            {selectedStudentCard.attendedSessions.map((as_, idx) => (
+                              <div key={idx} className={`flex items-center gap-2 px-3 py-2 text-[11px] ${as_.present ? 'hover:bg-green-500/5' : 'hover:bg-red-500/5'} transition`}>
+                                <span className="flex-shrink-0">{as_.present ? '✅' : '❌'}</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className={`font-medium truncate ${as_.present ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{as_.session.name}</p>
+                                  <p className="text-muted-foreground text-[10px]">{formatDateWithDay(as_.session._normalizedDate)}</p>
+                                </div>
                               </div>
                             ))}
                           </div>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2 p-2 bg-gray-50 border-t border-gray-200">
+                        <button
+                          onClick={() => sendStudentQuestion(selectedStudentCard.student)}
+                          className="flex-1 bg-blue-500 text-white text-[11px] py-2 rounded-lg hover:bg-blue-600 transition font-medium"
+                        >
+                          💬 اسأل AI عنه
+                        </button>
+                        <button
+                          onClick={() => { setShowStudentCard(false); setSelectedStudentCard(null); setStudentSearchQuery(''); }}
+                          className="px-3 bg-gray-200 text-gray-700 text-[11px] py-2 rounded-lg hover:bg-gray-300 transition"
+                        >
+                          إغلاق
+                        </button>
+                      </div>
+                    </div>
+              )}
+
+              {/* 💬 الرسائل */}
+              <div className="flex-1 overflow-y-auto pt-8 pb-4 space-y-3" style={{ backgroundColor: '#ffffff' }}>
+                {messages.map((msg, idx) => (
+                    <motion.div
+                      key={msg.id}
+                      initial={{ opacity: 0, y: 14, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ duration: 0.45, ease: [0.22, 0.08, 0.22, 1], delay: idx === messages.length - 1 ? 0.12 : 0 }}
+                      className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                    <div className={`max-w-[90%] rounded-2xl p-3 shadow-sm ${
+                      msg.type === 'user'
+                        ? 'bg-blue-500 text-white rounded-br-sm'
+                        : 'bg-gray-100 text-gray-900 border border-gray-200 rounded-bl-sm'
+                    }`}>
+                      {msg.type === 'bot' && (
+                        <div className="flex items-center gap-1 mb-1.5 text-[10px] text-gray-500 font-semibold">
+                          <span>✨</span><span>المساعد الذكي</span>
                         </div>
-                      );
-                    }
-                    return (
-                      <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
-                        <p className="text-[11px] text-gray-500 text-center">⚠️ لا توجد جلسات اليوم</p>
-                      </div>
-                    );
-                  })()}
+                      )}
+                      <div className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${
+                        msg.type === 'user' ? 'text-white' : 'text-gray-900'
+                      }`}>{formatMessage(msg.content)}</div>
+                      <p className={`text-[10px] mt-1.5 ${
+                        msg.type === 'user' ? 'text-white/70' : 'text-gray-500'
+                      }`}>
+                        {msg.timestamp.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </motion.div>
+                ))}
 
-                  <div className="max-h-[140px] overflow-y-auto">
-                    {selectedStudentCard.attendedSessions.length === 0 ? (
-                      <div className="text-center py-3 text-gray-400 text-xs">لا توجد جلسات مسجلة</div>
-                    ) : (
-                      <div className="divide-y divide-gray-50">
-                        {selectedStudentCard.attendedSessions.map((as_, idx) => (
-                          <div key={idx} className={`flex items-center gap-2 px-3 py-2 text-[11px] ${as_.present ? 'hover:bg-green-50' : 'hover:bg-red-50'} transition`}>
-                            <span className="flex-shrink-0">{as_.present ? '✅' : '❌'}</span>
-                            <div className="flex-1 min-w-0">
-                              <p className={`font-medium truncate ${as_.present ? 'text-green-700' : 'text-red-600'}`}>{as_.session.name}</p>
-                              <p className="text-gray-400 text-[10px]">{formatDateWithDay(as_.session._normalizedDate)}</p>
-                            </div>
-                          </div>
-                        ))}
+                {isTyping && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="flex justify-start"
+                  >
+                    <div className="bg-gray-100 border border-gray-200 rounded-2xl rounded-bl-sm p-3 shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="flex gap-1">
+                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
+                        <span className="text-xs text-gray-500">يكتب...</span>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  </motion.div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
 
-                  <div className="flex gap-2 p-2 bg-gray-50 border-t border-gray-100">
-                    <button
-                      onClick={() => sendStudentQuestion(selectedStudentCard.student)}
-                      className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-[11px] py-2 rounded-lg hover:from-blue-600 hover:to-indigo-700 transition font-medium"
-                    >
-                      💬 اسأل AI عنه
-                    </button>
-                    <button
-                      onClick={() => { setShowStudentCard(false); setSelectedStudentCard(null); setStudentSearchQuery(''); }}
-                      className="px-3 bg-gray-200 text-gray-600 text-[11px] py-2 rounded-lg hover:bg-gray-300 transition"
-                    >
-                      إغلاق
-                    </button>
-                  </div>
+              {/* ⚠️ شريط الأخطاء */}
+              {error && (
+                <div className="px-3 py-2 bg-red-50 border-t border-red-200">
+                  <p className="text-xs text-red-600">❌ {error}</p>
                 </div>
               )}
-            </div>
-          )}
 
-          {/* الرسائل */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-orange-50 via-white to-pink-50">
-            {messages.map(msg => (
-              <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[90%] rounded-2xl p-3 shadow-sm ${msg.type === 'user' ? 'bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-br-sm' : 'bg-white text-gray-800 border border-orange-100 rounded-bl-sm'}`}>
-                  {msg.type === 'bot' && (
-                    <div className="flex items-center gap-1 mb-1.5 text-[10px] text-orange-600 font-semibold">
-                      <span>✨</span><span>المساعد الذكي</span>
+              {/* ⌨️ منطقة الإدخال */}
+              {(() => {
+                const isInputBlocked = (isAdmin && !currentCollegeId) || (!isAdmin && !currentStageId);
+                return (
+                  <div className="border-t border-gray-200" style={{ backgroundColor: '#ffffff' }}>
+                    <div className="px-3 py-2">
+                      <div className={`flex items-end gap-2 rounded-xl border-2 bg-white px-3 py-2 transition ${
+                        isInputBlocked ? 'border-gray-200 opacity-50' : 'border-gray-900 focus-within:border-gray-700'
+                      }`}>
+                        <textarea
+                          ref={inputRef as React.Ref<HTMLTextAreaElement>}
+                          value={input}
+                          onChange={e => setInput(e.target.value)}
+                          onKeyDown={handleKeyDown}
+                          placeholder={isInputBlocked ? 'الإدخال متوقف مؤقتاً...' : 'اكتب سؤالك هنا...'}
+                          className="flex-1 resize-none outline-none text-sm bg-transparent text-gray-900 placeholder-gray-400"
+                          rows={1}
+                          style={{ minHeight: 24, maxHeight: 80 }}
+                          disabled={isTyping || isInputBlocked}
+                          spellCheck={false}
+                        />
+                        <button
+                          onClick={handleSend}
+                          disabled={isTyping || !input.trim() || isInputBlocked}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition flex-shrink-0 text-sm"
+                        >
+                          ↑
+                        </button>
+                      </div>
                     </div>
-                  )}
-                  <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">{formatMessage(msg.content)}</div>
-                  <p className={`text-[10px] mt-1.5 ${msg.type === 'user' ? 'text-orange-100' : 'text-gray-400'}`}>
-                    {msg.timestamp.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-              </div>
-            ))}
-
-            {isTyping && (
-              <div className="flex justify-start">
-                <div className="bg-white border border-orange-100 rounded-2xl rounded-bl-sm p-3 shadow-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-amber-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="w-2 h-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
-                    <span className="text-xs text-gray-500">{activeModel.emoji} {activeModel.name} يفكر...</span>
                   </div>
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {error && (
-            <div className="px-3 py-2 bg-red-50 border-t border-red-200">
-              <p className="text-xs text-red-700">❌ {error}</p>
-            </div>
-          )}
-
-          <div className="p-3 bg-white border-t border-orange-100">
-            <div className="flex gap-2 items-end">
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="اسألني أي شي..."
-                rows={1}
-                className="flex-1 px-3 py-2 border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent text-sm resize-none max-h-24"
-                dir="rtl"
-                style={{ minHeight: '40px' }}
-                onInput={e => {
-                  const target = e.target as HTMLTextAreaElement;
-                  target.style.height = 'auto';
-                  target.style.height = `${Math.min(target.scrollHeight, 96)}px`;
-                }}
-                disabled={isTyping}
-              />
-              <button
-                onClick={handleSend}
-                disabled={!input.trim() || isTyping}
-                className="bg-gradient-to-br from-amber-500 to-pink-600 hover:from-amber-600 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-full w-10 h-10 flex items-center justify-center transition shadow-md hover:shadow-lg flex-shrink-0"
-              >
-                {isTyping ? (
-                  <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5 transform -scale-x-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                )}
-              </button>
-            </div>
-            <p className="text-[10px] text-gray-400 mt-1.5 text-center">
-              {activeModel.emoji} <span className="text-orange-600 font-semibold">{activeModel.name}</span>
-              {selectedModelId === 'auto' ? ' • تلقائي' : ' • يدوي'}
-            </p>
-          </div>
-        </div>
-      )}
+                );
+              })()}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 };
