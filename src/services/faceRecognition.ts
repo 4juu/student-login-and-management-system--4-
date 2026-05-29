@@ -347,7 +347,7 @@ export const buildMultiDescriptor = (
   }
 
   return {
-    main: compressFaceDescriptor(mainDesc),
+    main: Array.from(mainDesc),
     angles: angles.length > 0 ? angles : undefined,
     quality: Math.round(overallQuality * 100) / 100,
     directions: [...capturedDirs].join(','),

@@ -622,7 +622,6 @@ const handleClose = useCallback(async () => {
               ...updates,
             });
             setLocalVersion(v => v + 1);
-            setShowReg(false);
           }}
           onClose={() => setShowReg(false)}
         />
