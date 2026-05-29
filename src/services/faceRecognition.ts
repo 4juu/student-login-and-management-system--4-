@@ -1,3 +1,4 @@
+// src/services/faceRecognition.ts
 import * as faceapi from 'face-api.js';
 import { compressFaceDescriptor, ensureDecompressed } from './faceCompression';
 import { getWorker } from './faceWorker';
@@ -10,6 +11,9 @@ const MODEL_URLS = [
   'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights',
 ];
 
+/* ═══════════════════════════════════════════════════════════
+   ✅ تحميل TinyFaceDetector فقط (بدون SSD)
+═══════════════════════════════════════════════════════════ */
 export const loadFaceModels = async (): Promise<void> => {
   if (modelsLoaded) return;
   if (loadingPromise) return loadingPromise;
@@ -21,15 +25,14 @@ export const loadFaceModels = async (): Promise<void> => {
         await Promise.all([
           faceapi.nets.tinyFaceDetector.loadFromUri(url),
           faceapi.nets.faceLandmark68TinyNet.loadFromUri(url),
-          faceapi.nets.faceLandmark68Net.loadFromUri(url),
           faceapi.nets.faceRecognitionNet.loadFromUri(url),
-          faceapi.nets.ssdMobilenetv1.loadFromUri(url),
         ]);
         modelsLoaded = true;
         loadingPromise = null;
+        console.log('✅ Models loaded successfully');
         return;
       } catch (e) {
-        console.warn(`⚠️ attempt ${attempt + 1} failed:`, e);
+        console.warn(`⚠️ Attempt ${attempt + 1} failed:`, e);
         loadingPromise = null;
         if (attempt < 2) await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
       }
@@ -49,14 +52,15 @@ export const resetModels = () => {
 export const areModelsLoaded = () => modelsLoaded;
 
 /* ═══════════════════════════════════════════════════════════
-   🎯 Device Detection
+   ✅ تقليل inputSize
 ═══════════════════════════════════════════════════════════ */
 const getDeviceInputSize = (): 160 | 224 | 320 | 416 | 512 | 608 => {
   const c = navigator.hardwareConcurrency || 2;
   const m = (navigator as any).deviceMemory || 2;
-  if (c >= 8 && m >= 6) return 608;
-  if (c >= 4 && m >= 3) return 416;
-  return 320;
+
+  if (c >= 8 && m >= 6) return 416;
+  if (c >= 4 && m >= 3) return 320;
+  return 224;
 };
 
 const getDetectorOptions = () =>
@@ -65,13 +69,8 @@ const getDetectorOptions = () =>
     scoreThreshold: 0.38,
   });
 
-const detectorOptionsSSD = new faceapi.SsdMobilenetv1Options({
-  minConfidence: 0.35,
-  maxResults: 10,
-});
-
 /* ═══════════════════════════════════════════════════════════
-   💡 Brightness Detection - محسّن
+   💡 Brightness Detection
 ═══════════════════════════════════════════════════════════ */
 export const detectBrightness = (
   input: HTMLVideoElement | HTMLCanvasElement
@@ -95,8 +94,6 @@ export const detectBrightness = (
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
-
-      // Luminance formula (ITU-R BT.709)
       const lum = r * 0.2126 + g * 0.7152 + b * 0.0722;
       sum += lum;
       count++;
@@ -111,7 +108,6 @@ export const detectBrightness = (
 export type LightLevel = 'dark' | 'dim' | 'good' | 'bright';
 
 export const classifyLight = (brightness: number): LightLevel => {
-  // ✅ عتبات محسّنة (أقل حساسية)
   if (brightness < 40) return 'dark';
   if (brightness < 70) return 'dim';
   if (brightness > 220) return 'bright';
@@ -123,7 +119,7 @@ export const classifyLight = (brightness: number): LightLevel => {
 ═══════════════════════════════════════════════════════════ */
 const preprocessFrame = (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
-  targetWidth = 1280,
+  targetWidth = 960,
   adaptiveLight = false
 ): HTMLCanvasElement => {
   const vw = 'videoWidth' in input ? input.videoWidth : input.width;
@@ -157,12 +153,12 @@ const preprocessFrame = (
     const brightness = detectBrightness(input);
     const light = classifyLight(brightness);
 
-    if (light === 'dark') ctx.filter = 'brightness(1.8) contrast(1.3)';
-    else if (light === 'dim') ctx.filter = 'brightness(1.3) contrast(1.15)';
-    else if (light === 'bright') ctx.filter = 'brightness(0.85) contrast(1.1)';
-    else ctx.filter = 'contrast(1.1) brightness(1.05)';
+    if (light === 'dark') ctx.filter = 'brightness(1.6) contrast(1.25)';
+    else if (light === 'dim') ctx.filter = 'brightness(1.25) contrast(1.1)';
+    else if (light === 'bright') ctx.filter = 'brightness(0.9) contrast(1.05)';
+    else ctx.filter = 'contrast(1.05) brightness(1.02)';
   } else {
-    ctx.filter = 'contrast(1.1) brightness(1.05)';
+    ctx.filter = 'contrast(1.05) brightness(1.02)';
   }
 
   ctx.drawImage(input, 0, 0, w, h);
@@ -173,7 +169,7 @@ const preprocessFrame = (
 
 const preprocessForEnrollment = (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
-  targetWidth = 960,
+  targetWidth = 640,
   adaptiveLight = true
 ): HTMLCanvasElement => {
   const vw = 'videoWidth' in input ? input.videoWidth : input.width;
@@ -207,9 +203,9 @@ const preprocessForEnrollment = (
     const brightness = detectBrightness(input);
     const light = classifyLight(brightness);
 
-    if (light === 'dark') ctx.filter = 'brightness(1.6) contrast(1.25)';
-    else if (light === 'dim') ctx.filter = 'brightness(1.25) contrast(1.1)';
-    else if (light === 'bright') ctx.filter = 'brightness(0.9) contrast(1.05)';
+    if (light === 'dark') ctx.filter = 'brightness(1.5) contrast(1.2)';
+    else if (light === 'dim') ctx.filter = 'brightness(1.2) contrast(1.1)';
+    else if (light === 'bright') ctx.filter = 'brightness(0.92) contrast(1.05)';
     else ctx.filter = 'none';
   }
 
@@ -219,9 +215,6 @@ const preprocessForEnrollment = (
   return canvas;
 };
 
-/* ═══════════════════════════════════════════════════════════
-   📐 Region Cropping
-═══════════════════════════════════════════════════════════ */
 const cropCenterRegion = (
   input: HTMLVideoElement | HTMLCanvasElement,
   regionRatio = 0.75
@@ -250,7 +243,7 @@ const cropCenterRegion = (
 };
 
 /* ═══════════════════════════════════════════════════════════
-   🧮 Descriptor Normalization
+   🧮 Descriptor Operations
 ═══════════════════════════════════════════════════════════ */
 export const normalizeDescriptor = (d: Float32Array): Float32Array => {
   const out = new Float32Array(d);
@@ -270,28 +263,21 @@ const meanDescriptor = (descs: Float32Array[]): Float32Array => {
   return normalizeDescriptor(merged);
 };
 
-const filterOutliers = (
-  descs: Float32Array[],
-  maxDist = 0.3
-): Float32Array[] => {
+const filterOutliers = (descs: Float32Array[], maxDist = 0.3): Float32Array[] => {
   if (descs.length <= 2) return descs;
 
   const center = meanDescriptor(descs);
-  const filtered = descs.filter(
-    d => faceapi.euclideanDistance(d, center) <= maxDist
-  );
+  const filtered = descs.filter(d => faceapi.euclideanDistance(d, center) <= maxDist);
 
   return filtered.length >= 2 ? filtered : descs.slice(0, Math.max(2, descs.length));
 };
 
 /* ═══════════════════════════════════════════════════════════
-   🧭 Face Direction Detection
+   🧭 Face Direction
 ═══════════════════════════════════════════════════════════ */
 export type FaceDirection = 'center' | 'left' | 'right' | 'up' | 'down';
 
-export const detectFaceDirection = (
-  landmarks: faceapi.FaceLandmarks68
-): FaceDirection => {
+export const detectFaceDirection = (landmarks: faceapi.FaceLandmarks68): FaceDirection => {
   const nose = landmarks.getNose();
   const jaw = landmarks.getJawOutline();
   const leftEye = landmarks.getLeftEye();
@@ -303,9 +289,7 @@ export const detectFaceDirection = (
   const jawLeft = jaw[0];
   const jawRight = jaw[16];
 
-  const faceWidth = Math.sqrt(
-    (jawRight.x - jawLeft.x) ** 2 + (jawRight.y - jawLeft.y) ** 2
-  );
+  const faceWidth = Math.sqrt((jawRight.x - jawLeft.x) ** 2 + (jawRight.y - jawLeft.y) ** 2);
 
   const distToLeft = Math.abs(noseTip.x - jawLeft.x);
   const distToRight = Math.abs(noseTip.x - jawRight.x);
@@ -331,12 +315,7 @@ export const detectFaceDirection = (
   return 'center';
 };
 
-/* ═══════════════════════════════════════════════════════════
-   🔄 Rotation Angle Detection
-═══════════════════════════════════════════════════════════ */
-export const detectRotationAngle = (
-  landmarks: faceapi.FaceLandmarks68
-): number => {
+export const detectRotationAngle = (landmarks: faceapi.FaceLandmarks68): number => {
   const nose = landmarks.getNose();
   const jaw = landmarks.getJawOutline();
   const leftEye = landmarks.getLeftEye();
@@ -352,9 +331,7 @@ export const detectRotationAngle = (
   const distToRight = Math.abs(noseTip.x - jawRight.x);
   const hRatio = distToLeft / (distToLeft + distToRight);
 
-  const faceWidth = Math.sqrt(
-    (jawRight.x - jawLeft.x) ** 2 + (jawRight.y - jawLeft.y) ** 2
-  );
+  const faceWidth = Math.sqrt((jawRight.x - jawLeft.x) ** 2 + (jawRight.y - jawLeft.y) ** 2);
 
   const leC = { y: leftEye.reduce((s, p) => s + p.y, 0) / leftEye.length };
   const reC = { y: rightEye.reduce((s, p) => s + p.y, 0) / rightEye.length };
@@ -371,7 +348,7 @@ export const detectRotationAngle = (
 };
 
 /* ═══════════════════════════════════════════════════════════
-   📊 Frame Quality Evaluation - محسّن
+   📊 Quality Evaluation
 ═══════════════════════════════════════════════════════════ */
 export interface FrameQuality {
   score: number;
@@ -415,34 +392,18 @@ const evaluateFrameQuality = (
   const brightness = videoInput ? detectBrightness(videoInput) : 128;
   const lightLevel = classifyLight(brightness);
 
-  // ✅ تقليل العقوبة للإضاءة
   const lightPenalty =
-    lightLevel === 'dark' ? 0.7 :
-    lightLevel === 'dim' ? 0.9 :
-    lightLevel === 'bright' ? 0.95 :
-    1;
+    lightLevel === 'dark' ? 0.7 : lightLevel === 'dim' ? 0.9 : lightLevel === 'bright' ? 0.95 : 1;
 
-  const quality = (
-    score * 0.4 +
-    Math.min(areaRatio / 0.2, 1) * 0.3 +
-    (1 - centerDist * 2) * 0.2 +
-    0.1
-  ) * lightPenalty;
+  const quality =
+    (score * 0.4 + Math.min(areaRatio / 0.2, 1) * 0.3 + (1 - centerDist * 2) * 0.2 + 0.1) *
+    lightPenalty;
 
-  return {
-    score,
-    areaRatio,
-    centerDist,
-    quality,
-    direction,
-    rotationAngle,
-    brightness,
-    lightLevel,
-  };
+  return { score, areaRatio, centerDist, quality, direction, rotationAngle, brightness, lightLevel };
 };
 
 /* ═══════════════════════════════════════════════════════════
-   🗜️ MultiDescriptor - ضغط متقدم
+   🗜️ MultiDescriptor
 ═══════════════════════════════════════════════════════════ */
 export interface MultiDescriptor {
   main: number[];
@@ -452,15 +413,10 @@ export interface MultiDescriptor {
   version?: number;
 }
 
-const TOP_DIMS = 32; // ✅ محسّن من 48
+const TOP_DIMS = 32;
 
 const compressAngleDescriptor = (desc: Float32Array): number[] => {
-  const indexed = Array.from(desc).map((v, i) => ({
-    v: Math.abs(v),
-    i,
-    val: v,
-  }));
-
+  const indexed = Array.from(desc).map((v, i) => ({ v: Math.abs(v), i, val: v }));
   indexed.sort((a, b) => b.v - a.v);
   const top = indexed.slice(0, TOP_DIMS);
 
@@ -474,13 +430,11 @@ const compressAngleDescriptor = (desc: Float32Array): number[] => {
 
 const decompressAngleDescriptor = (compressed: number[]): Float32Array => {
   const desc = new Float32Array(128);
-
   for (let i = 0; i < compressed.length; i += 2) {
     const idx = compressed[i];
     const val = compressed[i + 1];
     if (idx >= 0 && idx < 128) desc[idx] = val;
   }
-
   return normalizeDescriptor(desc);
 };
 
@@ -491,7 +445,7 @@ export const buildMultiDescriptor = (
   capturedDirs: Set<FaceDirection>
 ): MultiDescriptor => {
   const angles: number[] = [];
-  const dirOrder: FaceDirection[] = ['center', 'right', 'left', 'up', 'down'];
+  const dirOrder: FaceDirection[] = ['center', 'right', 'left'];
 
   for (const dir of dirOrder) {
     const descs = angleDescs.get(dir);
@@ -510,9 +464,6 @@ export const buildMultiDescriptor = (
   };
 };
 
-/* ═══════════════════════════════════════════════════════════
-   🔧 Helper: تحويل أي بصمة لـ Float32Array
-═══════════════════════════════════════════════════════════ */
 const toFloat32 = (input: number[] | string | Float32Array): Float32Array => {
   if (input instanceof Float32Array) return input;
 
@@ -529,6 +480,7 @@ const toFloat32 = (input: number[] | string | Float32Array): Float32Array => {
         Number.isInteger(input[0]) &&
         input[0] >= 0 &&
         input[0] < 128 &&
+        input.length >= 4 &&
         Number.isInteger(input[2]) &&
         input[2] >= 0 &&
         input[2] < 128;
@@ -548,13 +500,7 @@ const toFloat32 = (input: number[] | string | Float32Array): Float32Array => {
   return new Float32Array(input);
 };
 
-/* ═══════════════════════════════════════════════════════════
-   🔍 Multi-Angle Comparison
-═══════════════════════════════════════════════════════════ */
-export const compareMultiDescriptor = (
-  query: Float32Array,
-  stored: MultiDescriptor
-): number => {
+export const compareMultiDescriptor = (query: Float32Array, stored: MultiDescriptor): number => {
   const mainDesc = toFloat32(stored.main);
   const mainDist = faceapi.euclideanDistance(query, mainDesc);
 
@@ -574,9 +520,6 @@ export const compareMultiDescriptor = (
   return Math.min(mainDist, mainDist * 0.6 + bestAngleDist * 0.4);
 };
 
-/* ═══════════════════════════════════════════════════════════
-   🎯 Type Guard
-═══════════════════════════════════════════════════════════ */
 const isMultiDescriptor = (d: any): d is MultiDescriptor => {
   return d !== null && typeof d === 'object' && !Array.isArray(d) && 'main' in d;
 };
@@ -590,11 +533,7 @@ export interface TamperResult {
 }
 
 export const checkForTampering = <
-  T extends {
-    id: string;
-    name: string;
-    faceDescriptor?: number[] | string | MultiDescriptor;
-  }
+  T extends { id: string; name: string; faceDescriptor?: number[] | string | MultiDescriptor }
 >(
   descriptor: Float32Array,
   allStudents: T[],
@@ -616,11 +555,7 @@ export const checkForTampering = <
 };
 
 export const checkForTamperingAsync = async <
-  T extends {
-    id: string;
-    name: string;
-    faceDescriptor?: number[] | string | MultiDescriptor;
-  }
+  T extends { id: string; name: string; faceDescriptor?: number[] | string | MultiDescriptor }
 >(
   descriptor: Float32Array,
   allStudents: T[],
@@ -719,7 +654,7 @@ const DIRECTION_LABELS: Record<FaceDirection, string> = {
 };
 
 /* ═══════════════════════════════════════════════════════════
-   🎬 Multi-Capture Enrollment - محسّن
+   ✅ Multi-Capture - مُحسّن
 ═══════════════════════════════════════════════════════════ */
 export const extractFaceDescriptorMultiCapture = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
@@ -732,21 +667,20 @@ export const extractFaceDescriptorMultiCapture = async (
 } | null> => {
   if (!modelsLoaded) await loadFaceModels();
 
-  const TOTAL_MS = 10000;
-  const STABILIZE_MS = 1000;
-  const INTERVAL_MS = 220;
-  const MIN_SCORE = 0.45; // ✅ كان 0.50
-  const MIN_AREA = 0.025; // ✅ كان 0.03
-  const MAX_CENTER = 0.5; // ✅ كان 0.45
+  const MAX_DURATION_MS = 10000;
+  const STABILIZE_MS = 800;
+  const INTERVAL_MS = 350;
+  const MIN_SCORE = 0.45;
+  const MIN_AREA = 0.025;
+  const MAX_CENTER = 0.5;
   const MIN_GOOD = 5;
+
+  const REQUIRED_DIRECTIONS: FaceDirection[] = ['center', 'right', 'left'];
 
   const capturedDirections = new Set<FaceDirection>();
   const angleDescs = new Map<FaceDirection, Float32Array[]>();
-  const allFrames: Array<{
-    descriptor: Float32Array;
-    quality: number;
-    direction: FaceDirection;
-  }> = [];
+  const allFrames: Array<{ descriptor: Float32Array; quality: number; direction: FaceDirection }> =
+    [];
   const coveredAngles = new Set<number>();
 
   const reportProgress = (
@@ -772,7 +706,7 @@ export const extractFaceDescriptorMultiCapture = async (
     });
   };
 
-  /* ─── التثبيت ─── */
+  /* ─── Stabilization ─── */
   const stabEnd = Date.now() + STABILIZE_MS;
   let stabilized = false;
 
@@ -783,11 +717,11 @@ export const extractFaceDescriptorMultiCapture = async (
     try {
       const processed = preprocessForEnrollment(input, 640);
       const det = await faceapi
-        .detectAllFaces(processed, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 })) // ✅ كان 0.45
-        .withFaceLandmarks()
+        .detectAllFaces(processed, getDetectorOptions())
+        .withFaceLandmarks(true)
         .withFaceDescriptors();
 
-      if (det.length === 1 && det[0].detection.score >= 0.4) { // ✅ كان 0.45
+      if (det.length === 1 && det[0].detection.score >= 0.4) {
         stabilized = true;
         const q = evaluateFrameQuality(
           det[0],
@@ -807,8 +741,8 @@ export const extractFaceDescriptorMultiCapture = async (
     try {
       const processed = preprocessForEnrollment(input, 640);
       const det = await faceapi
-        .detectAllFaces(processed, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 })) // ✅ كان 0.35
-        .withFaceLandmarks()
+        .detectAllFaces(processed, getDetectorOptions())
+        .withFaceLandmarks(true)
         .withFaceDescriptors();
 
       if (det.length !== 1) return null;
@@ -819,38 +753,32 @@ export const extractFaceDescriptorMultiCapture = async (
 
   reportProgress(10, 'capture', 'center', true);
 
-  /* ─── الالتقاط ─── */
+  /* ─── Capture Loop ─── */
   const captureStart = Date.now();
-  const captureEnd = captureStart + (TOTAL_MS - STABILIZE_MS);
-  const DIRECTION_SEQUENCE: FaceDirection[] = ['center', 'right', 'left', 'up', 'down', 'center'];
+  const DIRECTION_SEQUENCE: FaceDirection[] = ['center', 'right', 'left'];
+  let currentDirIndex = 0;
 
-  while (Date.now() < captureEnd) {
+  while (Date.now() - captureStart < MAX_DURATION_MS) {
+    const allDirectionsCaptured = REQUIRED_DIRECTIONS.every(dir => capturedDirections.has(dir));
+    if (allDirectionsCaptured && allFrames.length >= MIN_GOOD) {
+      console.log('✅ اكتملت الاتجاهات المطلوبة مبكراً');
+      break;
+    }
+
     const elapsed = Date.now() - captureStart;
-    const totalCapture = TOTAL_MS - STABILIZE_MS;
-    const ratio = elapsed / totalCapture;
-    const progress = 10 + Math.min(85, Math.round(ratio * 85));
-    const seqIdx = Math.min(DIRECTION_SEQUENCE.length - 1, Math.floor(ratio * DIRECTION_SEQUENCE.length));
-    const requiredDir = DIRECTION_SEQUENCE[seqIdx];
+    const progress = 10 + Math.min(85, Math.round((elapsed / MAX_DURATION_MS) * 85));
+
+    const requiredDir = DIRECTION_SEQUENCE[currentDirIndex % DIRECTION_SEQUENCE.length];
 
     try {
-      const processed = preprocessForEnrollment(input, 960, true);
+      const processed = preprocessForEnrollment(input, 640, true);
       const imgW = processed.width;
       const imgH = processed.height;
 
-      let detections = await faceapi
-        .detectAllFaces(processed, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.42 })) // ✅ كان 0.48
-        .withFaceLandmarks()
+      const detections = await faceapi
+        .detectAllFaces(processed, getDetectorOptions())
+        .withFaceLandmarks(true)
         .withFaceDescriptors();
-
-      if (detections.length === 0) {
-        detections = await faceapi
-          .detectAllFaces(
-            processed,
-            new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.38 }) // ✅ كان 0.42
-          )
-          .withFaceLandmarks()
-          .withFaceDescriptors();
-      }
 
       if (detections.length !== 1) {
         reportProgress(progress, 'capture', requiredDir, false);
@@ -865,6 +793,7 @@ export const extractFaceDescriptorMultiCapture = async (
         imgH,
         input instanceof HTMLVideoElement ? input : undefined
       );
+
       reportProgress(progress, 'capture', requiredDir, true, q);
 
       if (q.score < MIN_SCORE || q.areaRatio < MIN_AREA || q.centerDist > MAX_CENTER) {
@@ -873,7 +802,14 @@ export const extractFaceDescriptorMultiCapture = async (
       }
 
       const desc = normalizeDescriptor(det.descriptor);
-      capturedDirections.add(q.direction);
+
+      if (!capturedDirections.has(q.direction)) {
+        capturedDirections.add(q.direction);
+        if (REQUIRED_DIRECTIONS.includes(q.direction)) {
+          currentDirIndex++;
+        }
+      }
+
       allFrames.push({ descriptor: desc, quality: q.quality, direction: q.direction });
 
       if (!angleDescs.has(q.direction)) angleDescs.set(q.direction, []);
@@ -892,6 +828,7 @@ export const extractFaceDescriptorMultiCapture = async (
 
   if (allFrames.length < MIN_GOOD) return null;
 
+  /* ─── Merging ─── */
   const byDir = new Map<FaceDirection, typeof allFrames>();
   for (const f of allFrames) {
     if (!byDir.has(f.direction)) byDir.set(f.direction, []);
@@ -940,7 +877,7 @@ export const extractFaceDescriptorMultiCapture = async (
 };
 
 /* ═══════════════════════════════════════════════════════════
-   🔍 IOU Tracker
+   🔍 IoU Tracker
 ═══════════════════════════════════════════════════════════ */
 export interface TrackedFace {
   id: number;
@@ -984,13 +921,7 @@ export class IOUTracker {
         this.tracks[bestIdx].lost = 0;
         if (det.descriptor) this.tracks[bestIdx].descriptor = det.descriptor;
       } else {
-        this.tracks.push({
-          id: this.nextId++,
-          box: det.box,
-          descriptor: det.descriptor,
-          age: 1,
-          lost: 0,
-        });
+        this.tracks.push({ id: this.nextId++, box: det.box, descriptor: det.descriptor, age: 1, lost: 0 });
       }
     }
 
@@ -1028,7 +959,7 @@ export class IOUTracker {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   📸 Single Capture
+   📸 Single & Batch Extraction
 ═══════════════════════════════════════════════════════════ */
 export const extractFaceDescriptor = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
@@ -1037,20 +968,10 @@ export const extractFaceDescriptor = async (
 
   const processed = preprocessFrame(input, 640, true);
 
-  let result = await faceapi
+  const result = await faceapi
     .detectSingleFace(processed, getDetectorOptions())
     .withFaceLandmarks(true)
     .withFaceDescriptor();
-
-  if (!result) {
-    result = await faceapi
-      .detectSingleFace(
-        processed,
-        new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.32 })
-      )
-      .withFaceLandmarks(true)
-      .withFaceDescriptor();
-  }
 
   return result?.descriptor || null;
 };
@@ -1064,80 +985,13 @@ export const extractAllFaceDescriptors = async (
   const src = useRegion ? cropCenterRegion(input as any, 0.8) : input;
 
   return faceapi
-    .detectAllFaces(preprocessFrame(src, 1280, true), getDetectorOptions())
+    .detectAllFaces(preprocessFrame(src, 960, true), getDetectorOptions())
     .withFaceLandmarks(true)
     .withFaceDescriptors();
 };
 
-export const extractAllFaceDescriptorsHybrid = async (
-  input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
-  useRegion = false
-) => {
-  if (!modelsLoaded) await loadFaceModels();
-
-  const cores = navigator.hardwareConcurrency || 2;
-  const memory = (navigator as any).deviceMemory || 2;
-  const isHigh = cores >= 8 && memory >= 6;
-
-  const src = useRegion ? cropCenterRegion(input as any, 0.85) : input;
-  const processed = preprocessFrame(src, isHigh ? 1280 : 960, true);
-  const options = getDetectorOptions();
-
-  if (isHigh) {
-    let tiny: any[] = [];
-    try {
-      tiny = await faceapi
-        .detectAllFaces(processed, options)
-        .withFaceLandmarks(true)
-        .withFaceDescriptors();
-    } catch {
-      tiny = [];
-    }
-
-    let ssd: any[] = [];
-    try {
-      ssd = await faceapi
-        .detectAllFaces(processed, detectorOptionsSSD)
-        .withFaceLandmarks(true)
-        .withFaceDescriptors();
-    } catch {
-      ssd = [];
-    }
-
-    const merged = [...tiny];
-    ssd.forEach((f: any) => {
-      if (!merged.some(m => calculateIoU(m.detection.box, f.detection.box) > 0.4)) {
-        merged.push(f);
-      }
-    });
-
-    return merged;
-  }
-
-  try {
-    return await faceapi
-      .detectAllFaces(processed, options)
-      .withFaceLandmarks(true)
-      .withFaceDescriptors();
-  } catch {
-    return [];
-  }
-};
-
-function calculateIoU(b1: any, b2: any): number {
-  const x1 = Math.max(b1.x, b2.x);
-  const y1 = Math.max(b1.y, b2.y);
-  const x2 = Math.min(b1.x + b1.width, b2.x + b2.width);
-  const y2 = Math.min(b1.y + b1.height, b2.y + b2.height);
-
-  if (x2 < x1 || y2 < y1) return 0;
-
-  const inter = (x2 - x1) * (y2 - y1);
-  return inter / (b1.width * b1.height + b2.width * b2.height - inter);
-}
-
 /* ═══════════════════════════════════════════════════════════
-   🔍 Face Comparison - محسّن لحل euclideanDistance
+   🔍 Comparison
 ═══════════════════════════════════════════════════════════ */
 export const compareFaces = (
   desc1: Float32Array | number[],
@@ -1149,14 +1003,12 @@ export const compareFaces = (
     return compareMultiDescriptor(a, desc2);
   }
 
-  // ✅ إصلاح: فك ضغط البصمة المخزنة
   let b: Float32Array;
 
   if (typeof desc2 === 'string') {
     const decompressed = ensureDecompressed(desc2);
     b = new Float32Array(decompressed);
   } else if (Array.isArray(desc2)) {
-    // ✅ إذا كانت مضغوطة (طولها < 128)، نفك الضغط
     if (desc2.length < 128) {
       const decompressed = ensureDecompressed(desc2);
       b = new Float32Array(decompressed);
@@ -1167,7 +1019,6 @@ export const compareFaces = (
     b = toFloat32(desc2 as any);
   }
 
-  // ✅ تأكد من أن الطولين متساويين
   if (a.length !== b.length) {
     console.warn(`⚠️ Length mismatch: ${a.length} vs ${b.length}. Padding...`);
 
@@ -1190,9 +1041,7 @@ export interface FaceMatchResult<T> {
   confidence: number;
 }
 
-export const findBestMatch = <
-  T extends { faceDescriptor?: number[] | string | MultiDescriptor }
->(
+export const findBestMatch = <T extends { faceDescriptor?: number[] | string | MultiDescriptor }>(
   queryDescriptor: Float32Array,
   items: T[],
   threshold = 0.6
@@ -1205,23 +1054,14 @@ export const findBestMatch = <
     const distance = compareFaces(queryDescriptor, item.faceDescriptor as any);
 
     if (distance < threshold && (!best || distance < best.distance)) {
-      best = {
-        item,
-        distance,
-        confidence: Math.round((1 - distance / threshold) * 100),
-      };
+      best = { item, distance, confidence: Math.round((1 - distance / threshold) * 100) };
     }
   }
 
   return best;
 };
 
-/* ═══════════════════════════════════════════════════════════
-   🔄 Auto Improvement
-═══════════════════════════════════════════════════════════ */
-export const shouldAutoImprove = (
-  stored: MultiDescriptor | number[] | string
-): boolean => {
+export const shouldAutoImprove = (stored: MultiDescriptor | number[] | string): boolean => {
   if (isMultiDescriptor(stored)) {
     const md = stored;
     return (

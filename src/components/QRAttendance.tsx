@@ -5,18 +5,19 @@ import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { AttendanceSession, Student } from '../types/student';
 import {
   loadFaceModels,
-  extractAllFaceDescriptorsHybrid,
   extractAllFaceDescriptors,
   IOUTracker,
   areModelsLoaded,
   resetModels,
   detectFaceDirection,
-  compareFaces, // ✅ إضافة
+  compareFaces,
   shouldAutoImprove,
   autoImproveDescriptor,
 } from '../services/faceRecognition';
 
-/* ── Types ── */
+/* ══════════════════════════════════════════════════════════
+   Types
+══════════════════════════════════════════════════════════ */
 interface QRAttendanceProps {
   students: Student[];
   activeSession: AttendanceSession | null;
@@ -46,14 +47,18 @@ interface DetectedFaceBox {
   timestamp: number;
 }
 
-/* ── Constants ── */
+/* ══════════════════════════════════════════════════════════
+   Constants
+══════════════════════════════════════════════════════════ */
 const QR_REGION_ID = 'qr-reader-v3';
 const DUPLICATE_BLOCK_MS = 30_000;
 const BULK_FACE_BLOCK_MS = 120_000;
 const BOX_FADE_MS = 4000;
 const CONFIDENCE_THRESHOLD = 0.55;
 
-/* ── Device Detection ── */
+/* ══════════════════════════════════════════════════════════
+   Device Detection
+══════════════════════════════════════════════════════════ */
 interface DeviceTier {
   tier: 'low' | 'mid' | 'high';
   cores: number;
@@ -61,23 +66,24 @@ interface DeviceTier {
   fps: number;
   maxFaces: number;
   intervalMs: number;
-  useHybrid: boolean;
 }
 
 const detectDeviceTier = (): DeviceTier => {
   const c = navigator.hardwareConcurrency || 2;
   const m = (navigator as any).deviceMemory || 2;
-  
+
   if (c >= 8 && m >= 6) {
-    return { tier: 'high', cores: c, memory: m, fps: 30, maxFaces: 10, intervalMs: 250, useHybrid: true };
+    return { tier: 'high', cores: c, memory: m, fps: 24, maxFaces: 8, intervalMs: 300 };
   }
   if (c >= 4 && m >= 3) {
-    return { tier: 'mid', cores: c, memory: m, fps: 24, maxFaces: 6, intervalMs: 350, useHybrid: true };
+    return { tier: 'mid', cores: c, memory: m, fps: 20, maxFaces: 5, intervalMs: 400 };
   }
-  return { tier: 'low', cores: c, memory: m, fps: 15, maxFaces: 4, intervalMs: 550, useHybrid: false };
+  return { tier: 'low', cores: c, memory: m, fps: 15, maxFaces: 3, intervalMs: 550 };
 };
 
-/* ── Helpers ── */
+/* ══════════════════════════════════════════════════════════
+   Helpers
+══════════════════════════════════════════════════════════ */
 const extractQrCodeId = (t: string): string | null => {
   const r = t.trim();
   try {
@@ -85,13 +91,14 @@ const extractQrCodeId = (t: string): string | null => {
     const id = u.searchParams.get('id');
     if (id) return id.trim();
   } catch {}
-  
+
   try {
     const o = JSON.parse(r);
-    const v = o.qrCodeId || o.qrId || o.id || o.studentId || o.universityId || o.code;
+    const v =
+      o.qrCodeId || o.qrId || o.id || o.studentId || o.universityId || o.code;
     if (v) return String(v).trim();
   } catch {}
-  
+
   if (/^[A-Za-z0-9_-]{3,100}$/.test(r)) return r;
   return null;
 };
@@ -102,7 +109,9 @@ const getQrBox = () => {
   return { width: s, height: s };
 };
 
-/* ── Audio Feedback ── */
+/* ══════════════════════════════════════════════════════════
+   Audio Feedback
+══════════════════════════════════════════════════════════ */
 const beep = (f: number, d: number, v = 0.05) => {
   try {
     const AC = window.AudioContext || (window as any).webkitAudioContext;
@@ -128,8 +137,8 @@ const playFaceSuccess = () => {
     const ctx = new AC();
     [
       { f: 523, s: 0, d: 0.12, v: 0.18 },
-      { f: 659, s: 0.10, d: 0.12, v: 0.20 },
-      { f: 784, s: 0.20, d: 0.22, v: 0.22 }
+      { f: 659, s: 0.1, d: 0.12, v: 0.2 },
+      { f: 784, s: 0.2, d: 0.22, v: 0.22 },
     ].forEach(({ f, s, d, v }) => {
       const o = ctx.createOscillator();
       const g = ctx.createGain();
@@ -155,10 +164,12 @@ const playSuccess = () => {
 
 const playError = () => {
   navigator.vibrate?.([150]);
-  beep(200, 200, 0.10);
+  beep(200, 200, 0.1);
 };
 
-/* ══════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════
+   Main Component
+══════════════════════════════════════════════════════════ */
 export const QRAttendance: React.FC<QRAttendanceProps> = ({
   students,
   activeSession,
@@ -169,7 +180,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 }) => {
   const device = useMemo(detectDeviceTier, []);
 
-  /* ── Refs ── */
+  /* ─── Refs ─── */
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const trackRef = useRef<MediaStreamTrack | null>(null);
   const processingRef = useRef(false);
@@ -188,7 +199,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const frameSkipRef = useRef(0);
   const localUpdatesRef = useRef<Map<string, Partial<Student>>>(new Map());
 
-  /* ── State ── */
+  /* ─── State ─── */
   const [localVersion, setLocalVersion] = useState(0);
   const [mode, setMode] = useState<ScanMode>('qr');
   const [facing, setFacing] = useState<CameraFacing>('environment');
@@ -208,14 +219,16 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const [errorMsg, setErrorMsg] = useState('');
   const [faceModelsReady, setFaceModelsReady] = useState(areModelsLoaded);
   const [faceLoading, setFaceLoading] = useState(false);
-  const [cameraStatus, setCameraStatus] = useState<'starting' | 'ready' | 'error' | 'restarting'>('starting');
+  const [cameraStatus, setCameraStatus] = useState<
+    'starting' | 'ready' | 'error' | 'restarting'
+  >('starting');
   const [bulkStudents, setBulkStudents] = useState<Student[]>([]);
   const [bulkDetected, setBulkDetected] = useState(0);
   const [bulkSidebar, setBulkSidebar] = useState(false);
   const [sensitivity, setSensitivity] = useState<BulkSensitivity>('far');
   const [showReg, setShowReg] = useState(false);
 
-  /* ── Computed ── */
+  /* ─── Computed ─── */
   const studentMap = useMemo(() => {
     const m = new Map<string, Student>();
     students.forEach(s => {
@@ -233,24 +246,25 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     return [...map.values()];
   }, [students, localVersion]);
 
-  const studentsWithFace = useMemo(() =>
-    allStudents.filter(s => {
-      if (!s.faceDescriptor) return false;
-      if (Array.isArray(s.faceDescriptor)) return s.faceDescriptor.length > 0;
-      if (typeof s.faceDescriptor === 'object') return true;
-      return true;
-    }),
+  const studentsWithFace = useMemo(
+    () =>
+      allStudents.filter(s => {
+        if (!s.faceDescriptor) return false;
+        if (Array.isArray(s.faceDescriptor)) return s.faceDescriptor.length > 0;
+        if (typeof s.faceDescriptor === 'object') return true;
+        return true;
+      }),
     [allStudents]
   );
 
-  /* ── Toast ── */
+  /* ─── Toast ─── */
   const showToast = useCallback((msg: Omit<ToastMessage, 'id'>, ms = 2500) => {
     const id = ++toastCounterRef.current;
     setToasts(prev => [{ ...msg, id }, ...prev].slice(0, 4));
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), ms);
   }, []);
 
-  /* ── Camera Control ── */
+  /* ─── Camera Control ─── */
   const hardStop = useCallback(async () => {
     faceRunningRef.current = false;
     if (faceTimerRef.current) {
@@ -269,7 +283,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     if (scannerRef.current) {
       try {
         const st = scannerRef.current.getState();
-        if (st === Html5QrcodeScannerState.SCANNING || st === Html5QrcodeScannerState.PAUSED) {
+        if (
+          st === Html5QrcodeScannerState.SCANNING ||
+          st === Html5QrcodeScannerState.PAUSED
+        ) {
           await scannerRef.current.stop();
         }
       } catch {}
@@ -295,178 +312,154 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     if (reg) reg.innerHTML = '';
   }, [torchOn]);
 
-  const startCamera = useCallback(async (cf: CameraFacing) => {
-    if (!mountedRef.current || startingRef.current) return;
-    startingRef.current = true;
-    setCameraStatus('starting');
-    setErrorMsg('');
-    setCameraReady(false);
+  /* ✅ 5. دقة الكاميرا محسّنة (640x480 بدلاً من HD) */
+  const startCamera = useCallback(
+    async (cf: CameraFacing) => {
+      if (!mountedRef.current || startingRef.current) return;
+      startingRef.current = true;
+      setCameraStatus('starting');
+      setErrorMsg('');
+      setCameraReady(false);
 
-    try {
-      await hardStop();
-      await new Promise(r => setTimeout(r, 400));
-      if (!mountedRef.current) return;
+      try {
+        await hardStop();
+        await new Promise(r => setTimeout(r, 400));
+        if (!mountedRef.current) return;
 
-      const region = document.getElementById(QR_REGION_ID);
-      if (region) region.innerHTML = '';
+        const region = document.getElementById(QR_REGION_ID);
+        if (region) region.innerHTML = '';
 
-      const qrBox = getQrBox();
-      const mobile = device.tier !== 'high';
+        const qrBox = getQrBox();
 
-      const attempts = mobile
-        ? [
-            {
-              constraints: {
-                facingMode: cf,
-                width: { ideal: 640 },
-                height: { ideal: 480 },
-                frameRate: { ideal: 24, min: 15 }
-              },
-              fps: Math.min(device.fps, 15),
-              box: qrBox
+        // ✅ 5. دقة محسّنة
+        const attempts = [
+          {
+            constraints: {
+              facingMode: cf,
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              frameRate: { ideal: device.fps, min: 12 },
             },
-            {
-              constraints: {
-                facingMode: cf,
-                width: { ideal: 480 },
-                height: { ideal: 360 },
-                frameRate: { ideal: 15 }
-              },
-              fps: 10,
-              box: qrBox
+            fps: device.fps,
+            box: qrBox,
+          },
+          {
+            constraints: {
+              facingMode: cf,
+              width: { ideal: 480 },
+              height: { ideal: 360 },
             },
-            {
-              constraints: { facingMode: cf },
-              fps: 8,
-              box: { width: 200, height: 200 }
-            },
-          ]
-        : [
-            {
-              constraints: {
-                facingMode: cf,
-                width: { ideal: 1280, min: 640 },
-                height: { ideal: 720, min: 480 },
-                frameRate: { ideal: 30, min: 15 }
-              },
-              fps: device.fps,
-              box: qrBox
-            },
-            {
-              constraints: {
-                facingMode: cf,
-                width: { ideal: 640 },
-                height: { ideal: 480 }
-              },
-              fps: Math.min(device.fps, 20),
-              box: qrBox
-            },
-            {
-              constraints: { facingMode: cf },
-              fps: 10,
-              box: { width: 200, height: 200 }
-            },
-          ];
+            fps: Math.max(10, device.fps - 5),
+            box: qrBox,
+          },
+          {
+            constraints: { facingMode: cf },
+            fps: 8,
+            box: { width: 200, height: 200 },
+          },
+        ];
 
-      let scanner: Html5Qrcode | null = null;
+        let scanner: Html5Qrcode | null = null;
 
-      for (const att of attempts) {
-        try {
-          const s = new Html5Qrcode(QR_REGION_ID, { verbose: false });
-          await s.start(
-            { facingMode: cf },
-            {
-              fps: att.fps,
-              qrbox: att.box,
-              aspectRatio: window.innerHeight > window.innerWidth ? 4 / 3 : 16 / 9,
-              disableFlip: true,
-              videoConstraints: att.constraints
-            },
-            onDecoded,
-            () => {}
-          );
-          scanner = s;
-          break;
-        } catch {
-          const r2 = document.getElementById(QR_REGION_ID);
-          if (r2) r2.innerHTML = '';
-          await new Promise(r => setTimeout(r, 350));
-        }
-      }
-
-      if (!scanner || !mountedRef.current) {
-        if (scanner) {
+        for (const att of attempts) {
           try {
-            await scanner.stop();
-          } catch {}
-        }
-        throw new Error('all failed');
-      }
-
-      scannerRef.current = scanner;
-      await new Promise(r => setTimeout(r, 500));
-
-      const vid = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
-      if (vid?.srcObject) {
-        const track = (vid.srcObject as MediaStream).getVideoTracks()[0];
-        if (track) {
-          trackRef.current = track;
-          const caps = (track.getCapabilities?.() || {}) as any;
-
-          for (const [cap, val] of [
-            ['focusMode', 'continuous'],
-            ['exposureMode', 'continuous'],
-            ['whiteBalanceMode', 'continuous']
-          ] as const) {
-            if (caps[cap]?.includes?.(val)) {
-              try {
-                await track.applyConstraints({ advanced: [{ [cap]: val } as any] });
-              } catch {}
-            }
+            const s = new Html5Qrcode(QR_REGION_ID, { verbose: false });
+            await s.start(
+              { facingMode: cf },
+              {
+                fps: att.fps,
+                qrbox: att.box,
+                aspectRatio: window.innerHeight > window.innerWidth ? 4 / 3 : 16 / 9,
+                disableFlip: true,
+                videoConstraints: att.constraints,
+              },
+              onDecoded,
+              () => {}
+            );
+            scanner = s;
+            break;
+          } catch {
+            const r2 = document.getElementById(QR_REGION_ID);
+            if (r2) r2.innerHTML = '';
+            await new Promise(r => setTimeout(r, 350));
           }
+        }
 
-          if (caps.zoom && caps.zoom.max > caps.zoom.min) {
-            setMinZoom(caps.zoom.min);
-            setMaxZoom(caps.zoom.max);
-            setCanZoom(true);
+        if (!scanner || !mountedRef.current) {
+          if (scanner) {
             try {
-              await track.applyConstraints({ advanced: [{ zoom: caps.zoom.min } as any] });
-              setZoom(caps.zoom.min);
+              await scanner.stop();
             } catch {}
-          } else {
-            setCanZoom(false);
-            setMinZoom(1);
-            setMaxZoom(1);
           }
-
-          setHasTorch(!!caps.torch);
+          throw new Error('all failed');
         }
-      }
 
-      if (mountedRef.current) {
-        setCameraReady(true);
-        setCameraStatus('ready');
-      }
-    } catch (err: any) {
-      if (!mountedRef.current) return;
-      setCameraStatus('error');
+        scannerRef.current = scanner;
+        await new Promise(r => setTimeout(r, 500));
 
-      const msg = err?.message || '';
-      if (msg.includes('NotAllowed') || msg.includes('Permission')) {
-        setErrorMsg('يرجى السماح باستخدام الكاميرا');
-      } else if (msg.includes('NotFound')) {
-        setErrorMsg('لا توجد كاميرا');
-      } else {
-        setErrorMsg(`فشل: ${msg.slice(0, 60)}`);
-      }
+        const vid = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
+        if (vid?.srcObject) {
+          const track = (vid.srcObject as MediaStream).getVideoTracks()[0];
+          if (track) {
+            trackRef.current = track;
+            const caps = (track.getCapabilities?.() || {}) as any;
 
-      setTimeout(() => {
-        if (mountedRef.current) startCamera(cf);
-      }, 4000);
-    } finally {
-      startingRef.current = false;
-    }
-  }, [device.fps, device.tier, hardStop]);
+            for (const [cap, val] of [
+              ['focusMode', 'continuous'],
+              ['exposureMode', 'continuous'],
+              ['whiteBalanceMode', 'continuous'],
+            ] as const) {
+              if (caps[cap]?.includes?.(val)) {
+                try {
+                  await track.applyConstraints({ advanced: [{ [cap]: val } as any] });
+                } catch {}
+              }
+            }
+
+            if (caps.zoom && caps.zoom.max > caps.zoom.min) {
+              setMinZoom(caps.zoom.min);
+              setMaxZoom(caps.zoom.max);
+              setCanZoom(true);
+              try {
+                await track.applyConstraints({ advanced: [{ zoom: caps.zoom.min } as any] });
+                setZoom(caps.zoom.min);
+              } catch {}
+            } else {
+              setCanZoom(false);
+              setMinZoom(1);
+              setMaxZoom(1);
+            }
+
+            setHasTorch(!!caps.torch);
+          }
+        }
+
+        if (mountedRef.current) {
+          setCameraReady(true);
+          setCameraStatus('ready');
+        }
+      } catch (err: any) {
+        if (!mountedRef.current) return;
+        setCameraStatus('error');
+
+        const msg = err?.message || '';
+        if (msg.includes('NotAllowed') || msg.includes('Permission')) {
+          setErrorMsg('يرجى السماح باستخدام الكاميرا');
+        } else if (msg.includes('NotFound')) {
+          setErrorMsg('لا توجد كاميرا');
+        } else {
+          setErrorMsg(`فشل: ${msg.slice(0, 60)}`);
+        }
+
+        setTimeout(() => {
+          if (mountedRef.current) startCamera(cf);
+        }, 4000);
+      } finally {
+        startingRef.current = false;
+      }
+    },
+    [device.fps, hardStop]
+  );
 
   const onDecoded = useCallback(
     async (text: string) => {
@@ -487,10 +480,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           lastScansRef.current[qrId] = now;
 
           if (alreadyPresentIds.has(student.id)) {
-            showToast(
-              { type: 'warning', title: '⚠️ مسجل', text: student.name },
-              1500
-            );
+            showToast({ type: 'warning', title: '⚠️ مسجل', text: student.name }, 1500);
             return;
           }
 
@@ -503,7 +493,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           showToast({
             type: 'success',
             title: `✅ ${student.name}`,
-            text: student.group ? `${student.group}` : 'تم'
+            text: student.group ? `${student.group}` : 'تم',
           });
         } else {
           const now = Date.now();
@@ -553,7 +543,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     await startCamera(nf);
   }, [facing, startCamera]);
 
-  /* ── Face Models Loading ── */
+  /* ─── Face Models Loading ─── */
   useEffect(() => {
     if (mode !== 'bulk' || faceModelsReady) return;
 
@@ -590,206 +580,206 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     };
   }, [mode, faceModelsReady, showToast]);
 
-  /* ── Canvas Overlay Animation ── */
-useEffect(() => {
-  if (mode !== 'bulk' || !cameraReady) {
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = null;
-    }
-    return;
-  }
-
-  const canvas = overlayCanvasRef.current;
-  const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
-
-  if (!canvas || !video) return;
-
-  const isFront = facing === 'user';
-  let frameCount = 0;
-
-  const draw = () => {
-    if (!mountedRef.current) return;
-    if (!canvas || !video || video.readyState < 2) {
-      animFrameRef.current = requestAnimationFrame(draw);
+  /* ✅ 6. Canvas Overlay - بدون requestAnimationFrame مع كشف */
+  useEffect(() => {
+    if (mode !== 'bulk' || !cameraReady) {
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
       return;
     }
 
-    const now = Date.now();
-    const map = detectedFacesRef.current;
+    const canvas = overlayCanvasRef.current;
+    const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
 
-    let hasLive = false;
-    map.forEach((f, k) => {
-      if (now - f.timestamp < BOX_FADE_MS) hasLive = true;
-      else map.delete(k);
-    });
+    if (!canvas || !video) return;
 
-    frameCount = (frameCount + 1) % 2;
-    if (!hasLive && frameCount !== 0) {
-      animFrameRef.current = requestAnimationFrame(draw);
-      return;
-    }
+    const isFront = facing === 'user';
+    let frameCount = 0;
 
-    const rect = video.getBoundingClientRect();
-    if (Math.abs(canvas.width - rect.width) > 1 || Math.abs(canvas.height - rect.height) > 1) {
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-    }
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      animFrameRef.current = requestAnimationFrame(draw);
-      return;
-    }
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
-    
-    if (!vw || !vh) {
-      animFrameRef.current = requestAnimationFrame(draw);
-      return;
-    }
-
-    // ✅ حساب letterbox
-    const videoAspect = vw / vh;
-    const canvasAspect = canvas.width / canvas.height;
-
-    let drawWidth = canvas.width;
-    let drawHeight = canvas.height;
-    let offsetX = 0;
-    let offsetY = 0;
-
-    if (videoAspect > canvasAspect) {
-      drawHeight = canvas.width / videoAspect;
-      offsetY = (canvas.height - drawHeight) / 2;
-    } else {
-      drawWidth = canvas.height * videoAspect;
-      offsetX = (canvas.width - drawWidth) / 2;
-    }
-
-    const sx = drawWidth / vw;
-    const sy = drawHeight / vh;
-
-    let visible = 0;
-
-    map.forEach(face => {
-      if (face.status === 'unknown') return;
-
-      const age = now - face.timestamp;
-      visible++;
-
-      const opacity = age < 200 ? age / 200 : Math.max(0.35, 1 - (age - 200) / BOX_FADE_MS);
-
-      let stroke = '#10b981';
-      let bg = 'rgba(16,185,129,0.92)';
-      let label = face.student?.name || '';
-
-      if (face.status === 'already') {
-        stroke = '#f59e0b';
-        bg = 'rgba(245,158,11,0.92)';
-        label = `✓ ${face.student?.name || ''}`;
+    const draw = () => {
+      if (!mountedRef.current) return;
+      if (!canvas || !video || video.readyState < 2) {
+        animFrameRef.current = requestAnimationFrame(draw);
+        return;
       }
 
-      let dx = face.box.x * sx + offsetX;
-      let dy = face.box.y * sy + offsetY;
-      const dw = face.box.width * sx;
-      const dh = face.box.height * sy;
+      const now = Date.now();
+      const map = detectedFacesRef.current;
 
-      if (isFront) {
-        dx = canvas.width - dx - dw;
+      let hasLive = false;
+      map.forEach((f, k) => {
+        if (now - f.timestamp < BOX_FADE_MS) hasLive = true;
+        else map.delete(k);
+      });
+
+      frameCount = (frameCount + 1) % 2;
+      if (!hasLive && frameCount !== 0) {
+        animFrameRef.current = requestAnimationFrame(draw);
+        return;
       }
 
-      ctx.globalAlpha = opacity;
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(dx, dy, dw, dh);
+      const rect = video.getBoundingClientRect();
+      if (Math.abs(canvas.width - rect.width) > 1 || Math.abs(canvas.height - rect.height) > 1) {
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+      }
 
-      const cl = Math.max(10, Math.min(18, dw * 0.18));
-      ctx.lineWidth = 3;
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = stroke;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        animFrameRef.current = requestAnimationFrame(draw);
+        return;
+      }
 
-      ctx.beginPath();
-      ctx.moveTo(dx, dy + cl);
-      ctx.lineTo(dx, dy);
-      ctx.lineTo(dx + cl, dy);
-      ctx.moveTo(dx + dw - cl, dy);
-      ctx.lineTo(dx + dw, dy);
-      ctx.lineTo(dx + dw, dy + cl);
-      ctx.moveTo(dx + dw, dy + dh - cl);
-      ctx.lineTo(dx + dw, dy + dh);
-      ctx.lineTo(dx + dw - cl, dy + dh);
-      ctx.moveTo(dx + cl, dy + dh);
-      ctx.lineTo(dx, dy + dh);
-      ctx.lineTo(dx, dy + dh - cl);
-      ctx.stroke();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      if (label) {
-        const fs = Math.max(10, Math.min(15, dw / 8));
-        ctx.font = `bold ${fs}px Arial`;
-        const tw = ctx.measureText(label).width;
-        const pad = 5;
-        const bw = tw + pad * 2;
-        const bh = fs + pad;
-        const bx = dx + (dw - bw) / 2;
-        const by = dy - bh - 5;
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
 
-        ctx.fillStyle = bg;
-        ctx.beginPath();
-        if (ctx.roundRect) {
-          ctx.roundRect(bx, by, bw, bh, 5);
-        } else {
-          ctx.rect(bx, by, bw, bh);
+      if (!vw || !vh) {
+        animFrameRef.current = requestAnimationFrame(draw);
+        return;
+      }
+
+      // ✅ حساب letterbox
+      const videoAspect = vw / vh;
+      const canvasAspect = canvas.width / canvas.height;
+
+      let drawWidth = canvas.width;
+      let drawHeight = canvas.height;
+      let offsetX = 0;
+      let offsetY = 0;
+
+      if (videoAspect > canvasAspect) {
+        drawHeight = canvas.width / videoAspect;
+        offsetY = (canvas.height - drawHeight) / 2;
+      } else {
+        drawWidth = canvas.height * videoAspect;
+        offsetX = (canvas.width - drawWidth) / 2;
+      }
+
+      const sx = drawWidth / vw;
+      const sy = drawHeight / vh;
+
+      let visible = 0;
+
+      map.forEach(face => {
+        if (face.status === 'unknown') return;
+
+        const age = now - face.timestamp;
+        visible++;
+
+        const opacity = age < 200 ? age / 200 : Math.max(0.35, 1 - (age - 200) / BOX_FADE_MS);
+
+        let stroke = '#10b981';
+        let bg = 'rgba(16,185,129,0.92)';
+        let label = face.student?.name || '';
+
+        if (face.status === 'already') {
+          stroke = '#f59e0b';
+          bg = 'rgba(245,158,11,0.92)';
+          label = `✓ ${face.student?.name || ''}`;
         }
-        ctx.fill();
 
-        ctx.fillStyle = '#fff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(label, bx + bw / 2, by + bh / 2);
+        let dx = face.box.x * sx + offsetX;
+        let dy = face.box.y * sy + offsetY;
+        const dw = face.box.width * sx;
+        const dh = face.box.height * sy;
 
-        if (face.confidence > 0 && face.status === 'recognized') {
-          const ct = `${face.confidence}%`;
-          ctx.font = `bold ${fs - 2}px Arial`;
-          const cw2 = ctx.measureText(ct).width + 8;
-          const ch2 = fs;
-          const cx2 = dx + (dw - cw2) / 2;
-          const cy2 = dy + dh + 3;
+        if (isFront) {
+          dx = canvas.width - dx - dw;
+        }
+
+        ctx.globalAlpha = opacity;
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(dx, dy, dw, dh);
+
+        const cl = Math.max(10, Math.min(18, dw * 0.18));
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = stroke;
+
+        ctx.beginPath();
+        ctx.moveTo(dx, dy + cl);
+        ctx.lineTo(dx, dy);
+        ctx.lineTo(dx + cl, dy);
+        ctx.moveTo(dx + dw - cl, dy);
+        ctx.lineTo(dx + dw, dy);
+        ctx.lineTo(dx + dw, dy + cl);
+        ctx.moveTo(dx + dw, dy + dh - cl);
+        ctx.lineTo(dx + dw, dy + dh);
+        ctx.lineTo(dx + dw - cl, dy + dh);
+        ctx.moveTo(dx + cl, dy + dh);
+        ctx.lineTo(dx, dy + dh);
+        ctx.lineTo(dx, dy + dh - cl);
+        ctx.stroke();
+
+        if (label) {
+          const fs = Math.max(10, Math.min(15, dw / 8));
+          ctx.font = `bold ${fs}px Arial`;
+          const tw = ctx.measureText(label).width;
+          const pad = 5;
+          const bw = tw + pad * 2;
+          const bh = fs + pad;
+          const bx = dx + (dw - bw) / 2;
+          const by = dy - bh - 5;
 
           ctx.fillStyle = bg;
           ctx.beginPath();
           if (ctx.roundRect) {
-            ctx.roundRect(cx2, cy2, cw2, ch2, 4);
+            ctx.roundRect(bx, by, bw, bh, 5);
           } else {
-            ctx.rect(cx2, cy2, cw2, ch2);
+            ctx.rect(bx, by, bw, bh);
           }
           ctx.fill();
 
           ctx.fillStyle = '#fff';
-          ctx.fillText(ct, cx2 + cw2 / 2, cy2 + ch2 / 2);
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(label, bx + bw / 2, by + bh / 2);
+
+          if (face.confidence > 0 && face.status === 'recognized') {
+            const ct = `${face.confidence}%`;
+            ctx.font = `bold ${fs - 2}px Arial`;
+            const cw2 = ctx.measureText(ct).width + 8;
+            const ch2 = fs;
+            const cx2 = dx + (dw - cw2) / 2;
+            const cy2 = dy + dh + 3;
+
+            ctx.fillStyle = bg;
+            ctx.beginPath();
+            if (ctx.roundRect) {
+              ctx.roundRect(cx2, cy2, cw2, ch2, 4);
+            } else {
+              ctx.rect(cx2, cy2, cw2, ch2);
+            }
+            ctx.fill();
+
+            ctx.fillStyle = '#fff';
+            ctx.fillText(ct, cx2 + cw2 / 2, cy2 + ch2 / 2);
+          }
         }
-      }
 
-      ctx.globalAlpha = 1;
-    });
+        ctx.globalAlpha = 1;
+      });
 
-    setBulkDetected(visible);
+      setBulkDetected(visible);
+      animFrameRef.current = requestAnimationFrame(draw);
+    };
+
     animFrameRef.current = requestAnimationFrame(draw);
-  };
 
-  animFrameRef.current = requestAnimationFrame(draw);
+    return () => {
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+    };
+  }, [mode, cameraReady, facing]);
 
-  return () => {
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = null;
-    }
-  };
-}, [mode, cameraReady, facing]);
-
-  /* ── Face Detection Loop ── */
+  /* ─── Face Loop Control ─── */
   const stopFaceLoop = useCallback(() => {
     faceRunningRef.current = false;
     if (faceTimerRef.current) {
@@ -819,29 +809,28 @@ useEffect(() => {
     []
   );
 
-  /* ══════════════════════════════════════════════════════════
-     🎯 Face Detection Loop - النسخة المُحسّنة
-  ══════════════════════════════════════════════════════════ */
+  /* ✅ 9. Optimized Face Loop - استخراج 3 Descriptors فقط عند وجه واضح */
   const startFaceLoop = useCallback(
     (sens: BulkSensitivity, cf: CameraFacing, faces: Student[]) => {
       stopFaceLoop();
       faceRunningRef.current = true;
 
-      // ✅ إنشاء tracker جديد
       if (!trackerRef.current) {
         trackerRef.current = new IOUTracker();
       } else {
         trackerRef.current.reset();
       }
 
-      let baseIntervalMs = sens === 'extreme' ? device.intervalMs * 0.6 : device.intervalMs;
+      let baseIntervalMs = sens === 'extreme' ? device.intervalMs * 0.7 : device.intervalMs;
       const useRegion = sens === 'far';
       const matchedTrackIds = new Map<number, Student>();
       const detectTimes: number[] = [];
 
-      // ✅ Debouncing Map
       const lastDetectionMap = new Map<string, number>();
       const DETECTION_COOLDOWN = 2000;
+
+      // ✅ 9. عداد لكل track
+      const trackDescriptorCount = new Map<number, number>();
 
       const loop = async () => {
         if (!faceRunningRef.current || !mountedRef.current) return;
@@ -866,19 +855,12 @@ useEffect(() => {
           return;
         }
 
-        // ✅ إصلاح: التحقق من وجود tracker
         if (!trackerRef.current) {
           trackerRef.current = new IOUTracker();
         }
 
-        // ✅ Frame Skipping الذكي
         const activeTracks = trackerRef.current.getActiveFaces().length;
-        const skip =
-          activeTracks > 0 && detectTimes.length > 10
-            ? activeTracks >= 3
-              ? 3
-              : 2
-            : 1;
+        const skip = activeTracks > 0 && detectTimes.length > 10 ? (activeTracks >= 3 ? 3 : 2) : 1;
 
         frameSkipRef.current = (frameSkipRef.current + 1) % skip;
 
@@ -890,20 +872,13 @@ useEffect(() => {
         const detectStart = performance.now();
 
         try {
-          const useH = sens === 'extreme' ? true : device.useHybrid;
-
           const detections = (await Promise.race([
-            useH
-              ? extractAllFaceDescriptorsHybrid(video, useRegion)
-              : extractAllFaceDescriptors(video, useRegion),
-            new Promise<never>((_, rej) =>
-              setTimeout(() => rej(new Error('timeout')), 2800)
-            ),
+            extractAllFaceDescriptors(video, useRegion),
+            new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 2800)),
           ])) as any[];
 
           if (!faceRunningRef.current || !mountedRef.current) return;
 
-          // ✅ Interval ديناميكي
           const dt = performance.now() - detectStart;
           detectTimes.push(dt);
           if (detectTimes.length > 60) detectTimes.shift();
@@ -916,7 +891,6 @@ useEffect(() => {
             baseIntervalMs = Math.max(baseIntervalMs - 40, 300);
           }
 
-          // ✅ إصلاح: التحقق مرة أخرى
           if (!trackerRef.current) return;
 
           const tracked = trackerRef.current.update(
@@ -927,13 +901,14 @@ useEffect(() => {
             if (!faceRunningRef.current) break;
 
             const box = det.detection.box;
-            const boxKey = `${Math.round(box.x / 35)}_${Math.round(box.y / 35)}_${Math.round(box.width / 35)}`;
+            const boxKey = `${Math.round(box.x / 35)}_${Math.round(box.y / 35)}_${Math.round(
+              box.width / 35
+            )}`;
             const now = Date.now();
 
-            const track = tracked.find(t => calculateIoU(t.box, box) > 0.30);
+            const track = tracked.find(t => calculateIoU(t.box, box) > 0.3);
             const matchedStudent = track && matchedTrackIds.get(track.id);
 
-            // ✅ Debouncing - تخطي الكشف المتكرر
             if (track && matchedStudent) {
               const lastSeen = lastDetectionMap.get(matchedStudent.id) || 0;
 
@@ -949,14 +924,22 @@ useEffect(() => {
               }
             }
 
-            // ✅ مقارنة تسلسلية مع Early Stop
+            // ✅ 9. استخراج 3 descriptors فقط لكل track
+            if (track) {
+              const count = trackDescriptorCount.get(track.id) || 0;
+              if (count >= 3) {
+                // تم استخراج 3 descriptors، نتخطى
+                continue;
+              }
+              trackDescriptorCount.set(track.id, count + 1);
+            }
+
             let bestMatch: { student: Student; confidence: number } | null = null;
             let bestDist = Infinity;
 
             for (const student of faces) {
               if (!student.faceDescriptor) continue;
 
-              // ✅ استخدام compareFaces
               const dist = compareFaces(det.descriptor, student.faceDescriptor);
 
               if (dist < bestDist && dist < CONFIDENCE_THRESHOLD) {
@@ -966,7 +949,6 @@ useEffect(() => {
                   confidence: Math.round((1 - dist / CONFIDENCE_THRESHOLD) * 100),
                 };
 
-                // ✅ Early Stop عند 95%
                 if (bestMatch.confidence >= 95) break;
               }
             }
@@ -989,7 +971,7 @@ useEffect(() => {
                 });
               } else {
                 lastScansRef.current[`bulk_${s.id}`] = now;
-                lastDetectionMap.set(s.id, now); // ✅ Debouncing
+                lastDetectionMap.set(s.id, now);
 
                 detectedFacesRef.current.set(boxKey, {
                   box: { x: box.x, y: box.y, width: box.width, height: box.height },
@@ -1057,21 +1039,24 @@ useEffect(() => {
     ]
   );
 
-  /* ── Face Loop Control ── */
   useEffect(() => {
-    if (
-      mode === 'bulk' &&
-      cameraReady &&
-      faceModelsReady &&
-      studentsWithFace.length > 0
-    ) {
+    if (mode === 'bulk' && cameraReady && faceModelsReady && studentsWithFace.length > 0) {
       startFaceLoop(sensitivity, facing, studentsWithFace);
     } else {
       stopFaceLoop();
     }
 
     return () => stopFaceLoop();
-  }, [mode, cameraReady, faceModelsReady, studentsWithFace, sensitivity, facing, startFaceLoop, stopFaceLoop]);
+  }, [
+    mode,
+    cameraReady,
+    faceModelsReady,
+    studentsWithFace,
+    sensitivity,
+    facing,
+    startFaceLoop,
+    stopFaceLoop,
+  ]);
 
   useEffect(() => {
     const fn = () => {
@@ -1091,7 +1076,6 @@ useEffect(() => {
     return () => document.removeEventListener('visibilitychange', fn);
   }, [mode, cameraReady, faceModelsReady, studentsWithFace, sensitivity, facing, startFaceLoop]);
 
-  /* ── Init & Cleanup ── */
   useEffect(() => {
     mountedRef.current = true;
 
@@ -1178,7 +1162,7 @@ useEffect(() => {
     [pendingQrId, onUpdateStudent, students, alreadyPresentIds, onMarkAttendance, showToast]
   );
 
-  /* ── Rendering ── */
+  /* ─── Rendering ─── */
   const isBulk = mode === 'bulk';
   const isFront = facing === 'user';
   const doMirror = isFront;
@@ -1208,9 +1192,7 @@ useEffect(() => {
           <h2 className="text-sm font-bold flex items-center gap-1.5 truncate">
             {isBulk ? '🎯 جماعي' : '🔳 QR'}
           </h2>
-          <p className="text-[10px] text-gray-400 truncate">
-            {activeSession?.name || 'لا سجل'}
-          </p>
+          <p className="text-[10px] text-gray-400 truncate">{activeSession?.name || 'لا سجل'}</p>
         </div>
         <div className="flex items-center gap-2">
           <div
@@ -1283,9 +1265,7 @@ useEffect(() => {
             <button
               onClick={() => setSensitivity('far')}
               className={`flex-1 py-2 rounded-lg font-bold active:scale-95 ${
-                sensitivity === 'far'
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-white/10 text-gray-300'
+                sensitivity === 'far' ? 'bg-emerald-600 text-white' : 'bg-white/10 text-gray-300'
               }`}
             >
               🎯 متوازن
@@ -1293,9 +1273,7 @@ useEffect(() => {
             <button
               onClick={() => setSensitivity('extreme')}
               className={`flex-1 py-2 rounded-lg font-bold active:scale-95 ${
-                sensitivity === 'extreme'
-                  ? 'bg-red-600 text-white'
-                  : 'bg-white/10 text-gray-300'
+                sensitivity === 'extreme' ? 'bg-red-600 text-white' : 'bg-white/10 text-gray-300'
               }`}
             >
               🔍 بعيد
@@ -1351,10 +1329,7 @@ useEffect(() => {
             )}
             {cameraReady && !isBulk && (
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                <div
-                  className="relative"
-                  style={{ width: getQrBox().width, height: getQrBox().height }}
-                >
+                <div className="relative" style={{ width: getQrBox().width, height: getQrBox().height }}>
                   {[
                     'top-0 right-0 border-t-2 border-r-2 rounded-tr-lg',
                     'top-0 left-0 border-t-2 border-l-2 rounded-tl-lg',
