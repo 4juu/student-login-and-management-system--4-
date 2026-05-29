@@ -827,7 +827,7 @@ if (loading || !tokenChecked) {
 
   return (
     <div className="min-h-screen bg-slate-900" dir="rtl">
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-3 md:px-4 py-3 md:py-6">
         <div className="mb-8">
           <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
             <div className="flex items-center gap-3">
@@ -876,7 +876,7 @@ if (loading || !tokenChecked) {
             </div>
           </div>
 
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2 text-center">
+          <h1 className="text-xl sm:text-3xl md:text-4xl font-bold text-gray-800 mb-1 sm:mb-2 text-center">
             نظام إدارة الحضور
           </h1>
 
@@ -901,10 +901,10 @@ if (loading || !tokenChecked) {
 
         {!selectedStageId && (
           <div className="max-w-6xl mx-auto">
-            <div className="flex flex-wrap justify-center gap-3 mb-6">
+            <div className="flex overflow-x-auto flex-nowrap md:flex-wrap gap-2 md:gap-3 pb-1 md:pb-0 justify-start md:justify-center mb-4 md:mb-6 scrollbar-none">
               <button
                 onClick={() => setActiveTab('stage-selector')}
-                className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'stage-selector' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'stage-selector' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
               >
                 🎯 اختيار المرحلة
               </button>
@@ -912,19 +912,19 @@ if (loading || !tokenChecked) {
                 <>
                   <button
                     onClick={() => setActiveTab('colleges')}
-                    className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'colleges' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                    className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'colleges' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
                   >
                     🏛️ إدارة الكليات
                   </button>
                   <button
                     onClick={() => setActiveTab('teachers')}
-                    className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'teachers' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                    className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'teachers' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
                   >
                     👨‍🏫 التدريسيين
                   </button>
                   <button
                     onClick={() => setActiveTab('system-settings')}
-                    className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'system-settings' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                    className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'system-settings' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
                   >
                     ⚙️ إعدادات النظام
                   </button>
@@ -934,13 +934,13 @@ if (loading || !tokenChecked) {
                 <>
                   <button
                     onClick={() => setShowSendLink(true)}
-                    className="px-5 py-2 rounded-lg font-medium bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md hover:from-purple-700 hover:to-pink-700 transition"
+                    className="shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md hover:from-purple-700 hover:to-pink-700 transition"
                   >
                     📨 إرسال روابط تسجيل
                   </button>
                   <button
                     onClick={() => setShowPendingRegistrations(true)}
-                    className="relative px-5 py-2 rounded-lg font-medium bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:from-amber-600 hover:to-orange-600 transition"
+                    className="shrink-0 relative px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:from-amber-600 hover:to-orange-600 transition"
                   >
                     📋 طلبات التسجيل
                     {pendingCount > 0 && (
@@ -954,14 +954,14 @@ if (loading || !tokenChecked) {
               {isCollegeAdmin && (
                 <button
                   onClick={() => setActiveTab('teachers')}
-                  className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'teachers' ? 'bg-amber-600 text-white' : 'bg-white text-gray-700'}`}
+                  className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'teachers' ? 'bg-amber-600 text-white' : 'bg-white text-gray-700'}`}
                 >
                   👨‍🏫 صلاحيات التدريسيين
                 </button>
               )}
               <button
                 onClick={() => setActiveTab('profile')}
-                className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'profile' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'profile' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
               >
                 👤 الملف الشخصي
               </button>
@@ -1055,28 +1055,28 @@ if (loading || !tokenChecked) {
 
         {selectedStageId && (
           <div className="max-w-6xl mx-auto">
-            <div className="flex flex-wrap justify-center gap-3 mb-6">
+            <div className="flex overflow-x-auto flex-nowrap md:flex-wrap gap-2 md:gap-3 pb-1 md:pb-0 justify-start md:justify-center mb-4 md:mb-6 scrollbar-none">
               <button
                 onClick={() => setActiveTab('sessions')}
-                className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'sessions' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'sessions' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
               >
                 📋 السجلات ({sessions.length})
               </button>
               <button
                 onClick={() => setActiveTab('login')}
-                className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'login' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'login' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
               >
                 📝 تسجيل الحضور
               </button>
               <button
                 onClick={() => setActiveTab('manage')}
-                className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'manage' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'manage' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
               >
                 👥 {canEditStudents ? `إدارة الطلاب (${students.length})` : `الطلاب (${students.length})`}
               </button>
               <button
                 onClick={() => setActiveTab('records')}
-                className={`px-5 py-2 rounded-lg font-medium ${activeTab === 'records' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'records' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
               >
                 📊 سجل الحضور ({attendanceRecords.length})
               </button>

@@ -460,7 +460,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
           <label className="block text-sm font-bold text-gray-700 mb-3">اختر المدة الزمنية للتصدير:</label>
 
           <div className="flex flex-wrap gap-6 mb-4">
-            <label className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition flex-1 min-w-[200px] ${exportType === 'range' ? 'border-green-600 bg-green-50 font-bold text-green-800' : 'border-gray-200 hover:bg-gray-50'}`}>
+            <label className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition flex-1 min-w-[140px] sm:min-w-[200px] ${exportType === 'range' ? 'border-green-600 bg-green-50 font-bold text-green-800' : 'border-gray-200 hover:bg-gray-50'}`}>
               <input
                 type="radio"
                 name="exportType"
@@ -471,7 +471,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
               <span>📅 مدة زمنية (من - إلى)</span>
             </label>
 
-            <label className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition flex-1 min-w-[200px] ${exportType === 'single' ? 'border-green-600 bg-green-50 font-bold text-green-800' : 'border-gray-200 hover:bg-gray-50'}`}>
+            <label className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition flex-1 min-w-[140px] sm:min-w-[200px] ${exportType === 'single' ? 'border-green-600 bg-green-50 font-bold text-green-800' : 'border-gray-200 hover:bg-gray-50'}`}>
               <input
                 type="radio"
                 name="exportType"
@@ -566,7 +566,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-wrap">
             {sessions.length > 0 && (
               <select
                 value={selectedSessionId}
@@ -670,21 +670,21 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
           </div>
         )}
 
-        <div className="overflow-x-auto max-h-[500px] overflow-y-auto border rounded-lg">
+          <div className="overflow-x-auto max-h-[500px] overflow-y-auto border rounded-lg">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50 sticky top-0">
               <tr>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">#</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الرمز</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الاسم</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الكروب</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">التاريخ والوقت</th>
+                <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">#</th>
+                <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الرمز</th>
+                <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الاسم</th>
+                <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الكروب</th>
+                <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">التاريخ والوقت</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {paginatedRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500 text-sm font-medium">
+                  <td colSpan={5} className="px-3 sm:px-6 py-8 text-center text-gray-500 text-sm font-medium">
                     {searchRecord || selectedSessionId !== 'all'
                       ? '🔍 لا توجد نتائج مطابقة'
                       : 'لا توجد سجلات حضور مدخلة'}
@@ -695,15 +695,15 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
                   const globalIndex = filteredRecords.length - ((safeCurrentPage - 1) * pageSize + index);
                   return (
                     <tr key={record.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-3 text-sm text-gray-500">{globalIndex}</td>
-                      <td className="px-6 py-3">
+                      <td className="px-3 sm:px-6 py-3 text-sm text-gray-500">{globalIndex}</td>
+                      <td className="px-3 sm:px-6 py-3">
                         <span className="px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
                           {record.studentCode}
                         </span>
                       </td>
-                      <td className="px-6 py-3 font-medium text-gray-900 text-sm">{record.studentName}</td>
-                      <td className="px-6 py-3 text-sm text-gray-600">{record.studentGroup || '-'}</td>
-                      <td className="px-6 py-3 text-xs text-gray-500">
+                      <td className="px-3 sm:px-6 py-3 font-medium text-gray-900 text-sm">{record.studentName}</td>
+                      <td className="px-3 sm:px-6 py-3 text-sm text-gray-600">{record.studentGroup || '-'}</td>
+                      <td className="px-3 sm:px-6 py-3 text-xs text-gray-500">
                         {record.date} - {record.time}
                         {record.method === 'qr' && (
                           <span className="mr-2 inline-block px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold">

@@ -982,7 +982,7 @@ ${dataContext}`;
                 damping: 24,
                 mass: 0.7,
               }}
-            className="fixed bottom-6 right-6 z-50 overflow-hidden border border-gray-200 shadow-2xl max-w-[calc(100vw-3rem)] max-h-[calc(100vh-3rem)] overscroll-contain"
+            className="fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-50 overflow-hidden border border-gray-200 shadow-2xl max-w-[calc(100vw-1.5rem)] sm:max-w-[calc(100vw-3rem)] max-h-[calc(100vh-3rem)] overscroll-contain"
             style={{ backgroundColor: '#ffffff' }}
             onKeyDown={e => { e.stopPropagation(); }}
             onKeyUp={e => { e.stopPropagation(); }}

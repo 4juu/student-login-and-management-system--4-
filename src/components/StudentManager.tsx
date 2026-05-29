@@ -887,7 +887,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                     onSortByName();
                   }
                 }}
-                className="flex-1 min-w-[200px] px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-medium rounded-md transition duration-200 shadow-md"
+                className="flex-1 min-w-[140px] sm:min-w-[200px] px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-medium rounded-md transition duration-200 shadow-md"
               >
                 🔤 ترتيب أبجدي حسب الاسم
               </button>
@@ -899,7 +899,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                     onSortByGroup();
                   }
                 }}
-                className="flex-1 min-w-[200px] px-4 py-2 bg-gradient-to-r from-pink-600 to-pink-700 hover:from-pink-700 hover:to-pink-800 text-white font-medium rounded-md transition duration-200 shadow-md"
+                className="flex-1 min-w-[140px] sm:min-w-[200px] px-4 py-2 bg-gradient-to-r from-pink-600 to-pink-700 hover:from-pink-700 hover:to-pink-800 text-white font-medium rounded-md transition duration-200 shadow-md"
               >
                 👥 ترتيب حسب الكروب + الاسم
               </button>
@@ -1058,9 +1058,9 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الرمز</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الاسم</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الكروب</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">🪪 الرقم الجامعي</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">🔳 رمز QR</th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">😊 الوجه</th>
+              <th className="hidden md:table-cell px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">🪪 الرقم الجامعي</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">🔳 رمز QR</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">😊 الوجه</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">إجراءات</th>
             </tr>
           </thead>
@@ -1189,7 +1189,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                       )}
                     </td>
 
-                    <td className="px-4 py-4 whitespace-nowrap text-right">
+                    <td className="hidden md:table-cell px-4 py-4 whitespace-nowrap text-right">
                       {editingUniIdStudent === student.id ? (
                         <div className="flex items-center gap-1">
                           <input
@@ -1240,7 +1240,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                       )}
                     </td>
 
-                    <td className="px-4 py-4 whitespace-nowrap text-right">
+                    <td className="hidden sm:table-cell px-4 py-4 whitespace-nowrap text-right">
                       {editingQrStudent === student.id ? (
                         <div className="flex items-center gap-1">
                           <input
@@ -1308,7 +1308,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                       )}
                     </td>
 
-                    <td className="px-4 py-4 whitespace-nowrap text-center">
+                    <td className="hidden sm:table-cell px-4 py-4 whitespace-nowrap text-center">
                       <div className="flex items-center justify-center gap-1">
                         {hasFace ? (
                           <>

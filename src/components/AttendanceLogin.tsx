@@ -213,14 +213,14 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
               {codeDigits.map((digit, index) => (
                 <div
                   key={index}
-                  className={`w-16 h-20 md:w-20 md:h-24 flex items-center justify-center rounded-xl border-2 transition-all duration-200 ${
+                  className={`w-14 h-16 sm:w-16 sm:h-20 md:w-20 md:h-24 flex items-center justify-center rounded-xl border-2 transition-all duration-200 ${
                     digit
                       ? 'bg-gradient-to-br from-blue-500 to-blue-600 border-blue-700 text-white shadow-lg scale-105'
                       : 'bg-white border-gray-300 text-gray-300'
                   }`}
                   style={{ fontFamily: 'Arial, sans-serif' }}
                 >
-                  <span className="text-4xl md:text-5xl font-bold" style={{ fontFeatureSettings: '"tnum"' }}>
+                  <span className="text-3xl sm:text-4xl md:text-5xl font-bold" style={{ fontFeatureSettings: '"tnum"' }}>
                     {digit || '·'}
                   </span>
                 </div>
@@ -250,7 +250,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-3 max-w-sm mx-auto" dir="ltr">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full max-w-sm mx-auto" dir="ltr">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => {
             const numStr = num.toString();
             const isPressed = pressedKey === numStr;
@@ -259,7 +259,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
                 key={num}
                 onClick={() => handleCodeInput(numStr)}
                 disabled={code.length >= 4}
-                className={`relative overflow-hidden bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 active:from-blue-700 active:to-blue-800 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white text-3xl font-bold py-5 rounded-xl transition-all duration-150 shadow-md hover:shadow-lg transform active:scale-95 ${
+                className={`relative overflow-hidden bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 active:from-blue-700 active:to-blue-800 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white text-2xl sm:text-3xl font-bold py-3 sm:py-5 rounded-xl transition-all duration-150 shadow-md hover:shadow-lg transform active:scale-95 ${
                   isPressed ? 'scale-95 from-blue-700 to-blue-800 shadow-inner' : ''
                 }`}
                 style={{ fontFamily: 'Arial, sans-serif' }}
@@ -271,7 +271,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
 
           <button
             onClick={handleClear}
-            className={`bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white text-base font-bold py-5 rounded-xl transition-all duration-150 shadow-md hover:shadow-lg transform active:scale-95 flex items-center justify-center gap-1 ${
+            className={`bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white text-sm sm:text-base font-bold py-3 sm:py-5 rounded-xl transition-all duration-150 shadow-md hover:shadow-lg transform active:scale-95 flex items-center justify-center gap-1 ${
               pressedKey === 'clear' ? 'scale-95 from-red-700 to-red-800 shadow-inner' : ''
             }`}
           >
@@ -281,7 +281,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
           <button
             onClick={() => handleCodeInput('0')}
             disabled={code.length >= 4}
-            className={`bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white text-3xl font-bold py-5 rounded-xl transition-all duration-150 shadow-md hover:shadow-lg transform active:scale-95 ${
+            className={`bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white text-2xl sm:text-3xl font-bold py-3 sm:py-5 rounded-xl transition-all duration-150 shadow-md hover:shadow-lg transform active:scale-95 ${
               pressedKey === '0' ? 'scale-95 from-blue-700 to-blue-800 shadow-inner' : ''
             }`}
             style={{ fontFamily: 'Arial, sans-serif' }}
@@ -291,7 +291,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
 
           <button
             onClick={handleBackspace}
-            className={`bg-gradient-to-br from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-2xl font-bold py-5 rounded-xl transition-all duration-150 shadow-md hover:shadow-lg transform active:scale-95 flex items-center justify-center ${
+            className={`bg-gradient-to-br from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xl sm:text-2xl font-bold py-3 sm:py-5 rounded-xl transition-all duration-150 shadow-md hover:shadow-lg transform active:scale-95 flex items-center justify-center ${
               pressedKey === 'backspace' ? 'scale-95' : ''
             }`}
           >

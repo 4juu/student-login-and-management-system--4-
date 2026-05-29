@@ -225,7 +225,7 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
           {/* إطار */}
           {!loading && currentStudent && (
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-              <div className="w-64 h-80 lg:w-72 lg:h-96 border-4 border-purple-400/60 rounded-3xl shadow-[0_0_30px_rgba(168,85,247,0.3)]" />
+              <div className="w-56 sm:w-64 h-72 sm:h-80 lg:w-72 lg:h-96 border-4 border-purple-400/60 rounded-3xl shadow-[0_0_30px_rgba(168,85,247,0.3)]" />
             </div>
           )}
 
