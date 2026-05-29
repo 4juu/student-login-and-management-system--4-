@@ -382,9 +382,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
             <div className="text-sm text-yellow-800">
               <p className="font-medium mb-1">💡 ملاحظة</p>
               <p>السجل النشط هو الذي سيتم تسجيل الحضور فيه. يمكنك تبديل السجل في أي وقت.</p>
-              <p className="mt-1">
-                🔴 يمكنك تسجيل غياب الكروبات بالضغط على زر <strong>"غياب"</strong> بجانب أي سجل.
-              </p>
+
             </div>
           </div>
         </div>

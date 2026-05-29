@@ -366,12 +366,7 @@ export const CollegeManager: React.FC<CollegeManagerProps> = ({
         </div>
       )}
 
-      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <p className="text-sm text-blue-800">
-          💡 <strong>تلميح:</strong> أنشئ الكلية أولاً (مثل: كلية الصيدلة)، ثم أضف المراحل بداخلها (5 مراحل). 
-          بعدها افتح كل مرحلة لإدارة طلابها وسجلاتها بشكل منفصل.
-        </p>
-      </div>
+
     </div>
   );
 };

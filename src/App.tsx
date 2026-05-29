@@ -999,11 +999,6 @@ if (loading || !tokenChecked) {
                       : '⚡ تحميل بيانات الجامعة'}
                   </button>
                 </div>
-                {!universityDataLoaded && (
-                  <p className="text-[11px] text-purple-600 mt-2 bg-white/50 px-2 py-1 rounded">
-                    💡 الميزة موفرة - يتم التحميل فقط عند الحاجة لتقليل استهلاك الإنترنت
-                  </p>
-                )}
               </div>
             )}
 

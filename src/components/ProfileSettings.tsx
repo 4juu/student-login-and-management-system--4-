@@ -489,27 +489,13 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
             <p className="font-medium mb-1">   معلومات </p>
             <ul className="list-disc list-inside space-y-1">
               <li>الحد الأقصى للصورة 1MB لأفضل أداء</li>
-              <li>البايو يستخدم لتعريف التدريسيين والمواد</li>
-              <li>
-                <strong>البيانات تُحمّل تلقائياً عند تسجيل الدخول ✓</strong>
-              </li>
+
             </ul>
           </div>
         </div>
       </div>
 
-      {/* Status Indicator */}
-      <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <p className="text-sm text-gray-700 font-medium">
-              متصل بـ Firebase
-            </p>
-          </div>
-          <p className="text-xs text-gray-600"></p>
-        </div>
-      </div>
+
     </div>
   );
 };

@@ -852,12 +852,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                 </div>
               )}
 
-              {compressionStats.compressedCount > 0 && compressionStats.uncompressedCount === 0 && (
-                <div className="mt-2 text-[11px] text-emerald-700 bg-emerald-50 p-2 rounded border border-emerald-200 flex items-center gap-1">
-                  <span className="text-base">✨</span>
-                  <span>ممتاز! كل البصمات مضغوطة. توفر <strong>~75%</strong> من المساحة في قاعدة البيانات.</span>
-                </div>
-              )}
+
             </div>
           )}
 

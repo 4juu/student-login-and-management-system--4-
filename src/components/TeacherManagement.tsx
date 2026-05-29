@@ -705,11 +705,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
           </div>
         )}
 
-        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-          💡 <strong>اختر كلية</strong> لعرض وإدارة التدريسيين التابعين لها.
-          <br />
-          🔧 إذا عندك تدريسيين قدامى ما يطلعلهم زر "الصلاحيات" يشتغل، اضغط على زر <strong>"إصلاح التدريسيين القدامى"</strong> أولاً.
-        </div>
+
       </div>
     );
   }
@@ -1037,9 +1033,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
       <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
         💡 <strong>كيف تعمل الصلاحيات:</strong> لما تحدد مراحل لتدريسي، راح يشوف فقط هذي المراحل وطلابها. ما يقدر يضيف أو يحذف الطلاب - فقط يسجل الحضور.
-        <br />
-        🔧 إذا عندك تدريسيين قدامى ما يطلعلهم زر "الصلاحيات" يشتغل، اضغط على زر <strong>"إصلاح التدريسيين القدامى"</strong> أولاً.
-        <br />
+
         🔓 إذا تدريسي ظهر بحالة "معطّل" بعد التصفير السنوي، اضغط <strong>"إعادة تفعيل"</strong> ثم حدد له المراحل الجديدة.
       </div>
     </div>
