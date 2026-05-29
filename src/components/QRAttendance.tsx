@@ -591,178 +591,203 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   }, [mode, faceModelsReady, showToast]);
 
   /* ── Canvas Overlay Animation ── */
-  useEffect(() => {
-    if (mode !== 'bulk' || !cameraReady) {
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = null;
-      }
+useEffect(() => {
+  if (mode !== 'bulk' || !cameraReady) {
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    return;
+  }
+
+  const canvas = overlayCanvasRef.current;
+  const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
+
+  if (!canvas || !video) return;
+
+  const isFront = facing === 'user';
+  let frameCount = 0;
+
+  const draw = () => {
+    if (!mountedRef.current) return;
+    if (!canvas || !video || video.readyState < 2) {
+      animFrameRef.current = requestAnimationFrame(draw);
       return;
     }
 
-    const canvas = overlayCanvasRef.current;
-    const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
+    const now = Date.now();
+    const map = detectedFacesRef.current;
 
-    if (!canvas || !video) return;
+    let hasLive = false;
+    map.forEach((f, k) => {
+      if (now - f.timestamp < BOX_FADE_MS) hasLive = true;
+      else map.delete(k);
+    });
 
-    const isFront = facing === 'user';
-    let frameCount = 0;
+    frameCount = (frameCount + 1) % 2;
+    if (!hasLive && frameCount !== 0) {
+      animFrameRef.current = requestAnimationFrame(draw);
+      return;
+    }
 
-    const draw = () => {
-      if (!mountedRef.current) return;
-      if (!canvas || !video || video.readyState < 2) {
-        animFrameRef.current = requestAnimationFrame(draw);
-        return;
+    const rect = video.getBoundingClientRect();
+    if (Math.abs(canvas.width - rect.width) > 1 || Math.abs(canvas.height - rect.height) > 1) {
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      animFrameRef.current = requestAnimationFrame(draw);
+      return;
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    
+    if (!vw || !vh) {
+      animFrameRef.current = requestAnimationFrame(draw);
+      return;
+    }
+
+    // ✅ حساب letterbox
+    const videoAspect = vw / vh;
+    const canvasAspect = canvas.width / canvas.height;
+
+    let drawWidth = canvas.width;
+    let drawHeight = canvas.height;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (videoAspect > canvasAspect) {
+      drawHeight = canvas.width / videoAspect;
+      offsetY = (canvas.height - drawHeight) / 2;
+    } else {
+      drawWidth = canvas.height * videoAspect;
+      offsetX = (canvas.width - drawWidth) / 2;
+    }
+
+    const sx = drawWidth / vw;
+    const sy = drawHeight / vh;
+
+    let visible = 0;
+
+    map.forEach(face => {
+      if (face.status === 'unknown') return;
+
+      const age = now - face.timestamp;
+      visible++;
+
+      const opacity = age < 200 ? age / 200 : Math.max(0.35, 1 - (age - 200) / BOX_FADE_MS);
+
+      let stroke = '#10b981';
+      let bg = 'rgba(16,185,129,0.92)';
+      let label = face.student?.name || '';
+
+      if (face.status === 'already') {
+        stroke = '#f59e0b';
+        bg = 'rgba(245,158,11,0.92)';
+        label = `✓ ${face.student?.name || ''}`;
       }
 
-      const now = Date.now();
-      const map = detectedFacesRef.current;
+      let dx = face.box.x * sx + offsetX;
+      let dy = face.box.y * sy + offsetY;
+      const dw = face.box.width * sx;
+      const dh = face.box.height * sy;
 
-      let hasLive = false;
-      map.forEach((f, k) => {
-        if (now - f.timestamp < BOX_FADE_MS) hasLive = true;
-        else map.delete(k);
-      });
-
-      frameCount = (frameCount + 1) % 2;
-      if (!hasLive && frameCount !== 0) {
-        animFrameRef.current = requestAnimationFrame(draw);
-        return;
+      if (isFront) {
+        dx = canvas.width - dx - dw;
       }
 
-      const rect = video.getBoundingClientRect();
-      if (Math.abs(canvas.width - rect.width) > 1 || Math.abs(canvas.height - rect.height) > 1) {
-        canvas.width = rect.width;
-        canvas.height = rect.height;
-      }
+      ctx.globalAlpha = opacity;
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(dx, dy, dw, dh);
 
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        animFrameRef.current = requestAnimationFrame(draw);
-        return;
-      }
+      const cl = Math.max(10, Math.min(18, dw * 0.18));
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = stroke;
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.beginPath();
+      ctx.moveTo(dx, dy + cl);
+      ctx.lineTo(dx, dy);
+      ctx.lineTo(dx + cl, dy);
+      ctx.moveTo(dx + dw - cl, dy);
+      ctx.lineTo(dx + dw, dy);
+      ctx.lineTo(dx + dw, dy + cl);
+      ctx.moveTo(dx + dw, dy + dh - cl);
+      ctx.lineTo(dx + dw, dy + dh);
+      ctx.lineTo(dx + dw - cl, dy + dh);
+      ctx.moveTo(dx + cl, dy + dh);
+      ctx.lineTo(dx, dy + dh);
+      ctx.lineTo(dx, dy + dh - cl);
+      ctx.stroke();
 
-      const vw = video.videoWidth || 1280;
-      const vh = video.videoHeight || 720;
-      const sx = canvas.width / vw;
-      const sy = canvas.height / vh;
+      if (label) {
+        const fs = Math.max(10, Math.min(15, dw / 8));
+        ctx.font = `bold ${fs}px Arial`;
+        const tw = ctx.measureText(label).width;
+        const pad = 5;
+        const bw = tw + pad * 2;
+        const bh = fs + pad;
+        const bx = dx + (dw - bw) / 2;
+        const by = dy - bh - 5;
 
-      let visible = 0;
-
-      map.forEach(face => {
-        if (face.status === 'unknown') return;
-
-        const age = now - face.timestamp;
-        visible++;
-
-        const opacity = age < 200 ? age / 200 : Math.max(0.35, 1 - (age - 200) / BOX_FADE_MS);
-
-        let stroke = '#10b981';
-        let bg = 'rgba(16,185,129,0.92)';
-        let label = face.student?.name || '';
-
-        if (face.status === 'already') {
-          stroke = '#f59e0b';
-          bg = 'rgba(245,158,11,0.92)';
-          label = `✓ ${face.student?.name || ''}`;
-        }
-
-        let dx = face.box.x * sx;
-        const dy = face.box.y * sy;
-        const dw = face.box.width * sx;
-        const dh = face.box.height * sy;
-
-        if (isFront) dx = canvas.width - dx - dw;
-
-        ctx.globalAlpha = opacity;
-        ctx.strokeStyle = stroke;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(dx, dy, dw, dh);
-
-        const cl = Math.max(10, Math.min(18, dw * 0.18));
-        ctx.lineWidth = 3;
-        ctx.lineCap = 'round';
-        ctx.strokeStyle = stroke;
-
+        ctx.fillStyle = bg;
         ctx.beginPath();
-        ctx.moveTo(dx, dy + cl);
-        ctx.lineTo(dx, dy);
-        ctx.lineTo(dx + cl, dy);
-        ctx.moveTo(dx + dw - cl, dy);
-        ctx.lineTo(dx + dw, dy);
-        ctx.lineTo(dx + dw, dy + cl);
-        ctx.moveTo(dx + dw, dy + dh - cl);
-        ctx.lineTo(dx + dw, dy + dh);
-        ctx.lineTo(dx + dw - cl, dy + dh);
-        ctx.moveTo(dx + cl, dy + dh);
-        ctx.lineTo(dx, dy + dh);
-        ctx.lineTo(dx, dy + dh - cl);
-        ctx.stroke();
+        if (ctx.roundRect) {
+          ctx.roundRect(bx, by, bw, bh, 5);
+        } else {
+          ctx.rect(bx, by, bw, bh);
+        }
+        ctx.fill();
 
-        if (label) {
-          const fs = Math.max(10, Math.min(15, dw / 8));
-          ctx.font = `bold ${fs}px Arial`;
-          const tw = ctx.measureText(label).width;
-          const pad = 5;
-          const bw = tw + pad * 2;
-          const bh = fs + pad;
-          const bx = dx + (dw - bw) / 2;
-          const by = dy - bh - 5;
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, bx + bw / 2, by + bh / 2);
+
+        if (face.confidence > 0 && face.status === 'recognized') {
+          const ct = `${face.confidence}%`;
+          ctx.font = `bold ${fs - 2}px Arial`;
+          const cw2 = ctx.measureText(ct).width + 8;
+          const ch2 = fs;
+          const cx2 = dx + (dw - cw2) / 2;
+          const cy2 = dy + dh + 3;
 
           ctx.fillStyle = bg;
           ctx.beginPath();
           if (ctx.roundRect) {
-            ctx.roundRect(bx, by, bw, bh, 5);
+            ctx.roundRect(cx2, cy2, cw2, ch2, 4);
           } else {
-            ctx.rect(bx, by, bw, bh);
+            ctx.rect(cx2, cy2, cw2, ch2);
           }
           ctx.fill();
 
           ctx.fillStyle = '#fff';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(label, bx + bw / 2, by + bh / 2);
-
-          if (face.confidence > 0 && face.status === 'recognized') {
-            const ct = `${face.confidence}%`;
-            ctx.font = `bold ${fs - 2}px Arial`;
-            const cw2 = ctx.measureText(ct).width + 8;
-            const ch2 = fs;
-            const cx2 = dx + (dw - cw2) / 2;
-            const cy2 = dy + dh + 3;
-
-            ctx.fillStyle = bg;
-            ctx.beginPath();
-            if (ctx.roundRect) {
-              ctx.roundRect(cx2, cy2, cw2, ch2, 4);
-            } else {
-              ctx.rect(cx2, cy2, cw2, ch2);
-            }
-            ctx.fill();
-
-            ctx.fillStyle = '#fff';
-            ctx.fillText(ct, cx2 + cw2 / 2, cy2 + ch2 / 2);
-          }
+          ctx.fillText(ct, cx2 + cw2 / 2, cy2 + ch2 / 2);
         }
-
-        ctx.globalAlpha = 1;
-      });
-
-      setBulkDetected(visible);
-      animFrameRef.current = requestAnimationFrame(draw);
-    };
-
-    animFrameRef.current = requestAnimationFrame(draw);
-
-    return () => {
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = null;
       }
-    };
-  }, [mode, cameraReady, facing]);
+
+      ctx.globalAlpha = 1;
+    });
+
+    setBulkDetected(visible);
+    animFrameRef.current = requestAnimationFrame(draw);
+  };
+
+  animFrameRef.current = requestAnimationFrame(draw);
+
+  return () => {
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+  };
+}, [mode, cameraReady, facing]);
 
   /* ── Face Detection Loop ── */
   const stopFaceLoop = useCallback(() => {
