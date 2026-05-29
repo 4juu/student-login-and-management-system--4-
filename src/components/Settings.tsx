@@ -504,7 +504,7 @@ export const Settings: React.FC<SettingsProps> = ({
               </div>
               <div>
                 <p className="text-sm text-gray-600">عدد الطلاب</p>
-                <p className="text-2xl font-bold text-gray-800">{students.length.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-gray-800">{(stats?.totalStudents ?? students.length).toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -518,7 +518,7 @@ export const Settings: React.FC<SettingsProps> = ({
               </div>
               <div>
                 <p className="text-sm text-gray-600">سجلات الحضور</p>
-                <p className="text-2xl font-bold text-gray-800">{attendanceRecords.length.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-gray-800">{(stats?.totalRecords ?? attendanceRecords.length).toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -532,7 +532,7 @@ export const Settings: React.FC<SettingsProps> = ({
               </div>
               <div>
                 <p className="text-sm text-gray-600">حجم البيانات</p>
-                <p className="text-xl font-bold text-gray-800">{formatBytes(dataSize)}</p>
+                <p className="text-xl font-bold text-gray-800">{stats ? formatSize(stats.totalSizeKB) : formatBytes(dataSize)}</p>
               </div>
             </div>
           </div>
