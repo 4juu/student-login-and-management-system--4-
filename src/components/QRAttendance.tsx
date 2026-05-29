@@ -7,7 +7,7 @@ import {
   extractFaceDescriptorMultiCapture, findBestMatch, IOUTracker,
   areModelsLoaded, resetModels, buildMultiDescriptor, checkForTamperingAsync,
   shouldAutoImprove, autoImproveDescriptor, detectFaceDirection,
-  type CaptureProgress, type FaceDirection, type LightLevel, type QualityLevel,
+  type CaptureProgress, type FaceDirection,
 } from '../services/faceRecognition';
 
 /* ── Types ── */
@@ -58,10 +58,6 @@ const playTamperAlert = () => { navigator.vibrate?.([200, 100, 200, 100, 200]); 
 
 function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r); ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath(); }
 
-const DIR_EMOJI: Record<FaceDirection, string> = { center: '⬜', right: '➡️', left: '⬅️', up: '⬆️', down: '⬇️' };
-const QUALITY_COLORS: Record<QualityLevel, string> = { excellent: 'text-green-600 bg-green-50', good: 'text-blue-600 bg-blue-50', fair: 'text-amber-600 bg-amber-50', poor: 'text-red-600 bg-red-50' };
-const QUALITY_LABELS: Record<QualityLevel, string> = { excellent: '🟢 ممتاز', good: '🔵 جيد', fair: '🟡 مقبول', poor: '🔴 ضعيف' };
-const LIGHT_LABELS: Record<LightLevel, string> = { dark: '🌑 مظلم', dim: '🌙 خافت', good: '☀️ جيد', bright: '🔆 ساطع' };
 
 /* ══════════════════════════════════════════════════════════ */
 export const QRAttendance: React.FC<QRAttendanceProps> = ({
@@ -83,10 +79,9 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const animFrameRef = useRef<number | null>(null);
   const lastRestartRef = useRef(0);
   const toastCounterRef = useRef(0);
-  const codeInputRef = useRef<HTMLInputElement | null>(null);
   const qrCodeInputRef = useRef<HTMLInputElement | null>(null);
-  const registeringRef = useRef(false);
   const trackerRef = useRef<IOUTracker | null>(null);
+  const frameSkipRef = useRef(0);
 
   // تنظيف دوري لخريطة debounce
   useEffect(() => {
@@ -124,19 +119,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const [bulkDetected, setBulkDetected] = useState(0);
   const [bulkSidebar, setBulkSidebar] = useState(false);
   const [sensitivity, setSensitivity] = useState<BulkSensitivity>('far');
-
-  const [showRegister, setShowRegister] = useState(false);
-  const [regCode, setRegCode] = useState('');
-  const [regStep, setRegStep] = useState<'code' | 'capturing' | 'success' | 'confirm-update' | 'tamper-alert' | 'batch'>('code');
-  const [regStudent, setRegStudent] = useState<Student | null>(null);
-  const [regMessage, setRegMessage] = useState('');
-  const [regFacing, setRegFacing] = useState<CameraFacing>('environment');
-  const [capInfo, setCapInfo] = useState<CaptureProgress | null>(null);
-  const [tamperMatches, setTamperMatches] = useState<Array<{ id: string; name: string; distance: number }>>([]);
-
-  const [batchCodes, setBatchCodes] = useState('');
-  const [batchQueue, setBatchQueue] = useState<Student[]>([]);
-  const [batchCurrent, setBatchCurrent] = useState(0);
 
   const studentMap = useMemo(() => { const m = new Map<string, Student>(); students.forEach(s => { if (s.qrCodeId) m.set(s.qrCodeId.trim(), s); if (s.universityId) m.set(s.universityId.trim(), s); }); return m; }, [students]);
   const studentsWithFace = useMemo(() => students.filter(s => {
@@ -223,7 +205,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   }, [device.fps, hardStop]);
 
   const onDecoded = useCallback(async (text: string) => {
-    if (processingRef.current || registeringRef.current) return;
+    if (processingRef.current) return;
     const qrId = extractQrCodeId(text); if (!qrId) return;
     processingRef.current = true;
     try {
@@ -343,7 +325,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     const matchedTrackIds = new Map<number, Student>();
     const loop = async () => {
       if (!faceRunningRef.current || !mountedRef.current) return;
-      if (document.hidden || registeringRef.current) { faceTimerRef.current = setTimeout(loop, 500) as any; return; }
+      if (document.hidden) { faceTimerRef.current = setTimeout(loop, 500) as any; return; }
       const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
       if (!video || video.readyState < 2 || video.paused || video.ended) {
         const now = Date.now();
@@ -451,106 +433,6 @@ const handleClose = useCallback(async () => {
     }
   }, [pendingQrId, onUpdateStudent, students, alreadyPresentIds, onMarkAttendance, showToast]);
 
-  const toggleRegFacing = useCallback(async () => { if (startingRef.current) return; const nf: CameraFacing = regFacing === 'environment' ? 'user' : 'environment'; setRegFacing(nf); setFacing(nf); await startCamera(nf); }, [regFacing, startCamera]);
-
-  const openRegister = useCallback(async () => {
-    registeringRef.current = true; await pauseQrScanner();
-    setRegCode(''); setRegStep('code'); setRegStudent(null); setRegMessage(''); setCapInfo(null); setRegFacing(facing);
-    setBatchCodes(''); setBatchQueue([]); setBatchCurrent(0);
-    setShowRegister(true);
-    setTimeout(() => codeInputRef.current?.focus(), 300);
-  }, [facing, pauseQrScanner]);
-
-  const closeRegister = useCallback(async () => {
-    setShowRegister(false); setRegCode(''); setRegMessage(''); setCapInfo(null);
-    registeringRef.current = false; await resumeQrScanner();
-  }, [resumeQrScanner]);
-
-  const captureFace = useCallback(async (student: Student) => {
-    if (!onUpdateStudent) return;
-    const getVid = () => document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
-    const vid = getVid();
-    if (!vid || vid.readyState < 2) {
-      setRegMessage('❌ الكاميرا غير جاهزة');
-      setTimeout(() => { const v2 = getVid(); if (v2 && v2.readyState >= 2) captureFace(student); else { setRegStep('code'); setRegMessage('❌ لم تستجب'); } }, 1500);
-      return;
-    }
-    setRegStep('capturing'); setCapInfo(null);
-    playCapture();
-
-    try {
-      const result = await extractFaceDescriptorMultiCapture(vid, (info) => { if (mountedRef.current) setCapInfo(info); });
-
-      if (!result) {
-        setRegStep('code'); setRegMessage('❌ تأكد: وجه واحد • قريب • إضاءة • دوّر رأسك'); playError();
-        setTimeout(() => codeInputRef.current?.focus(), 100); return;
-      }
-
-      const tamper = await checkForTamperingAsync(result.descriptor, students, student.id, 0.35);
-      if (tamper.isTamper) {
-        setTamperMatches(tamper.matchedStudents);
-        setRegStep('tamper-alert');
-        playTamperAlert();
-        return;
-      }
-
-      const multiDesc = buildMultiDescriptor(result.descriptor, result.angleDescs, result.quality, result.directions);
-      onUpdateStudent(student.id, { faceDescriptor: multiDesc as any, faceRegisteredAt: new Date().toISOString() });
-      playSuccess(); setRegStep('success');
-
-      setTimeout(() => {
-        if (!mountedRef.current) return;
-        if (batchQueue.length > 0 && batchCurrent < batchQueue.length - 1) {
-          const next = batchCurrent + 1;
-          setBatchCurrent(next);
-          setRegStudent(batchQueue[next]);
-          setRegCode(batchQueue[next].code || '');
-          setRegMessage('');
-          setCapInfo(null);
-          setTimeout(() => captureFace(batchQueue[next]), 500);
-          return;
-        }
-        setRegCode(''); setRegStudent(null); setRegMessage(''); setCapInfo(null); setRegStep('code');
-        setBatchQueue([]); setBatchCurrent(0);
-        setTimeout(() => codeInputRef.current?.focus(), 100);
-      }, 2000);
-    } catch {
-      setRegStep('code'); setRegMessage('❌ خطأ'); playError();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onUpdateStudent, students, batchQueue, batchCurrent]);
-
-  const handleCodeSubmit = useCallback(async (code: string) => {
-    if (code.length !== 4) return;
-    const student = students.find(s => s.code === code);
-    if (!student) { setRegMessage('❌ لا يوجد طالب'); playError(); setRegCode(''); setTimeout(() => codeInputRef.current?.focus(), 100); return; }
-    setRegStudent(student);
-    const hasDesc = student.faceDescriptor && (
-      Array.isArray(student.faceDescriptor) ? student.faceDescriptor.length > 0 :
-      typeof student.faceDescriptor === 'object' ? true : true
-    );
-    if (hasDesc) { setRegStep('confirm-update'); return; }
-    await captureFace(student);
-  }, [students, captureFace]);
-
-  const handleConfirmUpdate = useCallback(async () => { if (!regStudent) return; await captureFace(regStudent); }, [regStudent, captureFace]);
-  const handleCancelUpdate = useCallback(() => { setRegStep('code'); setRegCode(''); setRegStudent(null); setRegMessage(''); setTimeout(() => codeInputRef.current?.focus(), 100); }, []);
-
-  const handleBatchStart = useCallback(() => {
-    const codes = batchCodes.split(/[\n,\s]+/).map(c => c.trim()).filter(c => /^\d{4}$/.test(c));
-    const found: Student[] = [];
-    for (const code of codes) {
-      const s = students.find(st => st.code === code);
-      if (s) found.push(s);
-    }
-    if (found.length === 0) { setRegMessage('❌ لا يوجد طلاب'); return; }
-    setBatchQueue(found);
-    setBatchCurrent(0);
-    setRegStudent(found[0]);
-    setRegCode(found[0].code || '');
-    captureFace(found[0]);
-  }, [batchCodes, students, captureFace]);
-
   const isBulk = mode === 'bulk', isFront = facing === 'user', doMirror = isBulk || isFront;
   const toastBg: Record<ToastType, string> = { success: 'from-emerald-500 to-green-600', error: 'from-red-500 to-rose-600', info: 'from-blue-500 to-cyan-600', warning: 'from-amber-500 to-orange-500' };
   const toastIcon: Record<ToastType, string> = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
@@ -588,7 +470,6 @@ const handleClose = useCallback(async () => {
           <div className="flex items-center justify-between">
             <p className="text-[11px] text-orange-200 font-bold">🎯 {studentsWithFace.length} بصمة • {bulkDetected} مكتشف</p>
             <div className="flex gap-1.5">
-              {onUpdateStudent && <button onClick={openRegister} className="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-[11px] font-bold px-3 py-2 rounded-lg active:scale-95">➕ بصمة</button>}
               <button onClick={() => setBulkSidebar(s => !s)} className="bg-white/10 px-2 py-1 rounded text-[10px] font-bold">{bulkSidebar ? '◀' : '▶'}</button>
             </div>
           </div>
@@ -674,200 +555,6 @@ const handleClose = useCallback(async () => {
               <button onClick={() => { setPendingQrId(null); setQrLinkCode(''); }} className="py-3 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95">إلغاء</button>
               <button onClick={() => handleQrLinkByCode(qrLinkCode)} disabled={qrLinkCode.length !== 4} className="py-3 bg-emerald-600 disabled:opacity-40 text-white font-bold rounded-lg active:scale-95">🔗 ربط</button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {showRegister && (
-        <div className="fixed inset-0 z-[10000] bg-black/95 flex items-center justify-center p-4">
-          <div className="bg-white text-gray-900 rounded-2xl p-5 w-full max-w-sm max-h-[94vh] overflow-y-auto">
-
-            {regStep === 'code' && (
-              <>
-                <div className="text-center mb-3">
-                  <div className="text-3xl mb-1">📸</div>
-                  <h3 className="text-base font-bold">إضافة بصمة وجه</h3>
-                </div>
-                <div className="flex gap-2 mb-3">
-                  <button onClick={() => { if (regFacing !== 'environment') toggleRegFacing(); }} className={`flex-1 py-2 rounded-xl text-xs font-bold active:scale-95 ${regFacing === 'environment' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600'}`}>📷 خلفية</button>
-                  <button onClick={() => { if (regFacing !== 'user') toggleRegFacing(); }} className={`flex-1 py-2 rounded-xl text-xs font-bold active:scale-95 ${regFacing === 'user' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600'}`}>🤳 أمامية</button>
-                </div>
-                <div className="flex gap-1 mb-3 bg-gray-100 rounded-lg p-0.5">
-                  <button onClick={() => setRegStep('code')} className="flex-1 py-1.5 rounded-md text-xs font-bold bg-white text-purple-700 shadow-sm">فردي</button>
-                  <button onClick={() => setRegStep('batch')} className="flex-1 py-1.5 rounded-md text-xs font-bold text-gray-500 hover:bg-white/50">جماعي</button>
-                </div>
-                <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-xl text-center">
-                  <p className="text-[10px] text-blue-700 font-bold">💡 10 ثواني — دوّر رأسك دائرياً</p>
-                </div>
-                <input ref={codeInputRef} type="text" value={regCode}
-                  onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); setRegCode(v); if (regMessage) setRegMessage(''); if (v.length === 4) setTimeout(() => handleCodeSubmit(v), 100); }}
-                  placeholder="0000" className="w-full text-center text-3xl font-bold tracking-[1em] py-3 border-2 border-purple-300 rounded-xl focus:border-purple-500 outline-none" maxLength={4} inputMode="numeric" autoFocus />
-                {regMessage && <div className="mt-2 p-2 rounded text-center text-xs font-medium bg-red-50 text-red-700 border border-red-200">{regMessage}</div>}
-                <button onClick={closeRegister} className="w-full mt-3 py-2 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95 text-sm">إغلاق</button>
-              </>
-            )}
-
-            {regStep === 'batch' && (
-              <>
-                <div className="text-center mb-3">
-                  <div className="text-3xl mb-1">👥</div>
-                  <h3 className="text-base font-bold">تسجيل جماعي</h3>
-                  <p className="text-[10px] text-gray-500">أدخل أكواد الطلاب (كل كود بسطر)</p>
-                </div>
-                <div className="flex gap-1 mb-3 bg-gray-100 rounded-lg p-0.5">
-                  <button onClick={() => setRegStep('code')} className="flex-1 py-1.5 rounded-md text-xs font-bold text-gray-500 hover:bg-white/50">فردي</button>
-                  <button onClick={() => setRegStep('batch')} className="flex-1 py-1.5 rounded-md text-xs font-bold bg-white text-purple-700 shadow-sm">جماعي</button>
-                </div>
-                <textarea value={batchCodes} onChange={e => setBatchCodes(e.target.value)}
-                  placeholder={"1234\n5678\n9012"} rows={5}
-                  className="w-full p-3 border-2 border-purple-300 rounded-xl text-sm font-mono focus:border-purple-500 outline-none resize-none" />
-                {regMessage && <div className="mt-2 p-2 rounded text-center text-xs font-medium bg-red-50 text-red-700 border border-red-200">{regMessage}</div>}
-                <button onClick={handleBatchStart} className="w-full mt-3 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg active:scale-95 text-sm">▶️ بدء التسجيل الجماعي</button>
-                <button onClick={closeRegister} className="w-full mt-2 py-2 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95 text-sm">إغلاق</button>
-              </>
-            )}
-
-            {regStep === 'confirm-update' && regStudent && (
-              <div className="text-center py-4">
-                <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3"><span className="text-3xl">👤</span></div>
-                <h3 className="text-base font-bold mb-1">{regStudent.name}</h3>
-                <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 mb-4">
-                  <p className="text-sm font-bold text-amber-800">⚠️ لديه بصمة بالفعل</p>
-                  <p className="text-xs text-amber-600 mt-1">هل تريد تحديث البصمة؟</p>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={handleCancelUpdate} className="py-3 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95 text-sm">❌ لا</button>
-                  <button onClick={handleConfirmUpdate} className="py-3 bg-amber-500 text-white font-bold rounded-lg active:scale-95 text-sm">✅ تحديث</button>
-                </div>
-              </div>
-            )}
-
-            {regStep === 'tamper-alert' && regStudent && (
-              <div className="text-center py-4">
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3"><span className="text-3xl">🚨</span></div>
-                <h3 className="text-lg font-bold text-red-700 mb-2">كشف تلاعب!</h3>
-                <p className="text-sm text-gray-700 mb-3">هذا الوجه مسجّل باسم طالب آخر:</p>
-                <div className="space-y-2 mb-4">
-                  {tamperMatches.map(m => (
-                    <div key={m.id} className="bg-red-50 border border-red-200 rounded-lg p-2">
-                      <p className="text-sm font-bold text-red-800">{m.name}</p>
-                      <p className="text-[10px] text-red-600">تشابه: {Math.round((1 - m.distance / 0.6) * 100)}%</p>
-                    </div>
-                  ))}
-                </div>
-                <button onClick={() => { setRegStep('code'); setRegCode(''); setRegStudent(null); setTamperMatches([]); setTimeout(() => codeInputRef.current?.focus(), 100); }}
-                  className="w-full py-3 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95">فهمت، إغلاق</button>
-              </div>
-            )}
-
-            {regStep === 'capturing' && regStudent && (
-              <div className="text-center">
-                <h3 className="text-base font-bold mb-0.5">{regStudent.name}</h3>
-                {batchQueue.length > 1 && <p className="text-[10px] text-purple-500 font-bold mb-1">👥 {batchCurrent + 1} / {batchQueue.length}</p>}
-
-                <div className="relative inline-block mb-3">
-                  <FaceCameraPreview mirror={regFacing === 'user'} size={190} />
-
-                  <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 200 200">
-                    <circle cx="100" cy="100" r="92" fill="none" stroke="rgba(139,92,246,0.1)" strokeWidth="5" />
-                    <circle cx="100" cy="100" r="92" fill="none"
-                      stroke={capInfo?.progress && capInfo.progress >= 100 ? '#10b981' : '#8b5cf6'}
-                      strokeWidth="5" strokeLinecap="round"
-                      strokeDasharray={`${2 * Math.PI * 92}`}
-                      strokeDashoffset={`${2 * Math.PI * 92 * (1 - (capInfo?.progress || 0) / 100)}`}
-                      style={{ transition: 'stroke-dashoffset 0.15s linear', transform: 'rotate(-90deg)', transformOrigin: 'center' }} />
-
-                    {capInfo?.phase === 'capture' && capInfo.faceDetected && (() => {
-                      const angle = (capInfo.rotationAngle - 90) * (Math.PI / 180);
-                      const cx = 100 + 92 * Math.cos(angle);
-                      const cy = 100 + 92 * Math.sin(angle);
-                      return (
-                        <>
-                          <circle cx={cx} cy={cy} r="8" fill="#8b5cf6" stroke="white" strokeWidth="3">
-                            <animate attributeName="r" values="7;9;7" dur="0.8s" repeatCount="indefinite" />
-                          </circle>
-                          <circle cx={cx} cy={cy} r="4" fill="white" />
-                        </>
-                      );
-                    })()}
-
-                    {capInfo && ALL_DIRS.map((dir) => {
-                      const angles: Record<FaceDirection, number> = { right: 0, down: 90, left: 180, up: 270, center: 315 };
-                      const a = (angles[dir] - 90) * (Math.PI / 180);
-                      const cx = 100 + 92 * Math.cos(a);
-                      const cy = 100 + 92 * Math.sin(a);
-                      const done = capInfo.capturedDirections.has(dir);
-                      return (
-                        <circle key={dir} cx={cx} cy={cy} r="5"
-                          fill={done ? '#10b981' : 'rgba(139,92,246,0.2)'}
-                          stroke={done ? '#065f46' : 'rgba(139,92,246,0.4)'} strokeWidth="1.5" />
-                      );
-                    })}
-                  </svg>
-
-                  {capInfo?.phase === 'capture' && (
-                    <div className={`absolute -top-1 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[9px] font-bold shadow ${capInfo.faceDetected ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
-                      {capInfo.faceDetected ? '✅' : '❌ أين الوجه؟'}
-                    </div>
-                  )}
-                </div>
-
-                {capInfo && (
-                  <div className="space-y-2">
-                    <div className={`py-2.5 px-3 rounded-xl font-bold text-base ${
-                      capInfo.phase === 'stabilize' ? 'bg-blue-50 text-blue-700'
-                        : capInfo.faceDetected ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-                    }`}>
-                      {capInfo.phase === 'stabilize' ? '🔍 تثبيت...' : capInfo.directionLabel}
-                    </div>
-
-                    <div className="flex justify-center gap-2">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${QUALITY_COLORS[capInfo.qualityLevel]}`}>
-                        {QUALITY_LABELS[capInfo.qualityLevel]}
-                      </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                        {LIGHT_LABELS[capInfo.lightLevel]}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-center gap-2 items-center">
-                      <span className="text-[10px] text-gray-500">🔄 دوران:</span>
-                      <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-purple-500 rounded-full transition-all" style={{ width: `${capInfo.rotationCoverage}%` }} />
-                      </div>
-                      <span className="text-[10px] font-bold text-purple-600">{capInfo.rotationCoverage}%</span>
-                    </div>
-
-                    <div className="flex justify-center gap-3 text-[10px] text-gray-500">
-                      <span>📷 {capInfo.totalGood}</span>
-                      <span>📊 {capInfo.progress}%</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {regStep === 'success' && regStudent && (
-              <div className="text-center py-4">
-                <div className="text-5xl mb-2 animate-bounce">🎉</div>
-                <h3 className="text-lg font-bold text-green-700 mb-1">تم!</h3>
-                <p className="text-gray-800 font-bold">{regStudent.name}</p>
-                {capInfo && (
-                  <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-2.5">
-                    <p className="text-xs text-green-700 font-medium">
-                      ✨ {capInfo.totalGood} لقطة • {capInfo.capturedDirections.size} اتجاه • دوران {capInfo.rotationCoverage}%
-                    </p>
-                    <div className="flex justify-center gap-1 mt-1">
-                      {ALL_DIRS.map(dir => <span key={dir} className={`text-sm ${capInfo.capturedDirections.has(dir) ? '' : 'opacity-20'}`}>{DIR_EMOJI[dir]}</span>)}
-                    </div>
-                    <p className={`text-[10px] font-bold mt-1 ${QUALITY_COLORS[capInfo.qualityLevel]}`}>{QUALITY_LABELS[capInfo.qualityLevel]}</p>
-                  </div>
-                )}
-                {batchQueue.length > 1 && batchCurrent < batchQueue.length - 1 && (
-                  <p className="text-xs text-purple-600 font-bold mt-2 animate-pulse">⏳ التالي: {batchQueue[batchCurrent + 1]?.name}...</p>
-                )}
-              </div>
-            )}
           </div>
         </div>
       )}
