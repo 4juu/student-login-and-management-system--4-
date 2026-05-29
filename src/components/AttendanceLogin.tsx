@@ -40,17 +40,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
     }
   }, [message]);
 
-  const checkAndSubmitRef = useRef(checkAndSubmit);
-  checkAndSubmitRef.current = checkAndSubmit;
-
-  const handleCodeInput = useCallback((digit: string) => {
-    setCode(prev => {
-      if (prev.length >= 4) return prev;
-      const newCode = prev + digit;
-      if (newCode.length === 4) setTimeout(() => checkAndSubmitRef.current(newCode), 150);
-      return newCode;
-    });
-  }, []);
+  const checkAndSubmitRef = useRef<(code: string) => void>(null as any);
 
   const checkAndSubmit = (codeToCheck: string) => {
     if (!activeSessionId) {
@@ -99,6 +89,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
       setCode('');
     }
   };
+  checkAndSubmitRef.current = checkAndSubmit;
 
   const handleClear = useCallback(() => { setCode(''); setMessage(null); }, []);
   const handleBackspace = useCallback(() => { setCode(prev => prev.slice(0, -1)); }, []);
