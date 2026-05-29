@@ -11,9 +11,6 @@ const MODEL_URLS = [
   'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights',
 ];
 
-/* ═══════════════════════════════════════════════════════════
-   ✅ تحميل TinyFaceDetector فقط (بدون SSD)
-═══════════════════════════════════════════════════════════ */
 export const loadFaceModels = async (): Promise<void> => {
   if (modelsLoaded) return;
   if (loadingPromise) return loadingPromise;
@@ -51,9 +48,6 @@ export const resetModels = () => {
 
 export const areModelsLoaded = () => modelsLoaded;
 
-/* ═══════════════════════════════════════════════════════════
-   ✅ تقليل inputSize
-═══════════════════════════════════════════════════════════ */
 const getDeviceInputSize = (): 160 | 224 | 320 | 416 | 512 | 608 => {
   const c = navigator.hardwareConcurrency || 2;
   const m = (navigator as any).deviceMemory || 2;
@@ -69,9 +63,6 @@ const getDetectorOptions = () =>
     scoreThreshold: 0.38,
   });
 
-/* ═══════════════════════════════════════════════════════════
-   💡 Brightness Detection
-═══════════════════════════════════════════════════════════ */
 export const detectBrightness = (
   input: HTMLVideoElement | HTMLCanvasElement
 ): number => {
@@ -114,9 +105,6 @@ export const classifyLight = (brightness: number): LightLevel => {
   return 'good';
 };
 
-/* ═══════════════════════════════════════════════════════════
-   🖼️ Preprocessing
-═══════════════════════════════════════════════════════════ */
 const preprocessFrame = (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
   targetWidth = 960,
@@ -242,9 +230,6 @@ const cropCenterRegion = (
   return canvas;
 };
 
-/* ═══════════════════════════════════════════════════════════
-   🧮 Descriptor Operations
-═══════════════════════════════════════════════════════════ */
 export const normalizeDescriptor = (d: Float32Array): Float32Array => {
   const out = new Float32Array(d);
   let norm = 0;
@@ -263,18 +248,27 @@ const meanDescriptor = (descs: Float32Array[]): Float32Array => {
   return normalizeDescriptor(merged);
 };
 
+// ✅ filterOutliers - مع debug guards
 const filterOutliers = (descs: Float32Array[], maxDist = 0.3): Float32Array[] => {
   if (descs.length <= 2) return descs;
 
   const center = meanDescriptor(descs);
-  const filtered = descs.filter(d => faceapi.euclideanDistance(d, center) <= maxDist);
+
+  const filtered = descs.filter(d => {
+    if (d.length !== center.length) {
+      console.error('OUTLIER LENGTH MISMATCH', {
+        d: d.length,
+        center: center.length,
+      });
+      return false;
+    }
+
+    return faceapi.euclideanDistance(d, center) <= maxDist;
+  });
 
   return filtered.length >= 2 ? filtered : descs.slice(0, Math.max(2, descs.length));
 };
 
-/* ═══════════════════════════════════════════════════════════
-   🧭 Face Direction
-═══════════════════════════════════════════════════════════ */
 export type FaceDirection = 'center' | 'left' | 'right' | 'up' | 'down';
 
 export const detectFaceDirection = (landmarks: faceapi.FaceLandmarks68): FaceDirection => {
@@ -347,9 +341,6 @@ export const detectRotationAngle = (landmarks: faceapi.FaceLandmarks68): number 
   return angle;
 };
 
-/* ═══════════════════════════════════════════════════════════
-   📊 Quality Evaluation
-═══════════════════════════════════════════════════════════ */
 export interface FrameQuality {
   score: number;
   areaRatio: number;
@@ -402,9 +393,6 @@ const evaluateFrameQuality = (
   return { score, areaRatio, centerDist, quality, direction, rotationAngle, brightness, lightLevel };
 };
 
-/* ═══════════════════════════════════════════════════════════
-   🗜️ MultiDescriptor
-═══════════════════════════════════════════════════════════ */
 export interface MultiDescriptor {
   main: number[];
   angles?: number[];
@@ -500,8 +488,22 @@ const toFloat32 = (input: number[] | string | Float32Array): Float32Array => {
   return new Float32Array(input);
 };
 
+// ✅ compareMultiDescriptor - مع debug guards كاملة
 export const compareMultiDescriptor = (query: Float32Array, stored: MultiDescriptor): number => {
   const mainDesc = toFloat32(stored.main);
+
+  // 🔍 Debug logs
+  console.log('query length:', query.length);
+  console.log('mainDesc length:', mainDesc.length);
+
+  if (query.length !== mainDesc.length) {
+    console.error('MAIN LENGTH MISMATCH', {
+      query: query.length,
+      stored: mainDesc.length,
+    });
+    return 999;
+  }
+
   const mainDist = faceapi.euclideanDistance(query, mainDesc);
 
   if (!stored.angles || stored.angles.length === 0) return mainDist;
@@ -513,6 +515,16 @@ export const compareMultiDescriptor = (query: Float32Array, stored: MultiDescrip
   for (let i = 0; i < angleCount; i++) {
     const chunk = stored.angles.slice(i * chunkSize, (i + 1) * chunkSize);
     const angleDesc = decompressAngleDescriptor(chunk);
+
+    // 🔍 Debug guard للـ angle
+    if (query.length !== angleDesc.length) {
+      console.error('ANGLE LENGTH MISMATCH', {
+        query: query.length,
+        angle: angleDesc.length,
+      });
+      continue;
+    }
+
     const dist = faceapi.euclideanDistance(query, angleDesc);
     if (dist < bestAngleDist) bestAngleDist = dist;
   }
@@ -524,9 +536,6 @@ const isMultiDescriptor = (d: any): d is MultiDescriptor => {
   return d !== null && typeof d === 'object' && !Array.isArray(d) && 'main' in d;
 };
 
-/* ═══════════════════════════════════════════════════════════
-   🛡️ Tampering Detection
-═══════════════════════════════════════════════════════════ */
 export interface TamperResult {
   isTamper: boolean;
   matchedStudents: Array<{ id: string; name: string; distance: number }>;
@@ -627,9 +636,6 @@ export const checkForTamperingAsync = async <
   });
 };
 
-/* ═══════════════════════════════════════════════════════════
-   📸 Multi-Capture Progress
-═══════════════════════════════════════════════════════════ */
 export interface CaptureProgress {
   progress: number;
   phase: 'stabilize' | 'capture';
@@ -653,9 +659,6 @@ const DIRECTION_LABELS: Record<FaceDirection, string> = {
   down: '👇 انزل للأسفل',
 };
 
-/* ═══════════════════════════════════════════════════════════
-   ✅ Multi-Capture - مُحسّن
-═══════════════════════════════════════════════════════════ */
 export const extractFaceDescriptorMultiCapture = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
   onProgress?: (info: CaptureProgress) => void
@@ -706,7 +709,6 @@ export const extractFaceDescriptorMultiCapture = async (
     });
   };
 
-  /* ─── Stabilization ─── */
   const stabEnd = Date.now() + STABILIZE_MS;
   let stabilized = false;
 
@@ -753,7 +755,6 @@ export const extractFaceDescriptorMultiCapture = async (
 
   reportProgress(10, 'capture', 'center', true);
 
-  /* ─── Capture Loop ─── */
   const captureStart = Date.now();
   const DIRECTION_SEQUENCE: FaceDirection[] = ['center', 'right', 'left'];
   let currentDirIndex = 0;
@@ -828,7 +829,6 @@ export const extractFaceDescriptorMultiCapture = async (
 
   if (allFrames.length < MIN_GOOD) return null;
 
-  /* ─── Merging ─── */
   const byDir = new Map<FaceDirection, typeof allFrames>();
   for (const f of allFrames) {
     if (!byDir.has(f.direction)) byDir.set(f.direction, []);
@@ -876,9 +876,6 @@ export const extractFaceDescriptorMultiCapture = async (
   return { descriptor: final, angleDescs, quality: avgQuality, directions: capturedDirections };
 };
 
-/* ═══════════════════════════════════════════════════════════
-   🔍 IoU Tracker
-═══════════════════════════════════════════════════════════ */
 export interface TrackedFace {
   id: number;
   box: { x: number; y: number; width: number; height: number };
@@ -921,7 +918,13 @@ export class IOUTracker {
         this.tracks[bestIdx].lost = 0;
         if (det.descriptor) this.tracks[bestIdx].descriptor = det.descriptor;
       } else {
-        this.tracks.push({ id: this.nextId++, box: det.box, descriptor: det.descriptor, age: 1, lost: 0 });
+        this.tracks.push({
+          id: this.nextId++,
+          box: det.box,
+          descriptor: det.descriptor,
+          age: 1,
+          lost: 0,
+        });
       }
     }
 
@@ -958,9 +961,6 @@ export class IOUTracker {
   }
 }
 
-/* ═══════════════════════════════════════════════════════════
-   📸 Single & Batch Extraction
-═══════════════════════════════════════════════════════════ */
 export const extractFaceDescriptor = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ): Promise<Float32Array | null> => {
@@ -990,9 +990,6 @@ export const extractAllFaceDescriptors = async (
     .withFaceDescriptors();
 };
 
-/* ═══════════════════════════════════════════════════════════
-   🔍 Comparison
-═══════════════════════════════════════════════════════════ */
 export const compareFaces = (
   desc1: Float32Array | number[],
   desc2: Float32Array | number[] | string | MultiDescriptor
