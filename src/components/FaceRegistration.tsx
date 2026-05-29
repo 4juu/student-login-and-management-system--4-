@@ -89,7 +89,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   const handleCameraChoice = (f: 'user' | 'environment') => {
     setFacing(f);
     setStep('capture');
-    setTimeout(() => openCamera(f), 100);
+    setTimeout(() => openCamera(f), 400);
   };
 
   const handleStartCapture = useCallback(() => {

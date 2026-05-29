@@ -443,6 +443,13 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
   useEffect(() => { mountedRef.current = true; const t = setTimeout(() => { if (mountedRef.current) startCamera('environment'); }, 250); return () => { mountedRef.current = false; clearTimeout(t); stopFaceLoop(); hardStop(); }; }, []); // eslint-disable-line
   useEffect(() => { detectedFacesRef.current.clear(); if (mode === 'bulk' && facing !== 'environment') { setFacing('environment'); startCamera('environment'); } }, [mode]); // eslint-disable-line
+  useEffect(() => {
+    if (showReg) { stopFaceLoop(); hardStop(); }
+    else if (mode === 'bulk' && mountedRef.current && !document.hidden) {
+      const t = setTimeout(() => { if (mountedRef.current) startCamera('environment'); }, 400);
+      return () => clearTimeout(t);
+    }
+  }, [showReg, mode]); // eslint-disable-line
 
 const handleClose = useCallback(async () => { 
   mountedRef.current = false; 
