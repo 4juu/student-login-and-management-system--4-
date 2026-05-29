@@ -1,5 +1,6 @@
 // src/components/QRAttendance.tsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { FaceRegistration } from './FaceRegistration';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { AttendanceSession, Student } from '../types/student';
 import {
@@ -119,6 +120,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const [bulkDetected, setBulkDetected] = useState(0);
   const [bulkSidebar, setBulkSidebar] = useState(false);
   const [sensitivity, setSensitivity] = useState<BulkSensitivity>('far');
+  const [showReg, setShowReg] = useState(false);
 
   const studentMap = useMemo(() => { const m = new Map<string, Student>(); students.forEach(s => { if (s.qrCodeId) m.set(s.qrCodeId.trim(), s); if (s.universityId) m.set(s.universityId.trim(), s); }); return m; }, [students]);
   const studentsWithFace = useMemo(() => students.filter(s => {
@@ -162,9 +164,14 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       if (!mountedRef.current) return;
       const region = document.getElementById(QR_REGION_ID); if (region) region.innerHTML = '';
       const qrBox = getQrBox();
-      const attempts = [
-        { constraints: { facingMode: cf, width: { ideal: 1920, min: 1280 }, height: { ideal: 1080, min: 720 }, frameRate: { ideal: 60, min: 30 } }, fps: device.fps, box: qrBox },
-        { constraints: { facingMode: cf, width: { ideal: 1280 }, height: { ideal: 720 } }, fps: Math.min(device.fps, 20), box: qrBox },
+      const mobile = device.tier !== 'high';
+      const attempts = mobile ? [
+        { constraints: { facingMode: cf, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24, min: 15 } }, fps: Math.min(device.fps, 15), box: qrBox },
+        { constraints: { facingMode: cf, width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15 } }, fps: 10, box: qrBox },
+        { constraints: { facingMode: cf }, fps: 8, box: { width: 200, height: 200 } },
+      ] : [
+        { constraints: { facingMode: cf, width: { ideal: 1280, min: 640 }, height: { ideal: 720, min: 480 }, frameRate: { ideal: 30, min: 15 } }, fps: device.fps, box: qrBox },
+        { constraints: { facingMode: cf, width: { ideal: 640 }, height: { ideal: 480 } }, fps: Math.min(device.fps, 20), box: qrBox },
         { constraints: { facingMode: cf }, fps: 10, box: { width: 200, height: 200 } },
       ];
       let scanner: Html5Qrcode | null = null;
@@ -320,9 +327,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     stopFaceLoop(); faceRunningRef.current = true;
     if (!trackerRef.current) trackerRef.current = new IOUTracker();
     else trackerRef.current.reset();
-    const intervalMs = sens === 'extreme' ? device.intervalMs * 0.6 : device.intervalMs;
+    let baseIntervalMs = sens === 'extreme' ? device.intervalMs * 0.6 : device.intervalMs;
     const useRegion = sens === 'far';
     const matchedTrackIds = new Map<number, Student>();
+    const detectTimes: number[] = [];
     const loop = async () => {
       if (!faceRunningRef.current || !mountedRef.current) return;
       if (document.hidden) { faceTimerRef.current = setTimeout(loop, 500) as any; return; }
@@ -332,6 +340,9 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         if (now - lastRestartRef.current > 6000 && mountedRef.current) { lastRestartRef.current = now; setCameraStatus('restarting'); setTimeout(() => { if (mountedRef.current) startCamera(cf); }, 300); }
         faceTimerRef.current = setTimeout(loop, 600) as any; return;
       }
+      frameSkipRef.current = (frameSkipRef.current + 1) % (detectTimes.length > 20 ? 3 : 1);
+      if (frameSkipRef.current !== 0) { faceTimerRef.current = setTimeout(loop, 100) as any; return; }
+      const detectStart = performance.now();
       try {
         const useH = sens === 'extreme' ? true : device.useHybrid;
         const detections = await Promise.race([
@@ -339,6 +350,13 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 2800)),
         ]) as any[];
         if (!faceRunningRef.current || !mountedRef.current) return;
+
+        const dt = performance.now() - detectStart;
+        detectTimes.push(dt);
+        if (detectTimes.length > 60) detectTimes.shift();
+        const avgTime = detectTimes.reduce((a, b) => a + b, 0) / detectTimes.length;
+        if (avgTime > 1200 && baseIntervalMs < 1000) baseIntervalMs = Math.min(baseIntervalMs + 80, 1000);
+        else if (avgTime < 400 && baseIntervalMs > 300) baseIntervalMs = Math.max(baseIntervalMs - 40, 300);
 
         const tracked = trackerRef.current.update(detections.map(d => ({ box: d.detection.box, descriptor: d.descriptor })));
 
@@ -388,7 +406,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           }
         }
       } catch (e: any) { if (e?.message !== 'timeout') console.warn('face:', e); }
-      if (faceRunningRef.current && mountedRef.current) faceTimerRef.current = setTimeout(loop, intervalMs) as any;
+      if (faceRunningRef.current && mountedRef.current) faceTimerRef.current = setTimeout(loop, baseIntervalMs) as any;
     };
     faceTimerRef.current = setTimeout(loop, 600) as any;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -433,7 +451,7 @@ const handleClose = useCallback(async () => {
     }
   }, [pendingQrId, onUpdateStudent, students, alreadyPresentIds, onMarkAttendance, showToast]);
 
-  const isBulk = mode === 'bulk', isFront = facing === 'user', doMirror = isBulk || isFront;
+  const isBulk = mode === 'bulk', isFront = facing === 'user', doMirror = isFront;
   const toastBg: Record<ToastType, string> = { success: 'from-emerald-500 to-green-600', error: 'from-red-500 to-rose-600', info: 'from-blue-500 to-cyan-600', warning: 'from-amber-500 to-orange-500' };
   const toastIcon: Record<ToastType, string> = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
   const ALL_DIRS: FaceDirection[] = ['center', 'right', 'left', 'up', 'down'];
@@ -476,6 +494,7 @@ const handleClose = useCallback(async () => {
           <div className="flex gap-1.5 text-[10px]">
             <button onClick={() => setSensitivity('far')} className={`flex-1 py-2 rounded-lg font-bold active:scale-95 ${sensitivity === 'far' ? 'bg-emerald-600 text-white' : 'bg-white/10 text-gray-300'}`}>🎯 متوازن</button>
             <button onClick={() => setSensitivity('extreme')} className={`flex-1 py-2 rounded-lg font-bold active:scale-95 ${sensitivity === 'extreme' ? 'bg-red-600 text-white' : 'bg-white/10 text-gray-300'}`}>🔍 بعيد</button>
+            {onUpdateStudent && <button onClick={() => setShowReg(true)} className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-3 py-2 rounded-lg font-bold shrink-0">➕ بصمة</button>}
           </div>
         </div>
       )}
@@ -495,7 +514,11 @@ const handleClose = useCallback(async () => {
                 </div>
               </div>
             )}
-            {cameraReady && <button onClick={toggleCamera} className="absolute top-2 left-2 bg-black/60 text-white p-2.5 rounded-full z-10 active:scale-95 text-lg">🔄</button>}
+            {cameraReady && (
+              <div className="absolute top-2 left-2 flex gap-1.5 z-10">
+                <button onClick={toggleCamera} className="bg-black/70 text-white p-2.5 rounded-full active:scale-90 text-base shadow-lg border border-white/10" title="تبديل الكاميرا">🔄</button>
+              </div>
+            )}
             {isBulk && cameraReady && (
               <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-orange-600 to-red-600 px-4 py-2 rounded-full shadow-xl z-10">
                 <div className="flex items-center gap-2 text-white"><span className="text-xl">📊</span><div className="text-center"><div className="text-xl font-bold leading-none">{bulkStudents.length}</div><div className="text-[9px] opacity-90">مسجّل</div></div></div>
@@ -504,11 +527,16 @@ const handleClose = useCallback(async () => {
           </div>
 
           {cameraReady && canZoom && (
-            <div className="w-full max-w-lg mx-auto flex gap-2 flex-wrap items-center">
-              {[1, 1.5, 2, 2.5, 3].filter(v => v <= maxZoom).map(v => (
-                <button key={v} onClick={() => applyZoom(v)} className={`px-5 py-3 rounded-xl text-sm font-bold active:scale-95 ${Math.abs(zoom - v) < 0.15 ? 'bg-emerald-600 text-white' : 'bg-white/12 text-gray-200'}`}>{v}x</button>
-              ))}
-              {hasTorch && <button onClick={toggleTorch} className={`px-5 py-3 rounded-xl text-sm font-bold active:scale-95 ${torchOn ? 'bg-yellow-500 text-black' : 'bg-white/12 text-gray-200'}`}>{torchOn ? '💡' : '🔦'}</button>}
+            <div className="w-full max-w-lg mx-auto flex items-center justify-center gap-2 bg-white/5 rounded-xl px-3 py-2">
+              <button onClick={() => applyZoom(zoom - 0.3)} disabled={zoom <= minZoom + 0.1} className="w-10 h-10 flex items-center justify-center bg-white/15 disabled:opacity-20 text-white font-bold rounded-full active:scale-90 text-lg">−</button>
+              <div className="text-center min-w-[60px]">
+                <div className="text-sm font-bold text-white">{zoom.toFixed(1)}x</div>
+                <div className="w-full h-1 bg-white/20 rounded-full mt-0.5 overflow-hidden">
+                  <div className="h-full bg-emerald-400 transition-all" style={{ width: `${((zoom - minZoom) / (maxZoom - minZoom)) * 100}%` }} />
+                </div>
+              </div>
+              <button onClick={() => applyZoom(zoom + 0.3)} disabled={zoom >= maxZoom - 0.1} className="w-10 h-10 flex items-center justify-center bg-white/15 disabled:opacity-20 text-white font-bold rounded-full active:scale-90 text-lg">+</button>
+              {hasTorch && <button onClick={toggleTorch} className={`w-10 h-10 flex items-center justify-center rounded-full active:scale-90 text-lg ${torchOn ? 'bg-yellow-500 text-black' : 'bg-white/15 text-white'}`}>{torchOn ? '💡' : '🔦'}</button>}
             </div>
           )}
 
@@ -559,6 +587,17 @@ const handleClose = useCallback(async () => {
         </div>
       )}
 
+      {showReg && (
+        <FaceRegistration
+          students={students}
+          onUpdateStudent={(id, updates) => {
+            onUpdateStudent?.(id, updates);
+            setShowReg(false);
+          }}
+          onClose={() => setShowReg(false)}
+        />
+      )}
+
       <style>{`
         @keyframes toastSlideDown{0%{opacity:0;transform:translateY(-100%) scale(.92)}60%{opacity:1;transform:translateY(6px) scale(1.02)}100%{opacity:1;transform:translateY(0) scale(1)}}
         .animate-toast-slide-down{animation:toastSlideDown .42s cubic-bezier(.22,1,.36,1) both}
@@ -572,37 +611,6 @@ const handleClose = useCallback(async () => {
       `}</style>
     </div>
   );
-};
-
-const FaceCameraPreview: React.FC<{ mirror?: boolean; size?: number }> = ({ mirror = true, size = 190 }) => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  useEffect(() => {
-    const canvas = canvasRef.current; if (!canvas) return;
-    const ctx = canvas.getContext('2d'); if (!ctx) return;
-    let animId: number, active = true;
-    const draw = () => {
-      if (!active) return;
-      const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
-      if (video && video.readyState >= 2) {
-        canvas.width = size; canvas.height = size;
-        ctx.save();
-        ctx.beginPath(); ctx.arc(size / 2, size / 2, size / 2 - 3, 0, Math.PI * 2); ctx.clip();
-        const vw = video.videoWidth, vh = video.videoHeight, md = Math.min(vw, vh);
-        const sx = (vw - md) / 2, sy = (vh - md) / 2;
-        if (mirror) { ctx.translate(size, 0); ctx.scale(-1, 1); }
-        ctx.drawImage(video, sx, sy, md, md, 0, 0, size, size);
-        ctx.restore();
-      } else {
-        canvas.width = size; canvas.height = size;
-        ctx.fillStyle = '#1f2937'; ctx.beginPath(); ctx.arc(size / 2, size / 2, size / 2 - 3, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#6b7280'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '32px Arial'; ctx.fillText('📷', size / 2, size / 2);
-      }
-      animId = requestAnimationFrame(draw);
-    };
-    draw();
-    return () => { active = false; if (animId) cancelAnimationFrame(animId); };
-  }, [mirror, size]);
-  return <canvas ref={canvasRef} width={size} height={size} className="rounded-full bg-gray-900 shadow-xl" style={{ width: size, height: size }} />;
 };
 
 export default QRAttendance;
