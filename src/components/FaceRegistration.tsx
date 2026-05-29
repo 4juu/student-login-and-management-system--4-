@@ -31,6 +31,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   const [capturing, setCapturing] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [capInfo, setCapInfo] = useState<CaptureProgress | null>(null);
+  const [captureQuality, setCaptureQuality] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -128,6 +129,8 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
           return;
         }
       }
+      const qualityPct = Math.round(result.quality * 100);
+      setCaptureQuality(qualityPct);
       const multiDesc = buildMultiDescriptor(result.descriptor, result.angleDescs, result.quality, result.directions);
       if (selectedStudent) {
         onUpdateStudent(selectedStudent.id, { faceDescriptor: multiDesc as any, faceRegisteredAt: new Date().toISOString() });
@@ -398,7 +401,9 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
                 <div className="flex justify-center gap-1">
                   {ALL_DIRS.map(dir => <span key={dir} className={`text-sm ${capInfo.capturedDirections.has(dir) ? '' : 'opacity-20'}`}>{DIR_EMOJI[dir]}</span>)}
                 </div>
-                <p className={`text-[10px] font-bold mt-2 ${QUALITY_COLORS[capInfo.qualityLevel]}`}>{QUALITY_LABELS[capInfo.qualityLevel]}</p>
+                <div className={`text-lg font-extrabold mt-1 ${QUALITY_COLORS[capInfo.qualityLevel]}`}>
+                  {captureQuality}% — {QUALITY_LABELS[capInfo.qualityLevel]}
+                </div>
               </div>
             )}
             <button onClick={onClose} className="w-full mt-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-lg active:scale-95 text-sm">👍 موافق</button>

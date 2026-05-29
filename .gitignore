@@ -1,2 +1,9 @@
 node_modules
 dist
+
+dev.log
+dev_err.log
+dev_out.log
+dev_stderr.log
+dev_stdout.log
+tmp.json

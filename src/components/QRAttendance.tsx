@@ -83,6 +83,8 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const qrCodeInputRef = useRef<HTMLInputElement | null>(null);
   const trackerRef = useRef<IOUTracker | null>(null);
   const frameSkipRef = useRef(0);
+  const localUpdatesRef = useRef<Map<string, Partial<Student>>>(new Map());
+  const [localVersion, setLocalVersion] = useState(0);
 
   // تنظيف دوري لخريطة debounce
   useEffect(() => {
@@ -123,12 +125,19 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const [showReg, setShowReg] = useState(false);
 
   const studentMap = useMemo(() => { const m = new Map<string, Student>(); students.forEach(s => { if (s.qrCodeId) m.set(s.qrCodeId.trim(), s); if (s.universityId) m.set(s.universityId.trim(), s); }); return m; }, [students]);
-  const studentsWithFace = useMemo(() => students.filter(s => {
+  const allStudents = useMemo(() => {
+    const map = new Map(students.map(s => [s.id, { ...s }]));
+    localUpdatesRef.current.forEach((updates, id) => {
+      if (map.has(id)) Object.assign(map.get(id)!, updates);
+    });
+    return [...map.values()];
+  }, [students, localVersion]);
+  const studentsWithFace = useMemo(() => allStudents.filter(s => {
     if (!s.faceDescriptor) return false;
     if (Array.isArray(s.faceDescriptor)) return s.faceDescriptor.length > 0;
     if (typeof s.faceDescriptor === 'object') return true;
     return true;
-  }), [students]);
+  }), [allStudents]);
 
   const showToast = useCallback((msg: Omit<ToastMessage, 'id'>, ms = 2500) => {
     const id = ++toastCounterRef.current;
@@ -278,13 +287,12 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       const vw = video.videoWidth || 1280, vh = video.videoHeight || 720, sx = canvas.width / vw, sy = canvas.height / vh;
       let visible = 0;
       map.forEach((face) => {
+        if (face.status === 'unknown') return;
         const age = now - face.timestamp;
         visible++;
         const opacity = age < 200 ? age / 200 : Math.max(0.35, 1 - (age - 200) / BOX_FADE_MS);
-        let stroke = '#ef4444', bg = 'rgba(239,68,68,0.85)', label = '';
-        if (face.status === 'recognized') { stroke = '#10b981'; bg = 'rgba(16,185,129,0.92)'; label = face.student?.name || ''; }
-        else if (face.status === 'already') { stroke = '#f59e0b'; bg = 'rgba(245,158,11,0.92)'; label = `✓ ${face.student?.name || ''}`; }
-        else { label = '❓'; }
+        let stroke = '#10b981', bg = 'rgba(16,185,129,0.92)', label = face.student?.name || '';
+        if (face.status === 'already') { stroke = '#f59e0b'; bg = 'rgba(245,158,11,0.92)'; label = `✓ ${face.student?.name || ''}`; }
         let dx = face.box.x * sx; const dy = face.box.y * sy, dw = face.box.width * sx, dh = face.box.height * sy;
         if (isFront) dx = canvas.width - dx - dw;
         ctx.globalAlpha = opacity;
@@ -348,8 +356,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         if (now - lastRestartRef.current > 6000 && mountedRef.current) { lastRestartRef.current = now; setCameraStatus('restarting'); setTimeout(() => { if (mountedRef.current) startCamera(cf); }, 300); }
         faceTimerRef.current = setTimeout(loop, 600) as any; return;
       }
-      frameSkipRef.current = (frameSkipRef.current + 1) % (detectTimes.length > 20 ? 3 : 1);
-      if (frameSkipRef.current !== 0) { faceTimerRef.current = setTimeout(loop, 100) as any; return; }
+      const activeTracks = trackerRef.current?.getActiveFaces().length || 0;
+      const skip = activeTracks > 0 && detectTimes.length > 10 ? (activeTracks >= 3 ? 3 : 2) : 1;
+      frameSkipRef.current = (frameSkipRef.current + 1) % skip;
+      if (frameSkipRef.current !== 0) { faceTimerRef.current = setTimeout(loop, 50) as any; return; }
       const detectStart = performance.now();
       try {
         const useH = sens === 'extreme' ? true : device.useHybrid;
@@ -374,7 +384,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           const boxKey = `${Math.round(box.x / 35)}_${Math.round(box.y / 35)}_${Math.round(box.width / 35)}`;
           const now = Date.now();
 
-          const track = tracked.find(t => calculateIoU(t.box, box) > 0.35);
+          const track = tracked.find(t => calculateIoU(t.box, box) > 0.30);
           const matchedStudent = track && matchedTrackIds.get(track.id);
 
           if (track && matchedStudent) {
@@ -600,6 +610,11 @@ const handleClose = useCallback(async () => {
           students={students}
           onUpdateStudent={(id, updates) => {
             onUpdateStudent?.(id, updates);
+            localUpdatesRef.current.set(id, {
+              ...localUpdatesRef.current.get(id),
+              ...updates,
+            });
+            setLocalVersion(v => v + 1);
             setShowReg(false);
           }}
           onClose={() => setShowReg(false)}

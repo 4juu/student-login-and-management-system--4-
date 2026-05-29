@@ -102,7 +102,7 @@ const preprocessFrame = (
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) { canvas.width = 1; canvas.height = 1; return canvas; }
   ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
+  ctx.imageSmoothingQuality = 'medium';
 
   if (adaptiveLight && input instanceof HTMLVideoElement) {
     const brightness = detectBrightness(input);
@@ -220,8 +220,8 @@ export const detectFaceDirection = (landmarks: faceapi.FaceLandmarks68): FaceDir
 
   if (verticalRatio < 0.28) return 'up';
   if (verticalRatio > 0.52) return 'down';
-  if (horizontalRatio < 0.38) return 'right';
-  if (horizontalRatio > 0.62) return 'left';
+  if (horizontalRatio < 0.38) return 'left';
+  if (horizontalRatio > 0.62) return 'right';
   return 'center';
 };
 
@@ -420,15 +420,7 @@ export const checkForTampering = <T extends { id: string; name: string; faceDesc
 
   for (const s of allStudents) {
     if (s.id === excludeId || !s.faceDescriptor) continue;
-
-    let dist: number;
-    if (isMultiDescriptor(s.faceDescriptor)) {
-      dist = compareMultiDescriptor(descriptor, s.faceDescriptor);
-    } else {
-      const arr = toFloat32(s.faceDescriptor as any);
-      dist = faceapi.euclideanDistance(descriptor, arr);
-    }
-
+    const dist = compareFaces(descriptor, s.faceDescriptor as any);
     if (dist < threshold) matches.push({ id: s.id, name: s.name, distance: dist });
   }
 
@@ -441,23 +433,37 @@ export const checkForTamperingAsync = async <T extends { id: string; name: strin
   excludeId: string,
   threshold = 0.35
 ): Promise<TamperResult> => {
-  const stored: Array<{ id: string; name: string; desc: number[] }> = [];
+  const matches: Array<{ id: string; name: string; distance: number }> = [];
+  const storedSimple: Array<{ id: string; name: string; desc: number[] }> = [];
+
   for (const s of allStudents) {
     if (s.id === excludeId || !s.faceDescriptor) continue;
-    const arr = toFloat32(s.faceDescriptor as any);
-    stored.push({ id: s.id, name: s.name, desc: Array.from(arr) });
+    if (isMultiDescriptor(s.faceDescriptor)) {
+      const dist = compareMultiDescriptor(descriptor, s.faceDescriptor);
+      if (dist < threshold) matches.push({ id: s.id, name: s.name, distance: dist });
+    } else {
+      const arr = toFloat32(s.faceDescriptor as any);
+      storedSimple.push({ id: s.id, name: s.name, desc: Array.from(arr) });
+    }
   }
 
-  if (stored.length === 0) return { isTamper: false, matchedStudents: [] };
+  if (storedSimple.length === 0) return { isTamper: matches.length > 0, matchedStudents: matches };
 
   const w = getWorker();
-  if (!w) return checkForTampering(descriptor, allStudents, excludeId, threshold);
+  if (!w) {
+    for (const s of storedSimple) {
+      const d = faceapi.euclideanDistance(descriptor, new Float32Array(s.desc));
+      if (d < threshold) matches.push({ id: s.id, name: s.name, distance: d });
+    }
+    return { isTamper: matches.length > 0, matchedStudents: matches };
+  }
 
   return new Promise(resolve => {
     const handler = (e: MessageEvent) => {
       if (e.data.type === 'tamperResult') {
         w.removeEventListener('message', handler);
-        resolve({ isTamper: e.data.data.length > 0, matchedStudents: e.data.data });
+        const wMatches = (e.data.data || []) as Array<{ id: string; name: string; distance: number }>;
+        resolve({ isTamper: (matches.length + wMatches.length) > 0, matchedStudents: [...matches, ...wMatches] });
       }
     };
     w.addEventListener('message', handler);
@@ -465,13 +471,13 @@ export const checkForTamperingAsync = async <T extends { id: string; name: strin
       type: 'tamper',
       data: {
         query: Array.from(descriptor),
-        storedDescriptors: stored,
+        storedDescriptors: storedSimple,
         threshold,
       },
     });
     setTimeout(() => {
       w.removeEventListener('message', handler);
-      resolve({ isTamper: false, matchedStudents: [] });
+      resolve({ isTamper: matches.length > 0, matchedStudents: matches });
     }, 15000);
   });
 };
@@ -676,8 +682,8 @@ export interface TrackedFace {
 export class IOUTracker {
   private tracks: TrackedFace[] = [];
   private nextId = 1;
-  private readonly iouThreshold = 0.35;
-  private readonly maxLost = 5;
+  private readonly iouThreshold = 0.30;
+  private readonly maxLost = 8;
 
   update(detections: Array<{ box: { x: number; y: number; width: number; height: number }; descriptor?: Float32Array }>): TrackedFace[] {
     const matched = new Set<number>();
