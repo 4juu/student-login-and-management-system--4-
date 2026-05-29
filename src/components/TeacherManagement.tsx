@@ -842,11 +842,11 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">التدريسي</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الصلاحيات</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">إجراءات</th>
+              <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">التدريسي</th>
+              <th className="hidden sm:table-cell px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد</th>
+              <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
+              <th className="hidden sm:table-cell px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الصلاحيات</th>
+              <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">إجراءات</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -863,9 +863,9 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
                 const isDeactivated = t.active === false;
                 return (
                   <tr key={t.uid} className={`hover:bg-gray-50 ${isDeactivated ? 'bg-red-50' : isOldTeacher ? 'bg-yellow-50' : ''}`}>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center overflow-hidden">
+                    <td className="px-3 sm:px-6 py-4">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-full flex items-center justify-center overflow-hidden shrink-0">
                           {t.photoURL ? (
                             <img src={t.photoURL} alt="" className="w-full h-full object-cover" />
                           ) : (
@@ -883,44 +883,44 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600" dir="ltr">{t.email}</td>
-                    <td className="px-6 py-4 text-sm">
+                    <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-xs sm:text-sm text-gray-600" dir="ltr">{t.email}</td>
+                    <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm">
                       {isDeactivated ? (
-                        <span className="inline-flex items-center px-3 py-1 rounded-full bg-red-100 text-red-700 font-medium text-xs">🔒 معطّل</span>
+                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-red-100 text-red-700 font-medium text-[10px] sm:text-xs">🔒 معطّل</span>
                       ) : (
-                        <span className="inline-flex items-center px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium text-xs">✅ مفعّل</span>
+                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium text-[10px] sm:text-xs">✅ مفعّل</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-sm">
+                    <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-xs sm:text-sm">
                       {allowedCount === 0 ? (
-                        <span className="inline-flex items-center px-3 py-1 rounded-full bg-red-100 text-red-700 font-medium">🔒 لا توجد صلاحيات</span>
+                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-red-100 text-red-700 font-medium text-[10px] sm:text-xs">🔒 لا توجد صلاحيات</span>
                       ) : (
-                        <span className="inline-flex items-center px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium">✅ {allowedCount} مرحلة</span>
+                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium text-[10px] sm:text-xs">✅ {allowedCount} مرحلة</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-sm">
-                      <div className="flex flex-wrap gap-2">
+                    <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm">
+                      <div className="flex flex-wrap gap-1 sm:gap-2">
                         {isDeactivated && (
-                          <button onClick={() => handleReactivateTeacher(t)} disabled={loading} className="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded font-medium">🔓 إعادة تفعيل</button>
+                          <button onClick={() => handleReactivateTeacher(t)} disabled={loading} className="bg-green-100 hover:bg-green-200 text-green-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs">🔓 إعادة تفعيل</button>
                         )}
-                        <button onClick={() => { setSelectedTeacher(t); setShowPermissionModal(true); }} className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1 rounded font-medium">⚙️ الصلاحيات</button>
-                        <button onClick={() => { setSelectedTeacher(t); setEditProfileName(t.displayName); setEditProfileBio(t.bio || ''); setShowProfileModal(true); }} className="bg-sky-100 hover:bg-sky-200 text-sky-700 px-3 py-1 rounded font-medium">📝 الملف</button>
+                        <button onClick={() => { setSelectedTeacher(t); setShowPermissionModal(true); }} className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs">⚙️ الصلاحيات</button>
+                        <button onClick={() => { setSelectedTeacher(t); setEditProfileName(t.displayName); setEditProfileBio(t.bio || ''); setShowProfileModal(true); }} className="bg-sky-100 hover:bg-sky-200 text-sky-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs">📝 الملف</button>
                         {isMainAdmin && (
-                          <button onClick={() => handleOpenPasswordModal(t)} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded font-medium">🔑 الرمز</button>
+                          <button onClick={() => handleOpenPasswordModal(t)} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs">🔑 الرمز</button>
                         )}
                           {isMainAdmin && t.role === 'college_admin' && (
-                            <button onClick={async () => { if (window.confirm(`إلغاء أدمن كلية عن ${t.displayName}؟`)) { await demoteFromCollegeAdmin(t.uid); await loadTeachers(); } }} disabled={loading} className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-1 rounded font-medium">👤 إلغاء أدمن</button>
+                            <button onClick={async () => { if (window.confirm(`إلغاء أدمن كلية عن ${t.displayName}؟`)) { await demoteFromCollegeAdmin(t.uid); await loadTeachers(); } }} disabled={loading} className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs">👤 إلغاء أدمن</button>
                           )}
                           {isMainAdmin && t.role !== 'college_admin' && (() => {
                             const cId = selectedCollegeId === '__all__' ? (t.collegeId || '') : (selectedCollegeId || '');
                             const cName = colleges.find(c => c.id === cId)?.name || '';
                             if (!cId) return null;
                             return (
-                              <button onClick={async () => { if (window.confirm(`تعيين ${t.displayName} أدمن لكلية ${cName}؟`)) { await promoteToCollegeAdmin(t.uid, cId, cName); await loadTeachers(); } }} disabled={loading} className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-1 rounded font-medium">🏛️ تعيين أدمن</button>
+                              <button onClick={async () => { if (window.confirm(`تعيين ${t.displayName} أدمن لكلية ${cName}؟`)) { await promoteToCollegeAdmin(t.uid, cId, cName); await loadTeachers(); } }} disabled={loading} className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs">🏛️ تعيين أدمن</button>
                             );
                           })()}
                           {isMainAdmin && (
-                          <button onClick={() => handleDeleteTeacher(t)} disabled={loading} className="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded font-medium">🗑️ حذف</button>
+                          <button onClick={() => handleDeleteTeacher(t)} disabled={loading} className="bg-red-100 hover:bg-red-200 text-red-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs">🗑️ حذف</button>
                         )}
                       </div>
                     </td>

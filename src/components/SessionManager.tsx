@@ -212,28 +212,28 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
           {sessions.map((session) => (
             <div
               key={session.id}
-              className={`p-4 rounded-lg border-2 transition-all ${
+              className={`p-3 sm:p-4 rounded-lg border-2 transition-all ${
                 session.id === activeSessionId
                   ? 'border-green-500 bg-green-50'
                   : 'border-gray-200 bg-white hover:border-gray-300'
               }`}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {session.id === activeSessionId && (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-500 text-white">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-green-500 text-white shrink-0">
                         نشط الآن
                       </span>
                     )}
-                    <h3 className="text-lg font-bold text-gray-800">
+                    <h3 className="text-base sm:text-lg font-bold text-gray-800 truncate">
                       {editingSessionId === session.id ? (
                         <div className="flex items-center gap-2">
                           <input
                             type="text"
                             value={editSessionName}
                             onChange={e => setEditSessionName(e.target.value)}
-                            className="px-3 py-1 border border-blue-400 rounded text-lg font-bold"
+                            className="px-3 py-1 border border-blue-400 rounded text-base sm:text-lg font-bold"
                             autoFocus
                             onKeyDown={e => {
                               if (e.key === 'Enter' && editSessionName.trim()) {
@@ -253,36 +253,36 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
                     {onRenameSession && editingSessionId !== session.id && (
                       <button
                         onClick={() => { setEditingSessionId(session.id); setEditSessionName(session.name); }}
-                        className="text-blue-500 hover:text-blue-700 text-sm"
+                        className="text-blue-500 hover:text-blue-700 text-xs sm:text-sm shrink-0"
                         title="تعديل الاسم"
                       >
                         ✏️
                       </button>
                     )}
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <p className="text-xs sm:text-sm text-gray-600 mt-1">
                     📅 {session.date} | ✅ {sessionPresentCount(session.id)} حاضر
                   </p>
                 </div>
                 
-                <div className="flex gap-2">
+                <div className="flex gap-1.5 sm:gap-2 flex-wrap">
                   {session.id !== activeSessionId && (
                     <button
                       onClick={() => onSelectSession(session.id)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-200"
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 sm:py-2 px-3 sm:px-4 rounded-md transition duration-200 text-xs sm:text-sm"
                     >
                       تفعيل
                     </button>
                   )}
                   <button
                     onClick={() => handleOpenAbsent(session.id)}
-                    className="bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-md transition duration-200"
+                    className="bg-orange-500 hover:bg-orange-600 text-white font-medium py-1.5 sm:py-2 px-3 sm:px-4 rounded-md transition duration-200 text-xs sm:text-sm"
                   >
                     🔴 غياب
                   </button>
                   <button
                     onClick={() => handleDelete(session.id)}
-                    className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md transition duration-200"
+                    className="bg-red-600 hover:bg-red-700 text-white font-medium py-1.5 sm:py-2 px-3 sm:px-4 rounded-md transition duration-200 text-xs sm:text-sm"
                   >
                     حذف
                   </button>

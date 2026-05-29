@@ -215,16 +215,16 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = ({ students }) => {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 #
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 الرمز
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 الاسم
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 الكروب
               </th>
             </tr>
@@ -232,7 +232,7 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = ({ students }) => {
           <tbody className="bg-white divide-y divide-gray-200">
             {paginatedStudents.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
+                <td colSpan={4} className="px-3 sm:px-6 py-8 sm:py-12 text-center text-gray-500">
                   <div className="flex flex-col items-center gap-2">
                     <svg className="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -261,18 +261,18 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = ({ students }) => {
                 const globalIndex = (safeCurrentPage - 1) * pageSize + index + 1;
                 return (
                   <tr key={student.id} className="hover:bg-blue-50 transition">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {globalIndex}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-lg font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-md">
+                    <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm sm:text-lg font-bold text-blue-600 bg-blue-50 px-2 sm:px-3 py-1 rounded-md">
                         {student.code}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right font-medium text-gray-900">
+                    <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right font-medium text-gray-900 text-sm">
                       {student.name}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right">
                       {student.group ? (
                         <span className="inline-block px-3 py-1 bg-indigo-100 text-indigo-800 text-sm font-medium rounded-full">
                           {student.group}

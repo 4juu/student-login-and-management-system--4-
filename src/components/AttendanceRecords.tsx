@@ -431,9 +431,9 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
       {/* 🆕 شريط السنة الأكاديمية */}
-      <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center gap-2">
+      <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center gap-2">
         <span className="text-2xl">🎓</span>
         <div>
           <p className="text-sm font-bold text-indigo-800">
@@ -448,18 +448,18 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
       {/* ============================================================ */}
       {/* 📥 لوحة التصدير */}
       {/* ============================================================ */}
-      <div className="mb-8 p-6 bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-500 rounded-xl shadow-sm">
-        <div className="flex items-center gap-3 mb-4">
-          <span className="text-4xl">📊</span>
+      <div className="mb-6 sm:mb-8 p-4 sm:p-6 bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-500 rounded-xl shadow-sm">
+        <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+          <span className="text-2xl sm:text-4xl">📊</span>
           <div>
-            <h3 className="text-xl font-bold text-gray-800">تصدير سجل الحضور والغياب الرسمي (Excel)</h3>
+            <h3 className="text-base sm:text-xl font-bold text-gray-800">تصدير سجل الحضور والغياب الرسمي (Excel)</h3>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-lg border border-green-200 mb-4">
-          <label className="block text-sm font-bold text-gray-700 mb-3">اختر المدة الزمنية للتصدير:</label>
+        <div className="bg-white p-3 sm:p-4 rounded-lg border border-green-200 mb-3 sm:mb-4">
+          <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-2 sm:mb-3">اختر المدة الزمنية للتصدير:</label>
 
-          <div className="flex flex-wrap gap-6 mb-4">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-6 mb-3 sm:mb-4">
             <label className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition flex-1 min-w-[140px] sm:min-w-[200px] ${exportType === 'range' ? 'border-green-600 bg-green-50 font-bold text-green-800' : 'border-gray-200 hover:bg-gray-50'}`}>
               <input
                 type="radio"
@@ -537,9 +537,9 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
 
         <button
           onClick={handleExportOfficialExcel}
-          className="w-full bg-gradient-to-r from-green-600 to-emerald-700 hover:from-green-700 hover:to-emerald-800 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-md flex items-center justify-center gap-2 text-lg"
+          className="w-full bg-gradient-to-r from-green-600 to-emerald-700 hover:from-green-700 hover:to-emerald-800 text-white font-bold py-2.5 sm:py-3 px-4 sm:px-6 rounded-lg transition duration-200 shadow-md flex items-center justify-center gap-2 text-sm sm:text-lg"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
           📥 تحميل كشف الحضور والغياب الرسمي (Excel)
@@ -554,10 +554,10 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
       {/* ============================================================ */}
       {/* 📋 جدول العرض المباشر مع Pagination */}
       {/* ============================================================ */}
-      <div className="border-t pt-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+      <div className="border-t pt-4 sm:pt-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
           <div>
-            <h2 className="text-xl font-bold text-gray-800">سجل عمليات الدخول المباشر</h2>
+            <h2 className="text-base sm:text-xl font-bold text-gray-800">سجل عمليات الدخول المباشر</h2>
             <p className="text-xs text-gray-500 mt-1">
               📊 إجمالي: {records.length} سجل
               {filteredRecords.length !== records.length && (
@@ -571,7 +571,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
               <select
                 value={selectedSessionId}
                 onChange={(e) => setSelectedSessionId(e.target.value)}
-                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium"
+                className="px-2 sm:px-3 py-1.5 border border-gray-300 rounded-md text-xs sm:text-sm font-medium"
               >
                 <option value="all">جميع الأيام ({records.length})</option>
                 {sessions.map((session) => {
@@ -588,7 +588,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
             <button
               onClick={handleClearRecords}
               disabled={records.length === 0}
-              className="bg-red-100 hover:bg-red-200 text-red-700 disabled:opacity-50 text-sm font-medium py-1.5 px-3 rounded-md transition"
+              className="bg-red-100 hover:bg-red-200 text-red-700 disabled:opacity-50 text-xs sm:text-sm font-medium py-1.5 px-2 sm:px-3 rounded-md transition"
             >
               مسح السجلات
             </button>
@@ -617,52 +617,52 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
         )}
 
         {filteredRecords.length > pageSize && (
-          <div className="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2 text-sm">
+          <div className="mb-3 p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded-lg flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <span className="text-gray-600">عرض:</span>
               <select
                 value={pageSize}
                 onChange={e => setPageSize(Number(e.target.value))}
-                className="px-3 py-1 border border-gray-300 rounded-md text-sm bg-white"
+                className="px-2 sm:px-3 py-1 border border-gray-300 rounded-md text-xs sm:text-sm bg-white"
               >
                 {PAGE_SIZE_OPTIONS.map(size => (
                   <option key={size} value={size}>{size} سجل</option>
                 ))}
               </select>
-              <span className="text-gray-600">
+              <span className="text-gray-600 hidden xs:inline">
                 ({((safeCurrentPage - 1) * pageSize) + 1} - {Math.min(safeCurrentPage * pageSize, filteredRecords.length)} من {filteredRecords.length})
               </span>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 justify-center sm:justify-end">
               <button
                 onClick={() => setCurrentPage(1)}
                 disabled={safeCurrentPage === 1}
-                className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+                className="px-1.5 sm:px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
               >
                 ⏮
               </button>
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={safeCurrentPage === 1}
-                className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+                className="px-2 sm:px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
               >
                 ←
               </button>
-              <span className="px-3 py-1 bg-blue-600 text-white rounded text-sm font-bold">
+              <span className="px-2 sm:px-3 py-1 bg-blue-600 text-white rounded text-xs sm:text-sm font-bold">
                 {safeCurrentPage} / {totalPages}
               </span>
               <button
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={safeCurrentPage === totalPages}
-                className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+                className="px-2 sm:px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
               >
                 →
               </button>
               <button
                 onClick={() => setCurrentPage(totalPages)}
                 disabled={safeCurrentPage === totalPages}
-                className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+                className="px-1.5 sm:px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
               >
                 ⏭
               </button>
@@ -670,7 +670,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
           </div>
         )}
 
-          <div className="overflow-x-auto max-h-[500px] overflow-y-auto border rounded-lg">
+          <div className="overflow-x-auto max-h-[400px] sm:max-h-[500px] overflow-y-auto border rounded-lg">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50 sticky top-0">
               <tr>
@@ -720,38 +720,40 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
         </div>
 
         {filteredRecords.length > pageSize && (
-          <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center gap-1 flex-wrap">
+          <div className="mt-3 p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center gap-1 flex-wrap">
             <button
               onClick={() => setCurrentPage(1)}
               disabled={safeCurrentPage === 1}
-              className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+              className="px-1.5 sm:px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
             >
-              ⏮ الأولى
+              <span className="hidden sm:inline">⏮ الأولى</span>
+              <span className="sm:hidden">⏮</span>
             </button>
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={safeCurrentPage === 1}
-              className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+              className="px-2 sm:px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
             >
-              ← السابق
+              <span className="hidden sm:inline">← السابق</span>
+              <span className="sm:hidden">←</span>
             </button>
 
-            {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
               let pageNum: number;
-              if (totalPages <= 7) {
+              if (totalPages <= 5) {
                 pageNum = i + 1;
-              } else if (safeCurrentPage <= 4) {
+              } else if (safeCurrentPage <= 3) {
                 pageNum = i + 1;
-              } else if (safeCurrentPage >= totalPages - 3) {
-                pageNum = totalPages - 6 + i;
+              } else if (safeCurrentPage >= totalPages - 2) {
+                pageNum = totalPages - 4 + i;
               } else {
-                pageNum = safeCurrentPage - 3 + i;
+                pageNum = safeCurrentPage - 2 + i;
               }
               return (
                 <button
                   key={pageNum}
                   onClick={() => setCurrentPage(pageNum)}
-                  className={`px-3 py-1 rounded text-sm font-medium ${
+                  className={`px-2 sm:px-3 py-1 rounded text-xs sm:text-sm font-medium ${
                     pageNum === safeCurrentPage
                       ? 'bg-blue-600 text-white'
                       : 'bg-white border border-gray-300 hover:bg-gray-100'
@@ -765,16 +767,18 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
             <button
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={safeCurrentPage === totalPages}
-              className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+              className="px-2 sm:px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
             >
-              التالي →
+              <span className="hidden sm:inline">التالي →</span>
+              <span className="sm:hidden">→</span>
             </button>
             <button
               onClick={() => setCurrentPage(totalPages)}
               disabled={safeCurrentPage === totalPages}
-              className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+              className="px-1.5 sm:px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
             >
-              الأخيرة ⏭
+              <span className="hidden sm:inline">الأخيرة ⏭</span>
+              <span className="sm:hidden">⏭</span>
             </button>
           </div>
         )}
