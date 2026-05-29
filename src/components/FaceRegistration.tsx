@@ -12,7 +12,7 @@ interface FaceRegistrationProps {
   onClose: () => void;
 }
 
-type Step = 'search' | 'camera' | 'capture' | 'success';
+type Step = 'search' | 'camera' | 'capture' | 'success' | 'confirm';
 
 const DIR_EMOJI: Record<FaceDirection, string> = { center: '⬜', right: '➡️', left: '⬅️', up: '⬆️', down: '⬇️' };
 const QUALITY_COLORS: Record<QualityLevel, string> = { excellent: 'text-green-600 bg-green-50', good: 'text-blue-600 bg-blue-50', fair: 'text-amber-600 bg-amber-50', poor: 'text-red-600 bg-red-50' };
@@ -74,9 +74,15 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
     }
   }, []);
 
+  const hasFaceDesc = (s: Student) => s.faceDescriptor && (
+    Array.isArray(s.faceDescriptor) ? s.faceDescriptor.length > 0 :
+    typeof s.faceDescriptor === 'object' ? true : true
+  );
+
   const handleSelectStudent = (s: Student) => {
     setSelectedStudent(s);
-    setStep('camera');
+    if (hasFaceDesc(s)) setStep('confirm');
+    else setStep('camera');
   };
 
   const handleCameraChoice = (f: 'user' | 'environment') => {
@@ -87,8 +93,8 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
 
   const handleStartCapture = useCallback(() => {
     if (!videoRef.current || !cameraReady || capturing) return;
-    setCountdown(3);
-    let c = 3;
+    setCountdown(2);
+    let c = 2;
     const iv = setInterval(() => {
       c--;
       if (c > 0) { setCountdown(c); }
@@ -210,6 +216,22 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
           </div>
         )}
 
+        {/* Confirm Update Step */}
+        {step === 'confirm' && selectedStudent && (
+          <div className="p-5 text-center">
+            <div className="text-5xl mb-3">🔄</div>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">بصمة موجودة</h3>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+              <p className="text-sm font-bold text-amber-800 mb-1">{selectedStudent.name}</p>
+              <p className="text-xs text-amber-600">هذا الطالب لديه بصمة مسجلة بالفعل. هل تريد تحديثها؟</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={handleBackToSearch} className="py-3.5 bg-gray-200 text-gray-700 font-bold rounded-xl active:scale-95 text-sm">إلغاء</button>
+              <button onClick={() => setStep('camera')} className="py-3.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold rounded-xl active:scale-95 text-sm">✅ تحديث</button>
+            </div>
+          </div>
+        )}
+
         {/* Camera Choice Step */}
         {step === 'camera' && selectedStudent && (
           <div className="p-5 text-center">
@@ -249,7 +271,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
 
             <div className="relative mb-3">
               <div className="relative rounded-2xl overflow-hidden bg-gray-900 mx-auto" style={{ width: 260, height: 260 }}>
-                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
+                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }} />
                 {!cameraReady && !error && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
                     <div className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
@@ -333,18 +355,6 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
               </div>
             )}
 
-            {!capturing && !error && cameraReady && (
-              <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-xl">
-                <p className="text-xs font-bold text-purple-800 mb-1">📋 التعليمات:</p>
-                <ul className="text-[10px] text-purple-700 space-y-0.5 list-decimal list-inside">
-                  <li>اضغط "بدء التسجيل"</li>
-                  <li>انظر للكاميرا مباشرة</li>
-                  <li>حرّك وجهك ببطء (يمين، يسار، أعلى، أسفل)</li>
-                  <li>التسجيل يستغرق <strong>10 ثوانٍ</strong> فقط</li>
-                </ul>
-              </div>
-            )}
-
             {!capturing && (
               <div className="grid grid-cols-2 gap-2">
                 <button onClick={handleBackToSearch} className="py-3 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95 text-sm">🔙 رجوع</button>
@@ -369,14 +379,29 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
             <p className="text-gray-800 font-bold">{selectedStudent.name}</p>
             {capInfo && (
               <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-2.5">
-                <p className="text-xs text-green-700 font-medium">✨ {capInfo.totalGood} لقطة • {capInfo.capturedDirections.size} اتجاه • دوران {capInfo.rotationCoverage}%</p>
-                <div className="flex justify-center gap-1 mt-1">
+                <div className="flex justify-center gap-3 mb-2">
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-green-600">{capInfo.totalGood}</div>
+                    <div className="text-[8px] text-green-500">لقطة</div>
+                  </div>
+                  <div className="w-px bg-green-200" />
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-green-600">{capInfo.capturedDirections.size}</div>
+                    <div className="text-[8px] text-green-500">اتجاه</div>
+                  </div>
+                  <div className="w-px bg-green-200" />
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-green-600">{capInfo.rotationCoverage}%</div>
+                    <div className="text-[8px] text-green-500">دوران</div>
+                  </div>
+                </div>
+                <div className="flex justify-center gap-1">
                   {ALL_DIRS.map(dir => <span key={dir} className={`text-sm ${capInfo.capturedDirections.has(dir) ? '' : 'opacity-20'}`}>{DIR_EMOJI[dir]}</span>)}
                 </div>
-                <p className={`text-[10px] font-bold mt-1 ${QUALITY_COLORS[capInfo.qualityLevel]}`}>{QUALITY_LABELS[capInfo.qualityLevel]}</p>
+                <p className={`text-[10px] font-bold mt-2 ${QUALITY_COLORS[capInfo.qualityLevel]}`}>{QUALITY_LABELS[capInfo.qualityLevel]}</p>
               </div>
             )}
-            <button onClick={onClose} className="w-full mt-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-lg active:scale-95 text-sm">✅ تم</button>
+            <button onClick={onClose} className="w-full mt-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-lg active:scale-95 text-sm">👍 موافق</button>
           </div>
         )}
 

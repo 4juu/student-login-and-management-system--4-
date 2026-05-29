@@ -31,14 +31,14 @@ const QR_REGION_ID = 'qr-reader-v3';
 const DUPLICATE_BLOCK_MS = 30_000;
 const BULK_FACE_BLOCK_MS = 120_000;
 const BOX_FADE_MS = 4000;
-const CONFIDENCE_THRESHOLD = 0.60;
+const CONFIDENCE_THRESHOLD = 0.55;
 
 interface DeviceTier { tier: 'low' | 'mid' | 'high'; cores: number; memory: number; fps: number; maxFaces: number; intervalMs: number; useHybrid: boolean; }
 const detectDeviceTier = (): DeviceTier => {
   const c = navigator.hardwareConcurrency || 2, m = (navigator as any).deviceMemory || 2;
-  if (c >= 8 && m >= 6) return { tier: 'high', cores: c, memory: m, fps: 30, maxFaces: 8, intervalMs: 300, useHybrid: true };
-  if (c >= 4 && m >= 3) return { tier: 'mid', cores: c, memory: m, fps: 20, maxFaces: 5, intervalMs: 450, useHybrid: false };
-  return { tier: 'low', cores: c, memory: m, fps: 10, maxFaces: 3, intervalMs: 700, useHybrid: false };
+  if (c >= 8 && m >= 6) return { tier: 'high', cores: c, memory: m, fps: 30, maxFaces: 10, intervalMs: 250, useHybrid: true };
+  if (c >= 4 && m >= 3) return { tier: 'mid', cores: c, memory: m, fps: 24, maxFaces: 6, intervalMs: 350, useHybrid: true };
+  return { tier: 'low', cores: c, memory: m, fps: 15, maxFaces: 4, intervalMs: 550, useHybrid: false };
 };
 
 const extractQrCodeId = (t: string): string | null => {
@@ -261,46 +261,54 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     const video = document.querySelector(`#${QR_REGION_ID} video`) as HTMLVideoElement | null;
     if (!canvas || !video) return;
     const isFront = facing === 'user';
+    let frameCount = 0;
     const draw = () => {
       if (!mountedRef.current) return;
       if (!canvas || !video || video.readyState < 2) { animFrameRef.current = requestAnimationFrame(draw); return; }
+      const now = Date.now();
+      const map = detectedFacesRef.current;
+      let hasLive = false;
+      map.forEach((f, k) => { if (now - f.timestamp < BOX_FADE_MS) hasLive = true; else map.delete(k); });
+      frameCount = (frameCount + 1) % 2;
+      if (!hasLive && frameCount !== 0) { animFrameRef.current = requestAnimationFrame(draw); return; }
       const rect = video.getBoundingClientRect();
       if (Math.abs(canvas.width - rect.width) > 1 || Math.abs(canvas.height - rect.height) > 1) { canvas.width = rect.width; canvas.height = rect.height; }
       const ctx = canvas.getContext('2d'); if (!ctx) { animFrameRef.current = requestAnimationFrame(draw); return; }
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const now = Date.now(), vw = video.videoWidth || 1280, vh = video.videoHeight || 720, sx = canvas.width / vw, sy = canvas.height / vh;
+      const vw = video.videoWidth || 1280, vh = video.videoHeight || 720, sx = canvas.width / vw, sy = canvas.height / vh;
       let visible = 0;
-      detectedFacesRef.current.forEach((face, key) => {
-        const age = now - face.timestamp; if (age > BOX_FADE_MS) { detectedFacesRef.current.delete(key); return; }
+      map.forEach((face) => {
+        const age = now - face.timestamp;
         visible++;
         const opacity = age < 200 ? age / 200 : Math.max(0.35, 1 - (age - 200) / BOX_FADE_MS);
-        let stroke = '#ef4444', bg = 'rgba(239,68,68,0.85)', label = '❓';
+        let stroke = '#ef4444', bg = 'rgba(239,68,68,0.85)', label = '';
         if (face.status === 'recognized') { stroke = '#10b981'; bg = 'rgba(16,185,129,0.92)'; label = face.student?.name || ''; }
         else if (face.status === 'already') { stroke = '#f59e0b'; bg = 'rgba(245,158,11,0.92)'; label = `✓ ${face.student?.name || ''}`; }
+        else { label = '❓'; }
         let dx = face.box.x * sx; const dy = face.box.y * sy, dw = face.box.width * sx, dh = face.box.height * sy;
         if (isFront) dx = canvas.width - dx - dw;
         ctx.globalAlpha = opacity;
-        ctx.strokeStyle = stroke; ctx.lineWidth = 2.5; ctx.strokeRect(dx, dy, dw, dh);
-        const cl = Math.max(12, Math.min(24, dw * 0.2));
-        ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.strokeStyle = stroke;
+        ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.strokeRect(dx, dy, dw, dh);
+        const cl = Math.max(10, Math.min(18, dw * 0.18));
+        ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = stroke;
         ctx.beginPath();
         ctx.moveTo(dx, dy + cl); ctx.lineTo(dx, dy); ctx.lineTo(dx + cl, dy);
         ctx.moveTo(dx + dw - cl, dy); ctx.lineTo(dx + dw, dy); ctx.lineTo(dx + dw, dy + cl);
         ctx.moveTo(dx + dw, dy + dh - cl); ctx.lineTo(dx + dw, dy + dh); ctx.lineTo(dx + dw - cl, dy + dh);
         ctx.moveTo(dx + cl, dy + dh); ctx.lineTo(dx, dy + dh); ctx.lineTo(dx, dy + dh - cl);
         ctx.stroke();
-        if (label && face.status !== 'unknown') {
-          const fs = Math.max(11, Math.min(17, dw / 7));
-          ctx.font = `bold ${fs}px Arial`; const tw = ctx.measureText(label).width, pad = 7, bw = tw + pad * 2, bh = fs + pad;
-          const bx = dx + (dw - bw) / 2, by = dy - bh - 6;
-          ctx.fillStyle = bg; drawRoundedRect(ctx, bx, by, bw, bh, 6); ctx.fill();
+        if (label) {
+          const fs = Math.max(10, Math.min(15, dw / 8));
+          ctx.font = `bold ${fs}px Arial`; const tw = ctx.measureText(label).width, pad = 5, bw = tw + pad * 2, bh = fs + pad;
+          const bx = dx + (dw - bw) / 2, by = dy - bh - 5;
+          ctx.fillStyle = bg; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, by, bw, bh, 5) : ctx.rect(bx, by, bw, bh); ctx.fill();
           ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, bx + bw / 2, by + bh / 2);
           if (face.confidence > 0 && face.status === 'recognized') {
-            const cf = Math.max(9, fs - 3); ctx.font = `bold ${cf}px Arial`;
-            const ct = `${face.confidence}%`, cw = ctx.measureText(ct).width + 10, ch = cf + 5;
-            const cx2 = dx + (dw - cw) / 2, cy2 = dy + dh + 4;
-            ctx.fillStyle = bg; drawRoundedRect(ctx, cx2, cy2, cw, ch, 4); ctx.fill();
-            ctx.fillStyle = '#fff'; ctx.fillText(ct, cx2 + cw / 2, cy2 + ch / 2);
+            const ct = `${face.confidence}%`;
+            ctx.font = `bold ${fs - 2}px Arial`; const cw2 = ctx.measureText(ct).width + 8, ch2 = fs;
+            const cx2 = dx + (dw - cw2) / 2, cy2 = dy + dh + 3;
+            ctx.fillStyle = bg; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(cx2, cy2, cw2, ch2, 4) : ctx.rect(cx2, cy2, cw2, ch2); ctx.fill();
+            ctx.fillStyle = '#fff'; ctx.fillText(ct, cx2 + cw2 / 2, cy2 + ch2 / 2);
           }
         }
         ctx.globalAlpha = 1;
