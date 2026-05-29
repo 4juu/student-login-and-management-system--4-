@@ -305,6 +305,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   const [selectedStudentCard, setSelectedStudentCard] = useState<StudentQuickCard | null>(null);
   const [showStudentCard, setShowStudentCard] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showSessionsModal, setShowSessionsModal] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -1088,24 +1089,30 @@ ${dataContext}`;
                               </p>
                             </div>
                           </div>
-                          <div className="text-left">
-                            <div className={`text-xs font-bold px-2 py-1 rounded-full ${selectedStudentCard.isPresentToday ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-red-500/10 text-red-700 dark:text-red-400'}`}>
+                          <div className="flex items-center gap-2">
+                            <div className={`text-xs font-bold px-2 py-1 rounded-full ${selectedStudentCard.isPresentToday ? 'bg-green-500/10 text-green-700' : 'bg-red-500/10 text-red-700'}`}>
                               {selectedStudentCard.isPresentToday ? '✅ حاضر اليوم' : '❌ غائب اليوم'}
                             </div>
+                            <button
+                              onClick={() => { setShowStudentCard(false); setSelectedStudentCard(null); setStudentSearchQuery(''); }}
+                              className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-red-50 text-red-400 hover:text-red-600 text-sm transition flex-shrink-0"
+                            >
+                              ✕
+                            </button>
                           </div>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-3 divide-x divide-x-reverse divide-gray-200">
-                        <div className="text-center py-2.5 px-2">
+                        <div className="text-center py-3 px-2">
                           <p className="text-lg font-bold text-green-600">{selectedStudentCard.attendedCount}</p>
                           <p className="text-[10px] text-gray-500">✅ حضور</p>
                         </div>
-                        <div className="text-center py-2.5 px-2">
+                        <div className="text-center py-3 px-2">
                           <p className="text-lg font-bold text-red-500">{selectedStudentCard.absentCount}</p>
                           <p className="text-[10px] text-gray-500">❌ غياب</p>
                         </div>
-                        <div className="text-center py-2.5 px-2">
+                        <div className="text-center py-3 px-2">
                           <p className={`text-lg font-bold ${parseFloat(selectedStudentCard.percentage) >= 75 ? 'text-green-600' : parseFloat(selectedStudentCard.percentage) >= 50 ? 'text-yellow-600' : 'text-red-500'}`}>
                             {selectedStudentCard.percentage}%
                           </p>
@@ -1113,63 +1120,73 @@ ${dataContext}`;
                         </div>
                       </div>
 
-                      {(() => {
-                        const todayStatus = getTodayStatus(selectedStudentCard);
-                        if (todayStatus.sessions.length > 0) {
-                          return (
-                            <div className="px-3 py-2 bg-yellow-500/5 border-b border-border">
-                              <p className="text-[11px] font-bold text-yellow-700 mb-1.5">🌟 سجلات اليوم:</p>
-                              <div className="space-y-1">
-                                {todayStatus.sessions.map((s, idx) => (
-                                  <div key={idx} className={`flex items-center gap-2 text-[11px] px-2 py-1 rounded-lg ${s.present ? 'bg-green-500/5 text-green-700 dark:text-green-400' : 'bg-red-500/5 text-red-600 dark:text-red-400'}`}>
-                                    <span>{s.present ? '✅' : '❌'}</span>
-                                    <span className="font-medium">{s.name}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        }
-                        return (
-                          <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
-                            <p className="text-[11px] text-gray-500 text-center">⚠️ لا توجد جلسات اليوم</p>
-                          </div>
-                        );
-                      })()}
-
-                      <div className="max-h-[300px] overflow-y-auto">
-                        {selectedStudentCard.attendedSessions.length === 0 ? (
-                          <div className="text-center py-3 text-muted-foreground text-xs">لا توجد جلسات مسجلة</div>
-                        ) : (
-                          <div className="divide-y divide-gray-200">
-                            {selectedStudentCard.attendedSessions.map((as_, idx) => (
-                              <div key={idx} className={`flex items-center gap-2 px-3 py-2 text-[11px] ${as_.present ? 'hover:bg-green-500/5' : 'hover:bg-red-500/5'} transition`}>
-                                <span className="flex-shrink-0">{as_.present ? '✅' : '❌'}</span>
-                                <div className="flex-1 min-w-0">
-                                  <p className={`font-medium truncate ${as_.present ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{as_.session.name}</p>
-                                  <p className="text-muted-foreground text-[10px]">{formatDateWithDay(as_.session._normalizedDate)}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex gap-2 p-2 bg-gray-50 border-t border-gray-200">
+                      <div className="flex gap-2 p-3 bg-gray-50 border-t border-gray-200">
+                        <button
+                          onClick={() => setShowSessionsModal(true)}
+                          className="flex-1 bg-gradient-to-l from-emerald-500 to-green-600 text-white text-[11px] py-2.5 rounded-lg hover:from-emerald-600 hover:to-green-700 transition font-medium shadow-sm"
+                        >
+                          📋 سجلات الحضور ({selectedStudentCard.attendedSessions.length})
+                        </button>
                         <button
                           onClick={() => sendStudentQuestion(selectedStudentCard.student)}
-                          className="flex-1 bg-blue-500 text-white text-[11px] py-2 rounded-lg hover:bg-blue-600 transition font-medium"
+                          className="flex-1 bg-blue-500 text-white text-[11px] py-2.5 rounded-lg hover:bg-blue-600 transition font-medium shadow-sm"
                         >
                           💬 اسأل AI عنه
                         </button>
-                        <button
-                          onClick={() => { setShowStudentCard(false); setSelectedStudentCard(null); setStudentSearchQuery(''); }}
-                          className="px-3 bg-gray-200 text-gray-700 text-[11px] py-2 rounded-lg hover:bg-gray-300 transition"
-                        >
-                          إغلاق
-                        </button>
                       </div>
                     </div>
+              )}
+
+              {/* نافذة منبثقة لكل السجلات */}
+              {showSessionsModal && selectedStudentCard && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"
+                     onMouseDown={() => setShowSessionsModal(false)}>
+                  <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-[calc(100%-16px)] max-h-[calc(100%-16px)] flex flex-col overflow-hidden"
+                       onMouseDown={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50 flex-shrink-0">
+                      <span className="text-sm font-bold text-gray-900">📋 سجلات حضور {selectedStudentCard.student.name}</span>
+                      <button
+                        onClick={() => setShowSessionsModal(false)}
+                        className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-red-50 text-red-400 hover:text-red-600 text-sm transition"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+                      {selectedStudentCard.attendedSessions.length === 0 ? (
+                        <div className="text-center py-8 text-gray-400 text-sm">لا توجد سجلات</div>
+                      ) : (
+                        selectedStudentCard.attendedSessions.map((as_, idx) => (
+                          <div key={idx}
+                               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm ${
+                                 as_.present
+                                   ? 'bg-green-50 border border-green-200 text-green-800'
+                                   : 'bg-red-50 border border-red-200 text-red-800'
+                               }`}>
+                            <span className="text-base flex-shrink-0">{as_.present ? '✅' : '❌'}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold truncate">{as_.session.name}</p>
+                              <p className={`text-[11px] mt-0.5 ${as_.present ? 'text-green-600' : 'text-red-600'}`}>
+                                {formatDateWithDay(as_.session._normalizedDate)}
+                              </p>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    <div className="px-4 py-2.5 border-t border-gray-200 bg-gray-50 flex-shrink-0 flex justify-between items-center">
+                      <span className="text-[11px] text-gray-500">
+                        ✅ {selectedStudentCard.attendedCount} حضور • ❌ {selectedStudentCard.absentCount} غياب
+                      </span>
+                      <button
+                        onClick={() => setShowSessionsModal(false)}
+                        className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs rounded-lg transition font-medium"
+                      >
+                        إغلاق
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
 
               {/* 💬 الرسائل */}
