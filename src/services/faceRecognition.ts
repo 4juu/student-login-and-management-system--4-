@@ -306,6 +306,7 @@ export interface MultiDescriptor {
   version?: number;
 }
 
+// ✅ تحديث: 32 بدلاً من 48
 const TOP_DIMS = 32;
 
 const compressAngleDescriptor = (desc: Float32Array): number[] => {
