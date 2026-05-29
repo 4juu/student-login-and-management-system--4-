@@ -37,7 +37,7 @@ interface ToastMessage {
   type: ToastType;
   title: string;
   text?: string;
-  visible: boolean; // ✅ إضافة visible
+  visible: boolean;
 }
 
 interface DetectedFaceBox {
@@ -46,6 +46,10 @@ interface DetectedFaceBox {
   status: 'recognized' | 'already' | 'unknown';
   confidence: number;
   timestamp: number;
+  blinkPhase: number;
+  blinkCount: number;
+  blinkStart: number;
+  blinkVisible: boolean;
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -54,8 +58,16 @@ interface DetectedFaceBox {
 const QR_REGION_ID = 'qr-reader-v3';
 const DUPLICATE_BLOCK_MS = 30_000;
 const BULK_FACE_BLOCK_MS = 120_000;
-const BOX_FADE_MS = 4000;
 const CONFIDENCE_THRESHOLD = 0.55;
+
+// ✅ ثوابت نظام الومضات
+const BLINK_ON_MS = 500;
+const BLINK_OFF_MS = 200;
+const PHASE_1_BLINKS = 3;
+const PHASE_1_REST_MS = 4000;
+const PHASE_2_BLINKS = 2;
+const PHASE_2_REST_MS = 2000;
+const PHASE_3_BLINKS = 2;
 
 /* ══════════════════════════════════════════════════════════
    Device Detection
@@ -200,7 +212,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const animFrameRef = useRef<number | null>(null);
   const lastRestartRef = useRef(0);
   const toastCounterRef = useRef(0);
-  const toastSequenceRef = useRef<Map<number, number>>(new Map()); // ✅ تتبع التسلسل
+  const toastSequenceRef = useRef<Map<number, number>>(new Map());
   const qrCodeInputRef = useRef<HTMLInputElement | null>(null);
   const trackerRef = useRef<IOUTracker | null>(null);
   const frameSkipRef = useRef(0);
@@ -272,7 +284,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     const seqId = id;
     toastSequenceRef.current.set(id, seqId);
 
-    // أضف التوست مخفياً في البداية
     setToasts(prev => [{ ...msg, id, visible: false }, ...prev].slice(0, 4));
 
     const runSequence = async () => {
@@ -289,25 +300,24 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       const remove = () =>
         setToasts(prev => prev.filter(t => t.id !== id));
 
-      // تحقق أن التسلسل لا يزال صالحاً
       const isActive = () =>
         mountedRef.current && toastSequenceRef.current.get(id) === seqId;
 
-      /* ─── دفعة 1: يظهر 3 مرات ─── */
+      // دفعة 1: 3 مرات
       for (let i = 0; i < 3; i++) {
         if (!isActive()) return;
         show();
         await sleep(500);
         if (!isActive()) return;
         hide();
-        if (i < 2) await sleep(200); // استراحة قصيرة بين الومضات
+        if (i < 2) await sleep(200);
       }
 
-      // انتظار 4 ثواني
+      // استراحة 4 ثواني
       await sleep(4000);
       if (!isActive()) return;
 
-      /* ─── دفعة 2: يظهر مرتين ─── */
+      // دفعة 2: مرتين
       for (let i = 0; i < 2; i++) {
         if (!isActive()) return;
         show();
@@ -317,11 +327,11 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         if (i < 1) await sleep(200);
       }
 
-      // انتظار ثانيتين
+      // استراحة ثانيتين
       await sleep(2000);
       if (!isActive()) return;
 
-      /* ─── دفعة 3: يظهر مرتين ثم يختفي نهائياً ─── */
+      // دفعة 3: مرتين
       for (let i = 0; i < 2; i++) {
         if (!isActive()) return;
         show();
@@ -655,7 +665,9 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     };
   }, [mode, faceModelsReady, showToast]);
 
-  /* ─── Canvas Overlay ─── */
+  /* ══════════════════════════════════════════════════════════
+     ✅ Canvas Overlay - مع نظام ومضات المربع
+  ══════════════════════════════════════════════════════════ */
   useEffect(() => {
     if (mode !== 'bulk' || !cameraReady) {
       if (animFrameRef.current) {
@@ -683,10 +695,70 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       const now = Date.now();
       const map = detectedFacesRef.current;
 
+      // ✅ تحديث حالة الومضات لكل وجه
       let hasLive = false;
-      map.forEach((f, k) => {
-        if (now - f.timestamp < BOX_FADE_MS) hasLive = true;
-        else map.delete(k);
+      map.forEach((face, k) => {
+        if (face.blinkPhase >= 5) {
+          map.delete(k);
+          return;
+        }
+
+        hasLive = true;
+        const elapsed = now - face.blinkStart;
+
+        if (face.blinkPhase === 0) {
+          // دفعة 1: 3 ومضات
+          const cycleDuration = BLINK_ON_MS + BLINK_OFF_MS;
+          const currentCycle = Math.floor(elapsed / cycleDuration);
+
+          if (currentCycle >= PHASE_1_BLINKS) {
+            face.blinkPhase = 1;
+            face.blinkStart = now;
+            face.blinkVisible = false;
+          } else {
+            const posInCycle = elapsed % cycleDuration;
+            face.blinkVisible = posInCycle < BLINK_ON_MS;
+          }
+        } else if (face.blinkPhase === 1) {
+          // استراحة 4 ثواني
+          face.blinkVisible = false;
+          if (elapsed >= PHASE_1_REST_MS) {
+            face.blinkPhase = 2;
+            face.blinkStart = now;
+          }
+        } else if (face.blinkPhase === 2) {
+          // دفعة 2: مرتين
+          const cycleDuration = BLINK_ON_MS + BLINK_OFF_MS;
+          const currentCycle = Math.floor(elapsed / cycleDuration);
+
+          if (currentCycle >= PHASE_2_BLINKS) {
+            face.blinkPhase = 3;
+            face.blinkStart = now;
+            face.blinkVisible = false;
+          } else {
+            const posInCycle = elapsed % cycleDuration;
+            face.blinkVisible = posInCycle < BLINK_ON_MS;
+          }
+        } else if (face.blinkPhase === 3) {
+          // استراحة ثانيتين
+          face.blinkVisible = false;
+          if (elapsed >= PHASE_2_REST_MS) {
+            face.blinkPhase = 4;
+            face.blinkStart = now;
+          }
+        } else if (face.blinkPhase === 4) {
+          // دفعة 3: مرتين
+          const cycleDuration = BLINK_ON_MS + BLINK_OFF_MS;
+          const currentCycle = Math.floor(elapsed / cycleDuration);
+
+          if (currentCycle >= PHASE_3_BLINKS) {
+            face.blinkPhase = 5;
+            face.blinkVisible = false;
+          } else {
+            const posInCycle = elapsed % cycleDuration;
+            face.blinkVisible = posInCycle < BLINK_ON_MS;
+          }
+        }
       });
 
       frameCount = (frameCount + 1) % 2;
@@ -741,10 +813,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       map.forEach(face => {
         if (face.status === 'unknown') return;
 
-        const age = now - face.timestamp;
-        visible++;
+        // ✅ إذا مخفي في هذه اللحظة، لا ترسم
+        if (!face.blinkVisible) return;
 
-        const opacity = age < 200 ? age / 200 : Math.max(0.35, 1 - (age - 200) / BOX_FADE_MS);
+        visible++;
 
         let stroke = '#10b981';
         let bg = 'rgba(16,185,129,0.92)';
@@ -765,7 +837,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           dx = canvas.width - dx - dw;
         }
 
-        ctx.globalAlpha = opacity;
+        ctx.globalAlpha = 1;
         ctx.strokeStyle = stroke;
         ctx.lineWidth = 2;
         ctx.strokeRect(dx, dy, dw, dh);
@@ -883,6 +955,9 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     []
   );
 
+  /* ══════════════════════════════════════════════════════════
+     ✅ Face Loop - مع إنشاء DetectedFaceBox بالحقول الجديدة
+  ══════════════════════════════════════════════════════════ */
   const startFaceLoop = useCallback(
     (sens: BulkSensitivity, cf: CameraFacing, faces: Student[]) => {
       stopFaceLoop();
@@ -985,13 +1060,23 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               const lastSeen = lastDetectionMap.get(matchedStudent.id) || 0;
 
               if (now - lastSeen < DETECTION_COOLDOWN) {
-                detectedFacesRef.current.set(boxKey, {
-                  box: { x: box.x, y: box.y, width: box.width, height: box.height },
-                  student: matchedStudent,
-                  status: 'already',
-                  confidence: 100,
-                  timestamp: now,
-                });
+                // ✅ تحديث الموقع فقط إذا موجود
+                if (!detectedFacesRef.current.has(boxKey)) {
+                  detectedFacesRef.current.set(boxKey, {
+                    box: { x: box.x, y: box.y, width: box.width, height: box.height },
+                    student: matchedStudent,
+                    status: 'already',
+                    confidence: 100,
+                    timestamp: now,
+                    blinkPhase: 0,
+                    blinkCount: 0,
+                    blinkStart: now,
+                    blinkVisible: true,
+                  });
+                } else {
+                  const existing = detectedFacesRef.current.get(boxKey)!;
+                  existing.box = { x: box.x, y: box.y, width: box.width, height: box.height };
+                }
                 continue;
               }
             }
@@ -1030,23 +1115,38 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                 alreadyPresentIds.has(s.id) ||
                 now - (lastScansRef.current[`bulk_${s.id}`] || 0) < BULK_FACE_BLOCK_MS
               ) {
-                detectedFacesRef.current.set(boxKey, {
-                  box: { x: box.x, y: box.y, width: box.width, height: box.height },
-                  student: s,
-                  status: 'already',
-                  confidence: bestMatch.confidence,
-                  timestamp: now,
-                });
+                // ✅ مسجل بالفعل
+                if (!detectedFacesRef.current.has(boxKey)) {
+                  detectedFacesRef.current.set(boxKey, {
+                    box: { x: box.x, y: box.y, width: box.width, height: box.height },
+                    student: s,
+                    status: 'already',
+                    confidence: bestMatch.confidence,
+                    timestamp: now,
+                    blinkPhase: 0,
+                    blinkCount: 0,
+                    blinkStart: now,
+                    blinkVisible: true,
+                  });
+                } else {
+                  const existing = detectedFacesRef.current.get(boxKey)!;
+                  existing.box = { x: box.x, y: box.y, width: box.width, height: box.height };
+                }
               } else {
                 lastScansRef.current[`bulk_${s.id}`] = now;
                 lastDetectionMap.set(s.id, now);
 
+                // ✅ تسجيل جديد
                 detectedFacesRef.current.set(boxKey, {
                   box: { x: box.x, y: box.y, width: box.width, height: box.height },
                   student: s,
                   status: 'recognized',
                   confidence: bestMatch.confidence,
                   timestamp: now,
+                  blinkPhase: 0,
+                  blinkCount: 0,
+                  blinkStart: now,
+                  blinkVisible: true,
                 });
 
                 await onMarkAttendance(s);
@@ -1079,12 +1179,17 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                 }
               }
             } else {
+              // ✅ غير معروف
               detectedFacesRef.current.set(boxKey, {
                 box: { x: box.x, y: box.y, width: box.width, height: box.height },
                 student: null,
                 status: 'unknown',
                 confidence: 0,
                 timestamp: now,
+                blinkPhase: 0,
+                blinkCount: 0,
+                blinkStart: now,
+                blinkVisible: true,
               });
             }
           }
@@ -1187,7 +1292,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   /* ─── Handle Close ─── */
   const handleClose = useCallback(async () => {
     mountedRef.current = false;
-    toastSequenceRef.current.clear(); // ✅ إيقاف كل التسلسلات
+    toastSequenceRef.current.clear();
     stopFaceLoop();
     await hardStop();
     await new Promise(r => setTimeout(r, 150));
@@ -1560,9 +1665,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             className={`
               bg-gradient-to-r ${toastBg[t.type]} rounded-xl px-4 py-3 shadow-2xl
               transition-all duration-200
-              ${t.visible
-                ? 'opacity-100 scale-100 translate-y-0'
-                : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+              ${
+                t.visible
+                  ? 'opacity-100 scale-100 translate-y-0'
+                  : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
               }
             `}
           >
