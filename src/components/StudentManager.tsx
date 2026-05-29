@@ -1321,13 +1321,13 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                               title={
                                 student.faceRegisteredAt
                                   ? `سُجلت في: ${new Date(student.faceRegisteredAt).toLocaleDateString('ar-EG')}\n${
-                                      faceFormat === 'multi' ? '🆕 متعدد الزوايا (Multi)' :
+                                      faceFormat === 'multi' ? 'متعدد الزوايا (Multi)' :
                                       isCompressed ? '🗜️ مضغوطة' : '⚠️ غير مضغوطة'
                                     }`
                                   : 'مسجّلة'
                               }
                             >
-                              {faceFormat === 'multi' ? '✅ 🆕' : isCompressed ? '✅ 🗜️' : '✅ ⚠️'}
+                              {faceFormat === 'multi' ? '✅' : isCompressed ? '✅ 🗜️' : '✅ ⚠️'}
                             </span>
                             {onUpdateStudent && (
                               <button

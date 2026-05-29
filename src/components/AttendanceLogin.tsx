@@ -40,11 +40,14 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
     }
   }, [message]);
 
+  const checkAndSubmitRef = useRef(checkAndSubmit);
+  checkAndSubmitRef.current = checkAndSubmit;
+
   const handleCodeInput = useCallback((digit: string) => {
     setCode(prev => {
       if (prev.length >= 4) return prev;
       const newCode = prev + digit;
-      if (newCode.length === 4) setTimeout(() => checkAndSubmit(newCode), 150);
+      if (newCode.length === 4) setTimeout(() => checkAndSubmitRef.current(newCode), 150);
       return newCode;
     });
   }, []);
@@ -178,8 +181,8 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
           >
             <span className="text-3xl group-hover:scale-110 transition-transform">📷</span>
             <div className="text-right">
-              <div className="text-lg">التسجيل عن طريق هوية الطالب</div>
-<div className="text-xs opacity-90 font-normal">افتح الكاميرا ومرر الهويات مباشرة</div>
+              <div className="text-base sm:text-lg">التسجيل عن طريق بصمة الوجه أو هوية الطالب</div>
+              <div className="text-[10px] sm:text-xs opacity-90 font-normal">افتح الكاميرا وامسح الوجه أو الهوية</div>
             </div>
             <span className="absolute top-1 left-2 bg-yellow-400 text-yellow-900 text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow">
               جديد ⚡

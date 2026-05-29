@@ -1032,7 +1032,7 @@ ${dataContext}`;
                             </button>
                           )}
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-1 text-right">اكتب اسم الطالب لعرض سجل الحضور فوراً بدون AI</p>
+                        <p className="text-[10px] text-gray-400 mt-1 text-right">اكتب اسم الطالب لعرض سجل الحضور فوراً</p>
 
                         {showSuggestions && studentSuggestions.length > 0 && (
                           <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-200 z-[70] overflow-hidden max-h-[320px] overflow-y-auto">
@@ -1131,7 +1131,7 @@ ${dataContext}`;
                           onClick={() => sendStudentQuestion(selectedStudentCard.student)}
                           className="flex-1 bg-blue-500 text-white text-[11px] py-2.5 rounded-lg hover:bg-blue-600 transition font-medium shadow-sm"
                         >
-                          💬 اسأل AI عنه
+                          💬 اسأل عن الطالب
                         </button>
                       </div>
                     </div>
