@@ -37,6 +37,7 @@ interface ToastMessage {
   type: ToastType;
   title: string;
   text?: string;
+  visible: boolean; // ✅ إضافة visible
 }
 
 interface DetectedFaceBox {
@@ -168,6 +169,11 @@ const playError = () => {
 };
 
 /* ══════════════════════════════════════════════════════════
+   Sleep Helper
+══════════════════════════════════════════════════════════ */
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+/* ══════════════════════════════════════════════════════════
    Main Component
 ══════════════════════════════════════════════════════════ */
 export const QRAttendance: React.FC<QRAttendanceProps> = ({
@@ -194,6 +200,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const animFrameRef = useRef<number | null>(null);
   const lastRestartRef = useRef(0);
   const toastCounterRef = useRef(0);
+  const toastSequenceRef = useRef<Map<number, number>>(new Map()); // ✅ تتبع التسلسل
   const qrCodeInputRef = useRef<HTMLInputElement | null>(null);
   const trackerRef = useRef<IOUTracker | null>(null);
   const frameSkipRef = useRef(0);
@@ -257,11 +264,81 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     [allStudents]
   );
 
-  /* ─── Toast ─── */
-  const showToast = useCallback((msg: Omit<ToastMessage, 'id'>, ms = 2500) => {
+  /* ══════════════════════════════════════════════════════════
+     ✅ Toast - مع تسلسل الظهور والاختفاء
+  ══════════════════════════════════════════════════════════ */
+  const showToast = useCallback((msg: Omit<ToastMessage, 'id' | 'visible'>, _ms = 2500) => {
     const id = ++toastCounterRef.current;
-    setToasts(prev => [{ ...msg, id }, ...prev].slice(0, 4));
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), ms);
+    const seqId = id;
+    toastSequenceRef.current.set(id, seqId);
+
+    // أضف التوست مخفياً في البداية
+    setToasts(prev => [{ ...msg, id, visible: false }, ...prev].slice(0, 4));
+
+    const runSequence = async () => {
+      const show = () =>
+        setToasts(prev =>
+          prev.map(t => (t.id === id ? { ...t, visible: true } : t))
+        );
+
+      const hide = () =>
+        setToasts(prev =>
+          prev.map(t => (t.id === id ? { ...t, visible: false } : t))
+        );
+
+      const remove = () =>
+        setToasts(prev => prev.filter(t => t.id !== id));
+
+      // تحقق أن التسلسل لا يزال صالحاً
+      const isActive = () =>
+        mountedRef.current && toastSequenceRef.current.get(id) === seqId;
+
+      /* ─── دفعة 1: يظهر 3 مرات ─── */
+      for (let i = 0; i < 3; i++) {
+        if (!isActive()) return;
+        show();
+        await sleep(500);
+        if (!isActive()) return;
+        hide();
+        if (i < 2) await sleep(200); // استراحة قصيرة بين الومضات
+      }
+
+      // انتظار 4 ثواني
+      await sleep(4000);
+      if (!isActive()) return;
+
+      /* ─── دفعة 2: يظهر مرتين ─── */
+      for (let i = 0; i < 2; i++) {
+        if (!isActive()) return;
+        show();
+        await sleep(500);
+        if (!isActive()) return;
+        hide();
+        if (i < 1) await sleep(200);
+      }
+
+      // انتظار ثانيتين
+      await sleep(2000);
+      if (!isActive()) return;
+
+      /* ─── دفعة 3: يظهر مرتين ثم يختفي نهائياً ─── */
+      for (let i = 0; i < 2; i++) {
+        if (!isActive()) return;
+        show();
+        await sleep(500);
+        if (!isActive()) return;
+        hide();
+        if (i < 1) await sleep(200);
+      }
+
+      // حذف نهائي
+      if (isActive()) {
+        remove();
+        toastSequenceRef.current.delete(id);
+      }
+    };
+
+    runSequence();
   }, []);
 
   /* ─── Camera Control ─── */
@@ -312,7 +389,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     if (reg) reg.innerHTML = '';
   }, [torchOn]);
 
-  /* ✅ 5. دقة الكاميرا محسّنة (640x480 بدلاً من HD) */
   const startCamera = useCallback(
     async (cf: CameraFacing) => {
       if (!mountedRef.current || startingRef.current) return;
@@ -331,7 +407,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
         const qrBox = getQrBox();
 
-        // ✅ 5. دقة محسّنة
         const attempts = [
           {
             constraints: {
@@ -580,7 +655,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     };
   }, [mode, faceModelsReady, showToast]);
 
-  /* ✅ 6. Canvas Overlay - بدون requestAnimationFrame مع كشف */
+  /* ─── Canvas Overlay ─── */
   useEffect(() => {
     if (mode !== 'bulk' || !cameraReady) {
       if (animFrameRef.current) {
@@ -642,7 +717,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         return;
       }
 
-      // ✅ حساب letterbox
       const videoAspect = vw / vh;
       const canvasAspect = canvas.width / canvas.height;
 
@@ -809,7 +883,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     []
   );
 
-  /* ✅ 9. Optimized Face Loop - استخراج 3 Descriptors فقط عند وجه واضح */
   const startFaceLoop = useCallback(
     (sens: BulkSensitivity, cf: CameraFacing, faces: Student[]) => {
       stopFaceLoop();
@@ -828,8 +901,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
       const lastDetectionMap = new Map<string, number>();
       const DETECTION_COOLDOWN = 2000;
-
-      // ✅ 9. عداد لكل track
       const trackDescriptorCount = new Map<number, number>();
 
       const loop = async () => {
@@ -860,7 +931,8 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         }
 
         const activeTracks = trackerRef.current.getActiveFaces().length;
-        const skip = activeTracks > 0 && detectTimes.length > 10 ? (activeTracks >= 3 ? 3 : 2) : 1;
+        const skip =
+          activeTracks > 0 && detectTimes.length > 10 ? (activeTracks >= 3 ? 3 : 2) : 1;
 
         frameSkipRef.current = (frameSkipRef.current + 1) % skip;
 
@@ -924,13 +996,9 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               }
             }
 
-            // ✅ 9. استخراج 3 descriptors فقط لكل track
             if (track) {
               const count = trackDescriptorCount.get(track.id) || 0;
-              if (count >= 3) {
-                // تم استخراج 3 descriptors، نتخطى
-                continue;
-              }
+              if (count >= 3) continue;
               trackDescriptorCount.set(track.id, count + 1);
             }
 
@@ -995,7 +1063,11 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                   2000
                 );
 
-                if (onUpdateStudent && s.faceDescriptor && shouldAutoImprove(s.faceDescriptor as any)) {
+                if (
+                  onUpdateStudent &&
+                  s.faceDescriptor &&
+                  shouldAutoImprove(s.faceDescriptor as any)
+                ) {
                   const dir = detectFaceDirection(det.landmarks);
                   const improved = autoImproveDescriptor(
                     s.faceDescriptor as any,
@@ -1112,8 +1184,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     }
   }, [showReg, mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* ─── Handle Close ─── */
   const handleClose = useCallback(async () => {
     mountedRef.current = false;
+    toastSequenceRef.current.clear(); // ✅ إيقاف كل التسلسلات
     stopFaceLoop();
     await hardStop();
     await new Promise(r => setTimeout(r, 150));
@@ -1329,7 +1403,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             )}
             {cameraReady && !isBulk && (
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                <div className="relative" style={{ width: getQrBox().width, height: getQrBox().height }}>
+                <div
+                  className="relative"
+                  style={{ width: getQrBox().width, height: getQrBox().height }}
+                >
                   {[
                     'top-0 right-0 border-t-2 border-r-2 rounded-tr-lg',
                     'top-0 left-0 border-t-2 border-l-2 rounded-tl-lg',
@@ -1411,7 +1488,9 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                 <div className="text-[10px] text-gray-400">مسجّل</div>
               </div>
               <div className="bg-white/5 rounded-lg p-2.5 text-center">
-                <div className="text-lg font-bold">{cameraStatus === 'ready' ? '🟢' : '🔴'}</div>
+                <div className="text-lg font-bold">
+                  {cameraStatus === 'ready' ? '🟢' : '🔴'}
+                </div>
                 <div className="text-[10px] text-gray-400">
                   {cameraStatus === 'ready' ? 'تعمل' : 'خطأ'}
                 </div>
@@ -1470,7 +1549,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         )}
       </div>
 
-      {/* Toasts */}
+      {/* ✅ Toasts - مع تأثير الظهور والاختفاء */}
       <div
         className="fixed top-0 left-1/2 -translate-x-1/2 z-[10001] flex flex-col gap-2 w-[92%] max-w-md pointer-events-none"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
@@ -1478,7 +1557,14 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         {toasts.map(t => (
           <div
             key={t.id}
-            className={`bg-gradient-to-r ${toastBg[t.type]} rounded-xl px-4 py-3 shadow-2xl animate-toast-slide-down`}
+            className={`
+              bg-gradient-to-r ${toastBg[t.type]} rounded-xl px-4 py-3 shadow-2xl
+              transition-all duration-200
+              ${t.visible
+                ? 'opacity-100 scale-100 translate-y-0'
+                : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+              }
+            `}
           >
             <div className="flex items-center gap-3">
               <span className="text-2xl">{toastIcon[t.type]}</span>
@@ -1559,7 +1645,11 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       )}
 
       <style>{`
-        @keyframes toastSlideDown{0%{opacity:0;transform:translateY(-100%) scale(.92)}60%{opacity:1;transform:translateY(6px) scale(1.02)}100%{opacity:1;transform:translateY(0) scale(1)}}
+        @keyframes toastSlideDown{
+          0%{opacity:0;transform:translateY(-100%) scale(.92)}
+          60%{opacity:1;transform:translateY(6px) scale(1.02)}
+          100%{opacity:1;transform:translateY(0) scale(1)}
+        }
         .animate-toast-slide-down{animation:toastSlideDown .42s cubic-bezier(.22,1,.36,1) both}
         @keyframes scanLine{0%,100%{top:8%;opacity:.5}50%{top:88%;opacity:1}}
         .animate-scan-line{animation:scanLine 1.8s ease-in-out infinite;position:absolute}
