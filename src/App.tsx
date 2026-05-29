@@ -771,14 +771,22 @@ useEffect(() => {
     window.history.replaceState({}, '', url.toString());
   };
 
-  // ✨ متابعة الفأرة لتأثير التوهج على الأزرار
+  // ✨ متابعة الفأرة لتأثير التوهج الأبيض المتدرج (دخان)
   useEffect(() => {
+    let lastButton: HTMLElement | null = null;
     const handleMouseMove = (e: MouseEvent) => {
-      const target = (e.target as HTMLElement).closest('button');
+      const target = (e.target as HTMLElement).closest('button') as HTMLElement | null;
+      if (target && target !== lastButton) {
+        if (lastButton) {
+          lastButton.style.setProperty('--glow-x', `${e.clientX - lastButton.getBoundingClientRect().left}px`);
+          lastButton.style.setProperty('--glow-y', `${e.clientY - lastButton.getBoundingClientRect().top}px`);
+        }
+        lastButton = target;
+      }
       if (target) {
         const rect = target.getBoundingClientRect();
-        (target as HTMLElement).style.setProperty('--glow-x', `${e.clientX - rect.left}px`);
-        (target as HTMLElement).style.setProperty('--glow-y', `${e.clientY - rect.top}px`);
+        target.style.setProperty('--glow-x', `${e.clientX - rect.left}px`);
+        target.style.setProperty('--glow-y', `${e.clientY - rect.top}px`);
       }
     };
     document.addEventListener('mousemove', handleMouseMove, { passive: true });
