@@ -461,7 +461,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       s.name.toLowerCase().includes(q) ||
       s.code?.toLowerCase().includes(q) ||
       s.group?.toLowerCase().includes(q)
-    ).slice(0, 8);
+    ).slice(0, 15);
 
     setStudentSuggestions(matches);
     setShowSuggestions(matches.length > 0);
@@ -509,7 +509,10 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   }, [isOpen, messages.length, user.displayName, isAdmin, currentStageId]);
 
   useEffect(() => {
-    if (isOpen) setTimeout(() => inputRef.current?.focus(), 300);
+    if (isOpen) {
+      const timer = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(timer);
+    }
   }, [isOpen]);
 
   const buildDataContext = useCallback((): string => {
@@ -970,16 +973,18 @@ ${dataContext}`;
           <motion.div
             key="chat-window"
             initial={{ width: 120, height: 44, borderRadius: 20, opacity: 0 }}
-            animate={{ width: 380, height: 460, borderRadius: 16, opacity: 1 }}
+            animate={{ width: 420, height: 520, borderRadius: 16, opacity: 1 }}
             exit={{ width: 120, height: 44, borderRadius: 20, opacity: 0 }}
-             transition={{
-               type: "spring",
-               stiffness: 80,
-               damping: 10,
-               mass: 1.0,
-             }}
-            className="fixed bottom-6 right-6 z-50 overflow-hidden border border-gray-200 shadow-2xl max-w-[calc(100vw-3rem)] max-h-[calc(100vh-3rem)]"
+              transition={{
+                type: "spring",
+                stiffness: 300,
+                damping: 24,
+                mass: 0.7,
+              }}
+            className="fixed bottom-6 right-6 z-50 overflow-hidden border border-gray-200 shadow-2xl max-w-[calc(100vw-3rem)] max-h-[calc(100vh-3rem)] overscroll-contain"
             style={{ backgroundColor: '#ffffff' }}
+            onKeyDown={e => { e.stopPropagation(); }}
+            onKeyUp={e => { e.stopPropagation(); }}
           >
             <motion.div
               initial={{ opacity: 0 }}
@@ -988,11 +993,12 @@ ${dataContext}`;
               transition={{ delay: 0.18, duration: 0.2 }}
               className="flex flex-col h-full"
             >
-              {/* شريط علوي: زر الإغلاق (يمين) */}
-              <div className="absolute top-2 right-2 z-10">
+              {/* شريط علوي: زر الإغلاق (يمين) مع خط فاصل تحته */}
+              <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-gray-200">
+                <span className="text-xs text-gray-400 font-medium">المساعد الذكي</span>
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-700 text-xs transition"
+                  className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-red-50 text-red-400 hover:text-red-600 text-sm transition"
                 >
                   ✕
                 </button>
@@ -1028,14 +1034,20 @@ ${dataContext}`;
                         <p className="text-[10px] text-gray-400 mt-1 text-right">اكتب اسم الطالب لعرض سجل الحضور فوراً بدون AI</p>
 
                         {showSuggestions && studentSuggestions.length > 0 && (
-                          <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-200 z-[70] overflow-hidden">
-                            {studentSuggestions.map(student => (
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-200 z-[70] overflow-hidden max-h-[320px] overflow-y-auto">
+                            {studentSuggestions.map(student => {
+                              const sRecords = records.filter(r => r.studentId === student.id);
+                              const attendedIds = new Set(sRecords.map(r => r.sessionId));
+                              const sAttended = sessions.filter(s => attendedIds.has(s.id)).length;
+                              const sTotal = sessions.length;
+                              const sPct = sTotal > 0 ? ((sAttended / sTotal) * 100).toFixed(1) : '0';
+                              return (
                               <button
                                 key={student.id}
                                 onClick={() => handleSelectStudent(student)}
-                                className="w-full text-right px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 transition border-b border-gray-100 last:border-0"
+                                className="w-full text-right px-4 py-3 hover:bg-gray-50 flex items-center gap-3 transition border-b border-gray-100 last:border-0"
                               >
-                                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-bold">
+                                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-bold text-sm border border-blue-200">
                                   {student.name.charAt(0)}
                                 </div>
                                 <div className="flex-1 min-w-0">
@@ -1044,10 +1056,14 @@ ${dataContext}`;
                                     {student.code && `كود: ${student.code}`}
                                     {student.group && ` • كروب: ${student.group}`}
                                   </p>
+                                  <p className="text-[10px] mt-0.5 text-gray-400">
+                                    ✅ {sAttended} / ❌ {sTotal - sAttended} — {sPct}%
+                                  </p>
                                 </div>
                                 <span className="text-gray-400 text-xs">←</span>
                               </button>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -1121,7 +1137,7 @@ ${dataContext}`;
                         );
                       })()}
 
-                      <div className="max-h-[140px] overflow-y-auto">
+                      <div className="max-h-[300px] overflow-y-auto">
                         {selectedStudentCard.attendedSessions.length === 0 ? (
                           <div className="text-center py-3 text-muted-foreground text-xs">لا توجد جلسات مسجلة</div>
                         ) : (
@@ -1157,7 +1173,7 @@ ${dataContext}`;
               )}
 
               {/* 💬 الرسائل */}
-              <div className="flex-1 overflow-y-auto pt-8 pb-4 space-y-3" style={{ backgroundColor: '#ffffff' }}>
+              <div className="flex-1 overflow-y-auto pb-4 space-y-3 px-3 overscroll-contain" style={{ backgroundColor: '#ffffff' }}>
                 {messages.map((msg, idx) => (
                     <motion.div
                       key={msg.id}

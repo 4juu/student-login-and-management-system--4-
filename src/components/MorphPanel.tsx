@@ -236,10 +236,10 @@ function DockBar({ onToggle }: { onToggle: () => void }) {
   return (
     <button
       type="button"
-      onClick={onToggle}
-      className="flex h-12 w-12 items-center justify-center rounded-full cursor-pointer select-none"
+      onMouseDown={onToggle}
+      className="flex h-14 w-14 items-center justify-center rounded-full cursor-pointer select-none active:scale-90 transition-transform"
     >
-      <ColorOrb dimension="32px" tones={{ base: "oklch(22.64% 0 0)" }} />
+      <ColorOrb dimension="44px" tones={{ base: "oklch(22.64% 0 0)" }} />
     </button>
   )
 }
