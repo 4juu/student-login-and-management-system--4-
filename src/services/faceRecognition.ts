@@ -276,21 +276,12 @@ export const detectFaceDirection = (
   mirrorHorizontal?: boolean
 ): FaceDirection => {
   const nose = landmarks.getNose();
-  const jaw = landmarks.getJawOutline();
   const leftEye = landmarks.getLeftEye();
   const rightEye = landmarks.getRightEye();
 
-  if (nose.length < 4 || jaw.length < 17) return 'center';
+  if (nose.length < 4 || leftEye.length < 3 || rightEye.length < 3) return 'center';
 
   const noseTip = nose[3];
-  const jawLeft = jaw[0];
-  const jawRight = jaw[16];
-
-  const faceWidth = Math.sqrt((jawRight.x - jawLeft.x) ** 2 + (jawRight.y - jawLeft.y) ** 2);
-
-  const distToLeft = Math.abs(noseTip.x - jawLeft.x);
-  const distToRight = Math.abs(noseTip.x - jawRight.x);
-  const horizontalRatio = distToLeft / (distToLeft + distToRight);
 
   const leC = {
     x: leftEye.reduce((s, p) => s + p.x, 0) / leftEye.length,
@@ -301,13 +292,25 @@ export const detectFaceDirection = (
     y: rightEye.reduce((s, p) => s + p.y, 0) / rightEye.length,
   };
 
-  const eyeMidY = (leC.y + reC.y) / 2;
-  const verticalRatio = (noseTip.y - eyeMidY) / faceWidth;
+  const eyeDist = Math.sqrt((reC.x - leC.x) ** 2 + (reC.y - leC.y) ** 2);
+  if (eyeDist < 1) return 'center';
 
-  if (verticalRatio < 0.28) return 'up';
-  if (verticalRatio > 0.52) return 'down';
-  if (horizontalRatio < 0.38) return mirrorHorizontal ? 'right' : 'left';
-  if (horizontalRatio > 0.62) return mirrorHorizontal ? 'left' : 'right';
+  const eyeMidX = (leC.x + reC.x) / 2;
+  const eyeMidY = (leC.y + reC.y) / 2;
+
+  const horiz = (noseTip.x - eyeMidX) / eyeDist;
+  const vert = (noseTip.y - eyeMidY) / eyeDist;
+
+  if (mirrorHorizontal) {
+    if (horiz < -0.55) return 'right';
+    if (horiz > 0.55) return 'left';
+  } else {
+    if (horiz < -0.55) return 'left';
+    if (horiz > 0.55) return 'right';
+  }
+
+  if (vert < -0.25) return 'up';
+  if (vert > 1.1) return 'down';
 
   return 'center';
 };
