@@ -3,8 +3,10 @@ import { Student, AttendanceSession } from '../types/student';
 import { User } from '../types/user';
 import { FaceRegistration } from './FaceRegistration';
 import {
-  loadFaceModels, extractAllFaceDescriptors, compareFaces, normalizeDescriptor,
+  loadFaceModels, extractAllFaceDescriptors, normalizeDescriptor,
   areModelsLoaded, IOUTracker, shouldAutoImprove, autoImproveDescriptor, detectFaceDirection,
+  buildDescriptorCache, findBestMatchBatchFromCache, getDescriptorCache, getCacheThreshold,
+  clearDescriptorCache, compareFaces,
 } from '../services/faceRecognition';
 
 interface FaceAttendanceProps {
@@ -64,12 +66,13 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const trackRef = useRef<MediaStreamTrack | null>(null);
   const trackerRef = useRef<IOUTracker | null>(null);
   const mountedRef = useRef(true);
-  const faceRunningRef = useRef(false);
-  const faceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rafRef = useRef<number>(0);
   const lastRecognitionRef = useRef<Map<string, number>>(new Map());
   const recognizedIdsRef = useRef<Set<string>>(new Set(alreadyPresentIds));
-  const processingRef = useRef(false);
   const logsRef = useRef<LogEntry[]>([]);
+  const faceRunningRef = useRef(false);
+  const lastFrameTime = useRef(0);
+  const frameCount = useRef(0);
 
   const studentsWithFace = useMemo(() =>
     students.filter(s => s.faceDescriptor && (
@@ -83,18 +86,29 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
   useEffect(() => {
     mountedRef.current = true;
+    if (studentsWithFace.length > 0) {
+      buildDescriptorCache(studentsWithFace as any, 0.6);
+    }
     if (areModelsLoaded()) { setModelsReady(true); initCamera(); return; }
     loadFaceModels().then(() => {
       if (mountedRef.current) { setModelsReady(true); initCamera(); }
     }).catch(() => {
       if (mountedRef.current) { setError('فشل تحميل موديلات التعرف'); }
     });
-    return () => { mountedRef.current = false; cleanup(); };
+    return () => { mountedRef.current = false; cleanup(); clearDescriptorCache(); };
   }, []);
+
+  useEffect(() => {
+    if (studentsWithFace.length > 0) {
+      buildDescriptorCache(studentsWithFace as any, 0.6);
+    } else {
+      clearDescriptorCache();
+    }
+  }, [studentsWithFace]);
 
   const cleanup = () => {
     faceRunningRef.current = false;
-    if (faceTimerRef.current) clearTimeout(faceTimerRef.current);
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (trackRef.current && torchOn) {
       try { trackRef.current.applyConstraints({ advanced: [{ torch: false } as any] }); } catch {}
     }
@@ -202,7 +216,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
   const stopFaceLoop = useCallback(() => {
     faceRunningRef.current = false;
-    if (faceTimerRef.current) clearTimeout(faceTimerRef.current);
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (trackerRef.current) trackerRef.current.reset();
   }, []);
 
@@ -229,33 +243,29 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const startFaceLoop = useCallback(() => {
     if (!faceRunningRef.current) faceRunningRef.current = true;
     if (!trackerRef.current) trackerRef.current = new IOUTracker();
+    lastFrameTime.current = performance.now();
+    frameCount.current = 0;
 
     const detectedFaces = new Map<string, DetectedFaceBox>();
-    const frameSkipRef = { val: 0 };
     const trackDescriptors = new Map<number, Float32Array[]>();
-    let loopRunning = true;
 
-    const processLoop = async () => {
-      if (!faceRunningRef.current || !mountedRef.current) { loopRunning = false; return; }
+    const processFrame = async () => {
+      if (!faceRunningRef.current || !mountedRef.current) return;
 
       const video = videoRef.current;
       const canvas = canvasRef.current;
       if (!video || !canvas || video.readyState < 2 || video.paused || video.ended) {
-        faceTimerRef.current = setTimeout(processLoop, 300) as any;
+        rafRef.current = requestAnimationFrame(processFrame);
         return;
       }
 
-      frameSkipRef.val = (frameSkipRef.val + 1) % 3;
-      if (frameSkipRef.val !== 0) {
-        faceTimerRef.current = setTimeout(processLoop, 100) as any;
-        return;
-      }
+      frameCount.current++;
+
+      const cache = getDescriptorCache();
+      const hasCache = cache && cache.length > 0;
 
       try {
-        const detections = await Promise.race([
-          extractAllFaceDescriptors(video, false, 640),
-          new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 2500)),
-        ]) as any[];
+        const detections = await extractAllFaceDescriptors(video, false, 480);
 
         if (!faceRunningRef.current || !mountedRef.current) return;
 
@@ -264,133 +274,214 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           detections.map((d: any) => ({ box: d.detection.box, descriptor: d.descriptor }))
         ) || [];
 
-        const currentKeys = new Set<string>();
+        if (detections.length === 0) {
+          frameCount.current = Math.min(frameCount.current + 1, 100);
+        } else {
+          frameCount.current = 0;
+        }
 
-        for (const det of detections) {
-          if (!faceRunningRef.current || processingRef.current) break;
+        if (detections.length > 0 && hasCache) {
+          const descriptors = detections.map((d: any) => normalizeDescriptor(d.descriptor));
+          const matches = await findBestMatchBatchFromCache(descriptors, 0.55);
 
-          const box = det.detection.box;
-          const qScore = det.detection.score;
-          if (qScore < 0.75 || box.width < 50 || box.height < 50) continue;
+          if (!faceRunningRef.current || !mountedRef.current) return;
 
-          const track = tracked.find((t: any) => calculateIoU(t.box, box) > 0.3);
+          for (let fi = 0; fi < detections.length; fi++) {
+            const det = detections[fi];
+            const box = det.detection.box;
+            const qScore = det.detection.score;
+            if (qScore < 0.75 || box.width < 50 || box.height < 50) continue;
 
-          if (track) {
-            const descs = trackDescriptors.get(track.id) || [];
-            descs.push(det.descriptor);
-            if (descs.length > 5) descs.shift();
-            trackDescriptors.set(track.id, descs);
-            if (descs.length < 2) continue;
-          }
+            const boxKey = `${Math.round(box.x / 40)}_${Math.round(box.y / 40)}`;
 
-          const matchDesc = track && trackDescriptors.get(track.id)
-            ? (() => {
-                const ds = trackDescriptors.get(track.id)!;
-                const out = new Float32Array(128);
-                for (const d of ds) for (let i = 0; i < 128; i++) out[i] += d[i];
-                for (let i = 0; i < 128; i++) out[i] /= ds.length;
-                return normalizeDescriptor(out);
-              })()
-            : det.descriptor;
-
-          const adaptiveThreshold = qScore < 0.85 ? 0.48 : qScore < 0.92 ? 0.52 : 0.55;
-
-          let bestStudent: Student | null = null;
-          let bestDist = Infinity;
-          let bestConfidence = 0;
-
-          for (const s of studentsWithFace) {
-            if (!s.faceDescriptor) continue;
-            const dist = compareFaces(matchDesc, s.faceDescriptor);
-            if (dist < bestDist && dist < adaptiveThreshold) {
-              bestDist = dist;
-              bestStudent = s;
-              bestConfidence = Math.round((1 - dist / adaptiveThreshold) * 100);
-              if (bestConfidence >= 95) break;
-            }
-          }
-
-          const boxKey = `${Math.round(box.x / 40)}_${Math.round(box.y / 40)}`;
-          currentKeys.add(boxKey);
-
-          if (bestStudent) {
-            const lastTime = lastRecognitionRef.current.get(bestStudent.id) || 0;
-            const isDuplicate = now - lastTime < RECOGNITION_COOLDOWN;
-            const isAlreadyMarked = recognizedIdsRef.current.has(bestStudent.id) || alreadyPresentIds.has(bestStudent.id);
-
-            if (isAlreadyMarked || isDuplicate) {
-              if ((!detectedFaces.has(boxKey) || detectedFaces.get(boxKey)!.status !== 'already') && !logsRef.current.some(l => l.id === bestStudent.id)) {
-                addLog({
-                  id: bestStudent.id, name: bestStudent.name, code: bestStudent.code,
-                  group: bestStudent.group, status: 'already', confidence: bestConfidence,
-                  time: new Date().toLocaleTimeString('ar-EG'),
-                });
+            const match = matches[fi];
+            if (match) {
+              const bestStudent = studentsWithFace.find(s => s.id === match.id);
+              if (!bestStudent) {
+                detectedFaces.set(boxKey, { box, status: 'unknown', confidence: 0 });
+                continue;
               }
-              detectedFaces.set(boxKey, {
-                box, studentId: bestStudent.id, name: bestStudent.name,
-                status: 'already', confidence: bestConfidence,
-              });
-              setMode('already_marked');
-              setTimeout(() => { if (mountedRef.current) setMode('active'); }, 1200);
-            } else {
-              lastRecognitionRef.current.set(bestStudent.id, now);
-              recognizedIdsRef.current.add(bestStudent.id);
 
-              setMode('info');
-              detectedFaces.set(boxKey, {
-                box, studentId: bestStudent.id, name: bestStudent.name,
-                status: 'recognized', confidence: bestConfidence,
-              });
+              const threshold = getCacheThreshold();
+              const confidence = Math.round((1 - match.distance / threshold) * 100);
+              const lastTime = lastRecognitionRef.current.get(bestStudent.id) || 0;
+              const isDuplicate = now - lastTime < RECOGNITION_COOLDOWN;
+              const isAlreadyMarked = recognizedIdsRef.current.has(bestStudent.id) || alreadyPresentIds.has(bestStudent.id);
 
-              setTimeout(async () => {
-                if (!mountedRef.current) return;
-                setMode('marked');
-                try { await onMarkAttendance(bestStudent!); } catch {}
-                playSuccess();
-                if (!logsRef.current.some(l => l.id === bestStudent!.id)) {
+              if (isAlreadyMarked || isDuplicate) {
+                if (!logsRef.current.some(l => l.id === bestStudent.id)) {
                   addLog({
-                    id: bestStudent!.id, name: bestStudent!.name, code: bestStudent!.code,
-                    group: bestStudent!.group, status: 'marked', confidence: bestConfidence,
+                    id: bestStudent.id, name: bestStudent.name, code: bestStudent.code,
+                    group: bestStudent.group, status: 'already', confidence,
                     time: new Date().toLocaleTimeString('ar-EG'),
                   });
                 }
                 detectedFaces.set(boxKey, {
-                  box, studentId: bestStudent!.id, name: bestStudent!.name,
-                  status: 'marked', confidence: bestConfidence,
+                  box, studentId: bestStudent.id, name: bestStudent.name,
+                  status: 'already', confidence,
+                });
+                setMode('already_marked');
+                setTimeout(() => { if (mountedRef.current) setMode('active'); }, 1200);
+              } else {
+                lastRecognitionRef.current.set(bestStudent.id, now);
+                recognizedIdsRef.current.add(bestStudent.id);
+
+                setMode('info');
+                detectedFaces.set(boxKey, {
+                  box, studentId: bestStudent.id, name: bestStudent.name,
+                  status: 'recognized', confidence,
                 });
 
-                if (onUpdateStudent && bestStudent!.faceDescriptor && shouldAutoImprove(bestStudent!.faceDescriptor as any)) {
-                  const dir = detectFaceDirection(det.landmarks);
-                  const improved = autoImproveDescriptor(bestStudent!.faceDescriptor as any, det.descriptor, dir, bestConfidence / 100);
-                  if (improved) onUpdateStudent(bestStudent!.id, { faceDescriptor: improved as any });
-                }
-
-                setTimeout(() => {
-                  if (mountedRef.current) {
-                    detectedFaces.delete(boxKey);
-                    setMode('active');
+                setTimeout(async () => {
+                  if (!mountedRef.current) return;
+                  setMode('marked');
+                  try { await onMarkAttendance(bestStudent!); } catch {}
+                  playSuccess();
+                  if (!logsRef.current.some(l => l.id === bestStudent!.id)) {
+                    addLog({
+                      id: bestStudent!.id, name: bestStudent!.name, code: bestStudent!.code,
+                      group: bestStudent!.group, status: 'marked', confidence,
+                      time: new Date().toLocaleTimeString('ar-EG'),
+                    });
                   }
-                }, 3000);
-              }, 600);
+                  detectedFaces.set(boxKey, {
+                    box, studentId: bestStudent!.id, name: bestStudent!.name,
+                    status: 'marked', confidence,
+                  });
+
+                  if (onUpdateStudent && bestStudent!.faceDescriptor && shouldAutoImprove(bestStudent!.faceDescriptor as any)) {
+                    const dir = detectFaceDirection(det.landmarks);
+                    const improved = autoImproveDescriptor(bestStudent!.faceDescriptor as any, det.descriptor, dir, confidence / 100);
+                    if (improved) onUpdateStudent(bestStudent!.id, { faceDescriptor: improved as any });
+                  }
+
+                  setTimeout(() => {
+                    if (mountedRef.current) { detectedFaces.delete(boxKey); setMode('active'); }
+                  }, 3000);
+                }, 400);
+              }
+            } else {
+              detectedFaces.set(boxKey, { box, status: 'unknown', confidence: 0 });
             }
-          } else {
-            detectedFaces.set(boxKey, { box, status: 'unknown', confidence: 0 });
+          }
+        } else if (detections.length > 0 && !hasCache && studentsWithFace.length > 0) {
+          for (const det of detections) {
+            const box = det.detection.box;
+            const qScore = det.detection.score;
+            if (qScore < 0.75 || box.width < 50 || box.height < 50) continue;
+
+            const track = tracked.find((t: any) => calculateIoU(t.box, box) > 0.3);
+            let matchDesc = det.descriptor;
+
+            if (track) {
+              const descs = trackDescriptors.get(track.id) || [];
+              descs.push(det.descriptor);
+              if (descs.length > 3) descs.shift();
+              trackDescriptors.set(track.id, descs);
+              if (descs.length >= 2) {
+                const avg = new Float32Array(128);
+                for (const d of descs) for (let i = 0; i < 128; i++) avg[i] += d[i];
+                for (let i = 0; i < 128; i++) avg[i] /= descs.length;
+                matchDesc = normalizeDescriptor(avg);
+              }
+            }
+
+            const adaptiveThreshold = qScore < 0.85 ? 0.48 : qScore < 0.92 ? 0.52 : 0.55;
+            let bestStudent: Student | null = null;
+            let bestDist = Infinity;
+            let bestConfidence = 0;
+
+            for (const s of studentsWithFace) {
+              if (!s.faceDescriptor) continue;
+              const dist = compareFaces(matchDesc, s.faceDescriptor as any);
+              if (dist < bestDist && dist < adaptiveThreshold) {
+                bestDist = dist;
+                bestStudent = s;
+                bestConfidence = Math.round((1 - dist / adaptiveThreshold) * 100);
+                if (bestConfidence >= 95) break;
+              }
+            }
+
+            const boxKey = `${Math.round(box.x / 40)}_${Math.round(box.y / 40)}`;
+
+            if (bestStudent) {
+              const lastTime = lastRecognitionRef.current.get(bestStudent.id) || 0;
+              const isDuplicate = now - lastTime < RECOGNITION_COOLDOWN;
+              const isAlreadyMarked = recognizedIdsRef.current.has(bestStudent.id) || alreadyPresentIds.has(bestStudent.id);
+
+              if (isAlreadyMarked || isDuplicate) {
+                if (!logsRef.current.some(l => l.id === bestStudent.id)) {
+                  addLog({
+                    id: bestStudent.id, name: bestStudent.name, code: bestStudent.code,
+                    group: bestStudent.group, status: 'already', confidence: bestConfidence,
+                    time: new Date().toLocaleTimeString('ar-EG'),
+                  });
+                }
+                detectedFaces.set(boxKey, {
+                  box, studentId: bestStudent.id, name: bestStudent.name,
+                  status: 'already', confidence: bestConfidence,
+                });
+                setMode('already_marked');
+                setTimeout(() => { if (mountedRef.current) setMode('active'); }, 1200);
+              } else {
+                lastRecognitionRef.current.set(bestStudent.id, now);
+                recognizedIdsRef.current.add(bestStudent.id);
+                setMode('info');
+                detectedFaces.set(boxKey, {
+                  box, studentId: bestStudent.id, name: bestStudent.name,
+                  status: 'recognized', confidence: bestConfidence,
+                });
+
+                setTimeout(async () => {
+                  if (!mountedRef.current) return;
+                  setMode('marked');
+                  try { await onMarkAttendance(bestStudent!); } catch {}
+                  playSuccess();
+                  if (!logsRef.current.some(l => l.id === bestStudent!.id)) {
+                    addLog({
+                      id: bestStudent!.id, name: bestStudent!.name, code: bestStudent!.code,
+                      group: bestStudent!.group, status: 'marked', confidence: bestConfidence,
+                      time: new Date().toLocaleTimeString('ar-EG'),
+                    });
+                  }
+                  detectedFaces.set(boxKey, {
+                    box, studentId: bestStudent!.id, name: bestStudent!.name,
+                    status: 'marked', confidence: bestConfidence,
+                  });
+                  if (onUpdateStudent && bestStudent!.faceDescriptor && shouldAutoImprove(bestStudent!.faceDescriptor as any)) {
+                    const dir = detectFaceDirection(det.landmarks);
+                    const improved = autoImproveDescriptor(bestStudent!.faceDescriptor as any, det.descriptor, dir, bestConfidence / 100);
+                    if (improved) onUpdateStudent(bestStudent!.id, { faceDescriptor: improved as any });
+                  }
+                  setTimeout(() => {
+                    if (mountedRef.current) { detectedFaces.delete(boxKey); setMode('active'); }
+                  }, 3000);
+                }, 400);
+              }
+            } else {
+              detectedFaces.set(boxKey, { box, status: 'unknown', confidence: 0 });
+            }
           }
         }
 
         for (const key of detectedFaces.keys()) {
-          if (!currentKeys.has(key) && detectedFaces.get(key)?.status !== 'marked') {
+          const face = detectedFaces.get(key)!;
+          const stillExists = detections.some((d: any) => calculateIoU(d.detection.box, face.box) > 0.1);
+          if (!stillExists && face.status !== 'marked') {
             detectedFaces.delete(key);
           }
         }
 
         drawBoxes(video, canvas, detectedFaces, facing);
       } catch {}
-      if (loopRunning) faceTimerRef.current = setTimeout(processLoop, 350) as any;
+
+      if (faceRunningRef.current && mountedRef.current) {
+        rafRef.current = requestAnimationFrame(processFrame);
+      }
     };
 
-    processLoop();
-    return () => { loopRunning = false; };
+    rafRef.current = requestAnimationFrame(processFrame);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, [studentsWithFace, alreadyPresentIds, onMarkAttendance, onUpdateStudent]);
 
   const drawBoxes = (
@@ -504,6 +595,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     mountedRef.current = false;
     stopFaceLoop();
     cleanup();
+    clearDescriptorCache();
     onClose();
   };
 
@@ -563,7 +655,6 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
         </div>
       </header>
 
-      {/* Attendance Log Panel */}
       {showLog && (
         <div className="absolute top-12 right-2 z-30 w-64 bg-gray-900/98 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl max-h-[70vh] flex flex-col">
           <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
@@ -635,10 +726,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           className="absolute inset-0 w-full h-full pointer-events-none"
         />
 
-        {/* Camera controls overlay */}
         {cameraReady && (
           <div className="absolute bottom-4 left-4 right-4 z-10">
-            {/* Main hint */}
             {mode === 'active' && studentsWithFace.length > 0 && (
               <div className="flex justify-center mb-2 pointer-events-none">
                 <div className="bg-gray-900/70 backdrop-blur-sm text-white/80 px-4 py-2 rounded-full text-xs font-medium flex items-center gap-2 border border-white/10">
@@ -651,7 +740,6 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
               </div>
             )}
 
-            {/* Control buttons */}
             <div className="flex items-center justify-center gap-2 bg-gray-900/80 backdrop-blur-sm rounded-2xl px-3 py-2 border border-white/10 mx-auto w-fit">
               <button onClick={toggleCamera}
                 className="w-9 h-9 flex items-center justify-center bg-white/15 text-white rounded-full active:scale-90 text-sm"

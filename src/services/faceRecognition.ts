@@ -1,10 +1,47 @@
 // src/services/faceRecognition.ts
 import * as faceapi from 'face-api.js';
 import { compressFaceDescriptor, ensureDecompressed } from './faceCompression';
-import { getWorker } from './faceWorker';
+import { getWorker, workerFindBestMatch, workerBatchMatchAll } from './faceWorker';
 
 let modelsLoaded = false;
 let loadingPromise: Promise<void> | null = null;
+
+// ── Canvas Pool ──────────────────────────────────────────────
+const _cvs: HTMLCanvasElement[] = [];
+let _cvsIdx = 0;
+function allocCanvas(w: number, h: number): HTMLCanvasElement {
+  const c = _cvs[_cvsIdx];
+  if (c) { c.width = w; c.height = h; _cvsIdx = (_cvsIdx + 1) % _cvs.length; return c; }
+  const nc = document.createElement('canvas');
+  nc.width = w; nc.height = h;
+  _cvs.push(nc);
+  _cvsIdx = (_cvsIdx + 1) % 3;
+  return nc;
+}
+function resetCanvasPool() { _cvs.length = 0; _cvsIdx = 0; }
+
+// ── Descriptor Cache ─────────────────────────────────────────
+interface DescCacheEntry { id: string; desc: Float32Array }
+let _descCache: DescCacheEntry[] | null = null;
+let _cacheThreshold = 0.6;
+
+export function buildDescriptorCache(
+  students: Array<{ id: string; faceDescriptor?: any }>,
+  threshold = 0.6
+): void {
+  _cacheThreshold = threshold;
+  _descCache = [];
+  for (const s of students) {
+    if (!s.faceDescriptor) continue;
+    const arr = toFloat32(s.faceDescriptor);
+    if (arr.length >= 128) {
+      _descCache.push({ id: s.id, desc: arr });
+    }
+  }
+}
+export function getDescriptorCache(): DescCacheEntry[] | null { return _descCache; }
+export function clearDescriptorCache(): void { _descCache = null; }
+export function getCacheThreshold(): number { return _cacheThreshold; }
 
 const MODEL_URLS = [
   'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights',
@@ -48,13 +85,13 @@ export const resetModels = () => {
 
 export const areModelsLoaded = () => modelsLoaded;
 
-const getDeviceInputSize = (): 160 | 224 | 320 | 416 | 512 | 608 => {
+const getDeviceInputSize = (): 128 | 160 | 224 | 320 | 416 | 512 | 608 => {
   const c = navigator.hardwareConcurrency || 2;
   const m = (navigator as any).deviceMemory || 2;
 
-  if (c >= 8 && m >= 6) return 416;
-  if (c >= 4 && m >= 3) return 320;
-  return 224;
+  if (c >= 8 && m >= 6) return 224;
+  if (c >= 4 && m >= 3) return 160;
+  return 128;
 };
 
 const getDetectorOptions = () =>
@@ -66,11 +103,8 @@ const getDetectorOptions = () =>
 export const detectBrightness = (
   input: HTMLVideoElement | HTMLCanvasElement
 ): number => {
-  const canvas = document.createElement('canvas');
   const size = 64;
-  canvas.width = size;
-  canvas.height = size;
-
+  const canvas = allocCanvas(size, size);
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return 128;
 
@@ -105,20 +139,15 @@ export const classifyLight = (brightness: number): LightLevel => {
   return 'good';
 };
 
-const preprocessFrame = (
+export const preprocessFrame = (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
-  targetWidth = 960,
+  targetWidth = 480,
   adaptiveLight = false
 ): HTMLCanvasElement => {
   const vw = 'videoWidth' in input ? input.videoWidth : input.width;
   const vh = 'videoHeight' in input ? input.videoHeight : input.height;
-  const canvas = document.createElement('canvas');
-
-  if (!vw || !vh) {
-    canvas.width = 1;
-    canvas.height = 1;
-    return canvas;
-  }
+  const canvas = allocCanvas(vw && vh ? Math.round(Math.min(vw, targetWidth)) : 1, 1);
+  if (!canvas.width || !canvas.height) return canvas;
 
   const scale = Math.min(1, targetWidth / vw);
   const w = Math.round(vw * scale);
@@ -162,27 +191,14 @@ const preprocessForEnrollment = (
 ): HTMLCanvasElement => {
   const vw = 'videoWidth' in input ? input.videoWidth : input.width;
   const vh = 'videoHeight' in input ? input.videoHeight : input.height;
-  const canvas = document.createElement('canvas');
 
-  if (!vw || !vh) {
-    canvas.width = 1;
-    canvas.height = 1;
-    return canvas;
-  }
-
-  const scale = Math.min(1, targetWidth / vw);
-  const w = Math.round(vw * scale);
-  const h = Math.round(vh * scale);
-
-  canvas.width = w;
-  canvas.height = h;
+  const scale = Math.min(1, targetWidth / (vw || 1));
+  const w = Math.round((vw || 1) * scale);
+  const h = Math.round((vh || 1) * scale);
+  const canvas = allocCanvas(w, h);
 
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) {
-    canvas.width = 1;
-    canvas.height = 1;
-    return canvas;
-  }
+  if (!ctx) return canvas;
 
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
@@ -210,21 +226,15 @@ const cropCenterRegion = (
   const vw = 'videoWidth' in input ? input.videoWidth : input.width;
   const vh = 'videoHeight' in input ? input.videoHeight : input.height;
 
-  const rw = Math.round(vw * regionRatio);
-  const rh = Math.round(vh * regionRatio);
-  const ox = Math.round((vw - rw) / 2);
-  const oy = Math.round((vh - rh) / 2);
+  const rw = Math.round((vw || 1) * regionRatio);
+  const rh = Math.round((vh || 1) * regionRatio);
+  const ox = Math.round(((vw || 1) - rw) / 2);
+  const oy = Math.round(((vh || 1) - rh) / 2);
 
-  const canvas = document.createElement('canvas');
-  canvas.width = rw;
-  canvas.height = rh;
+  const canvas = allocCanvas(rw, rh);
 
   const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    canvas.width = 1;
-    canvas.height = 1;
-    return canvas;
-  }
+  if (!ctx) return canvas;
 
   ctx.drawImage(input, ox, oy, rw, rh, 0, 0, rw, rh);
   return canvas;
@@ -987,14 +997,17 @@ export const extractFaceDescriptor = async (
 
 export const extractAllFaceDescriptors = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
-  useRegion = false
+  useRegion = false,
+  targetWidth = 480
 ) => {
   if (!modelsLoaded) await loadFaceModels();
 
   const src = useRegion ? cropCenterRegion(input as any, 0.8) : input;
 
+  const processed = preprocessFrame(src instanceof HTMLCanvasElement ? src : input, targetWidth, true);
+
   return faceapi
-    .detectAllFaces(preprocessFrame(src, 960, true), getDetectorOptions())
+    .detectAllFaces(processed, getDetectorOptions())
     .withFaceLandmarks(true)
     .withFaceDescriptors();
 };
@@ -1065,6 +1078,29 @@ export const findBestMatch = <T extends { faceDescriptor?: number[] | string | M
   }
 
   return best;
+};
+
+export const findBestMatchFromCache = async (
+  queryDescriptor: Float32Array,
+  threshold = 0.6
+): Promise<{ id: string; distance: number } | null> => {
+  const cache = getDescriptorCache();
+  if (!cache || cache.length === 0) return null;
+  const stored = cache.map((e, i) => ({ index: i, desc: Array.from(e.desc) }));
+  const result = await workerFindBestMatch(queryDescriptor, stored, threshold);
+  if (!result) return null;
+  return { id: cache[result.index].id, distance: result.distance };
+};
+
+export const findBestMatchBatchFromCache = async (
+  queryDescriptors: Float32Array[],
+  threshold = 0.6
+): Promise<Array<{ id: string; distance: number } | null>> => {
+  const cache = getDescriptorCache();
+  if (!cache || cache.length === 0) return queryDescriptors.map(() => null);
+  const stored = cache.map((e, i) => ({ index: i, desc: Array.from(e.desc) }));
+  const results = await workerBatchMatchAll(queryDescriptors, stored, threshold);
+  return results.map(r => r ? { id: cache[r.index].id, distance: r.distance } : null);
 };
 
 export const shouldAutoImprove = (stored: MultiDescriptor | number[] | string): boolean => {
