@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import * as faceapi from 'face-api.js';
 import { Student } from '../types/student';
 import {
   loadFaceModels, extractFaceDescriptorMultiCapture, areModelsLoaded,
@@ -36,6 +37,8 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const mountedRef = useRef(true);
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
+  const detectTimerRef = useRef<number>(0);
 
   const filtered = search.trim()
     ? students.filter(s =>
@@ -50,6 +53,65 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
     loadFaceModels().then(() => { if (mountedRef.current) setModelsReady(true); }).catch(() => {});
     return () => { mountedRef.current = false; };
   }, []);
+
+  // كشف الوجه ورسم المربع أثناء التصوير
+  useEffect(() => {
+    if (step !== 'capture' || !cameraReady) return;
+
+    const canvas = overlayCanvasRef.current;
+    const video = videoRef.current;
+    if (!canvas || !video) return;
+
+    let running = true;
+
+    const detectLoop = async () => {
+      if (!running || !mountedRef.current || !video || video.readyState < 2) {
+        detectTimerRef.current = window.setTimeout(detectLoop, 300);
+        return;
+      }
+
+      try {
+        const result = await faceapi
+          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 }))
+          .withFaceLandmarks(true);
+
+        if (!running) return;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        canvas.width = video.clientWidth || 260;
+        canvas.height = video.clientHeight || 260;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (result) {
+          const box = result.detection.box;
+          const sx = canvas.width / video.videoWidth;
+          const sy = canvas.height / video.videoHeight;
+
+          const dx = box.x * sx;
+          const dy = box.y * sy;
+          const dw = box.width * sx;
+          const dh = box.height * sy;
+
+          ctx.strokeStyle = '#10b981';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(dx, dy, dw, dh);
+        }
+
+        detectTimerRef.current = window.setTimeout(detectLoop, 200);
+      } catch {
+        if (running) detectTimerRef.current = window.setTimeout(detectLoop, 300);
+      }
+    };
+
+    detectLoop();
+
+    return () => {
+      running = false;
+      clearTimeout(detectTimerRef.current);
+    };
+  }, [step, cameraReady]);
 
   const openCamera = useCallback(async (f: 'user' | 'environment') => {
     setError('');
@@ -275,6 +337,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
             <div className="relative mb-3">
               <div className="relative rounded-2xl overflow-hidden bg-gray-900 mx-auto" style={{ width: 260, height: 260 }}>
                 <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }} />
+                <canvas ref={overlayCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
                 {!cameraReady && !error && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
                     <div className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />

@@ -47,10 +47,9 @@ interface DetectedFaceBox {
   status: 'recognized' | 'already' | 'unknown' | 'pending';
   confidence: number;
   timestamp: number;
-  blinkPhase: number;
-  blinkCount: number;
-  blinkStart: number;
-  blinkVisible: boolean;
+  showStartTime: number;
+  totalShows: number;
+  faceDisappeared: boolean;
   cx: number;
   cy: number;
   smoothCx: number;
@@ -67,14 +66,8 @@ const DUPLICATE_BLOCK_MS = 30_000;
 const BULK_FACE_BLOCK_MS = 120_000;
 const CONFIDENCE_THRESHOLD = 0.55;
 
-// ✅ ثوابت نظام الومضات
-const BLINK_ON_MS = 500;
-const BLINK_OFF_MS = 200;
-const PHASE_1_BLINKS = 3;
-const PHASE_1_REST_MS = 4000;
-const PHASE_2_BLINKS = 2;
-const PHASE_2_REST_MS = 2000;
-const PHASE_3_BLINKS = 2;
+// ✅ نظام عرض المربع: 2 ثانية لكل عرض
+const SHOW_DURATION = 2000;
 
 /* ══════════════════════════════════════════════════════════
    Device Detection
@@ -711,69 +704,26 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       const now = Date.now();
       const map = detectedFacesRef.current;
 
-      // ✅ تحديث حالة الومضات لكل وجه
+      // ✅ تحديث حالة عرض المربع لكل وجه
       let hasLive = false;
       map.forEach((face, k) => {
-        if (face.blinkPhase >= 5) {
-          map.delete(k);
-          return;
+        if (face.status === 'unknown') return;
+
+        // إذا مر 3.5 ثواني بدون تحديث من face loop → الوجه اختفى
+        if (now - face.timestamp > 3500) {
+          face.faceDisappeared = true;
         }
+        if (face.faceDisappeared) return;
 
         hasLive = true;
-        const elapsed = now - face.blinkStart;
+        if (face.status === 'pending') return; // pending لا يخضع لمؤقت العرض
 
-        if (face.blinkPhase === 0) {
-          // دفعة 1: 3 ومضات
-          const cycleDuration = BLINK_ON_MS + BLINK_OFF_MS;
-          const currentCycle = Math.floor(elapsed / cycleDuration);
+        const elapsed = now - face.showStartTime;
+        const currentShow = Math.floor(elapsed / SHOW_DURATION);
 
-          if (currentCycle >= PHASE_1_BLINKS) {
-            face.blinkPhase = 1;
-            face.blinkStart = now;
-            face.blinkVisible = false;
-          } else {
-            const posInCycle = elapsed % cycleDuration;
-            face.blinkVisible = posInCycle < BLINK_ON_MS;
-          }
-        } else if (face.blinkPhase === 1) {
-          // استراحة 4 ثواني
-          face.blinkVisible = false;
-          if (elapsed >= PHASE_1_REST_MS) {
-            face.blinkPhase = 2;
-            face.blinkStart = now;
-          }
-        } else if (face.blinkPhase === 2) {
-          // دفعة 2: مرتين
-          const cycleDuration = BLINK_ON_MS + BLINK_OFF_MS;
-          const currentCycle = Math.floor(elapsed / cycleDuration);
-
-          if (currentCycle >= PHASE_2_BLINKS) {
-            face.blinkPhase = 3;
-            face.blinkStart = now;
-            face.blinkVisible = false;
-          } else {
-            const posInCycle = elapsed % cycleDuration;
-            face.blinkVisible = posInCycle < BLINK_ON_MS;
-          }
-        } else if (face.blinkPhase === 3) {
-          // استراحة ثانيتين
-          face.blinkVisible = false;
-          if (elapsed >= PHASE_2_REST_MS) {
-            face.blinkPhase = 4;
-            face.blinkStart = now;
-          }
-        } else if (face.blinkPhase === 4) {
-          // دفعة 3: مرتين
-          const cycleDuration = BLINK_ON_MS + BLINK_OFF_MS;
-          const currentCycle = Math.floor(elapsed / cycleDuration);
-
-          if (currentCycle >= PHASE_3_BLINKS) {
-            face.blinkPhase = 5;
-            face.blinkVisible = false;
-          } else {
-            const posInCycle = elapsed % cycleDuration;
-            face.blinkVisible = posInCycle < BLINK_ON_MS;
-          }
+        if (currentShow >= face.totalShows) {
+          map.delete(k);
+          return;
         }
       });
 
@@ -828,9 +778,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
       map.forEach(face => {
         if (face.status === 'unknown') return;
-
-        // ✅ إذا مخفي في هذه اللحظة، لا ترسم
-        if (!face.blinkVisible) return;
+        if (face.faceDisappeared) return;
 
         visible++;
 
@@ -841,7 +789,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         if (face.status === 'already') {
           stroke = '#f59e0b';
           bg = 'rgba(245,158,11,0.92)';
-          label = `✓ ${face.student?.name || ''}`;
+          label = face.student?.name ? `✓ ${face.student.name} — مسجل مسبقاً` : 'مسجل مسبقاً';
         } else if (face.status === 'pending') {
           stroke = '#6366f1';
           bg = 'rgba(99,102,241,0.92)';
@@ -1146,10 +1094,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                     status: 'already',
                     confidence: 100,
                     timestamp: now,
-                    blinkPhase: 0,
-                    blinkCount: 0,
-                    blinkStart: now,
-                    blinkVisible: true,
+                    showStartTime: now, totalShows: 5, faceDisappeared: false,
                     cx: fc.cx, cy: fc.cy,
                     smoothCx: fc.cx, smoothCy: fc.cy,
                     stableW: box.width, stableH: box.height,
@@ -1162,6 +1107,12 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                   existing.smoothCy += (fc.cy - existing.smoothCy) * 0.18;
                   existing.stableW += (box.width - existing.stableW) * 0.12;
                   existing.stableH += (box.height - existing.stableH) * 0.12;
+                  existing.timestamp = now;
+                  if (existing.faceDisappeared) {
+                    existing.faceDisappeared = false;
+                    existing.showStartTime = now;
+                    existing.totalShows = 5;
+                  }
                 }
                 continue;
               }
@@ -1231,7 +1182,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                     status: 'pending',
                     confidence: bestMatch.confidence,
                     timestamp: now,
-                    blinkPhase: 0, blinkCount: 0, blinkStart: now, blinkVisible: true,
+                    showStartTime: now, totalShows: 10, faceDisappeared: false,
                     cx: fc2.cx, cy: fc2.cy,
                     smoothCx: fc2.cx, smoothCy: fc2.cy,
                     stableW: box.width, stableH: box.height,
@@ -1252,19 +1203,19 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                 now - (lastScansRef.current[`bulk_${s.id}`] || 0) < BULK_FACE_BLOCK_MS
               ) {
                 // ✅ مسجل بالفعل
-                if (!detectedFacesRef.current.has(boxKey)) {
+                  if (!detectedFacesRef.current.has(boxKey)) {
                   detectedFacesRef.current.set(boxKey, {
                     box: { x: box.x, y: box.y, width: box.width, height: box.height },
                     student: s,
                     status: 'already',
                     confidence: bestMatch.confidence,
                     timestamp: now,
-                    blinkPhase: 0, blinkCount: 0, blinkStart: now, blinkVisible: true,
+                    showStartTime: now, totalShows: 5, faceDisappeared: false,
                     cx: fc.cx, cy: fc.cy,
                     smoothCx: fc.cx, smoothCy: fc.cy,
                     stableW: box.width, stableH: box.height,
                   });
-                } else {
+                  } else {
                   const existing = detectedFacesRef.current.get(boxKey)!;
                   existing.box = { x: box.x, y: box.y, width: box.width, height: box.height };
                   existing.cx = fc.cx; existing.cy = fc.cy;
@@ -1272,19 +1223,25 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                   existing.smoothCy += (fc.cy - existing.smoothCy) * 0.18;
                   existing.stableW += (box.width - existing.stableW) * 0.12;
                   existing.stableH += (box.height - existing.stableH) * 0.12;
+                  existing.timestamp = now;
+                  if (existing.faceDisappeared) {
+                    existing.faceDisappeared = false;
+                    existing.showStartTime = now;
+                    existing.totalShows = 5;
+                  }
                 }
               } else {
                 lastScansRef.current[`bulk_${s.id}`] = now;
                 lastDetectionMap.set(s.id, now);
 
                 // ✅ تسجيل جديد
-                detectedFacesRef.current.set(boxKey, {
-                  box: { x: box.x, y: box.y, width: box.width, height: box.height },
-                  student: s,
-                  status: 'recognized',
-                  confidence: bestMatch.confidence,
-                  timestamp: now,
-                  blinkPhase: 0, blinkCount: 0, blinkStart: now, blinkVisible: true,
+                  detectedFacesRef.current.set(boxKey, {
+                    box: { x: box.x, y: box.y, width: box.width, height: box.height },
+                    student: s,
+                    status: 'recognized',
+                    confidence: bestMatch.confidence,
+                    timestamp: now,
+                    showStartTime: now, totalShows: 10, faceDisappeared: false,
                   cx: fc.cx, cy: fc.cy,
                   smoothCx: fc.cx, smoothCy: fc.cy,
                   stableW: box.width, stableH: box.height,
@@ -1328,7 +1285,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                 status: 'unknown',
                 confidence: 0,
                 timestamp: now,
-                blinkPhase: 0, blinkCount: 0, blinkStart: now, blinkVisible: true,
+                showStartTime: now, totalShows: 5, faceDisappeared: false,
                 cx: fc.cx, cy: fc.cy,
                 smoothCx: fc.cx, smoothCy: fc.cy,
                 stableW: box.width, stableH: box.height,

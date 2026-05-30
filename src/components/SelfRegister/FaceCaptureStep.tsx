@@ -1,5 +1,6 @@
 // src/components/SelfRegister/FaceCaptureStep.tsx
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import * as faceapi from 'face-api.js';
 import { Student } from '../../types/student';
 import {
   loadFaceModels,
@@ -53,6 +54,8 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const mountedRef = useRef(true);
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
+  const detectTimerRef = useRef<number>(0);
 
   const [modelsReady, setModelsReady] = useState(areModelsLoaded());
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -174,6 +177,65 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
       }
     };
   }, [modelsReady]);
+
+  // كشف الوجه ورسم المربع أثناء التصوير
+  useEffect(() => {
+    if (!cameraReady || capturing) return;
+
+    const canvas = overlayCanvasRef.current;
+    const video = videoRef.current;
+    if (!canvas || !video) return;
+
+    let running = true;
+
+    const detectLoop = async () => {
+      if (!running || !mountedRef.current || !video || video.readyState < 2) {
+        detectTimerRef.current = window.setTimeout(detectLoop, 300);
+        return;
+      }
+
+      try {
+        const result = await faceapi
+          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 }))
+          .withFaceLandmarks(true);
+
+        if (!running) return;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        canvas.width = video.clientWidth || 320;
+        canvas.height = video.clientHeight || 320;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (result) {
+          const box = result.detection.box;
+          const sx = canvas.width / video.videoWidth;
+          const sy = canvas.height / video.videoHeight;
+
+          const dx = box.x * sx;
+          const dy = box.y * sy;
+          const dw = box.width * sx;
+          const dh = box.height * sy;
+
+          ctx.strokeStyle = '#10b981';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(dx, dy, dw, dh);
+        }
+
+        detectTimerRef.current = window.setTimeout(detectLoop, 200);
+      } catch {
+        if (running) detectTimerRef.current = window.setTimeout(detectLoop, 300);
+      }
+    };
+
+    detectLoop();
+
+    return () => {
+      running = false;
+      clearTimeout(detectTimerRef.current);
+    };
+  }, [cameraReady, capturing]);
 
   // ──────────────────────────────────────────
   // 🎬 بدء التسجيل
@@ -397,6 +459,7 @@ const startActualCapture = async () => {
                 className="w-full h-full object-cover"
                 style={{ transform: 'scaleX(-1)' }}
               />
+              <canvas ref={overlayCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
               {cameraReady && !capturing && countdown === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
