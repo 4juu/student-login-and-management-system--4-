@@ -755,24 +755,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         return;
       }
 
-      const videoAspect = vw / vh;
-      const canvasAspect = canvas.width / canvas.height;
-
-      let drawWidth = canvas.width;
-      let drawHeight = canvas.height;
-      let offsetX = 0;
-      let offsetY = 0;
-
-      if (videoAspect > canvasAspect) {
-        drawHeight = canvas.width / videoAspect;
-        offsetY = (canvas.height - drawHeight) / 2;
-      } else {
-        drawWidth = canvas.height * videoAspect;
-        offsetX = (canvas.width - drawWidth) / 2;
-      }
-
-      const sx = drawWidth / vw;
-      const sy = drawHeight / vh;
+      // object-fit: cover يستخدم scale موحد مع crop
+      const coverScale = Math.max(canvas.width / vw, canvas.height / vh);
+      const coverOffX = (canvas.width - vw * coverScale) / 2;
+      const coverOffY = (canvas.height - vh * coverScale) / 2;
 
       let visible = 0;
 
@@ -796,13 +782,17 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           label = `${face.student?.name || ''} ⏳`;
         }
 
-        let dx = (face.smoothCx - face.stableW / 2) * sx + offsetX;
-        let dy = (face.smoothCy - face.stableH / 2) * sy + offsetY;
-        const dw = face.stableW * sx;
-        const dh = face.stableH * sy;
+        let dx = (face.smoothCx - face.stableW / 2) * coverScale + coverOffX;
+        let dy = (face.smoothCy - face.stableH / 2) * coverScale + coverOffY;
+        const dw = face.stableW * coverScale;
+        const dh = face.stableH * coverScale;
 
         if (isFront) {
-          dx = canvas.width - (face.smoothCx + face.stableW / 2) * sx + offsetX - dw;
+          // camera أمامية: الـ video معكوس بـ CSS، نعكس إحداثيات X
+          // مركز الوجه بالـ canvas: face.smoothCx * coverScale + coverOffX
+          // نعكس المركز ثم نطرح نصف العرض
+          const centerX = face.smoothCx * coverScale + coverOffX;
+          dx = canvas.width - centerX - dw / 2;
         }
 
         ctx.globalAlpha = 1;
