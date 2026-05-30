@@ -89,15 +89,15 @@ const getDeviceInputSize = (): 128 | 160 | 224 | 320 | 416 | 512 | 608 => {
   const c = navigator.hardwareConcurrency || 2;
   const m = (navigator as any).deviceMemory || 2;
 
-  if (c >= 8 && m >= 6) return 224;
-  if (c >= 4 && m >= 3) return 160;
-  return 128;
+  if (c >= 8 && m >= 6) return 320;
+  if (c >= 4 && m >= 3) return 224;
+  return 160;
 };
 
 const getDetectorOptions = () =>
   new faceapi.TinyFaceDetectorOptions({
     inputSize: getDeviceInputSize(),
-    scoreThreshold: 0.38,
+    scoreThreshold: 0.3,
   });
 
 export const detectBrightness = (
