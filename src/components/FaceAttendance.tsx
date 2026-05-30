@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Student, AttendanceSession } from '../types/student';
 import { User } from '../types/user';
+import { FaceRegistration } from './FaceRegistration';
 import {
   loadFaceModels, extractAllFaceDescriptors, compareFaces, normalizeDescriptor,
   areModelsLoaded, IOUTracker, shouldAutoImprove, autoImproveDescriptor, detectFaceDirection,
@@ -18,16 +19,24 @@ interface FaceAttendanceProps {
 
 type FaceMode = 'loading' | 'active' | 'info' | 'marked' | 'already_marked';
 
-interface DetectedFaceBox {
-  box: { x: number; y: number; width: number; height: number };
-  student: Student | null;
-  status: 'recognized' | 'already' | 'unknown';
+interface LogEntry {
+  id: string;
+  name: string;
+  code: string;
+  group?: string;
+  status: 'marked' | 'already' | 'pending';
   confidence: number;
-  cx: number; cy: number;
+  time: string;
 }
 
-const VIDEO_ID = 'face-attendance-video';
-const CONFIDENCE_THRESHOLD = 0.55;
+interface DetectedFaceBox {
+  box: { x: number; y: number; width: number; height: number };
+  studentId?: string;
+  name?: string;
+  status: 'recognized' | 'already' | 'unknown' | 'marked';
+  confidence: number;
+}
+
 const RECOGNITION_COOLDOWN = 30000;
 
 export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
@@ -35,10 +44,10 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   alreadyPresentIds, currentUser, onClose,
 }) => {
   const [mode, setMode] = useState<FaceMode>('loading');
-  const [recognizedStudent, setRecognizedStudent] = useState<Student | null>(null);
-  const [confidence, setConfidence] = useState(0);
   const [error, setError] = useState('');
   const [modelsReady, setModelsReady] = useState(areModelsLoaded());
+  const [showReg, setShowReg] = useState(false);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -46,16 +55,22 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const trackerRef = useRef<IOUTracker | null>(null);
   const mountedRef = useRef(true);
   const faceRunningRef = useRef(false);
-  const animFrameRef = useRef<number | null>(null);
   const faceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRecognitionRef = useRef<Map<string, number>>(new Map());
   const recognizedIdsRef = useRef<Set<string>>(new Set(alreadyPresentIds));
   const processingRef = useRef(false);
+  const logsRef = useRef<LogEntry[]>([]);
+  const sidePanelRef = useRef<HTMLDivElement>(null);
 
   const studentsWithFace = useMemo(() =>
     students.filter(s => s.faceDescriptor && (
       Array.isArray(s.faceDescriptor) ? s.faceDescriptor.length > 0 : true
     )), [students]);
+
+  const addLog = (entry: LogEntry) => {
+    logsRef.current = [entry, ...logsRef.current].slice(0, 50);
+    setLogs(logsRef.current);
+  };
 
   useEffect(() => {
     mountedRef.current = true;
@@ -65,25 +80,21 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       return;
     }
     loadFaceModels().then(() => {
-      if (mountedRef.current) {
-        setModelsReady(true);
-        initCamera();
-      }
+      if (mountedRef.current) { setModelsReady(true); initCamera(); }
     }).catch(() => {
-      if (mountedRef.current) {
-        setError('فشل تحميل موديلات التعرف على الوجوه');
-        setMode('loading');
-      }
+      if (mountedRef.current) { setError('فشل تحميل موديلات التعرف'); setMode('loading'); }
     });
-    return () => {
-      mountedRef.current = false;
-      cleanup();
-    };
+    return () => { mountedRef.current = false; cleanup(); };
   }, []);
+
+  useEffect(() => {
+    if (sidePanelRef.current) {
+      sidePanelRef.current.scrollTop = 0;
+    }
+  }, [logs]);
 
   const cleanup = () => {
     faceRunningRef.current = false;
-    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     if (faceTimerRef.current) clearTimeout(faceTimerRef.current);
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
@@ -115,20 +126,10 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     }
   };
 
-  const getFaceCenter = (det: any) => {
-    if (det.landmarks) {
-      const pts = det.landmarks.positions;
-      if (pts && pts.length > 0) {
-        let sx = 0, sy = 0;
-        for (const p of pts) { sx += p.x; sy += p.y; }
-        return { cx: sx / pts.length, cy: sy / pts.length };
-      }
-    }
-    const box = det.detection?.box || det.box;
-    return { cx: box.x + box.width / 2, cy: box.y + box.height / 2 };
-  };
-
-  const calculateIoU = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) => {
+  const calculateIoU = (
+    a: { x: number; y: number; width: number; height: number },
+    b: { x: number; y: number; width: number; height: number }
+  ) => {
     const x1 = Math.max(a.x, b.x), y1 = Math.max(a.y, b.y);
     const x2 = Math.min(a.x + a.width, b.x + b.width), y2 = Math.min(a.y + a.height, b.y + b.height);
     if (x2 < x1 || y2 < y1) return 0;
@@ -138,10 +139,29 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
   const stopFaceLoop = useCallback(() => {
     faceRunningRef.current = false;
-    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     if (faceTimerRef.current) clearTimeout(faceTimerRef.current);
     if (trackerRef.current) trackerRef.current.reset();
   }, []);
+
+  const playSuccess = () => {
+    navigator.vibrate?.([50, 30, 50]);
+    try {
+      const AC = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AC) return;
+      const ctx = new AC();
+      [{ f: 523, s: 0, d: 0.1 }, { f: 659, s: 0.1, d: 0.1 }, { f: 784, s: 0.2, d: 0.2 }].forEach(({ f, s, d }) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = f;
+        g.gain.setValueAtTime(0, ctx.currentTime + s);
+        g.gain.linearRampToValueAtTime(0.15, ctx.currentTime + s + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + s + d);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(ctx.currentTime + s); o.stop(ctx.currentTime + s + d + 0.05);
+      });
+      setTimeout(() => ctx.close(), 700);
+    } catch {}
+  };
 
   const startFaceLoop = useCallback(() => {
     if (!faceRunningRef.current) faceRunningRef.current = true;
@@ -178,20 +198,19 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
         const now = Date.now();
         const tracked = trackerRef.current?.update(
-          detections.map(d => ({ box: d.detection.box, descriptor: d.descriptor }))
+          detections.map((d: any) => ({ box: d.detection.box, descriptor: d.descriptor }))
         ) || [];
 
         const currentKeys = new Set<string>();
 
         for (const det of detections) {
-          if (!faceRunningRef.current) break;
-          if (processingRef.current) break;
+          if (!faceRunningRef.current || processingRef.current) break;
 
           const box = det.detection.box;
           const qScore = det.detection.score;
           if (qScore < 0.75 || box.width < 50 || box.height < 50) continue;
 
-          const track = tracked.find(t => calculateIoU(t.box, box) > 0.3);
+          const track = tracked.find((t: any) => calculateIoU(t.box, box) > 0.3);
 
           if (track) {
             const descs = trackDescriptors.get(track.id) || [];
@@ -228,8 +247,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
             }
           }
 
-          const fc = getFaceCenter(det);
           const boxKey = `${Math.round(box.x / 40)}_${Math.round(box.y / 40)}`;
+          currentKeys.add(boxKey);
 
           if (bestStudent) {
             const lastTime = lastRecognitionRef.current.get(bestStudent.id) || 0;
@@ -237,24 +256,43 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
             const isAlreadyMarked = recognizedIdsRef.current.has(bestStudent.id) || alreadyPresentIds.has(bestStudent.id);
 
             if (isAlreadyMarked || isDuplicate) {
-              setRecognizedStudent(bestStudent);
-              setConfidence(bestConfidence);
+              if (!detectedFaces.has(boxKey) || detectedFaces.get(boxKey)!.status !== 'already') {
+                addLog({
+                  id: bestStudent.id, name: bestStudent.name, code: bestStudent.code,
+                  group: bestStudent.group, status: 'already', confidence: bestConfidence,
+                  time: new Date().toLocaleTimeString('ar-EG'),
+                });
+              }
+              detectedFaces.set(boxKey, {
+                box, studentId: bestStudent.id, name: bestStudent.name,
+                status: 'already', confidence: bestConfidence,
+              });
               setMode('already_marked');
-              detectedFaces.set(boxKey, { box, student: bestStudent, status: 'already', confidence: bestConfidence, ...fc });
-              setTimeout(() => { if (mountedRef.current) setMode('active'); }, 1500);
+              setTimeout(() => { if (mountedRef.current) setMode('active'); }, 1200);
             } else {
               lastRecognitionRef.current.set(bestStudent.id, now);
               recognizedIdsRef.current.add(bestStudent.id);
-              setRecognizedStudent(bestStudent);
-              setConfidence(bestConfidence);
+
               setMode('info');
-              detectedFaces.set(boxKey, { box, student: bestStudent, status: 'recognized', confidence: bestConfidence, ...fc });
+              detectedFaces.set(boxKey, {
+                box, studentId: bestStudent.id, name: bestStudent.name,
+                status: 'recognized', confidence: bestConfidence,
+              });
 
               setTimeout(async () => {
                 if (!mountedRef.current) return;
                 setMode('marked');
                 try { await onMarkAttendance(bestStudent!); } catch {}
                 playSuccess();
+                addLog({
+                  id: bestStudent!.id, name: bestStudent!.name, code: bestStudent!.code,
+                  group: bestStudent!.group, status: 'marked', confidence: bestConfidence,
+                  time: new Date().toLocaleTimeString('ar-EG'),
+                });
+                detectedFaces.set(boxKey, {
+                  box, studentId: bestStudent!.id, name: bestStudent!.name,
+                  status: 'marked', confidence: bestConfidence,
+                });
 
                 if (onUpdateStudent && bestStudent!.faceDescriptor && shouldAutoImprove(bestStudent!.faceDescriptor as any)) {
                   const dir = detectFaceDirection(det.landmarks);
@@ -264,23 +302,24 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
                 setTimeout(() => {
                   if (mountedRef.current) {
-                    setRecognizedStudent(null);
+                    detectedFaces.delete(boxKey);
                     setMode('active');
                   }
-                }, 2500);
+                }, 3000);
               }, 600);
             }
           } else {
-            currentKeys.add(boxKey);
-            detectedFaces.set(boxKey, { box, student: null, status: 'unknown', confidence: 0, ...fc });
+            detectedFaces.set(boxKey, { box, status: 'unknown', confidence: 0 });
           }
         }
 
         for (const key of detectedFaces.keys()) {
-          if (!currentKeys.has(key)) detectedFaces.delete(key);
+          if (!currentKeys.has(key) && detectedFaces.get(key)?.status !== 'marked') {
+            detectedFaces.delete(key);
+          }
         }
 
-        drawCanvas(video, canvas, detectedFaces);
+        drawBoxes(video, canvas, detectedFaces);
       } catch {}
       if (loopRunning) faceTimerRef.current = setTimeout(processLoop, 350) as any;
     };
@@ -289,7 +328,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     return () => { loopRunning = false; };
   }, [studentsWithFace, alreadyPresentIds, onMarkAttendance, onUpdateStudent]);
 
-  const drawCanvas = (
+  const drawBoxes = (
     video: HTMLVideoElement,
     canvas: HTMLCanvasElement,
     faces: Map<string, DetectedFaceBox>
@@ -301,7 +340,6 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     }
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const vw = video.videoWidth, vh = video.videoHeight;
@@ -310,80 +348,89 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     const sx = canvas.width / vw, sy = canvas.height / vh;
 
     faces.forEach(face => {
-      if (face.status === 'unknown') return;
+      const box = face.box;
+      const dx = box.x * sx;
+      const dy = box.y * sy;
+      const dw = box.width * sx;
+      const dh = box.height * sy;
 
-      let stroke = '#10b981';
-      let label = face.student?.name || '';
-      let sublabel = `${face.confidence}%`;
+      let stroke: string;
+      let bg: string;
+      let label: string;
+      let sublabel: string;
 
-      if (face.status === 'already') {
-        stroke = '#f59e0b';
-        sublabel = 'مسجل مسبقاً';
-      } else if (face.status === 'recognized') {
-        stroke = '#3b82f6';
+      switch (face.status) {
+        case 'recognized':
+          stroke = '#3b82f6';
+          bg = 'rgba(59,130,246,0.85)';
+          label = face.name || '';
+          sublabel = `${face.confidence}% ⏳`;
+          break;
+        case 'marked':
+          stroke = '#10b981';
+          bg = 'rgba(16,185,129,0.85)';
+          label = face.name || '';
+          sublabel = '✅ تم';
+          break;
+        case 'already':
+          stroke = '#f59e0b';
+          bg = 'rgba(245,158,11,0.85)';
+          label = face.name || '';
+          sublabel = '⚠️ مسبقاً';
+          break;
+        default:
+          stroke = '#ef4444';
+          bg = 'rgba(239,68,68,0.75)';
+          label = '';
+          sublabel = 'غير معروف';
+          break;
       }
-
-      const dx = face.cx * sx - 40;
-      const dy = face.cy * sy - 52;
-      const dw = 80;
-      const dh = 104;
-
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = 2.5;
-      ctx.strokeRect(dx, dy, dw, dh);
 
       ctx.strokeStyle = stroke;
       ctx.lineWidth = 3;
+      ctx.strokeRect(dx, dy, dw, dh);
+
+      const corner = Math.min(12, Math.max(6, dw * 0.08));
+      ctx.lineWidth = 3.5;
       ctx.lineCap = 'round';
-      const c = 8;
+      ctx.strokeStyle = stroke;
       ctx.beginPath();
-      ctx.moveTo(dx, dy + c); ctx.lineTo(dx, dy); ctx.lineTo(dx + c, dy);
-      ctx.moveTo(dx + dw - c, dy); ctx.lineTo(dx + dw, dy); ctx.lineTo(dx + dw, dy + c);
-      ctx.moveTo(dx + dw, dy + dh - c); ctx.lineTo(dx + dw, dy + dh); ctx.lineTo(dx + dw - c, dy + dh);
-      ctx.moveTo(dx + c, dy + dh); ctx.lineTo(dx, dy + dh); ctx.lineTo(dx, dy + dh - c);
+      ctx.moveTo(dx, dy + corner); ctx.lineTo(dx, dy); ctx.lineTo(dx + corner, dy);
+      ctx.moveTo(dx + dw - corner, dy); ctx.lineTo(dx + dw, dy); ctx.lineTo(dx + dw, dy + corner);
+      ctx.moveTo(dx + dw, dy + dh - corner); ctx.lineTo(dx + dw, dy + dh); ctx.lineTo(dx + dw - corner, dy + dh);
+      ctx.moveTo(dx + corner, dy + dh); ctx.lineTo(dx, dy + dh); ctx.lineTo(dx, dy + dh - corner);
       ctx.stroke();
 
-      ctx.fillStyle = stroke + 'e0';
-      const fs = 11;
-      ctx.font = `bold ${fs}px Arial`;
-      const tw = ctx.measureText(label).width;
+      if (label) {
+        ctx.font = `bold ${Math.max(11, Math.min(14, dw * 0.07))}px Arial`;
+        const tw = ctx.measureText(label).width;
+        const bw = tw + 14;
+        const bx = dx + (dw - bw) / 2;
+        const by = dy - 28;
+        ctx.fillStyle = bg;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(bx, by, bw, 22, 5);
+        else ctx.rect(bx, by, bw, 22);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, bx + bw / 2, by + 11);
+      }
+
+      ctx.font = `bold ${Math.max(9, Math.min(12, dw * 0.06))}px Arial`;
       const tw2 = ctx.measureText(sublabel).width;
-      const bw = Math.max(tw, tw2) + 12;
+      const bw2 = tw2 + 12;
+      const bx2 = dx + (dw - bw2) / 2;
+      const by2 = dy + dh + 4;
+      ctx.fillStyle = bg;
       ctx.beginPath();
-      ctx.roundRect(dx + (dw - bw) / 2, dy - fs - 8, bw, fs + 6, 4);
+      if (ctx.roundRect) ctx.roundRect(bx2, by2, bw2, 20, 4);
+      else ctx.rect(bx2, by2, bw2, 20);
       ctx.fill();
       ctx.fillStyle = '#fff';
-      ctx.textAlign = 'center';
-      ctx.fillText(label, dx + dw / 2, dy - 6);
-
-      ctx.fillStyle = stroke + 'c0';
-      ctx.beginPath();
-      ctx.roundRect(dx + (dw - bw) / 2, dy + dh + 2, bw, fs + 6, 4);
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.font = `bold 10px Arial`;
-      ctx.fillText(sublabel, dx + dw / 2, dy + dh + fs + 2);
+      ctx.fillText(sublabel, bx2 + bw2 / 2, by2 + 10);
     });
-  };
-
-  const playSuccess = () => {
-    navigator.vibrate?.([50, 30, 50]);
-    try {
-      const AC = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AC) return;
-      const ctx = new AC();
-      [{ f: 523, s: 0, d: 0.1 }, { f: 659, s: 0.1, d: 0.1 }, { f: 784, s: 0.2, d: 0.2 }].forEach(({ f, s, d }) => {
-        const o = ctx.createOscillator();
-        const g = ctx.createGain();
-        o.type = 'sine'; o.frequency.value = f;
-        g.gain.setValueAtTime(0, ctx.currentTime + s);
-        g.gain.linearRampToValueAtTime(0.15, ctx.currentTime + s + 0.03);
-        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + s + d);
-        o.connect(g); g.connect(ctx.destination);
-        o.start(ctx.currentTime + s); o.stop(ctx.currentTime + s + d + 0.05);
-      });
-      setTimeout(() => ctx.close(), 700);
-    } catch {}
   };
 
   const handleClose = () => {
@@ -393,152 +440,161 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     onClose();
   };
 
-  const modeConfig = {
+  const handleShowReg = () => {
+    stopFaceLoop();
+    cleanup();
+    setShowReg(true);
+  };
+
+  const handleRegClose = () => {
+    setShowReg(false);
+    if (mountedRef.current) {
+      setTimeout(() => initCamera(), 400);
+    }
+  };
+
+  const modeConfig: Record<FaceMode, { icon: string; text: string; bg: string }> = {
     loading: { icon: '⏳', text: 'جاري التحميل...', bg: 'bg-gray-600' },
-    active: { icon: '🔍', text: 'البحث عن وجه...', bg: 'bg-emerald-500' },
-    info: { icon: '👤', text: `تم التعرف على ${recognizedStudent?.name || ''}`, bg: 'bg-blue-500' },
+    active: { icon: '🔍', text: 'البحث عن وجوه...', bg: 'bg-emerald-500' },
+    info: { icon: '👤', text: 'تم التعرف!', bg: 'bg-blue-500' },
     marked: { icon: '✅', text: 'تم تسجيل الحضور!', bg: 'bg-emerald-500' },
-    already_marked: { icon: '⚠️', text: `${recognizedStudent?.name || ''} — مسجل مسبقاً`, bg: 'bg-amber-500' },
+    already_marked: { icon: '⚠️', text: 'مسجل مسبقاً', bg: 'bg-amber-500' },
+  };
+
+  const counts = {
+    marked: logs.filter(l => l.status === 'marked').length,
+    already: logs.filter(l => l.status === 'already').length,
+    pending: logs.filter(l => l.status === 'pending').length,
   };
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black flex flex-col" dir="rtl">
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 bg-gray-900/90 border-b border-white/10"
-        style={{ paddingTop: 'max(0.75rem,env(safe-area-inset-top))' }}>
-        <div className="flex items-center gap-3">
-          <div className={`px-4 py-1.5 rounded-full text-white text-sm font-bold transition-all duration-300 flex items-center gap-2 ${modeConfig[mode].bg}`}>
+      <header className="flex items-center justify-between px-4 py-2 bg-gray-900/90 border-b border-white/10"
+        style={{ paddingTop: 'max(0.5rem,env(safe-area-inset-top))' }}>
+        <div className="flex items-center gap-2">
+          <div className={`px-3 py-1 rounded-full text-white text-xs font-bold transition-all duration-300 flex items-center gap-1.5 ${modeConfig[mode].bg}`}>
             <span>{modeConfig[mode].icon}</span>
-            <span className="truncate max-w-[200px]">{modeConfig[mode].text}</span>
+            <span className="truncate max-w-[160px]">{modeConfig[mode].text}</span>
+          </div>
+          <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded-lg text-[10px] text-gray-300">
+            <span className="text-emerald-400">✅{counts.marked}</span>
+            <span className="text-gray-600">|</span>
+            <span className="text-amber-400">⚠️{counts.already}</span>
           </div>
         </div>
-        <button onClick={handleClose}
-          className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl text-sm font-bold transition active:scale-95">
-          ✕ إغلاق
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleShowReg}
+            className="bg-purple-600/80 hover:bg-purple-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition active:scale-95 flex items-center gap-1">
+            <span>📸</span>
+            <span className="hidden sm:inline">إضافة بصمة</span>
+          </button>
+          <button onClick={handleClose}
+            className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition active:scale-95">
+            ✕
+          </button>
+        </div>
       </header>
 
-      {/* Error */}
       {error && (
-        <div className="absolute top-16 left-4 right-4 z-10 bg-red-600/90 text-white p-3 rounded-xl text-sm font-bold text-center">
+        <div className="absolute top-14 left-4 right-4 z-10 bg-red-600/90 text-white p-3 rounded-xl text-sm font-bold text-center">
           {error}
-          <button onClick={initCamera} className="block mx-auto mt-2 bg-white/20 px-4 py-1.5 rounded-lg text-xs">
-            🔄 إعادة المحاولة
-          </button>
+          <button onClick={initCamera} className="block mx-auto mt-2 bg-white/20 px-4 py-1.5 rounded-lg text-xs">🔄 إعادة</button>
         </div>
       )}
 
-      {/* Video + Canvas */}
-      <div className="flex-1 relative bg-gray-900 overflow-hidden flex items-center justify-center">
-        {studentsWithFace.length === 0 && mode !== 'loading' && (
-          <div className="absolute inset-0 flex items-center justify-center z-20">
-            <div className="bg-gray-800/90 rounded-2xl p-6 text-center max-w-xs">
-              <div className="text-4xl mb-3">📸</div>
-              <p className="text-white font-bold text-lg">لا يوجد طلاب ببصمة وجه</p>
-              <p className="text-gray-400 text-sm mt-1">قم بتسجيل بصمات الوجوه أولاً من خلال إدارة الطلاب</p>
-            </div>
-          </div>
-        )}
-
-        <video ref={videoRef} id={VIDEO_ID}
-          autoPlay playsInline muted
-          className="w-full h-full object-contain"
-          style={{ transform: 'scaleX(-1)' }}
-        />
-
-        <canvas ref={canvasRef}
-          className="absolute inset-0 w-full h-full pointer-events-none"
-        />
-
-        {/* Mode indicator overlay */}
-        {mode === 'marked' && recognizedStudent && (
-          <div className="absolute bottom-0 left-0 right-0 p-6 pb-8 bg-gradient-to-t from-black/80 to-transparent">
-            <div className="bg-gray-900/90 backdrop-blur-sm rounded-2xl p-5 border border-emerald-500/30 max-w-sm mx-auto">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-2xl font-bold text-white shadow-lg">
-                  {recognizedStudent.name.charAt(0)}
-                </div>
-                <div className="text-right flex-1 min-w-0">
-                  <p className="text-white font-bold text-lg truncate">{recognizedStudent.name}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-emerald-400 text-xs font-bold bg-emerald-500/20 px-2 py-0.5 rounded-full">
-                      #{recognizedStudent.code}
-                    </span>
-                    {recognizedStudent.group && (
-                      <span className="text-gray-400 text-xs">🏷️ {recognizedStudent.group}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="text-emerald-400 text-3xl">✅</div>
-              </div>
-              <div className="mt-3 flex items-center justify-center gap-2 text-emerald-400/80 text-sm">
-                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-ping" />
-                <span>تم تسجيل الحضور بنجاح</span>
+      <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 relative bg-gray-900 flex items-center justify-center min-w-0">
+          {studentsWithFace.length === 0 && mode !== 'loading' && (
+            <div className="absolute inset-0 flex items-center justify-center z-20">
+              <div className="bg-gray-800/90 rounded-2xl p-6 text-center max-w-xs">
+                <div className="text-4xl mb-3">📸</div>
+                <p className="text-white font-bold text-lg">لا يوجد طلاب ببصمة وجه</p>
+                <p className="text-gray-400 text-sm mt-1">سجل بصمات الوجوه أولاً</p>
+                <button onClick={handleShowReg}
+                  className="mt-4 bg-purple-600 text-white px-5 py-2 rounded-xl text-sm font-bold">
+                  📸 إضافة بصمة الآن
+                </button>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {mode === 'already_marked' && recognizedStudent && (
-          <div className="absolute top-16 left-4 right-4 z-10 bg-amber-600/90 backdrop-blur-sm text-white p-3 rounded-xl text-sm font-bold text-center shadow-lg">
-            ⚠️ {recognizedStudent.name} — مسجل حضور مسبقاً
-          </div>
-        )}
+          <video ref={videoRef}
+            autoPlay playsInline muted
+            className="w-full h-full object-contain"
+            style={{ transform: 'scaleX(-1)' }}
+          />
 
-        {mode === 'active' && (
-          <div className="absolute bottom-8 left-0 right-0 flex justify-center pointer-events-none">
-            <div className="bg-gray-900/70 backdrop-blur-sm text-white/80 px-5 py-2.5 rounded-full text-sm font-medium flex items-center gap-2 border border-white/10">
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
-              </span>
-              أنظر إلى الكاميرا للتسجيل
+          <canvas ref={canvasRef}
+            className="absolute inset-0 w-full h-full pointer-events-none"
+          />
+
+          {mode === 'active' && studentsWithFace.length > 0 && (
+            <div className="absolute bottom-4 left-4 right-4 flex justify-center pointer-events-none">
+              <div className="bg-gray-900/70 backdrop-blur-sm text-white/80 px-4 py-2 rounded-full text-xs font-medium flex items-center gap-2 border border-white/10">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                </span>
+                أنظر إلى الكاميرا للتسجيل
+              </div>
+            </div>
+          )}
+
+          {mode === 'loading' && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+              <div className="text-center">
+                <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                <p className="text-white font-bold text-sm">جاري تحميل موديلات التعرف...</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="w-56 shrink-0 bg-gray-900/95 border-r border-white/5 flex flex-col hidden md:flex">
+          <div className="px-3 py-2 border-b border-white/5">
+            <p className="text-white font-bold text-sm flex items-center gap-1.5">
+              📋 سجل الحضور
+              <span className="text-[10px] text-gray-400 font-normal">({logs.length})</span>
+            </p>
+            <div className="flex gap-2 mt-1.5 text-[10px]">
+              <span className="text-emerald-400">✅ {counts.marked} جديد</span>
+              <span className="text-amber-400">⚠️ {counts.already} مسبق</span>
             </div>
           </div>
-        )}
-
-        {mode === 'loading' && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
-            <div className="text-center">
-              <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-              <p className="text-white font-bold">جاري تحميل موديلات التعرف...</p>
-              <p className="text-gray-400 text-sm mt-1">قد يستغرق 5-10 ثواني لأول مرة</p>
-            </div>
+          <div ref={sidePanelRef} className="flex-1 overflow-y-auto px-2 py-1.5 space-y-1">
+            {logs.length === 0 && (
+              <p className="text-gray-500 text-[10px] text-center py-4">بانتظار التعرف...</p>
+            )}
+            {logs.map((entry, i) => (
+              <div key={`${entry.id}-${i}`}
+                className={`px-2.5 py-1.5 rounded-lg text-[11px] ${
+                  entry.status === 'marked' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
+                  : entry.status === 'already' ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
+                  : 'bg-blue-500/10 text-blue-300 border border-blue-500/20'
+                }`}>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold truncate max-w-[120px]">
+                    {entry.status === 'marked' ? '✅ ' : entry.status === 'already' ? '⚠️ ' : '⏳ '}
+                    {entry.name}
+                  </span>
+                  <span className="text-[9px] opacity-70 shrink-0">{entry.confidence}%</span>
+                </div>
+                <div className="flex items-center justify-between mt-0.5">
+                  <span className="text-[9px] opacity-50">#{entry.code}</span>
+                  <span className="text-[9px] opacity-50">{entry.time}</span>
+                </div>
+              </div>
+            ))}
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Student info quick bar */}
-      {mode === 'info' && recognizedStudent && (
-        <footer className="bg-gray-900/90 border-t border-blue-500/30 px-4 py-4">
-          <div className="flex items-center gap-4 max-w-md mx-auto">
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-2xl font-bold text-white shadow-lg shrink-0">
-              {recognizedStudent.name.charAt(0)}
-            </div>
-            <div className="text-right flex-1 min-w-0">
-              <p className="text-white font-bold text-lg truncate">{recognizedStudent.name}</p>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-blue-400 text-xs font-bold">#{recognizedStudent.code}</span>
-                {recognizedStudent.group && (
-                  <span className="text-gray-400 text-xs">🏷️ {recognizedStudent.group}</span>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-1 text-blue-400">
-              <span className="text-lg font-bold">{confidence}%</span>
-            </div>
-          </div>
-        </footer>
-      )}
-
-      {/* Close button at bottom when no recognition */}
-      {mode === 'error' && (
-        <footer className="bg-gray-900/90 p-4">
-          <button onClick={handleClose}
-            className="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-xl active:scale-95 transition text-sm">
-            ✕ إغلاق
-          </button>
-        </footer>
+      {showReg && onUpdateStudent && (
+        <FaceRegistration
+          students={students}
+          onUpdateStudent={onUpdateStudent}
+          onClose={handleRegClose}
+        />
       )}
     </div>
   );
