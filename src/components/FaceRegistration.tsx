@@ -33,6 +33,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   const [capInfo, setCapInfo] = useState<CaptureProgress | null>(null);
   const [captureQuality, setCaptureQuality] = useState(0);
 
+  const searchRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const mountedRef = useRef(true);
@@ -46,10 +47,10 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
 
   useEffect(() => {
     mountedRef.current = true;
+    if (step === 'search') setTimeout(() => searchRef.current?.focus(), 300);
     if (areModelsLoaded()) { setModelsReady(true); return; }
     loadFaceModels().then(() => { if (mountedRef.current) setModelsReady(true); }).catch(() => {});
-    return () => { mountedRef.current = false; };
-  }, []);
+  }, [step]);
 
   const openCamera = useCallback(async (f: 'user' | 'environment') => {
     setError('');
@@ -183,11 +184,12 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
               <p className="text-xs text-gray-500 mt-1">ابحث عن الطالب بكود أو اسم</p>
             </div>
             <input
+              ref={searchRef}
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="🔍 كود الطالب أو اسمه..."
+              placeholder="ابحث بكود الطالب أو اسمه..."
+              inputMode="search"
               className="w-full p-3 border-2 border-purple-300 rounded-xl text-sm focus:border-purple-500 outline-none"
-              autoFocus
             />
             {filtered.length > 0 && (
               <div className="mt-3 space-y-1 max-h-60 overflow-y-auto">

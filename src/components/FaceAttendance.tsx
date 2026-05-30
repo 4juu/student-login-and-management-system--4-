@@ -143,9 +143,33 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
   const toggleCamera = async () => {
     const newFacing: CameraFacing = facing === 'user' ? 'environment' : 'user';
-    setFacing(newFacing);
     stopFaceLoop();
-    setTimeout(() => { if (mountedRef.current) initCamera(); }, 100);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: newFacing, width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false,
+      });
+      if (!mountedRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+      trackRef.current = null;
+      setFacing(newFacing);
+      streamRef.current = stream;
+      const track = stream.getVideoTracks()[0];
+      trackRef.current = track;
+      const caps = (track.getCapabilities?.() || {}) as any;
+      setHasTorch(!!caps.torch);
+      setTorchOn(false);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        setCameraReady(true);
+        setMode('active');
+        startFaceLoop();
+      }
+    } catch {}
   };
 
   const applyZoom = async (val: number) => {
