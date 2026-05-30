@@ -165,6 +165,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
     setCapturing(false);
     setCapInfo(null);
     setCountdown(0);
+    setTimeout(() => searchRef.current?.focus(), 100);
   };
 
   useEffect(() => {
@@ -172,7 +173,10 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-3" dir="rtl">
+    <div className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-3" dir="rtl"
+      onClick={e => { e.stopPropagation(); searchRef.current?.focus(); }}
+      onKeyDown={e => e.stopPropagation()}
+    >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[96vh] overflow-y-auto">
 
         {/* Search Step */}
@@ -186,9 +190,12 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
             <input
               ref={searchRef}
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => { e.stopPropagation(); setSearch(e.target.value); }}
+              onFocus={e => e.stopPropagation()}
+              onKeyDown={e => e.stopPropagation()}
               placeholder="ابحث بكود الطالب أو اسمه..."
               inputMode="search"
+              autoFocus
               className="w-full p-3 border-2 border-purple-300 rounded-xl text-sm focus:border-purple-500 outline-none"
             />
             {filtered.length > 0 && (
