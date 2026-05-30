@@ -295,7 +295,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
             const isAlreadyMarked = recognizedIdsRef.current.has(bestStudent.id) || alreadyPresentIds.has(bestStudent.id);
 
             if (isAlreadyMarked || isDuplicate) {
-              if (!detectedFaces.has(boxKey) || detectedFaces.get(boxKey)!.status !== 'already') {
+              if ((!detectedFaces.has(boxKey) || detectedFaces.get(boxKey)!.status !== 'already') && !logsRef.current.some(l => l.id === bestStudent.id)) {
                 addLog({
                   id: bestStudent.id, name: bestStudent.name, code: bestStudent.code,
                   group: bestStudent.group, status: 'already', confidence: bestConfidence,
@@ -323,11 +323,13 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
                 setMode('marked');
                 try { await onMarkAttendance(bestStudent!); } catch {}
                 playSuccess();
-                addLog({
-                  id: bestStudent!.id, name: bestStudent!.name, code: bestStudent!.code,
-                  group: bestStudent!.group, status: 'marked', confidence: bestConfidence,
-                  time: new Date().toLocaleTimeString('ar-EG'),
-                });
+                if (!logsRef.current.some(l => l.id === bestStudent!.id)) {
+                  addLog({
+                    id: bestStudent!.id, name: bestStudent!.name, code: bestStudent!.code,
+                    group: bestStudent!.group, status: 'marked', confidence: bestConfidence,
+                    time: new Date().toLocaleTimeString('ar-EG'),
+                  });
+                }
                 detectedFaces.set(boxKey, {
                   box, studentId: bestStudent!.id, name: bestStudent!.name,
                   status: 'marked', confidence: bestConfidence,
@@ -605,6 +607,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
         <canvas ref={canvasRef}
           className="absolute inset-0 w-full h-full pointer-events-none"
+          style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }}
         />
 
         {/* Camera controls overlay */}
