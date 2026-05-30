@@ -733,24 +733,6 @@ useEffect(() => {
     });
 
     setAttendanceRecords(prev => [...prev, ...newRecords]);
-
-    if (telegramConfig && selectedStageId) {
-      for (const record of newRecords) {
-        const absentCount = attendanceRecords.filter(
-          r => r.studentId === record.studentId && r.status === 'absent'
-        ).length + 1;
-
-        sendAbsenceNotification(
-          telegramConfig,
-          selectedStageId,
-          record.studentName,
-          date,
-          absentCount,
-          record.subjectName || stageName,
-          record.teacherName
-        ).catch(() => {});
-      }
-    }
   };
 
   const handleTelegramConfigChange = (config: TelegramConfig | null) => setTelegramConfig(config);
@@ -1143,6 +1125,9 @@ if (loading || !tokenChecked) {
                   students={students}
                   activeSessionId={activeSessionId}
                   onClearRecords={handleClearRecords}
+                  telegramConfig={telegramConfig}
+                  stageId={selectedStageId}
+                  stages={stages}
                 />
               )}
             </div>
