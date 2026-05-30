@@ -13,7 +13,6 @@ import {
 } from '../firebase/dataService';
 import {
   sendTestMessage,
-  sendDailyReport,
   verifyBotToken,
 } from '../services/telegramService';
 
@@ -211,29 +210,6 @@ export const Settings: React.FC<SettingsProps> = ({
       setTelegramMessage({ type: 'success', text: '✅ تم إرسال رسالة اختبار للقناة!' });
     } else {
       setTelegramMessage({ type: 'error', text: '❌ فشل الإرسال. تأكد من Chat ID والبوت مضاف كأدمن في القناة' });
-    }
-  };
-
-  const handleSendDailyReport = async (stageId: string) => {
-    if (!telegramConfig) return;
-    setTelegramMessage(null);
-    const today = new Date().toLocaleDateString('ar-EG');
-    const todayRecords = attendanceRecords.filter(r => r.date === today && r.sessionId === stageId);
-    const presentIds = new Set(todayRecords.filter(r => r.status === 'present').map(r => r.studentId));
-    const absentStudents = students
-      .filter(s => !presentIds.has(s.id))
-      .map(s => s.name);
-    const ok = await sendDailyReport(telegramConfig, stageId, {
-      date: today,
-      totalStudents: students.length,
-      presentCount: presentIds.size,
-      absentCount: absentStudents.length,
-      absentStudents,
-    });
-    if (ok) {
-      setTelegramMessage({ type: 'success', text: '✅ تم إرسال التقرير اليومي!' });
-    } else {
-      setTelegramMessage({ type: 'error', text: '❌ فشل إرسال التقرير. تأكد من إعدادات البوت' });
     }
   };
 
@@ -788,27 +764,11 @@ export const Settings: React.FC<SettingsProps> = ({
                       {chatId && (
                         <div className="flex flex-wrap gap-2 sm:gap-3 mt-2 text-[10px] sm:text-xs text-gray-500">
                           <label className="flex items-center gap-1">
-                            <input type="checkbox" checked={channel?.notifyOnAttendance ?? false}
-                              onChange={e => handleChannelToggle(stage.id, 'notifyOnAttendance', e.target.checked)}
-                              className="accent-sky-600 w-3 h-3" />
-                            حضور
-                          </label>
-                          <label className="flex items-center gap-1">
                             <input type="checkbox" checked={channel?.notifyOnAbsence ?? true}
                               onChange={e => handleChannelToggle(stage.id, 'notifyOnAbsence', e.target.checked)}
                               className="accent-sky-600 w-3 h-3" />
                             غياب
                           </label>
-                          <label className="flex items-center gap-1">
-                            <input type="checkbox" checked={channel?.sendDailyReport ?? false}
-                              onChange={e => handleChannelToggle(stage.id, 'sendDailyReport', e.target.checked)}
-                              className="accent-sky-600 w-3 h-3" />
-                            تقرير يومي
-                          </label>
-                          <button onClick={() => handleSendDailyReport(stage.id)}
-                            className="text-[10px] bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-0.5 rounded font-bold active:scale-95">
-                            📊 إرسال الآن
-                          </button>
                         </div>
                       )}
                     </div>
