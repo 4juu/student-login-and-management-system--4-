@@ -360,7 +360,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           }
         }
 
-        drawBoxes(video, canvas, detectedFaces);
+        drawBoxes(video, canvas, detectedFaces, facing);
       } catch {}
       if (loopRunning) faceTimerRef.current = setTimeout(processLoop, 350) as any;
     };
@@ -372,7 +372,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const drawBoxes = (
     video: HTMLVideoElement,
     canvas: HTMLCanvasElement,
-    faces: Map<string, DetectedFaceBox>
+    faces: Map<string, DetectedFaceBox>,
+    camFacing: string
   ) => {
     const rect = canvas.getBoundingClientRect();
     if (Math.abs(canvas.width - rect.width) > 1 || Math.abs(canvas.height - rect.height) > 1) {
@@ -387,10 +388,11 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     if (!vw || !vh) return;
 
     const sx = canvas.width / vw, sy = canvas.height / vh;
+    const mirrorX = camFacing === 'user';
 
     faces.forEach(face => {
       const box = face.box;
-      const dx = box.x * sx;
+      const dx = mirrorX ? canvas.width - box.x * sx - box.width * sx : box.x * sx;
       const dy = box.y * sy;
       const dw = box.width * sx;
       const dh = box.height * sy;
@@ -607,7 +609,6 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
         <canvas ref={canvasRef}
           className="absolute inset-0 w-full h-full pointer-events-none"
-          style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }}
         />
 
         {/* Camera controls overlay */}
