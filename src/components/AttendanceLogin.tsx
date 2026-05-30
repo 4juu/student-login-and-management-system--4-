@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from
 import { Student, AttendanceRecord, AttendanceSession } from '../types/student';
 import { User } from '../types/user';
 import { QRAttendance } from './QRAttendance';
+import { FaceAttendance } from './FaceAttendance';
 
 interface AttendanceLoginProps {
   students: Student[];
@@ -25,6 +26,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string; } | null>(null);
   const [pressedKey, setPressedKey] = useState<string | null>(null);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showFaceAttendance, setShowFaceAttendance] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -175,14 +177,29 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
 
         <div className="mb-6">
           <button
+            onClick={() => setShowFaceAttendance(true)}
+            disabled={!activeSessionId}
+            className="w-full relative overflow-hidden bg-gradient-to-r from-purple-500 via-violet-500 to-indigo-600 hover:from-purple-600 hover:via-violet-600 hover:to-indigo-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 group transition-all duration-200 mb-3"
+          >
+            <span className="text-3xl group-hover:scale-110 transition-transform">👤</span>
+            <div className="text-right">
+              <div className="text-base sm:text-lg">تسجيل الحضور ببصمة الوجه</div>
+              <div className="text-[10px] sm:text-xs opacity-90 font-normal">تعرف تلقائي على الوجه وسجل الحضور</div>
+            </div>
+            <span className="absolute top-1 left-2 bg-yellow-400 text-yellow-900 text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow">
+              جديد ⚡
+            </span>
+          </button>
+
+          <button
             onClick={() => setShowQRScanner(true)}
             disabled={!activeSessionId}
             className="w-full relative overflow-hidden bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-600 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 group transition-all duration-200"
           >
             <span className="text-3xl group-hover:scale-110 transition-transform">📷</span>
             <div className="text-right">
-              <div className="text-base sm:text-lg">التسجيل عن طريق بصمة الوجه أو هوية الطالب</div>
-              <div className="text-[10px] sm:text-xs opacity-90 font-normal">افتح الكاميرا وامسح الوجه أو الهوية</div>
+              <div className="text-base sm:text-lg">مسح QR أو هوية الطالب</div>
+              <div className="text-[10px] sm:text-xs opacity-90 font-normal">افتح الكاميرا وامسح الهوية</div>
             </div>
             <span className="absolute top-1 left-2 bg-yellow-400 text-yellow-900 text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow">
               جديد ⚡
@@ -310,6 +327,18 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
           .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
         `}</style>
       </div>
+
+      {showFaceAttendance && (
+<FaceAttendance
+  students={students}
+  activeSession={activeSession || null}
+  onMarkAttendance={handleQRMarkAttendance}
+  onUpdateStudent={onUpdateStudent}
+  alreadyPresentIds={alreadyPresentIds}
+  currentUser={currentUser}
+  onClose={() => setShowFaceAttendance(false)}
+/>
+      )}
 
       {showQRScanner && (
 <QRAttendance
