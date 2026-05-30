@@ -37,7 +37,10 @@ interface DetectedFaceBox {
   confidence: number;
 }
 
+type CameraFacing = 'user' | 'environment';
+
 const RECOGNITION_COOLDOWN = 30000;
+const ZOOM_STEPS = [1, 1.5, 2, 2.5, 3];
 
 export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   students, activeSession, onMarkAttendance, onUpdateStudent,
@@ -48,10 +51,17 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const [modelsReady, setModelsReady] = useState(areModelsLoaded());
   const [showReg, setShowReg] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [showLog, setShowLog] = useState(false);
+  const [facing, setFacing] = useState<CameraFacing>('user');
+  const [cameraReady, setCameraReady] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [hasTorch, setHasTorch] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const trackRef = useRef<MediaStreamTrack | null>(null);
   const trackerRef = useRef<IOUTracker | null>(null);
   const mountedRef = useRef(true);
   const faceRunningRef = useRef(false);
@@ -60,7 +70,6 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const recognizedIdsRef = useRef<Set<string>>(new Set(alreadyPresentIds));
   const processingRef = useRef(false);
   const logsRef = useRef<LogEntry[]>([]);
-  const sidePanelRef = useRef<HTMLDivElement>(null);
 
   const studentsWithFace = useMemo(() =>
     students.filter(s => s.faceDescriptor && (
@@ -74,47 +83,53 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
   useEffect(() => {
     mountedRef.current = true;
-    if (areModelsLoaded()) {
-      setModelsReady(true);
-      initCamera();
-      return;
-    }
+    if (areModelsLoaded()) { setModelsReady(true); initCamera(); return; }
     loadFaceModels().then(() => {
       if (mountedRef.current) { setModelsReady(true); initCamera(); }
     }).catch(() => {
-      if (mountedRef.current) { setError('فشل تحميل موديلات التعرف'); setMode('loading'); }
+      if (mountedRef.current) { setError('فشل تحميل موديلات التعرف'); }
     });
     return () => { mountedRef.current = false; cleanup(); };
   }, []);
 
-  useEffect(() => {
-    if (sidePanelRef.current) {
-      sidePanelRef.current.scrollTop = 0;
-    }
-  }, [logs]);
-
   const cleanup = () => {
     faceRunningRef.current = false;
     if (faceTimerRef.current) clearTimeout(faceTimerRef.current);
+    if (trackRef.current && torchOn) {
+      try { trackRef.current.applyConstraints({ advanced: [{ torch: false } as any] }); } catch {}
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     }
+    trackRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
   };
 
   const initCamera = async () => {
     if (!mountedRef.current) return;
+    setCameraReady(false);
     try {
+      await cleanup();
+      await new Promise(r => setTimeout(r, 300));
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+        video: { facingMode: facing, width: { ideal: 640 }, height: { ideal: 480 } },
         audio: false,
       });
       if (!mountedRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
+
       streamRef.current = stream;
+      const track = stream.getVideoTracks()[0];
+      trackRef.current = track;
+
+      const caps = (track.getCapabilities?.() || {}) as any;
+      setHasTorch(!!caps.torch);
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
+        setCameraReady(true);
         setMode('active');
         startFaceLoop();
       }
@@ -124,6 +139,30 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       else if (e.name === 'NotFoundError') setError('لا توجد كاميرا');
       else setError('فشل فتح الكاميرا');
     }
+  };
+
+  const toggleCamera = async () => {
+    const newFacing: CameraFacing = facing === 'user' ? 'environment' : 'user';
+    setFacing(newFacing);
+    stopFaceLoop();
+    setTimeout(() => { if (mountedRef.current) initCamera(); }, 100);
+  };
+
+  const applyZoom = async (val: number) => {
+    if (!trackRef.current) return;
+    try {
+      await trackRef.current.applyConstraints({ advanced: [{ zoom: val } as any] });
+      setZoom(val);
+    } catch {}
+  };
+
+  const toggleTorch = async () => {
+    if (!trackRef.current || !hasTorch) return;
+    const n = !torchOn;
+    try {
+      await trackRef.current.applyConstraints({ advanced: [{ torch: n } as any] });
+      setTorchOn(n);
+    } catch {}
   };
 
   const calculateIoU = (
@@ -464,104 +503,54 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const counts = {
     marked: logs.filter(l => l.status === 'marked').length,
     already: logs.filter(l => l.status === 'already').length,
-    pending: logs.filter(l => l.status === 'pending').length,
   };
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black flex flex-col" dir="rtl">
-      <header className="flex items-center justify-between px-4 py-2 bg-gray-900/90 border-b border-white/10"
+      <header className="flex items-center justify-between px-3 py-2 bg-gray-900/90 border-b border-white/10"
         style={{ paddingTop: 'max(0.5rem,env(safe-area-inset-top))' }}>
         <div className="flex items-center gap-2">
           <div className={`px-3 py-1 rounded-full text-white text-xs font-bold transition-all duration-300 flex items-center gap-1.5 ${modeConfig[mode].bg}`}>
             <span>{modeConfig[mode].icon}</span>
-            <span className="truncate max-w-[160px]">{modeConfig[mode].text}</span>
-          </div>
-          <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded-lg text-[10px] text-gray-300">
-            <span className="text-emerald-400">✅{counts.marked}</span>
-            <span className="text-gray-600">|</span>
-            <span className="text-amber-400">⚠️{counts.already}</span>
+            <span className="truncate max-w-[140px]">{modeConfig[mode].text}</span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => setShowLog(!showLog)}
+            className={`${showLog ? 'bg-blue-600' : 'bg-white/10'} hover:bg-white/20 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition active:scale-95 flex items-center gap-1`}>
+            <span>📋</span>
+            {counts.marked + counts.already > 0 && (
+              <span className="bg-emerald-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center">{counts.marked + counts.already}</span>
+            )}
+          </button>
           <button onClick={handleShowReg}
-            className="bg-purple-600/80 hover:bg-purple-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition active:scale-95 flex items-center gap-1">
+            className="bg-purple-600/80 hover:bg-purple-600 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition active:scale-95 flex items-center gap-1">
             <span>📸</span>
-            <span className="hidden sm:inline">إضافة بصمة</span>
+            <span className="hidden sm:inline">بصمة</span>
           </button>
           <button onClick={handleClose}
-            className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition active:scale-95">
+            className="bg-white/10 hover:bg-white/20 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition active:scale-95">
             ✕
           </button>
         </div>
       </header>
 
-      {error && (
-        <div className="absolute top-14 left-4 right-4 z-10 bg-red-600/90 text-white p-3 rounded-xl text-sm font-bold text-center">
-          {error}
-          <button onClick={initCamera} className="block mx-auto mt-2 bg-white/20 px-4 py-1.5 rounded-lg text-xs">🔄 إعادة</button>
-        </div>
-      )}
-
-      <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 relative bg-gray-900 flex items-center justify-center min-w-0">
-          {studentsWithFace.length === 0 && mode !== 'loading' && (
-            <div className="absolute inset-0 flex items-center justify-center z-20">
-              <div className="bg-gray-800/90 rounded-2xl p-6 text-center max-w-xs">
-                <div className="text-4xl mb-3">📸</div>
-                <p className="text-white font-bold text-lg">لا يوجد طلاب ببصمة وجه</p>
-                <p className="text-gray-400 text-sm mt-1">سجل بصمات الوجوه أولاً</p>
-                <button onClick={handleShowReg}
-                  className="mt-4 bg-purple-600 text-white px-5 py-2 rounded-xl text-sm font-bold">
-                  📸 إضافة بصمة الآن
-                </button>
-              </div>
-            </div>
-          )}
-
-          <video ref={videoRef}
-            autoPlay playsInline muted
-            className="w-full h-full object-contain"
-            style={{ transform: 'scaleX(-1)' }}
-          />
-
-          <canvas ref={canvasRef}
-            className="absolute inset-0 w-full h-full pointer-events-none"
-          />
-
-          {mode === 'active' && studentsWithFace.length > 0 && (
-            <div className="absolute bottom-4 left-4 right-4 flex justify-center pointer-events-none">
-              <div className="bg-gray-900/70 backdrop-blur-sm text-white/80 px-4 py-2 rounded-full text-xs font-medium flex items-center gap-2 border border-white/10">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-                </span>
-                أنظر إلى الكاميرا للتسجيل
-              </div>
-            </div>
-          )}
-
-          {mode === 'loading' && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
-              <div className="text-center">
-                <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                <p className="text-white font-bold text-sm">جاري تحميل موديلات التعرف...</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="w-56 shrink-0 bg-gray-900/95 border-r border-white/5 flex flex-col hidden md:flex">
-          <div className="px-3 py-2 border-b border-white/5">
-            <p className="text-white font-bold text-sm flex items-center gap-1.5">
+      {/* Attendance Log Panel */}
+      {showLog && (
+        <div className="absolute top-12 right-2 z-30 w-64 bg-gray-900/98 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl max-h-[70vh] flex flex-col">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
+            <p className="text-white font-bold text-xs flex items-center gap-1.5">
               📋 سجل الحضور
               <span className="text-[10px] text-gray-400 font-normal">({logs.length})</span>
             </p>
-            <div className="flex gap-2 mt-1.5 text-[10px]">
-              <span className="text-emerald-400">✅ {counts.marked} جديد</span>
-              <span className="text-amber-400">⚠️ {counts.already} مسبق</span>
-            </div>
+            <button onClick={() => setShowLog(false)}
+              className="text-gray-400 hover:text-white text-sm">✕</button>
           </div>
-          <div ref={sidePanelRef} className="flex-1 overflow-y-auto px-2 py-1.5 space-y-1">
+          <div className="flex gap-2 px-3 py-1.5 text-[10px] border-b border-white/5">
+            <span className="text-emerald-400">✅ {counts.marked} جديد</span>
+            <span className="text-amber-400">⚠️ {counts.already} مسبق</span>
+          </div>
+          <div className="flex-1 overflow-y-auto px-2 py-1.5 space-y-1">
             {logs.length === 0 && (
               <p className="text-gray-500 text-[10px] text-center py-4">بانتظار التعرف...</p>
             )}
@@ -587,6 +576,93 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
             ))}
           </div>
         </div>
+      )}
+
+      {error && (
+        <div className="absolute top-14 left-4 right-4 z-10 bg-red-600/90 text-white p-3 rounded-xl text-sm font-bold text-center">
+          {error}
+          <button onClick={initCamera} className="block mx-auto mt-2 bg-white/20 px-4 py-1.5 rounded-lg text-xs">🔄 إعادة</button>
+        </div>
+      )}
+
+      <div className="flex-1 relative bg-gray-900 flex items-center justify-center overflow-hidden">
+        {studentsWithFace.length === 0 && mode !== 'loading' && (
+          <div className="absolute inset-0 flex items-center justify-center z-20">
+            <div className="bg-gray-800/90 rounded-2xl p-6 text-center max-w-xs">
+              <div className="text-4xl mb-3">📸</div>
+              <p className="text-white font-bold text-lg">لا يوجد طلاب ببصمة وجه</p>
+              <p className="text-gray-400 text-sm mt-1">سجل بصمات الوجوه أولاً</p>
+              <button onClick={handleShowReg} className="mt-4 bg-purple-600 text-white px-5 py-2 rounded-xl text-sm font-bold">📸 إضافة بصمة الآن</button>
+            </div>
+          </div>
+        )}
+
+        <video ref={videoRef}
+          autoPlay playsInline muted
+          className="w-full h-full object-contain"
+          style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }}
+        />
+
+        <canvas ref={canvasRef}
+          className="absolute inset-0 w-full h-full pointer-events-none"
+        />
+
+        {/* Camera controls overlay */}
+        {cameraReady && (
+          <div className="absolute bottom-4 left-4 right-4 z-10">
+            {/* Main hint */}
+            {mode === 'active' && studentsWithFace.length > 0 && (
+              <div className="flex justify-center mb-2 pointer-events-none">
+                <div className="bg-gray-900/70 backdrop-blur-sm text-white/80 px-4 py-2 rounded-full text-xs font-medium flex items-center gap-2 border border-white/10">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                  </span>
+                  أنظر إلى الكاميرا للتسجيل
+                </div>
+              </div>
+            )}
+
+            {/* Control buttons */}
+            <div className="flex items-center justify-center gap-2 bg-gray-900/80 backdrop-blur-sm rounded-2xl px-3 py-2 border border-white/10 mx-auto w-fit">
+              <button onClick={toggleCamera}
+                className="w-9 h-9 flex items-center justify-center bg-white/15 text-white rounded-full active:scale-90 text-sm"
+                title="تبديل الكاميرا">
+                🔄
+              </button>
+
+              <div className="flex items-center gap-1 px-1 border-r border-l border-white/10">
+                {ZOOM_STEPS.map(s => (
+                  <button key={s} onClick={() => applyZoom(s)}
+                    className={`px-2 py-1 rounded-md text-[10px] font-bold transition active:scale-90 ${
+                      Math.abs(zoom - s) < 0.01 ? 'bg-emerald-500 text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'
+                    }`}>
+                    {s}x
+                  </button>
+                ))}
+              </div>
+
+              {hasTorch && (
+                <button onClick={toggleTorch}
+                  className={`w-9 h-9 flex items-center justify-center rounded-full active:scale-90 text-sm ${
+                    torchOn ? 'bg-yellow-500 text-black' : 'bg-white/15 text-white'
+                  }`}
+                  title="فلاش">
+                  {torchOn ? '💡' : '🔦'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {mode === 'loading' && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+            <div className="text-center">
+              <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-white font-bold text-sm">جاري تحميل موديلات التعرف...</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {showReg && onUpdateStudent && (

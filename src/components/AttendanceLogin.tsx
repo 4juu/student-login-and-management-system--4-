@@ -198,8 +198,8 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
           >
             <span className="text-3xl group-hover:scale-110 transition-transform">📷</span>
             <div className="text-right">
-              <div className="text-base sm:text-lg">مسح QR أو هوية الطالب</div>
-              <div className="text-[10px] sm:text-xs opacity-90 font-normal">افتح الكاميرا وامسح الهوية</div>
+              <div className="text-base sm:text-lg">تسجيل حضور عن طريق هوية الطالب QR Code</div>
+              <div className="text-[10px] sm:text-xs opacity-90 font-normal">افتح الكاميرا وامسح رمز QR</div>
             </div>
             <span className="absolute top-1 left-2 bg-yellow-400 text-yellow-900 text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow">
               جديد ⚡
