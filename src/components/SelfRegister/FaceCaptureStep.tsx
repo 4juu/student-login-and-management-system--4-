@@ -214,7 +214,8 @@ const startActualCapture = async () => {
       videoRef.current,
       (info) => {
         if (mountedRef.current) setCapInfo(info);
-      }
+      },
+      true
     );
 
     console.log('═══════════════════════════');

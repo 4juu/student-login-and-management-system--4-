@@ -271,7 +271,10 @@ const filterOutliers = (descs: Float32Array[], maxDist = 0.3): Float32Array[] =>
 
 export type FaceDirection = 'center' | 'left' | 'right' | 'up' | 'down';
 
-export const detectFaceDirection = (landmarks: faceapi.FaceLandmarks68): FaceDirection => {
+export const detectFaceDirection = (
+  landmarks: faceapi.FaceLandmarks68,
+  mirrorHorizontal?: boolean
+): FaceDirection => {
   const nose = landmarks.getNose();
   const jaw = landmarks.getJawOutline();
   const leftEye = landmarks.getLeftEye();
@@ -303,8 +306,8 @@ export const detectFaceDirection = (landmarks: faceapi.FaceLandmarks68): FaceDir
 
   if (verticalRatio < 0.28) return 'up';
   if (verticalRatio > 0.52) return 'down';
-  if (horizontalRatio < 0.38) return 'left';
-  if (horizontalRatio > 0.62) return 'right';
+  if (horizontalRatio < 0.38) return mirrorHorizontal ? 'right' : 'left';
+  if (horizontalRatio > 0.62) return mirrorHorizontal ? 'left' : 'right';
 
   return 'center';
 };
@@ -367,7 +370,8 @@ const evaluateFrameQuality = (
   >,
   imgW: number,
   imgH: number,
-  videoInput?: HTMLVideoElement
+  videoInput?: HTMLVideoElement,
+  mirrorHorizontal?: boolean
 ): FrameQuality => {
   const box = detection.detection.box;
   const score = detection.detection.score;
@@ -377,7 +381,7 @@ const evaluateFrameQuality = (
   const cy = (box.y + box.height / 2) / imgH;
   const centerDist = Math.sqrt((cx - 0.5) ** 2 + (cy - 0.5) ** 2);
 
-  const direction = detectFaceDirection(detection.landmarks);
+  const direction = detectFaceDirection(detection.landmarks, mirrorHorizontal);
   const rotationAngle = detectRotationAngle(detection.landmarks);
 
   const brightness = videoInput ? detectBrightness(videoInput) : 128;
@@ -661,7 +665,8 @@ const DIRECTION_LABELS: Record<FaceDirection, string> = {
 
 export const extractFaceDescriptorMultiCapture = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
-  onProgress?: (info: CaptureProgress) => void
+  onProgress?: (info: CaptureProgress) => void,
+  mirrorHorizontal?: boolean
 ): Promise<{
   descriptor: Float32Array;
   angleDescs: Map<FaceDirection, Float32Array[]>;
@@ -792,7 +797,8 @@ export const extractFaceDescriptorMultiCapture = async (
         det,
         imgW,
         imgH,
-        input instanceof HTMLVideoElement ? input : undefined
+        input instanceof HTMLVideoElement ? input : undefined,
+        mirrorHorizontal
       );
 
       reportProgress(progress, 'capture', requiredDir, true, q);

@@ -115,7 +115,8 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
     try {
       const result = await extractFaceDescriptorMultiCapture(
         videoRef.current,
-        (info) => { if (mountedRef.current) setCapInfo(info); }
+        (info) => { if (mountedRef.current) setCapInfo(info); },
+        facing === 'user'
       );
       if (!result || !result.descriptor) {
         setError('لم نتمكن من التقاط الوجه بوضوح. تأكد من الإضاءة وأن وجهك في المنتصف');
