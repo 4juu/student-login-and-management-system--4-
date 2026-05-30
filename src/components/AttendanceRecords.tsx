@@ -1,9 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { AttendanceRecord, AttendanceSession, Student, Stage } from '../types/student';
-import { TelegramConfig } from '../types/telegram';
+import { AttendanceRecord, AttendanceSession, Student } from '../types/student';
 import * as XLSX from 'xlsx-js-style';
 import { getCurrentAcademicYear } from '../firebase/dataService';
-import { sendAbsenceNotification } from '../services/telegramService';
 
 interface AttendanceRecordsProps {
   records: AttendanceRecord[];
@@ -11,9 +9,6 @@ interface AttendanceRecordsProps {
   students?: Student[];
   activeSessionId: string | null;
   onClearRecords: () => void;
-  telegramConfig?: TelegramConfig | null;
-  stageId?: string | null;
-  stages?: Stage[];
 }
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
@@ -25,40 +20,9 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
   students = [],
   activeSessionId,
   onClearRecords,
-  telegramConfig,
-  stageId,
-  stages = [],
 }) => {
   // 🆕 السنة الأكاديمية الحالية (للعرض)
   const currentAcademicYear = useMemo(() => getCurrentAcademicYear(), []);
-
-  const [telegramMsg, setTelegramMsg] = useState<string | null>(null);
-
-  const handleSendAbsence = async (record: AttendanceRecord) => {
-    if (!telegramConfig || !stageId) return;
-    setTelegramMsg(null);
-    const stage = stages.find(s => s.id === stageId);
-    const stageName = stage?.name || '';
-    const absentCount = records.filter(
-      r => r.studentId === record.studentId && r.status === 'absent'
-    ).length;
-
-    const ok = await sendAbsenceNotification(
-      telegramConfig,
-      stageId,
-      record.studentName,
-      record.date,
-      absentCount,
-      record.subjectName || stageName,
-      record.teacherName
-    );
-    if (ok) {
-      setTelegramMsg(`✅ تم إرسال إشعار غياب ${record.studentName}`);
-    } else {
-      setTelegramMsg('❌ فشل الإرسال');
-    }
-    setTimeout(() => setTelegramMsg(null), 3000);
-  };
 
   // 🎯 useCallback للـ helper function
   const normalizeAnyDate = useCallback((dateStr: string): string => {
@@ -468,11 +432,6 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-      {telegramMsg && (
-        <div className={`mb-3 p-2 rounded-lg text-sm font-bold text-center ${telegramMsg.startsWith('✅') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-          {telegramMsg}
-        </div>
-      )}
       {/* 🆕 شريط السنة الأكاديمية */}
       <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center gap-2">
         <span className="text-2xl">🎓</span>
@@ -720,16 +679,12 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
                 <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الاسم</th>
                 <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الكروب</th>
                 <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">التاريخ والوقت</th>
-                <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
-                {telegramConfig && stageId && (
-                  <th className="px-3 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">تلغرام</th>
-                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {paginatedRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={telegramConfig && stageId ? 7 : 6} className="px-3 sm:px-6 py-8 text-center text-gray-500 text-sm font-medium">
+                  <td colSpan={5} className="px-3 sm:px-6 py-8 text-center text-gray-500 text-sm font-medium">
                     {searchRecord || selectedSessionId !== 'all'
                       ? '🔍 لا توجد نتائج مطابقة'
                       : 'لا توجد سجلات حضور مدخلة'}
@@ -738,9 +693,8 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
               ) : (
                 paginatedRecords.map((record, index) => {
                   const globalIndex = filteredRecords.length - ((safeCurrentPage - 1) * pageSize + index);
-                  const isAbsent = record.status === 'absent';
                   return (
-                    <tr key={record.id} className={`hover:bg-gray-50 ${isAbsent ? 'bg-red-50' : ''}`}>
+                    <tr key={record.id} className="hover:bg-gray-50">
                       <td className="px-3 sm:px-6 py-3 text-sm text-gray-500">{globalIndex}</td>
                       <td className="px-3 sm:px-6 py-3">
                         <span className="px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
@@ -757,25 +711,6 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
                           </span>
                         )}
                       </td>
-                      <td className="px-3 sm:px-6 py-3 text-xs font-bold">
-                        {isAbsent ? (
-                          <span className="text-red-600">❌ غائب</span>
-                        ) : (
-                          <span className="text-green-600">✅ حاضر</span>
-                        )}
-                      </td>
-                      {telegramConfig && stageId && (
-                        <td className="px-3 sm:px-6 py-3 text-center">
-                          {isAbsent && (
-                            <button
-                              onClick={() => handleSendAbsence(record)}
-                              className="text-[11px] bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded font-bold active:scale-95 transition"
-                            >
-                              📨 إرسال
-                            </button>
-                          )}
-                        </td>
-                      )}
                     </tr>
                   );
                 })
