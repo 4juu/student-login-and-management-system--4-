@@ -13,6 +13,7 @@ import {
   compareFaces,
   shouldAutoImprove,
   autoImproveDescriptor,
+  normalizeDescriptor,
 } from '../services/faceRecognition';
 
 /* ══════════════════════════════════════════════════════════
@@ -43,13 +44,19 @@ interface ToastMessage {
 interface DetectedFaceBox {
   box: { x: number; y: number; width: number; height: number };
   student: Student | null;
-  status: 'recognized' | 'already' | 'unknown';
+  status: 'recognized' | 'already' | 'unknown' | 'pending';
   confidence: number;
   timestamp: number;
   blinkPhase: number;
   blinkCount: number;
   blinkStart: number;
   blinkVisible: boolean;
+  cx: number;
+  cy: number;
+  smoothCx: number;
+  smoothCy: number;
+  stableW: number;
+  stableH: number;
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -92,6 +99,15 @@ const detectDeviceTier = (): DeviceTier => {
     return { tier: 'mid', cores: c, memory: m, fps: 20, maxFaces: 5, intervalMs: 400 };
   }
   return { tier: 'low', cores: c, memory: m, fps: 15, maxFaces: 3, intervalMs: 550 };
+};
+
+/* ─── مركز الوجه من Landmarks ─── */
+const getFaceCenter = (landmarks: faceapi.FaceLandmarks68): { cx: number; cy: number } => {
+  const pts = landmarks.positions;
+  if (pts.length === 0) return { cx: 0, cy: 0 };
+  let sx = 0, sy = 0;
+  for (let i = 0; i < pts.length; i++) { sx += pts[i].x; sy += pts[i].y; }
+  return { cx: sx / pts.length, cy: sy / pts.length };
 };
 
 /* ══════════════════════════════════════════════════════════
@@ -826,15 +842,19 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           stroke = '#f59e0b';
           bg = 'rgba(245,158,11,0.92)';
           label = `✓ ${face.student?.name || ''}`;
+        } else if (face.status === 'pending') {
+          stroke = '#6366f1';
+          bg = 'rgba(99,102,241,0.92)';
+          label = `${face.student?.name || ''} ⏳`;
         }
 
-        let dx = face.box.x * sx + offsetX;
-        let dy = face.box.y * sy + offsetY;
-        const dw = face.box.width * sx;
-        const dh = face.box.height * sy;
+        let dx = (face.smoothCx - face.stableW / 2) * sx + offsetX;
+        let dy = (face.smoothCy - face.stableH / 2) * sy + offsetY;
+        const dw = face.stableW * sx;
+        const dh = face.stableH * sy;
 
         if (isFront) {
-          dx = canvas.width - dx - dw;
+          dx = canvas.width - (face.smoothCx + face.stableW / 2) * sx + offsetX - dw;
         }
 
         ctx.globalAlpha = 1;
@@ -886,7 +906,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           ctx.textBaseline = 'middle';
           ctx.fillText(label, bx + bw / 2, by + bh / 2);
 
-          if (face.confidence > 0 && face.status === 'recognized') {
+          if (face.confidence > 0 && (face.status === 'recognized' || face.status === 'pending')) {
             const ct = `${face.confidence}%`;
             ctx.font = `bold ${fs - 2}px Arial`;
             const cw2 = ctx.measureText(ct).width + 8;
@@ -976,7 +996,23 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
       const lastDetectionMap = new Map<string, number>();
       const DETECTION_COOLDOWN = 2000;
-      const trackDescriptorCount = new Map<number, number>();
+      const trackDescriptors = new Map<number, Float32Array[]>();
+      const consensusHistory = new Map<number, { studentId: string }[]>();
+      const trackPositions = new Map<number, { x: number; y: number }[]>();
+      let deepSleep = false;
+      let lastFaceSeen = performance.now();
+      const DEEP_SLEEP_MS = 10000;
+
+      const mergeTrackDescs = (descs: Float32Array[]): Float32Array => {
+        if (descs.length === 1) return descs[0];
+        const out = new Float32Array(128);
+        for (let i = 0; i < descs.length; i++) {
+          const d = descs[i];
+          for (let j = 0; j < 128; j++) out[j] += d[j];
+        }
+        for (let j = 0; j < 128; j++) out[j] /= descs.length;
+        return normalizeDescriptor(out);
+      };
 
       const loop = async () => {
         if (!faceRunningRef.current || !mountedRef.current) return;
@@ -1005,9 +1041,34 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           trackerRef.current = new IOUTracker();
         }
 
+        // Deep Sleep: very relaxed interval while idle
+        if (deepSleep) {
+          faceTimerRef.current = setTimeout(loop, 2000) as any;
+          return;
+        }
+
         const activeTracks = trackerRef.current.getActiveFaces().length;
-        const skip =
-          activeTracks > 0 && detectTimes.length > 10 ? (activeTracks >= 3 ? 3 : 2) : 1;
+
+        // Smart Frame Skip
+        let skip: number;
+        if (activeTracks > 0 && detectTimes.length > 10) {
+          let stableCount = 0;
+          const active = trackerRef.current.getActiveFaces();
+          for (const t of active) {
+            const pos = trackPositions.get(t.id);
+            if (pos && pos.length >= 5) {
+              let variance = 0;
+              for (let k = 1; k < pos.length; k++) variance += Math.abs(pos[k].x - pos[0].x) + Math.abs(pos[k].y - pos[0].y);
+              variance /= pos.length;
+              if (variance < 12) stableCount++;
+            }
+          }
+          if (stableCount === activeTracks) skip = 4;
+          else if (stableCount > 0) skip = 3;
+          else skip = 2;
+        } else {
+          skip = 1;
+        }
 
         frameSkipRef.current = (frameSkipRef.current + 1) % skip;
 
@@ -1019,8 +1080,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         const detectStart = performance.now();
 
         try {
+          const lowRes = !deepSleep && activeTracks === 0 && detectTimes.length > 10;
+
           const detections = (await Promise.race([
-            extractAllFaceDescriptors(video, useRegion),
+            extractAllFaceDescriptors(video, useRegion, lowRes ? 480 : undefined),
             new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 2800)),
           ])) as any[];
 
@@ -1044,8 +1107,22 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             detections.map(d => ({ box: d.detection.box, descriptor: d.descriptor }))
           );
 
+          // Track positions for stability measurement
+          for (const t of tracked) {
+            const pos = trackPositions.get(t.id) || [];
+            pos.push({ x: t.box.x, y: t.box.y });
+            if (pos.length > 15) pos.shift();
+            trackPositions.set(t.id, pos);
+          }
+
           for (const det of detections.slice(0, device.maxFaces)) {
             if (!faceRunningRef.current) break;
+
+            // Update last face seen timestamp
+            if (detections.length > 0) {
+              lastFaceSeen = performance.now();
+              if (deepSleep) deepSleep = false;
+            }
 
             const box = det.detection.box;
             const boxKey = `${Math.round(box.x / 35)}_${Math.round(box.y / 35)}_${Math.round(
@@ -1061,6 +1138,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
               if (now - lastSeen < DETECTION_COOLDOWN) {
                 // ✅ تحديث الموقع فقط إذا موجود
+                const fc = getFaceCenter(det.landmarks);
                 if (!detectedFacesRef.current.has(boxKey)) {
                   detectedFacesRef.current.set(boxKey, {
                     box: { x: box.x, y: box.y, width: box.width, height: box.height },
@@ -1072,44 +1150,102 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                     blinkCount: 0,
                     blinkStart: now,
                     blinkVisible: true,
+                    cx: fc.cx, cy: fc.cy,
+                    smoothCx: fc.cx, smoothCy: fc.cy,
+                    stableW: box.width, stableH: box.height,
                   });
                 } else {
                   const existing = detectedFacesRef.current.get(boxKey)!;
                   existing.box = { x: box.x, y: box.y, width: box.width, height: box.height };
+                  existing.cx = fc.cx; existing.cy = fc.cy;
+                  existing.smoothCx += (fc.cx - existing.smoothCx) * 0.18;
+                  existing.smoothCy += (fc.cy - existing.smoothCy) * 0.18;
+                  existing.stableW += (box.width - existing.stableW) * 0.12;
+                  existing.stableH += (box.height - existing.stableH) * 0.12;
                 }
                 continue;
               }
             }
 
             if (track) {
-              const count = trackDescriptorCount.get(track.id) || 0;
-              if (count >= 3) continue;
-              trackDescriptorCount.set(track.id, count + 1);
+              const descs = trackDescriptors.get(track.id) || [];
+              descs.push(det.descriptor);
+              if (descs.length > 5) descs.shift();
+              trackDescriptors.set(track.id, descs);
+              if (descs.length < 3) continue;
             }
+
+            // Quality Gate: skip low-quality detections
+            const qScore = det.detection.score;
+            if (qScore < 0.78) continue;
+            if (box.width < 55 || box.height < 55) continue;
+
+            // Adaptive Threshold: stricter for low-quality, lenient for clean
+            const adaptiveThreshold = qScore < 0.88 ? 0.48 : qScore < 0.93 ? 0.52 : qScore < 0.96 ? 0.54 : 0.55;
 
             let bestMatch: { student: Student; confidence: number } | null = null;
             let bestDist = Infinity;
 
+            const matchDesc = track ? mergeTrackDescs(trackDescriptors.get(track.id)!) : det.descriptor;
+
             for (const student of faces) {
               if (!student.faceDescriptor) continue;
 
-              const dist = compareFaces(det.descriptor, student.faceDescriptor);
+              const dist = compareFaces(matchDesc, student.faceDescriptor);
 
-              if (dist < bestDist && dist < CONFIDENCE_THRESHOLD) {
+                if (dist < bestDist && dist < adaptiveThreshold) {
                 bestDist = dist;
                 bestMatch = {
                   student,
-                  confidence: Math.round((1 - dist / CONFIDENCE_THRESHOLD) * 100),
+                  confidence: Math.round((1 - dist / adaptiveThreshold) * 100),
                 };
 
                 if (bestMatch.confidence >= 95) break;
               }
             }
 
-            if (bestMatch) {
+              if (bestMatch) {
               const s = bestMatch.student;
 
-              if (track) matchedTrackIds.set(track.id, s);
+              // Multi-Frame Consensus: require 3/4 frames to agree
+              if (track) {
+                const history = consensusHistory.get(track.id) || [];
+                history.push({ studentId: s.id });
+                if (history.length > 4) history.shift();
+                consensusHistory.set(track.id, history);
+
+                const counts = new Map<string, number>();
+                for (const h of history)
+                  counts.set(h.studentId, (counts.get(h.studentId) || 0) + 1);
+                let maxCount = 0;
+                for (const c of counts.values()) if (c > maxCount) maxCount = c;
+                let consensusId = '';
+                for (const [id, c] of counts) if (c >= 3) { consensusId = id; break; }
+
+                if (!consensusId) {
+                  // Show pending box, don't mark attendance yet
+                  const fc2 = getFaceCenter(det.landmarks);
+                  detectedFacesRef.current.set(boxKey, {
+                    box: { x: box.x, y: box.y, width: box.width, height: box.height },
+                    student: s,
+                    status: 'pending',
+                    confidence: bestMatch.confidence,
+                    timestamp: now,
+                    blinkPhase: 0, blinkCount: 0, blinkStart: now, blinkVisible: true,
+                    cx: fc2.cx, cy: fc2.cy,
+                    smoothCx: fc2.cx, smoothCy: fc2.cy,
+                    stableW: box.width, stableH: box.height,
+                  });
+                  continue;
+                }
+
+                // Consensus reached — persist match so future frames use "already" path
+                matchedTrackIds.set(track.id, s);
+                // If current frame's bestMatch doesn't match consensus leader, skip
+                if (s.id !== consensusId) continue;
+              }
+
+              const fc = getFaceCenter(det.landmarks);
 
               if (
                 alreadyPresentIds.has(s.id) ||
@@ -1123,14 +1259,19 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                     status: 'already',
                     confidence: bestMatch.confidence,
                     timestamp: now,
-                    blinkPhase: 0,
-                    blinkCount: 0,
-                    blinkStart: now,
-                    blinkVisible: true,
+                    blinkPhase: 0, blinkCount: 0, blinkStart: now, blinkVisible: true,
+                    cx: fc.cx, cy: fc.cy,
+                    smoothCx: fc.cx, smoothCy: fc.cy,
+                    stableW: box.width, stableH: box.height,
                   });
                 } else {
                   const existing = detectedFacesRef.current.get(boxKey)!;
                   existing.box = { x: box.x, y: box.y, width: box.width, height: box.height };
+                  existing.cx = fc.cx; existing.cy = fc.cy;
+                  existing.smoothCx += (fc.cx - existing.smoothCx) * 0.18;
+                  existing.smoothCy += (fc.cy - existing.smoothCy) * 0.18;
+                  existing.stableW += (box.width - existing.stableW) * 0.12;
+                  existing.stableH += (box.height - existing.stableH) * 0.12;
                 }
               } else {
                 lastScansRef.current[`bulk_${s.id}`] = now;
@@ -1143,10 +1284,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
                   status: 'recognized',
                   confidence: bestMatch.confidence,
                   timestamp: now,
-                  blinkPhase: 0,
-                  blinkCount: 0,
-                  blinkStart: now,
-                  blinkVisible: true,
+                  blinkPhase: 0, blinkCount: 0, blinkStart: now, blinkVisible: true,
+                  cx: fc.cx, cy: fc.cy,
+                  smoothCx: fc.cx, smoothCy: fc.cy,
+                  stableW: box.width, stableH: box.height,
                 });
 
                 await onMarkAttendance(s);
@@ -1180,18 +1321,25 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               }
             } else {
               // ✅ غير معروف
+              const fc = getFaceCenter(det.landmarks);
               detectedFacesRef.current.set(boxKey, {
                 box: { x: box.x, y: box.y, width: box.width, height: box.height },
                 student: null,
                 status: 'unknown',
                 confidence: 0,
                 timestamp: now,
-                blinkPhase: 0,
-                blinkCount: 0,
-                blinkStart: now,
-                blinkVisible: true,
+                blinkPhase: 0, blinkCount: 0, blinkStart: now, blinkVisible: true,
+                cx: fc.cx, cy: fc.cy,
+                smoothCx: fc.cx, smoothCy: fc.cy,
+                stableW: box.width, stableH: box.height,
               });
             }
+          }
+
+          // Deep Sleep: if no face detected for 10s, enter idle mode
+          if (detections.length === 0 && performance.now() - lastFaceSeen > DEEP_SLEEP_MS) {
+            deepSleep = true;
+            detectedFacesRef.current.clear();
           }
         } catch (e: any) {
           if (e?.message !== 'timeout') console.warn('face:', e);

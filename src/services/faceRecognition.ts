@@ -978,14 +978,15 @@ export const extractFaceDescriptor = async (
 
 export const extractAllFaceDescriptors = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
-  useRegion = false
+  useRegion = false,
+  targetWidth = 960
 ) => {
   if (!modelsLoaded) await loadFaceModels();
 
   const src = useRegion ? cropCenterRegion(input as any, 0.8) : input;
 
   return faceapi
-    .detectAllFaces(preprocessFrame(src, 960, true), getDetectorOptions())
+    .detectAllFaces(preprocessFrame(src, targetWidth, true), getDetectorOptions())
     .withFaceLandmarks(true)
     .withFaceDescriptors();
 };
