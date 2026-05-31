@@ -5,6 +5,7 @@ import { TelegramConfig } from '../../types/telegram';
 import {
   createBulkRegistrationLinks,
 } from '../../services/tokenService';
+import { flushAllPendingSaves } from '../../firebase/dataService';
 import {
   sendRegistrationLinksToTelegram,
 } from '../../services/telegramService';
@@ -428,6 +429,8 @@ export const SendRegisterLink: React.FC<SendRegisterLinkProps> = ({
 
     setGenerating(true);
     try {
+      // 💾 نضمن حفظ كل بيانات الطلاب قبل إنشاء الروابط
+      await flushAllPendingSaves();
       const studentIds = Array.from(selectedIds);
       const links = await createBulkRegistrationLinks(adminUid, selectedStageId, studentIds, expiryDays);
 

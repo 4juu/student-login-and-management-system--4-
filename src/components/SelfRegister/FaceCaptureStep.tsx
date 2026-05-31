@@ -1,3 +1,4 @@
+// src/components/SelfRegister/FaceCaptureStep.tsx
 import React, { useEffect, useRef, useState } from 'react';
 import { Student } from '../../types/student';
 import {
@@ -9,6 +10,7 @@ import {
   checkForTamperingAsync,
   buildMultiDescriptor,
   drawFaceLandmarks,
+  MultiDescriptor,
 } from '../../services/faceRecognition';
 import * as faceapi from 'face-api.js';
 
@@ -16,7 +18,7 @@ interface FaceCaptureStepProps {
   student: Student;
   matchPercentage: number;
   allStudents?: Student[];
-  onCaptured: (faceDescriptor: any) => void;
+  onCaptured: (faceDescriptor: MultiDescriptor) => void;
   onCancel: () => void;
 }
 
@@ -40,29 +42,35 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
   const [faceDetected, setFaceDetected] = useState(false);
   const [detLandmarks, setDetLandmarks] = useState<faceapi.FaceLandmarks68 | null>(null);
   const [detBox, setDetBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
-  const [detFrameW, setDetFrameW] = useState(0);
-  const [detFrameH, setDetFrameH] = useState(0);
 
+  // تحميل النماذج
   useEffect(() => {
     mountedRef.current = true;
-    if (areModelsLoaded()) { setModelsReady(true); return; }
+    
+    if (areModelsLoaded()) {
+      setModelsReady(true);
+      return;
+    }
+    
     (async () => {
       try {
         setModelsLoading(true);
         await loadFaceModels();
-        if (!mountedRef.current) return;
-        setModelsReady(true);
+        if (mountedRef.current) setModelsReady(true);
       } catch (e: any) {
         if (mountedRef.current) setError('فشل تحميل نظام التعرف على الوجوه');
       } finally {
         if (mountedRef.current) setModelsLoading(false);
       }
     })();
+    
     return () => { mountedRef.current = false; };
   }, []);
 
+  // فتح الكاميرا
   useEffect(() => {
     if (!modelsReady) return;
+    
     let localStream: MediaStream | null = null;
     let cancelled = false;
 
@@ -72,14 +80,23 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
           video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
           audio: false,
         });
-        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+        
+        if (cancelled) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
+        }
+        
         localStream = stream;
         streamRef.current = stream;
+        
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
         }
-        setTimeout(() => { if (!cancelled && mountedRef.current) setCameraReady(true); }, 500);
+        
+        setTimeout(() => {
+          if (!cancelled && mountedRef.current) setCameraReady(true);
+        }, 500);
       } catch (e: any) {
         if (cancelled) return;
         if (e.name === 'NotAllowedError') setError('يرجى السماح باستخدام الكاميرا');
@@ -90,25 +107,32 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
 
     return () => {
       cancelled = true;
-      if (localStream) { localStream.getTracks().forEach(t => t.stop()); }
+      if (localStream) localStream.getTracks().forEach(t => t.stop());
       if (streamRef.current === localStream) streamRef.current = null;
       if (videoRef.current) videoRef.current.srcObject = null;
     };
   }, [modelsReady]);
 
+  // كشف الوجه المستمر
   useEffect(() => {
     if (!cameraReady || capturing || !videoRef.current) return;
+    
     const iv = window.setInterval(async () => {
       if (!videoRef.current || !mountedRef.current) return;
+      
       try {
-        const det = await detectSingleFace(videoRef.current, 480);
+        const det = await detectSingleFace(videoRef.current, 150);
         if (!mountedRef.current) return;
+        
         if (det) {
           setFaceDetected(true);
           setDetLandmarks(det.landmarks);
-          setDetBox({ x: det.detection.box.x, y: det.detection.box.y, width: det.detection.box.width, height: det.detection.box.height });
-          setDetFrameW(videoRef.current?.videoWidth || 640);
-          setDetFrameH(videoRef.current?.videoHeight || 480);
+          setDetBox({
+            x: det.detection.box.x,
+            y: det.detection.box.y,
+            width: det.detection.box.width,
+            height: det.detection.box.height,
+          });
         } else {
           setFaceDetected(false);
           setDetLandmarks(null);
@@ -116,41 +140,58 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
         }
       } catch {}
     }, 300);
+    
     return () => clearInterval(iv);
   }, [cameraReady, capturing]);
 
+  // رسم معالم الوجه
   useEffect(() => {
     const canvas = landmarkCanvasRef.current;
     const container = canvas?.parentElement;
+    
     if (!canvas || !container || !detLandmarks || !detBox) {
-      if (canvas) { const ctx = canvas.getContext('2d'); if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height); }
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
       return;
     }
+    
     const rect = container.getBoundingClientRect();
     canvas.width = rect.width;
     canvas.height = rect.height;
+    
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    drawFaceLandmarks(ctx, detLandmarks, detBox, canvas.width, canvas.height, videoRef.current?.videoWidth || detFrameW, videoRef.current?.videoHeight || detFrameH, true);
+    
+    const frameW = videoRef.current?.videoWidth || 640;
+    const frameH = videoRef.current?.videoHeight || 480;
+    
+    drawFaceLandmarks(ctx, detLandmarks, detBox, canvas.width, canvas.height, frameW, frameH, true);
   }, [detLandmarks, detBox]);
 
   const handleCapture = async () => {
     if (!videoRef.current || capturing) return;
+    
     setCapturing(true);
     setError('');
+    
     try {
       const descriptor = await extractFaceDescriptor(videoRef.current);
+      
       if (!descriptor) {
-        setError('لم يتم التعرف على الوجه. تأكد من الإضاءة');
+        setError('لم يتم التعرف على الوجه. تأكد من الإضاءة والمسافة.');
         setCapturing(false);
         return;
       }
-      const normalized = normalizeDescriptor(new Float32Array(descriptor));
+      
+      const normalized = normalizeDescriptor(descriptor);
 
+      // التحقق من التكرار
       if (allStudents.length > 1) {
         const tamper = await checkForTamperingAsync(normalized, allStudents, student.id || '');
         if (tamper.isTamper) {
-          setError(`هذه البصمة مسجلة أصلاً للطالب: ${tamper.matchedStudents.map(m => m.name).join('، ')}`);
+          setError(`⚠️ هذا الوجه مسجل مسبقاً للطالب: ${tamper.matchedStudents.map(m => m.name).join('، ')}`);
           setCapturing(false);
           return;
         }
@@ -160,12 +201,13 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
       angleDescs.set('center', [normalized]);
       const multiDesc = buildMultiDescriptor(normalized, angleDescs, 1, new Set(['center']));
 
+      // إيقاف الكاميرا
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());
         streamRef.current = null;
       }
 
-      setTimeout(() => onCaptured(multiDesc as any), 500);
+      setTimeout(() => onCaptured(multiDesc), 500);
     } catch (e: any) {
       setError(e.message || 'فشل حفظ البصمة');
       setCapturing(false);
@@ -178,6 +220,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
     setFaceDetected(false);
     setDetLandmarks(null);
     setDetBox(null);
+    
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
@@ -191,13 +234,21 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
           video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
           audio: false,
         });
-        if (!mountedRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
+        
+        if (!mountedRef.current) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
+        }
+        
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
         }
-        setTimeout(() => { if (mountedRef.current) setCameraReady(true); }, 500);
+        
+        setTimeout(() => {
+          if (mountedRef.current) setCameraReady(true);
+        }, 500);
       } catch (e: any) {
         if (mountedRef.current) setError(e.message || 'فشل فتح الكاميرا');
       }
@@ -236,15 +287,28 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
         {modelsReady && !modelsLoading && (
           <div className="relative mb-4">
             <div className="relative rounded-2xl overflow-hidden bg-gray-900 aspect-square mx-auto" style={{ maxWidth: 320 }}>
-              <video ref={videoRef} autoPlay playsInline muted
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
                 className="w-full h-full object-cover"
-                style={{ transform: 'scaleX(-1)' }} />
+                style={{ transform: 'scaleX(-1)' }}
+              />
               <canvas ref={landmarkCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
               {cameraReady && !capturing && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className={`w-56 h-56 border-4 rounded-full ${faceDetected ? 'border-green-400/70' : 'border-purple-400/70'}`}
-                    style={{ boxShadow: faceDetected ? '0 0 40px rgba(34,197,94,0.4)' : '0 0 40px rgba(168,85,247,0.4)' }} />
+                  <div
+                    className={`w-56 h-56 border-4 rounded-full ${
+                      faceDetected ? 'border-green-400/70' : 'border-purple-400/70'
+                    }`}
+                    style={{
+                      boxShadow: faceDetected
+                        ? '0 0 40px rgba(34,197,94,0.4)'
+                        : '0 0 40px rgba(168,85,247,0.4)',
+                    }}
+                  />
                 </div>
               )}
 
@@ -254,27 +318,47 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
                 </div>
               )}
             </div>
+            
+            {cameraReady && !capturing && (
+              <div className="mt-2 text-center">
+                <span className={`text-xs font-medium ${faceDetected ? 'text-green-600' : 'text-gray-500'}`}>
+                  {faceDetected ? '✅ تم كشف الوجه' : '⏳ ضع وجهك داخل الدائرة'}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
         {cameraReady && !capturing && !error && modelsReady && !modelsLoading && (
           <div className="grid grid-cols-2 gap-2">
-            <button onClick={onCancel} className="py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg active:scale-95">
+            <button
+              onClick={onCancel}
+              className="py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg active:scale-95"
+            >
               إلغاء
             </button>
-            <button onClick={handleCapture}
-              className="py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg active:scale-95">
-              التقاط ✅
+            <button
+              onClick={handleCapture}
+              disabled={!faceDetected}
+              className="py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-40 text-white font-bold rounded-lg active:scale-95"
+            >
+              {faceDetected ? 'التقاط ✅' : 'انتظر الكشف...'}
             </button>
           </div>
         )}
 
         {error && !capturing && (
           <div className="grid grid-cols-2 gap-2">
-            <button onClick={onCancel} className="py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg active:scale-95">
+            <button
+              onClick={onCancel}
+              className="py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg active:scale-95"
+            >
               إلغاء
             </button>
-            <button onClick={handleRetry} className="py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold rounded-lg active:scale-95">
+            <button
+              onClick={handleRetry}
+              className="py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold rounded-lg active:scale-95"
+            >
               إعادة المحاولة
             </button>
           </div>
