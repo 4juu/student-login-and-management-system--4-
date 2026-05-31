@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Student } from '../types/student';
 import {
-  loadFaceModels, extractFaceDescriptorMultiCapture, areModelsLoaded,
+  loadFaceModels, areModelsLoaded,
+  captureSingleDirection,
   buildMultiDescriptor, checkForTamperingAsync,
   drawFaceLandmarks,
   type CaptureProgress, type FaceDirection, type QualityLevel, type LightLevel,
@@ -15,11 +16,33 @@ interface FaceRegistrationProps {
 
 type Step = 'search' | 'camera' | 'capture' | 'success' | 'confirm';
 
+interface CapturedFace {
+  descriptor: Float32Array;
+  quality: number;
+  direction: FaceDirection;
+  landmarks: { leftEye: Array<{ x: number; y: number }>; rightEye: Array<{ x: number; y: number }>; nose: Array<{ x: number; y: number }>; mouth: Array<{ x: number; y: number }>; jawOutline: Array<{ x: number; y: number }> };
+  faceBox: { x: number; y: number; width: number; height: number };
+  frameWidth: number;
+  frameHeight: number;
+  eyeDistance: number;
+  noseWidth: number;
+  mouthWidth: number;
+  faceAspectRatio: number;
+}
+
 const DIR_EMOJI: Record<FaceDirection, string> = { center: '⬜', right: '➡️', left: '⬅️', up: '⬆️', down: '⬇️' };
 const QUALITY_COLORS: Record<QualityLevel, string> = { excellent: 'text-green-600 bg-green-50', good: 'text-blue-600 bg-blue-50', fair: 'text-amber-600 bg-amber-50', poor: 'text-red-600 bg-red-50' };
 const QUALITY_LABELS: Record<QualityLevel, string> = { excellent: '🟢 ممتاز', good: '🔵 جيد', fair: '🟡 مقبول', poor: '🔴 ضعيف' };
 const LIGHT_LABELS: Record<LightLevel, string> = { dark: '🌑 مظلم', dim: '🌙 خافت', good: '☀️ جيد', bright: '🔆 ساطع' };
 const ALL_DIRS: FaceDirection[] = ['center', 'right', 'left', 'up', 'down'];
+
+const DIR_PROMPTS: Record<FaceDirection, string> = {
+  center: '👤 انظر للأمام',
+  right: '👉 أدر رأسك لليمين',
+  left: '👈 أدر رأسك لليسار',
+  up: '👆 ارفع رأسك للأعلى',
+  down: '👇 اخفض رأسك للأسفل',
+};
 
 export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, onUpdateStudent, onClose }) => {
   const [step, setStep] = useState<Step>('search');
@@ -29,8 +52,10 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   const [error, setError] = useState('');
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
   const [cameraReady, setCameraReady] = useState(false);
-  const [capturing, setCapturing] = useState(false);
-  const [countdown, setCountdown] = useState(0);
+  const [capturingDir, setCapturingDir] = useState(false);
+  const [dirError, setDirError] = useState('');
+  const [currentDirIndex, setCurrentDirIndex] = useState(0);
+  const [capturedFaces, setCapturedFaces] = useState<CapturedFace[]>([]);
   const [capInfo, setCapInfo] = useState<CaptureProgress | null>(null);
   const [captureQuality, setCaptureQuality] = useState(0);
 
@@ -91,24 +116,13 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
 
   const handleCameraChoice = (f: 'user' | 'environment') => {
     setFacing(f);
+    setCurrentDirIndex(0);
+    setCapturedFaces([]);
+    setDirError('');
+    setCapInfo(null);
     setStep('capture');
     setTimeout(() => openCamera(f), 400);
   };
-
-  const handleStartCapture = useCallback(() => {
-    if (!videoRef.current || !cameraReady || capturing) return;
-    setCountdown(2);
-    let c = 2;
-    const iv = setInterval(() => {
-      c--;
-      if (c > 0) { setCountdown(c); }
-      else {
-        clearInterval(iv);
-        setCountdown(0);
-        startCapture();
-      }
-    }, 1000);
-  }, [cameraReady, capturing]);
 
   // 🖌️ رسم معالم الوجه على Canvas
   useEffect(() => {
@@ -129,40 +143,115 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
     drawFaceLandmarks(ctx, capInfo, canvas.width, canvas.height, facing === 'user');
   }, [capInfo, facing]);
 
-  const startCapture = async () => {
-    if (!videoRef.current) return;
-    setCapturing(true);
-    setError('');
+  const handleCaptureDirection = async () => {
+    if (!videoRef.current || capturingDir) return;
+    setCapturingDir(true);
+    setDirError('');
+    setCapInfo(null);
+
     try {
-      const result = await extractFaceDescriptorMultiCapture(
+      const result = await captureSingleDirection(
         videoRef.current,
-        (info) => { if (mountedRef.current) setCapInfo(info); },
-        true // 🛑 الكاميرا الأمامية تعكس اليسار/اليمين — mirrorHorizontal=true يعكس التصحيح
+        true,
+        videoRef.current
       );
-      if (!result || !result.descriptor) {
-        setError('لم نتمكن من التقاط الوجه بوضوح. تأكد من الإضاءة وأن وجهك في المنتصف');
-        setCapturing(false);
+
+      if (!result) {
+        setDirError('لم يتم التعرف على الوجه. تأكد من الإضاءة وأن وجهك واضح');
+        setCapturingDir(false);
         return;
       }
+
+      setCapInfo({
+        progress: 100,
+        phase: 'capture',
+        direction: result.direction,
+        directionLabel: '',
+        capturedDirections: new Set(),
+        totalGood: capturedFaces.length + 1,
+        currentScore: Math.round(result.quality * 100),
+        faceDetected: true,
+        qualityLevel: result.quality >= 0.8 ? 'excellent' : result.quality >= 0.6 ? 'good' : result.quality >= 0.4 ? 'fair' : 'poor',
+        lightLevel: 'good',
+        rotationAngle: 0,
+        rotationCoverage: 100,
+        landmarks: result.landmarks,
+        faceBox: result.faceBox,
+        eyeDistance: result.eyeDistance,
+        noseWidth: result.noseWidth,
+        mouthWidth: result.mouthWidth,
+        faceAspectRatio: result.faceAspectRatio,
+        frameWidth: result.frameWidth,
+        frameHeight: result.frameHeight,
+      });
+
+      const newFace: CapturedFace = {
+        descriptor: result.descriptor,
+        quality: result.quality,
+        direction: result.direction,
+        landmarks: result.landmarks,
+        faceBox: result.faceBox,
+        frameWidth: result.frameWidth,
+        frameHeight: result.frameHeight,
+        eyeDistance: result.eyeDistance,
+        noseWidth: result.noseWidth,
+        mouthWidth: result.mouthWidth,
+        faceAspectRatio: result.faceAspectRatio,
+      };
+
+      const newCaptured = [...capturedFaces, newFace];
+      setCapturedFaces(newCaptured);
+
+      if (currentDirIndex < ALL_DIRS.length - 1) {
+        setTimeout(() => {
+          if (mountedRef.current) {
+            setCurrentDirIndex(currentDirIndex + 1);
+            setCapturingDir(false);
+            setCapInfo(null);
+          }
+        }, 600);
+      } else {
+        await finishCapture(newCaptured);
+      }
+    } catch (e: any) {
+      setDirError(e.message || 'فشل التقاط الوجه');
+      setCapturingDir(false);
+    }
+  };
+
+  const finishCapture = async (faces: CapturedFace[]) => {
+    try {
+      const centerFace = faces.find(f => f.direction === 'center') || faces[0];
+      const angleDescs = new Map<FaceDirection, Float32Array[]>();
+      const capturedDirs = new Set<FaceDirection>();
+
+      for (const f of faces) {
+        if (!angleDescs.has(f.direction)) angleDescs.set(f.direction, []);
+        angleDescs.get(f.direction)!.push(f.descriptor);
+        capturedDirs.add(f.direction);
+      }
+
+      const avgQuality = faces.reduce((s, f) => s + f.quality, 0) / faces.length;
+      const multiDesc = buildMultiDescriptor(centerFace.descriptor, angleDescs, avgQuality, capturedDirs);
+
       if (students.length > 1 && selectedStudent) {
-        const tamper = await checkForTamperingAsync(result.descriptor, students, selectedStudent.id, 0.35);
+        const tamper = await checkForTamperingAsync(centerFace.descriptor, students, selectedStudent.id, 0.35);
         if (tamper.isTamper) {
           setError(`⚠️ هذا الوجه مسجل للطالب: ${tamper.matchedStudents.map(m => m.name).join('، ')}`);
-          setCapturing(false);
+          setCapturingDir(false);
+          setCurrentDirIndex(0);
+          setCapturedFaces([]);
           return;
         }
       }
-      const qualityPct = Math.round(result.quality * 100);
-      setCaptureQuality(qualityPct);
-      const multiDesc = buildMultiDescriptor(result.descriptor, result.angleDescs, result.quality, result.directions);
-      if (selectedStudent) {
-        onUpdateStudent(selectedStudent.id, { faceDescriptor: multiDesc as any, faceRegisteredAt: new Date().toISOString() });
-      }
+
+      setCaptureQuality(Math.round(avgQuality * 100));
+      onUpdateStudent(selectedStudent!.id, { faceDescriptor: multiDesc as any, faceRegisteredAt: new Date().toISOString() });
       cleanupCamera();
       setStep('success');
     } catch (e: any) {
-      setError(e.message || 'فشل التقاط الوجه');
-      setCapturing(false);
+      setError(e.message || 'فشل حفظ البصمة');
+      setCapturingDir(false);
     }
   };
 
@@ -174,7 +263,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
 
   const handleRetry = () => {
     setError('');
-    setCapturing(false);
+    setCapturingDir(false);
     openCamera(facing);
   };
 
@@ -184,9 +273,11 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
     setSearch('');
     setStep('search');
     setError('');
-    setCapturing(false);
+    setCapturingDir(false);
+    setCurrentDirIndex(0);
+    setCapturedFaces([]);
+    setDirError('');
     setCapInfo(null);
-    setCountdown(0);
     setTimeout(() => searchRef.current?.focus(), 100);
   };
 
@@ -292,14 +383,15 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
           </div>
         )}
 
-        {/* Capture Step */}
+        {/* Capture Step — يدوي خطوة بخطوة */}
         {step === 'capture' && selectedStudent && (
           <div className="p-4">
             <div className="text-center mb-3">
               <h3 className="text-sm font-bold text-gray-800 truncate">{selectedStudent.name}</h3>
+              <p className="text-[10px] text-gray-500">{currentDirIndex + 1} / {ALL_DIRS.length}</p>
             </div>
 
-            {error && !capturing && (
+            {error && !capturingDir && (
               <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs whitespace-pre-line">{error}</div>
             )}
 
@@ -312,57 +404,25 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
                     <div className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
-                {cameraReady && !capturing && countdown === 0 && (
+                {cameraReady && !capturingDir && !capInfo && (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="w-52 h-52 border-4 border-purple-400/70 rounded-full" style={{ boxShadow: '0 0 40px rgba(168,85,247,0.4)' }} />
                   </div>
                 )}
-                {countdown > 0 && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                    <span className="text-white text-7xl font-bold animate-pulse">{countdown}</span>
-                  </div>
-                )}
-                {capturing && capInfo && (
+                {cameraReady && !capturingDir && (
                   <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 200 200">
-                    <circle cx="100" cy="100" r="92" fill="none" stroke="rgba(139,92,246,0.15)" strokeWidth="5" />
-                    <circle cx="100" cy="100" r="92" fill="none"
-                      stroke={capInfo.progress >= 100 ? '#10b981' : '#8b5cf6'} strokeWidth="5" strokeLinecap="round"
-                      strokeDasharray={`${2 * Math.PI * 92}`}
-                      strokeDashoffset={`${2 * Math.PI * 92 * (1 - capInfo.progress / 100)}`}
-                      style={{ transition: 'stroke-dashoffset 0.15s linear', transform: 'rotate(-90deg)', transformOrigin: 'center' }} />
-                    {capInfo.phase === 'capture' && capInfo.faceDetected && (() => {
-                      const angle = (capInfo.rotationAngle - 90) * (Math.PI / 180);
-                      const cx = 100 + 92 * Math.cos(angle);
-                      const cy = 100 + 92 * Math.sin(angle);
-                      return (
-                        <>
-                          <circle cx={cx} cy={cy} r="8" fill="#8b5cf6" stroke="white" strokeWidth="3">
-                            <animate attributeName="r" values="7;10;7" dur="0.8s" repeatCount="indefinite" />
-                          </circle>
-                          <circle cx={cx} cy={cy} r="4" fill="white" />
-                        </>
-                      );
-                    })()}
-                    {ALL_DIRS.map(dir => {
+                    {ALL_DIRS.map((dir, i) => {
                       const isCenter = dir === 'center';
-                      const cx = isCenter ? 100 : 100 + 92 * Math.cos((({ right: 90, down: 180, left: 270, up: 0 }[dir] || 0) - 90) * (Math.PI / 180));
-                      const cy = isCenter ? 100 : 100 + 92 * Math.sin((({ right: 90, down: 180, left: 270, up: 0 }[dir] || 0) - 90) * (Math.PI / 180));
-                      const done = capInfo.capturedDirections.has(dir);
-                      const isCurrent = capInfo.direction === dir;
+                      const cx = isCenter ? 100 : 100 + 92 * Math.cos((({ right: 90, down: 180, left: 270, up: 0 } as Record<string, number>)[dir] - 90) * (Math.PI / 180));
+                      const cy = isCenter ? 100 : 100 + 92 * Math.sin((({ right: 90, down: 180, left: 270, up: 0 } as Record<string, number>)[dir] - 90) * (Math.PI / 180));
+                      const done = i < currentDirIndex;
+                      const isCurrent = i === currentDirIndex;
                       const r = isCenter ? 10 : isCurrent ? 8 : 6;
                       return (
                         <g key={dir}>
                           <circle cx={cx} cy={cy} r={r}
-                            fill={
-                              isCurrent ? '#f59e0b'
-                                : done ? '#10b981'
-                                : 'rgba(139,92,246,0.2)'
-                            }
-                            stroke={
-                              isCurrent ? '#d97706'
-                                : done ? '#065f46'
-                                : 'rgba(139,92,246,0.4)'
-                            }
+                            fill={isCurrent ? '#f59e0b' : done ? '#10b981' : 'rgba(139,92,246,0.2)'}
+                            stroke={isCurrent ? '#d97706' : done ? '#065f46' : 'rgba(139,92,246,0.4)'}
                             strokeWidth={isCurrent ? 3 : 2}
                           />
                           {isCurrent && (
@@ -376,69 +436,44 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
                     })}
                   </svg>
                 )}
-                {capturing && capInfo?.phase === 'capture' && (
-                  <div className={`absolute top-2 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[10px] font-bold shadow-lg ${
-                    capInfo.faceDetected ? 'bg-green-500 text-white' : 'bg-red-500 text-white animate-pulse'
-                  }`}>
-                    {capInfo.faceDetected ? '✅ وجه واضح' : '❌ أين وجهك؟'}
+                {capturingDir && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                    <div className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
               </div>
             </div>
 
-            {capturing && capInfo && (
-              <div className="space-y-2 mb-3">
-                <div className={`py-2 px-3 rounded-xl font-bold text-center text-sm ${
-                  capInfo.phase === 'stabilize' ? 'bg-blue-50 text-blue-700'
-                    : capInfo.faceDetected ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-                }`}>
-                  {capInfo.phase === 'stabilize' ? '🔍 جاري التثبيت...' : capInfo.directionLabel}
-                </div>
-                <div className="flex justify-center gap-2">
-                  <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${QUALITY_COLORS[capInfo.qualityLevel]}`}>{QUALITY_LABELS[capInfo.qualityLevel]}</span>
-                  <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-gray-100 text-gray-600">{LIGHT_LABELS[capInfo.lightLevel]}</span>
-                </div>
-                <div className="flex justify-center gap-2 items-center">
-                  <span className="text-[10px] text-gray-500">🔄 دوران:</span>
-                  <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-purple-500 rounded-full transition-all" style={{ width: `${capInfo.rotationCoverage}%` }} />
+            {cameraReady && !capturingDir && (
+              <>
+                <div className="text-center mb-3">
+                  <div className="font-bold text-sm text-gray-800">
+                    {DIR_PROMPTS[ALL_DIRS[currentDirIndex]]}
                   </div>
-                  <span className="text-[10px] font-bold text-purple-600">{capInfo.rotationCoverage}%</span>
+                  <div className="flex justify-center gap-2 mt-2">
+                    {ALL_DIRS.map((dir, i) => (
+                      <span key={dir} className={`text-lg transition-opacity ${
+                        i < currentDirIndex ? 'opacity-100' : i === currentDirIndex ? 'opacity-100' : 'opacity-25'
+                      }`}>
+                        {DIR_EMOJI[dir]}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                {/* 🐛 Debug Overlay — القيم الرقمية للاتجاه */}
-                <div className="flex justify-center gap-3 text-[10px] font-mono">
-                  <span className={`px-2 py-0.5 rounded ${
-                    capInfo.directionMatch ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-                  }`}>
-                    {capInfo.directionMatch ? '✅ مطابق' : '⏳ انتظر...'}
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-600">
-                    H: {capInfo.horizOffset !== undefined ? capInfo.horizOffset.toFixed(2) : '-'}
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-600">
-                    V: {capInfo.vertOffset !== undefined ? capInfo.vertOffset.toFixed(2) : '-'}
-                  </span>
-                </div>
-                <div className="flex justify-center gap-2 text-[10px] text-gray-500">
-                  {ALL_DIRS.map(dir => (
-                    <span key={dir} className={`text-lg transition-opacity ${capInfo.capturedDirections.has(dir) ? 'opacity-100' : 'opacity-25'}`}>{DIR_EMOJI[dir]}</span>
-                  ))}
-                </div>
-              </div>
-            )}
 
-            {!capturing && (
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={handleBackToSearch} className="py-3 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95 text-sm">🔙 رجوع</button>
-                {error ? (
-                  <button onClick={handleRetry} className="py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold rounded-lg active:scale-95 text-sm">🔄 إعادة</button>
-                ) : (
-                  <button onClick={handleStartCapture} disabled={!cameraReady}
-                    className="py-3 bg-gradient-to-r from-purple-600 to-pink-600 disabled:opacity-40 text-white font-bold rounded-lg active:scale-95 text-sm">
-                    📸 بدء التسجيل
-                  </button>
+                {dirError && (
+                  <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs">{dirError}</div>
                 )}
-              </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={handleBackToSearch} className="py-3 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95 text-sm">
+                    🔙 رجوع
+                  </button>
+                  <button onClick={handleCaptureDirection} className="py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg active:scale-95 text-sm">
+                    تم ✅
+                  </button>
+                </div>
+              </>
             )}
           </div>
         )}
@@ -449,29 +484,27 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
             <div className="text-5xl mb-3 animate-bounce">🎉</div>
             <h3 className="text-lg font-bold text-green-700 mb-1">تم تسجيل البصمة!</h3>
             <p className="text-gray-800 font-bold">{selectedStudent.name}</p>
-            {capInfo && (
+            {capturedFaces.length > 0 && (
               <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-2.5">
                 <div className="flex justify-center gap-3 mb-2">
                   <div className="text-center">
-                    <div className="text-lg font-bold text-green-600">{capInfo.totalGood}</div>
-                    <div className="text-[8px] text-green-500">لقطة</div>
-                  </div>
-                  <div className="w-px bg-green-200" />
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-green-600">{capInfo.capturedDirections.size}</div>
+                    <div className="text-lg font-bold text-green-600">{capturedFaces.length}</div>
                     <div className="text-[8px] text-green-500">اتجاه</div>
                   </div>
                   <div className="w-px bg-green-200" />
                   <div className="text-center">
-                    <div className="text-lg font-bold text-green-600">{capInfo.rotationCoverage}%</div>
-                    <div className="text-[8px] text-green-500">دوران</div>
+                    <div className="text-lg font-bold text-green-600">{Math.round(capturedFaces.reduce((s, f) => s + f.quality, 0) / capturedFaces.length * 100)}%</div>
+                    <div className="text-[8px] text-green-500">الجودة</div>
                   </div>
                 </div>
                 <div className="flex justify-center gap-1">
-                  {ALL_DIRS.map(dir => <span key={dir} className={`text-sm ${capInfo.capturedDirections.has(dir) ? '' : 'opacity-20'}`}>{DIR_EMOJI[dir]}</span>)}
+                  {ALL_DIRS.map(dir => {
+                    const captured = capturedFaces.some(f => f.direction === dir);
+                    return <span key={dir} className={`text-sm ${captured ? '' : 'opacity-20'}`}>{DIR_EMOJI[dir]}</span>;
+                  })}
                 </div>
-                <div className={`text-lg font-extrabold mt-1 ${QUALITY_COLORS[capInfo.qualityLevel]}`}>
-                  {captureQuality}% — {QUALITY_LABELS[capInfo.qualityLevel]}
+                <div className="text-lg font-extrabold mt-1 text-green-700">
+                  {captureQuality}%
                 </div>
               </div>
             )}

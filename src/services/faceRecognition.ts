@@ -477,7 +477,7 @@ export const drawFaceLandmarks = (
   // ── Face bounding box ──
   ctx.strokeStyle = capInfo.directionMatch ? '#10b981' : '#8b5cf6';
   ctx.lineWidth = 2;
-  ctx.strokeRect(mapX(faceBox.x), mapY(faceBox.y), mapW(faceBox.width), mapH(faceBox.height));
+  ctx.strokeRect(mirrored ? mapX(faceBox.x + faceBox.width) : mapX(faceBox.x), mapY(faceBox.y), mapW(faceBox.width), mapH(faceBox.height));
 
   // ── Helper: draw dots with lines ──
   const drawPoints = (pts: Array<{ x: number; y: number }>, color: string) => {
@@ -1129,6 +1129,73 @@ export const extractFaceDescriptorMultiCapture = async (
   reportProgress(100, 'capture', 'center', true, { quality: avgQuality });
 
   return { descriptor: final, angleDescs, quality: avgQuality, directions: capturedDirections };
+};
+
+// 🆕 التقاط اتجاه واحد يدوياً — يعيد الواصف والمعالم، ولا يجبر اتجاه
+export const captureSingleDirection = async (
+  input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
+  mirrorHorizontal?: boolean,
+  videoInput?: HTMLVideoElement
+): Promise<{
+  descriptor: Float32Array;
+  quality: number;
+  direction: FaceDirection;
+  landmarks: LandmarkPoints;
+  faceBox: { x: number; y: number; width: number; height: number };
+  frameWidth: number;
+  frameHeight: number;
+  eyeDistance: number;
+  noseWidth: number;
+  mouthWidth: number;
+  faceAspectRatio: number;
+} | null> => {
+  if (!modelsLoaded) await loadFaceModels();
+
+  const stabEnd = Date.now() + 800;
+  while (Date.now() < stabEnd) {
+    try {
+      const processed = preprocessForEnrollment(input, 640);
+      const det = await faceapi
+        .detectAllFaces(processed, getDetectorOptions())
+        .withFaceLandmarks(true);
+
+      if (det.length === 1 && det[0].detection.score >= 0.4) break;
+    } catch {}
+    await new Promise(r => setTimeout(r, 150));
+  }
+
+  const processed = preprocessForEnrollment(input, 640, true);
+  const imgW = processed.width;
+  const imgH = processed.height;
+
+  const detections = await faceapi
+    .detectAllFaces(processed, getDetectorOptions())
+    .withFaceLandmarks(true)
+    .withFaceDescriptors();
+
+  if (detections.length !== 1) return null;
+
+  const det = detections[0];
+  const q = evaluateFrameQuality(
+    det,
+    imgW,
+    imgH,
+    videoInput || (input instanceof HTMLVideoElement ? input : undefined),
+    mirrorHorizontal
+  );
+
+  const MIN_SCORE = 0.45;
+  const MIN_AREA = 0.025;
+  const MAX_CENTER = 0.5;
+
+  if (q.score < MIN_SCORE || q.areaRatio < MIN_AREA || q.centerDist > MAX_CENTER) return null;
+
+  const descriptor = normalizeDescriptor(det.descriptor);
+  const lm = extractLandmarkPoints(det.landmarks);
+  const geo = calculateFaceGeometry(lm);
+  const faceBox = { x: det.detection.box.x, y: det.detection.box.y, width: det.detection.box.width, height: det.detection.box.height };
+
+  return { descriptor, quality: q.quality, direction: q.direction, landmarks: lm, faceBox, frameWidth: imgW, frameHeight: imgH, ...geo };
 };
 
 export interface TrackedFace {
