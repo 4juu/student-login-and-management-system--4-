@@ -4,7 +4,7 @@
     // 👥 المستخدمون
     // ══════════════════════════════════════════════════════════
     "users": {
-      ".read": "auth != null",
+      ".read": true,
       "$uid": {
         ".write": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin' || (root.child('users').child(auth.uid).child('role').val() == 'college_admin' && root.child('users').child($uid).child('role').val() == 'teacher'))"
       }
@@ -34,7 +34,7 @@
     // ⚙️ إعدادات النظام
     // ══════════════════════════════════════════════════════════
     "system": {
-      ".read": "auth != null",
+      ".read": true,
       ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'"
     },
 
@@ -92,34 +92,28 @@
 
         "userData": {
           "$adminUid": {
-            // قراءة: الأدمن صاحب البيانات + أي أدمن رئيسي + أدمن الكلية التابع له
             ".read": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
-            // كتابة: نفس الشي
             ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
 
-            // الكليات — قراءة للكل، كتابة للأدمن المالك
             "colleges": {
               ".read": true,
               ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin')"
             },
 
-            // المراحل — قراءة للكل، كتابة للأدمن المالك
             "stages": {
               ".read": true,
               ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin')"
             },
 
-            // بيانات المراحل
             "stageData": {
               "$stageId": {
-                // 👨‍🎓 الطلاب
                 "students": {
                   ".read": true,
-                  // TODO: نقل auto-approve إلى Cloud Function لإغلاق الكتابة بدون auth
+                  // ⚠️ مفتوح للكتابة لأن auto-approve يحتاجها بدون auth
+                  // مستقبلاً: استخدم Cloud Function لتحسين الأمان
                   ".write": true
                 },
 
-                // 👨‍🏫 سجلات التدريسيين
                 "teacherRecords": {
                   "$teacherId": {
                     ".read": "auth != null && (auth.uid == $teacherId || auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",

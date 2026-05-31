@@ -101,11 +101,19 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   useEffect(() => {
     let mounted = true;
 
+    const timeout = setTimeout(() => {
+      if (!mounted) return;
+      console.warn('⏱️ انتهت مهلة تحميل الرابط');
+      setErrorMsg('تعذر الاتصال بقاعدة البيانات، تحقق من اتصالك');
+      setStep('invalid-link');
+    }, 15000);
+
     (async () => {
       try {
         const linkData = await getRegistrationLink(token);
         if (!mounted) return;
 
+        clearTimeout(timeout);
         const validation = validateLink(linkData);
         if (!validation.valid) {
           setErrorMsg(validation.reason || 'الرابط غير صالح');
@@ -122,6 +130,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
           setStep('enter-code');
         }
       } catch (e: any) {
+        clearTimeout(timeout);
         console.error(e);
         setErrorMsg('فشل تحميل بيانات الرابط');
         setStep('invalid-link');
@@ -130,6 +139,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
     return () => {
       mounted = false;
+      clearTimeout(timeout);
       terminateOCR();
     };
   }, [token]);
