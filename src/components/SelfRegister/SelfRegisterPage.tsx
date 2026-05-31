@@ -9,7 +9,6 @@ import {
 } from '../../services/tokenService';
 import {
   matchArabicNames,
-  classifyMatch,
   getMatchDescription,
 } from '../../services/nameMatching';
 import { IDCardUpload } from './IDCardUpload';
@@ -19,10 +18,11 @@ import { getActiveAcademicYear } from '../../firebase/dataService';
 import { SkeletonCard } from '../Skeleton';
 import type { MultiDescriptor } from '../../services/faceRecognition';
 
+const MIN_MATCH = 90;
+
 type Step =
   | 'loading'
   | 'invalid-link'
-  | 'enter-code'
   | 'upload-id'
   | 'name-mismatch'
   | 'capture-face'
@@ -79,8 +79,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   const [link, setLink] = useState<RegistrationLink | null>(null);
   const [student, setStudent] = useState<Student | null>(null);
   const [allStudents, setAllStudents] = useState<Student[]>([]);
-  const [enteredCode, setEnteredCode] = useState('');
-  const [codeError, setCodeError] = useState('');
   const [idData, setIdData] = useState<IDExtractionResult | null>(null);
   const [matchPercentage, setMatchPercentage] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
@@ -142,7 +140,8 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
             clearTimeout(studentTimeout);
           }
         } else {
-          goTo('enter-code');
+          setErrorMsg('هذا الرابط غير مرتبط بطالب محدد');
+          goTo('invalid-link');
         }
       } catch (e: any) {
         if (e?.name === 'AbortError') {
@@ -164,67 +163,50 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     };
   }, [token]);
 
-  const handleCodeSubmit = async () => {
-    if (!link) return;
-    setCodeError('');
-    if (!/^\d{4}$/.test(enteredCode)) {
-      setCodeError('الرمز يجب أن يكون 4 أرقام');
-      return;
-    }
-    try {
-      const ac = new AbortController();
-      const t = setTimeout(() => ac.abort(), 15000);
-      const year = await getActiveAcademicYear();
-      clearTimeout(t);
-      const data = await dbFetch<Record<string, Student> | Student[]>(
-        `academicYears/${year}/userData/${link.adminUid}/stageData/${link.stageId}/students`,
-        ac.signal
-      );
-      if (!data) { setCodeError('لم نجد بيانات الطلاب'); return; }
-      const studentsArr: Student[] = Array.isArray(data) ? data : Object.values(data);
-      const found = studentsArr.find((s) => s.secretCode === enteredCode);
-      if (!found) { setCodeError('الرمز خطأ'); return; }
-      setAllStudents(studentsArr);
-      setStudent(found);
-      goTo('upload-id');
-    } catch { setCodeError('فشل التحقق، حاول مرة أخرى'); }
-  };
-
   const handleIdExtracted = async (result: IDExtractionResult) => {
     setIdData(result);
-    if (!student) return;
-    const pct = matchArabicNames(student.name, result.fullName);
+    if (!student || !link) return;
+    const pct = matchArabicNames(student.name, result.name || result.fullName || '');
     setMatchPercentage(pct);
-    goTo(classifyMatch(pct) === 'auto-approve' ? 'capture-face' : 'name-mismatch');
+
+    if (pct < MIN_MATCH) {
+      goTo('name-mismatch');
+      return;
+    }
+
+    // حفظ QR في Firebase مباشرة
+    try {
+      const year = await getActiveAcademicYear();
+      const path = `academicYears/${year}/userData/${link.adminUid}/stageData/${link.stageId}/students`;
+      const data = await dbFetch<Record<string, Student> | Student[]>(path);
+      if (data) {
+        const arr: Student[] = Array.isArray(data) ? data : Object.values(data);
+        const idx = arr.findIndex((s) => s.id === student.id);
+        if (idx !== -1 && result.qrId) {
+          arr[idx] = { ...arr[idx], qrCodeId: result.qrId };
+          await set(ref(database, path), arr);
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ فشل حفظ QR:', e);
+    }
+
+    goTo('capture-face');
   };
 
   const handleFaceCaptured = async (descriptor: MultiDescriptor) => {
     if (!link || !student) return;
     goTo('submitting');
     const cleanFaceDescriptor = deepSanitize(descriptor);
-    const status = classifyMatch(matchPercentage);
     try {
       const year = await getActiveAcademicYear();
-      const basePath = `academicYears/${year}/userData/${link.adminUid}/stageData/${link.stageId}`;
       const requestId = `${student.id}_${Date.now()}`;
       const pendingRef = ref(database, `registrationSystem/pending/${link.adminUid}/${requestId}`);
       await set(pendingRef, {
-        student, idData, matchPercentage, matchLevel: status,
+        student, idData, matchPercentage,
         faceDescriptor: cleanFaceDescriptor, token, createdAt: Date.now(),
       });
-      if (status === 'auto-approve') {
-        const snap = await get(ref(database, `${basePath}/students`));
-        if (snap.exists()) {
-          const raw = snap.val();
-          const arr: Student[] = Array.isArray(raw) ? raw : Object.values(raw);
-          const idx = arr.findIndex((s) => s.id === student.id);
-          if (idx !== -1) {
-            arr[idx] = { ...arr[idx], faceDescriptor: cleanFaceDescriptor, qrCodeId: requestId };
-            await set(ref(database, `${basePath}/students`), arr);
-          }
-        }
-        await set(ref(database, `registrationSystem/links/${token}/used`), true);
-      }
+      await set(ref(database, `registrationSystem/links/${token}/used`), true);
       goTo('success');
     } catch (e: any) {
       console.error('❌ فشل حفظ:', e);
@@ -235,8 +217,8 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   const handleRetryId = () => goTo('upload-id');
 
-  const stepLabels = ['التحقق', 'الهوية', 'البصمة', 'تأكيد'];
-  const stepIcons = ['🔐', '🪪', '😊', '✅'];
+  const stepLabels = ['الهوية', 'البصمة', 'تأكيد'];
+  const stepIcons = ['🪪', '😊', '✅'];
 
   if (step === 'loading') {
     return (
@@ -262,7 +244,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   }
 
   const renderStepIndicator = () => {
-    const activeIdx = ['enter-code', 'upload-id', 'capture-face', 'success'].indexOf(step);
+    const activeIdx = ['upload-id', 'capture-face', 'success'].indexOf(step);
     return (
       <div className="mb-6">
         <div className="flex items-center justify-between">
@@ -294,65 +276,25 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     );
   };
 
-  if (step === 'enter-code') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4" dir="rtl">
-        <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 max-w-md w-full">
-          {renderStepIndicator()}
-          <div className="text-center mb-6">
-            <div className="text-5xl mb-3">🔐</div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">التحقق من الهوية</h2>
-            <p className="text-sm text-gray-600">أدخل رمزك المكون من 4 أرقام للبدء</p>
-          </div>
-          <input
-            type="text"
-            value={enteredCode}
-            onChange={(e) => {
-              setEnteredCode(e.target.value.replace(/\D/g, '').slice(0, 4));
-              setCodeError('');
-            }}
-            placeholder="0000"
-            maxLength={4}
-            inputMode="numeric"
-            className="w-full text-center text-4xl font-bold tracking-[1em] py-4 border-2 border-purple-300 rounded-xl focus:border-purple-500 outline-none"
-            autoFocus
-          />
-          {codeError && (
-            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm text-center">{codeError}</div>
-          )}
-          <button
-            onClick={handleCodeSubmit}
-            disabled={enteredCode.length !== 4}
-            className="w-full mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-40 text-white font-bold py-3 rounded-lg transition active:scale-95"
-          >
-            متابعة
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   if (step === 'upload-id' && student) {
     return <IDCardUpload student={student} onExtracted={handleIdExtracted} onCancel={onExit} />;
   }
 
   if (step === 'name-mismatch' && student && idData) {
-    const matchLevel = classifyMatch(matchPercentage);
     return (
       <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-orange-50 flex items-center justify-center p-4" dir="rtl">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
           <div className="text-6xl mb-4">⚠️</div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">اختلاف في الاسم</h2>
-          <p className="text-sm text-gray-500 mb-4">نسبة التطابق: {matchPercentage}%</p>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">الاسم غير متطابق</h2>
+          <p className="text-sm text-gray-500 mb-4">نسبة التطابق: {matchPercentage}% (المطلوب {MIN_MATCH}% فأكثر)</p>
           <div className="bg-gray-50 rounded-xl p-4 mb-4 text-right">
-            <p className="text-sm text-gray-500">المسجل: <span className="text-gray-800 font-bold">{student.name}</span></p>
-            <p className="text-sm text-gray-500">الهوية: <span className="text-gray-800 font-bold">{idData.fullName}</span></p>
+            <p className="text-sm text-gray-500">المسجل بالنظام: <span className="text-gray-800 font-bold">{student.name}</span></p>
+            <p className="text-sm text-gray-500">المستخرج من الهوية: <span className="text-gray-800 font-bold">{idData.name || idData.fullName}</span></p>
           </div>
-          <p className="text-sm text-gray-600 mb-6">{getMatchDescription(matchLevel)}</p>
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={handleRetryId} className="py-3 bg-gray-200 text-gray-700 font-bold rounded-lg">إعادة التصوير</button>
-            <button onClick={() => goTo('capture-face')} className="py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg">متابعة</button>
-          </div>
+          <p className="text-sm text-gray-600 mb-6">الاسم في الهوية لا يتطابق مع الاسم المسجل في النظام. حاول تصوير الهوية بشكل أوضح أو تأكد من استخدام الهوية الصحيحة.</p>
+          <button onClick={handleRetryId} className="w-full py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg">
+            🔄 إعادة التصوير
+          </button>
         </div>
       </div>
     );
@@ -383,8 +325,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   }
 
   if (step === 'success' && student) {
-    const matchLevel = classifyMatch(matchPercentage);
-    return <RegistrationSuccess student={student} matchPercentage={matchPercentage} autoApproved={matchLevel === 'auto-approve'} onExit={onExit} />;
+    return <RegistrationSuccess student={student} matchPercentage={matchPercentage} autoApproved={false} onExit={onExit} />;
   }
 
   if (step === 'error') {
