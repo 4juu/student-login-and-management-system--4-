@@ -116,7 +116,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
       const result = await extractFaceDescriptorMultiCapture(
         videoRef.current,
         (info) => { if (mountedRef.current) setCapInfo(info); },
-        facing === 'user'
+        false // 🛑 Raw feed من getUserMedia غير معكوس — CSS scaleX(-1) للعرض فقط
       );
       if (!result || !result.descriptor) {
         setError('لم نتمكن من التقاط الوجه بوضوح. تأكد من الإضاءة وأن وجهك في المنتصف');
@@ -322,7 +322,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
                       );
                     })()}
                     {ALL_DIRS.map(dir => {
-                      const angles: Record<FaceDirection, number> = { right: 0, down: 90, left: 180, up: 270, center: 315 };
+                      const angles: Record<FaceDirection, number> = { right: 90, down: 180, left: 270, up: 0, center: 315 };
                       const a = (angles[dir] - 90) * (Math.PI / 180);
                       const cx = 100 + 92 * Math.cos(a);
                       const cy = 100 + 92 * Math.sin(a);
