@@ -87,9 +87,11 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   const goTo = (s: Step) => { if (step !== s) setStep(s); };
 
-  const loadStudent = async (adminUid: string, stageId: string, studentId: string, signal: AbortSignal): Promise<Student | null> => {
-    let year = '';
-    try { year = await getActiveAcademicYear(); } catch { year = ''; }
+  const loadStudent = async (adminUid: string, stageId: string, studentId: string, signal: AbortSignal, linkYear?: string): Promise<Student | null> => {
+    let year = linkYear || '';
+    if (!year) {
+      try { year = await getActiveAcademicYear(); } catch { year = ''; }
+    }
     if (!year) { setErrorMsg('تعذر تحميل السنة الدراسية'); goTo('invalid-link'); return null; }
 
     const data = await dbFetch<Record<string, Student> | Student[]>(
@@ -135,7 +137,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
           const ac = new AbortController();
           const studentTimeout = setTimeout(() => ac.abort(), TIMEOUT);
           try {
-            const s = await loadStudent(linkData!.adminUid, linkData!.stageId, linkData!.studentId, ac.signal);
+            const s = await loadStudent(linkData!.adminUid, linkData!.stageId, linkData!.studentId, ac.signal, linkData!.academicYear);
             if (mounted && s) goTo('upload-id');
           } finally {
             clearTimeout(studentTimeout);

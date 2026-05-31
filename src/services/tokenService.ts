@@ -3,6 +3,7 @@ import { ref, set, get, update } from 'firebase/database';
 import { database } from '../firebase/config';
 import { nanoid } from 'nanoid';
 import { RegistrationLink } from '../types/registration';
+import { getActiveAcademicYear } from '../firebase/dataService';
 
 // ============================================================
 // 🔑 إدارة روابط التسجيل الذاتي
@@ -22,6 +23,8 @@ export const createSingleRegistrationLink = async (
 ): Promise<{ token: string; url: string }> => {
   const token = nanoid(20);
   const now = Date.now();
+  let academicYear = '';
+  try { academicYear = await getActiveAcademicYear(); } catch {}
   
   const linkData: RegistrationLink = {
     token,
@@ -33,6 +36,7 @@ export const createSingleRegistrationLink = async (
     createdAt: new Date().toISOString(),
     expiresAt: now + expiryDays * 24 * 60 * 60 * 1000,
     used: false,
+    academicYear: academicYear || undefined,
   };
   
   await set(ref(database, `${LINKS_PATH}/${token}`), linkData);
@@ -53,6 +57,9 @@ export const createBulkRegistrationLinks = async (
   const results: Array<{ studentId: string; token: string; url: string }> = [];
   const now = Date.now();
   const expiresAt = now + expiryDays * 24 * 60 * 60 * 1000;
+  let academicYear = '';
+  try { academicYear = await getActiveAcademicYear(); } catch {}
+  const ay = academicYear || undefined;
   
   const updates: { [key: string]: RegistrationLink } = {};
   
@@ -68,6 +75,7 @@ export const createBulkRegistrationLinks = async (
       createdAt: new Date().toISOString(),
       expiresAt,
       used: false,
+      academicYear: ay,
     };
     
     updates[`${LINKS_PATH}/${token}`] = linkData;

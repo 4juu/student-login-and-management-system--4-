@@ -14,6 +14,7 @@ export interface RegistrationLink {
   used: boolean;
   usedAt?: string;
   usedByStudentId?: string;
+  academicYear?: string;      // السنة الدراسية عند إنشاء الرابط
 }
 
 export interface PendingRegistration {
