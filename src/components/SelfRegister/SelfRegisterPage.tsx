@@ -126,10 +126,24 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
         setLink(linkData);
 
         if (linkData!.studentId) {
-          await loadStudent(linkData!.adminUid, linkData!.stageId, linkData!.studentId);
-          setStep('upload-id');
+          // ⏱️ timeout ثاني لعملية تحميل الطالب
+          const studentTimeout = setTimeout(() => {
+            if (!mounted) return;
+            console.warn('⏱️ انتهت مهلة تحميل الطالب');
+            setErrorMsg('تعذر تحميل بيانات الطالب، تحقق من اتصالك');
+            setStep('invalid-link');
+          }, 15000);
+
+          try {
+            await loadStudent(linkData!.adminUid, linkData!.stageId, linkData!.studentId);
+            clearTimeout(studentTimeout);
+            if (mounted) setStep('upload-id');
+          } catch (e) {
+            clearTimeout(studentTimeout);
+            throw e;
+          }
         } else {
-          setStep('enter-code');
+          if (mounted) setStep('enter-code');
         }
       } catch (e: any) {
         clearTimeout(timeout);
