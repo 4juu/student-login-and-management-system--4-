@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { ref as dbRef, onValue, off } from 'firebase/database';
 import { Student, AttendanceRecord, AttendanceSession, College, Stage } from './types/student';
 import { User } from './types/user';
@@ -206,10 +206,16 @@ useEffect(() => {
   }, []);
 
   useEffect(() => {
-    // 🆕 لا نسجل المستخدم تلقائياً إذا كان في صفحة التسجيل الذاتي
+    // 🆕 تسجيل دخول مجهول لقراءة بيانات Firebase في صفحة التسجيل الذاتي
     if (registerToken) {
-      console.log('🎯 صفحة التسجيل الذاتي - تخطي auth check');
-      setLoading(false);
+      console.log('🎯 صفحة التسجيل الذاتي - تسجيل دخول مجهول');
+      signInAnonymously(auth).then(() => {
+        console.log('✅ تم تسجيل الدخول المجهول بنجاح');
+        setLoading(false);
+      }).catch((e) => {
+        console.warn('⚠️ فشل تسجيل الدخول المجهول:', e);
+        setLoading(false);
+      });
       return;
     }
 
