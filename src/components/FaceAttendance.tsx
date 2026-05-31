@@ -4,7 +4,7 @@ import { User } from '../types/user';
 import { FaceRegistration } from './FaceRegistration';
 import {
   loadFaceModels, extractAllFaceDescriptors, normalizeDescriptor,
-  areModelsLoaded, IOUTracker, shouldAutoImprove, autoImproveDescriptor, detectFaceDirection,
+  areModelsLoaded, IOUTracker, shouldAutoImprove, autoImproveDescriptor,
   buildDescriptorCache, findBestMatchBatchFromCache, getDescriptorCache, getCacheThreshold,
   clearDescriptorCache, compareFaces,
 } from '../services/faceRecognition';
@@ -273,7 +273,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       const hasCache = cache && cache.length > 0;
 
       try {
-        const detections = await extractAllFaceDescriptors(video, false, 480);
+        const detections = await extractAllFaceDescriptors(video, 480);
 
         if (!faceRunningRef.current || !mountedRef.current) return;
 
@@ -363,8 +363,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
                   });
 
                   if (onUpdateStudent && bestStudent!.faceDescriptor && shouldAutoImprove(bestStudent!.faceDescriptor as any)) {
-                    const dir = detectFaceDirection(det.landmarks);
-                    const improved = autoImproveDescriptor(bestStudent!.faceDescriptor as any, det.descriptor, dir, confidence / 100);
+                    const improved = autoImproveDescriptor(bestStudent!.faceDescriptor as any, det.descriptor, 'center', confidence / 100);
                     if (improved) onUpdateStudent(bestStudent!.id, { faceDescriptor: improved as any });
                   }
 
@@ -466,8 +465,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
                     status: 'marked', confidence: bestConfidence,
                   });
                   if (onUpdateStudent && bestStudent!.faceDescriptor && shouldAutoImprove(bestStudent!.faceDescriptor as any)) {
-                    const dir = detectFaceDirection(det.landmarks);
-                    const improved = autoImproveDescriptor(bestStudent!.faceDescriptor as any, det.descriptor, dir, bestConfidence / 100);
+                    const improved = autoImproveDescriptor(bestStudent!.faceDescriptor as any, det.descriptor, 'center', bestConfidence / 100);
                     if (improved) onUpdateStudent(bestStudent!.id, { faceDescriptor: improved as any });
                   }
                   setTimeout(() => {

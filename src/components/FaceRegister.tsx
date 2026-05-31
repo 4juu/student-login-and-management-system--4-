@@ -1,12 +1,10 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Student } from '../types/student';
 import {
   loadFaceModels,
-  extractFaceDescriptorMultiCapture,
+  extractFaceDescriptor,
   buildMultiDescriptor,
   checkForTamperingAsync,
-  drawFaceLandmarks,
-  type CaptureProgress,
 } from '../services/faceRecognition';
 
 interface FaceRegisterProps {
@@ -14,9 +12,6 @@ interface FaceRegisterProps {
   onUpdateStudent: (id: string, updates: Partial<Student>) => void;
   onClose: () => void;
 }
-
-const DIR_EMOJI: Record<string, string> = { center: '⬜', right: '➡️', left: '⬅️', up: '⬆️', down: '⬇️' };
-const ALL_DIRS: string[] = ['center', 'right', 'left', 'up', 'down'];
 
 export const FaceRegister: React.FC<FaceRegisterProps> = ({
   students,
@@ -26,16 +21,12 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const autoQueued = useRef(false);
-  const landmarkCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  const [modelsReady, setModelsReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'without'>('without');
   const [capturing, setCapturing] = useState(false);
-  const [countdown, setCountdown] = useState(0);
-  const [capInfo, setCapInfo] = useState<CaptureProgress | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [autoMode, setAutoMode] = useState(false);
 
@@ -60,7 +51,6 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
       try {
         await loadFaceModels();
         if (!mounted) return;
-        setModelsReady(true);
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
           audio: false,
@@ -73,7 +63,6 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
         }
         setLoading(false);
       } catch (e) {
-        console.error(e);
         setMessage({ type: 'error', text: 'فشل فتح الكاميرا أو تحميل النظام' });
         setLoading(false);
       }
@@ -84,68 +73,47 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
     };
   }, []);
 
-  const handleStartCapture = () => {
+  const handleCapture = async () => {
+    if (!videoRef.current || !currentStudent || capturing) return;
     setMessage(null);
-    setCapInfo(null);
-    let c = 3;
-    setCountdown(c);
-    const iv = setInterval(() => {
-      c--;
-      if (c > 0) setCountdown(c);
-      else {
-        clearInterval(iv);
-        setCountdown(0);
-        startCapture();
-      }
-    }, 700);
-  };
-
-  const startCapture = async () => {
-    if (!videoRef.current || !currentStudent) return;
     setCapturing(true);
     try {
-      const result = await extractFaceDescriptorMultiCapture(
-        videoRef.current,
-        (info) => setCapInfo(info),
-        true
-      );
-      if (!result || !result.descriptor) {
-        setMessage({ type: 'error', text: '❌ لم نتمكن من التقاط الوجه بوضوح. تأكد من الإضاءة وأن وجهك في المنتصف' });
+      const descriptor = await extractFaceDescriptor(videoRef.current);
+      if (!descriptor) {
+        setMessage({ type: 'error', text: 'لم يتم التعرف على الوجه. تأكد من الإضاءة' });
         setCapturing(false);
         return;
       }
-      const tamper = await checkForTamperingAsync(result.descriptor, students, currentStudent.id, 0.35);
+      const tamper = await checkForTamperingAsync(descriptor, students, currentStudent.id, 0.35);
       if (tamper.isTamper) {
         setMessage({
           type: 'error',
-          text: `⚠️ هذه البصمة مسجلة أصلاً للطالب: ${tamper.matchedStudents.map(m => m.name).join('، ')}`,
+          text: `هذه البصمة مسجلة أصلاً للطالب: ${tamper.matchedStudents.map(m => m.name).join('، ')}`,
         });
         setCapturing(false);
         return;
       }
-      const multiDesc = buildMultiDescriptor(result.descriptor, result.angleDescs, result.quality, result.directions);
+      const angleDescs = new Map<string, Float32Array[]>();
+      angleDescs.set('center', [descriptor]);
+      const multiDesc = buildMultiDescriptor(descriptor, angleDescs, 1, new Set(['center']));
       onUpdateStudent(currentStudent.id, {
         faceDescriptor: multiDesc as any,
         faceRegisteredAt: new Date().toISOString(),
       });
-      setMessage({ type: 'success', text: `✅ ${currentStudent.name}` });
+      setMessage({ type: 'success', text: currentStudent.name });
       setCapturing(false);
       setTimeout(() => {
         setMessage(null);
-        setCapInfo(null);
         if (currentIndex < filteredStudents.length - 1) {
           setCurrentIndex(i => i + 1);
-          if (autoMode) {
-            autoQueued.current = true;
-          }
+          if (autoMode) autoQueued.current = true;
         } else {
-          setMessage({ type: 'success', text: '🎉 انتهى التسجيل!' });
+          setMessage({ type: 'success', text: 'انتهى التسجيل!' });
           setAutoMode(false);
         }
       }, 600);
     } catch (e) {
-      console.error(e);
-      setMessage({ type: 'error', text: '❌ خطأ في التقاط البصمة' });
+      setMessage({ type: 'error', text: 'خطأ في التقاط البصمة' });
       setCapturing(false);
     }
   };
@@ -155,8 +123,8 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
       autoQueued.current = true;
       const t = setTimeout(() => {
         autoQueued.current = false;
-        handleStartCapture();
-      }, 200);
+        handleCapture();
+      }, 400);
       return () => clearTimeout(t);
     }
     if (!autoMode) autoQueued.current = false;
@@ -164,14 +132,12 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
 
   const capturingRef = useRef(capturing);
   capturingRef.current = capturing;
-  const countdownRef = useRef(countdown);
-  countdownRef.current = countdown;
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        if (!capturingRef.current && countdownRef.current === 0) handleStartCapture();
+        if (!capturingRef.current) handleCapture();
       } else if (e.key === 'ArrowRight') {
         setCurrentIndex(i => Math.min(i + 1, filteredStudents.length - 1));
       } else if (e.key === 'ArrowLeft') {
@@ -184,29 +150,13 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
     return () => window.removeEventListener('keydown', handleKey);
   }, [filteredStudents.length, onClose]);
 
-  // 🖌️ رسم معالم الوجه على Canvas
-  useEffect(() => {
-    const canvas = landmarkCanvasRef.current;
-    const container = canvas?.parentElement;
-    if (!canvas || !container || !capInfo || !capInfo.landmarks) {
-      if (canvas) { const ctx = canvas.getContext('2d'); if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height); }
-      return;
-    }
-    const rect = container.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    drawFaceLandmarks(ctx, capInfo, canvas.width, canvas.height, true);
-  }, [capInfo]);
-
   const withFaceCount = students.filter(s => s.faceDescriptor).length;
 
   return (
     <div className="fixed inset-0 z-[9999] bg-gray-900 text-white flex flex-col" dir="rtl">
       <header className="bg-gray-800 px-4 py-3 flex items-center justify-between border-b border-gray-700">
         <div>
-          <h2 className="text-lg font-bold">📷 تسجيل بصمات الوجه</h2>
+          <h2 className="text-lg font-bold">تسجيل بصمات الوجه</h2>
           <p className="text-xs text-gray-400">{withFaceCount} / {students.length} مسجّلين</p>
         </div>
         <button onClick={onClose} className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-sm font-bold">✕ إغلاق</button>
@@ -225,80 +175,16 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
             className={`max-w-full max-h-full object-contain ${loading ? 'hidden' : ''}`}
             style={{ transform: 'scaleX(-1)' }}
           />
-          <canvas ref={landmarkCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
-          {!loading && currentStudent && !capturing && countdown === 0 && !capInfo && (
+          {!loading && currentStudent && !capturing && (
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
               <div className="w-56 sm:w-64 h-72 sm:h-80 lg:w-72 lg:h-96 border-4 border-purple-400/60 rounded-3xl shadow-[0_0_30px_rgba(168,85,247,0.3)]" />
             </div>
           )}
 
-          {countdown > 0 && (
+          {capturing && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10">
-              <span className="text-white text-7xl font-bold animate-pulse">{countdown}</span>
-            </div>
-          )}
-
-          {capturing && capInfo && (
-            <svg className="absolute inset-0 w-full h-full pointer-events-none z-10" viewBox="0 0 200 200">
-              <circle cx="100" cy="100" r="92" fill="none" stroke="rgba(139,92,246,0.15)" strokeWidth="5" />
-              <circle cx="100" cy="100" r="92" fill="none"
-                stroke={capInfo.progress >= 100 ? '#10b981' : '#8b5cf6'} strokeWidth="5" strokeLinecap="round"
-                strokeDasharray={`${2 * Math.PI * 92}`}
-                strokeDashoffset={`${2 * Math.PI * 92 * (1 - capInfo.progress / 100)}`}
-                style={{ transition: 'stroke-dashoffset 0.15s linear', transform: 'rotate(-90deg)', transformOrigin: 'center' }} />
-              {capInfo.faceDetected && (() => {
-                const angle = (capInfo.rotationAngle - 90) * (Math.PI / 180);
-                const cx = 100 + 92 * Math.cos(angle);
-                const cy = 100 + 92 * Math.sin(angle);
-                return (
-                  <>
-                    <circle cx={cx} cy={cy} r="8" fill="#8b5cf6" stroke="white" strokeWidth="3">
-                      <animate attributeName="r" values="7;10;7" dur="0.8s" repeatCount="indefinite" />
-                    </circle>
-                    <circle cx={cx} cy={cy} r="4" fill="white" />
-                  </>
-                );
-              })()}
-              {ALL_DIRS.map((dir: string) => {
-                const isCenter = dir === 'center';
-                const cx = isCenter ? 100 : 100 + 92 * Math.cos((({ right: 90, down: 180, left: 270, up: 0 } as Record<string, number>)[dir] - 90) * (Math.PI / 180));
-                const cy = isCenter ? 100 : 100 + 92 * Math.sin((({ right: 90, down: 180, left: 270, up: 0 } as Record<string, number>)[dir] - 90) * (Math.PI / 180));
-                const done = capInfo.capturedDirections.has(dir as any);
-                const isCurrent = capInfo.direction === dir;
-                const r = isCenter ? 10 : isCurrent ? 8 : 6;
-                return (
-                  <g key={dir}>
-                    <circle cx={cx} cy={cy} r={r}
-                      fill={
-                        isCurrent ? '#f59e0b'
-                          : done ? '#10b981'
-                          : 'rgba(139,92,246,0.2)'
-                      }
-                      stroke={
-                        isCurrent ? '#d97706'
-                          : done ? '#065f46'
-                          : 'rgba(139,92,246,0.4)'
-                      }
-                      strokeWidth={isCurrent ? 3 : 2}
-                    />
-                    {isCurrent && (
-                      <circle cx={cx} cy={cy} r={r + 4} fill="none" stroke="#f59e0b" strokeWidth="2" opacity="0.5">
-                        <animate attributeName="r" values={`${r + 4};${r + 8};${r + 4}`} dur="1.2s" repeatCount="indefinite" />
-                        <animate attributeName="opacity" values="0.5;0;0.5" dur="1.2s" repeatCount="indefinite" />
-                      </circle>
-                    )}
-                  </g>
-                );
-              })}
-            </svg>
-          )}
-
-          {capturing && capInfo?.phase === 'capture' && (
-            <div className={`absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full text-xs font-bold shadow-lg z-20 ${
-              capInfo.faceDetected ? 'bg-green-600' : 'bg-red-600 animate-pulse'
-            }`}>
-              {capInfo.faceDetected ? '✅ وجه واضح' : '❌ أين وجهك؟'}
+              <div className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
             </div>
           )}
 
@@ -319,42 +205,17 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
               <p className="text-sm opacity-90">{currentStudent.code} • {currentStudent.group || '-'}</p>
               <p className="text-xs mt-2 opacity-75">{currentIndex + 1} من {filteredStudents.length}</p>
               {currentStudent.faceDescriptor && (
-                <div className="mt-2 inline-block bg-white/20 px-3 py-1 rounded-full text-xs">✅ مسجّل سابقًا</div>
-              )}
-              {capturing && capInfo && (
-                <div className="mt-3 text-xs space-y-1">
-                  <div className={`font-bold ${capInfo.faceDetected ? 'text-green-300' : 'text-red-300'}`}>
-                    {capInfo.phase === 'stabilize' ? '🔍 جاري التثبيت...' : capInfo.directionLabel}
-                  </div>
-                  <div className="flex justify-center gap-2">
-                    {ALL_DIRS.map((dir: string) => (
-                      <span key={dir} className={`text-sm transition-opacity ${capInfo.capturedDirections.has(dir as any) ? 'opacity-100' : 'opacity-25'}`}>{DIR_EMOJI[dir]}</span>
-                    ))}
-                  </div>
-                  <div className="flex justify-center gap-2 font-mono">
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] ${
-                      capInfo.directionMatch ? 'bg-green-900/40 text-green-300' : 'bg-yellow-900/40 text-yellow-300'
-                    }`}>
-                      {capInfo.directionMatch ? '✅' : '⏳'}
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 text-[9px]">
-                      H:{capInfo.horizOffset !== undefined ? capInfo.horizOffset.toFixed(2) : '-'}
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 text-[9px]">
-                      V:{capInfo.vertOffset !== undefined ? capInfo.vertOffset.toFixed(2) : '-'}
-                    </span>
-                  </div>
-                </div>
+                <div className="mt-2 inline-block bg-white/20 px-3 py-1 rounded-full text-xs">مسجّل سابقًا</div>
               )}
             </div>
           ) : (
             <div className="bg-gray-700 rounded-xl p-4 mb-4 text-center text-gray-400">لا يوجد طلاب</div>
           )}
 
-          <button onClick={handleStartCapture}
-            disabled={!currentStudent || capturing || loading || countdown > 0}
+          <button onClick={handleCapture}
+            disabled={!currentStudent || capturing || loading}
             className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-40 py-4 rounded-xl font-bold text-lg mb-2 active:scale-95 transition-all">
-            {countdown > 0 ? `⏳ ${countdown}` : capturing ? '⏳ جاري التقاط متعدد...' : '📸 التقاط البصمة'}
+            {capturing ? 'جاري...' : 'التقاط البصمة'}
           </button>
 
           <p className="text-xs text-center text-gray-400 mb-3">(أو اضغط Enter / مسطرة)</p>
@@ -363,7 +224,7 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
             <input type="checkbox" checked={autoMode} onChange={e => setAutoMode(e.target.checked)}
               className="w-5 h-5 accent-purple-500" />
             <div>
-              <div className="font-bold text-sm">⚡ الوضع التلقائي</div>
+              <div className="font-bold text-sm">الوضع التلقائي</div>
               <div className="text-xs text-gray-400">يلتقط تلقائياً لكل طالب</div>
             </div>
           </label>
@@ -394,7 +255,7 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
             </div>
             <input type="text" value={searchQuery}
               onChange={e => { setSearchQuery(e.target.value); setCurrentIndex(0); }}
-              placeholder="🔍 بحث..." className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm" />
+              placeholder="بحث..." className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm" />
           </div>
 
           <div className="flex-1 overflow-y-auto bg-gray-900 rounded-lg p-2 space-y-1 min-h-[150px]">
