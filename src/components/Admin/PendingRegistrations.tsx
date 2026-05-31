@@ -94,6 +94,10 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       // 1️⃣ تطبيق التغييرات على الطالب
       const year = await getActiveAcademicYear();
       const storageUid = dataAdminUid || adminUid;
+      if (!req.studentId) {
+        throw new Error('بيانات الطالب ناقصة (studentId) - الرجاء التحقق من الطلب');
+      }
+
       const studentsPath = `academicYears/${year}/userData/${storageUid}/stageData/${req.stageId}/students`;
       const snap = await get(ref(database, studentsPath));
       
@@ -106,7 +110,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       const idx = studentsArr.findIndex(s => s.id === req.studentId);
 
       if (idx === -1) {
-        throw new Error('لم نجد الطالب');
+        throw new Error(`لم نجد الطالب بالمعرف: ${req.studentId}`);
       }
 
       // 🛡️ فحص عدم تطابق البصمة مع طالب آخر

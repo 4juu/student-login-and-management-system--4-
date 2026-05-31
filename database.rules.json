@@ -1,0 +1,104 @@
+{
+  "rules": {
+    "system": {
+      ".read": "auth != null",
+      ".write": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      "metadata": {
+        "currentAcademicYear": {
+          ".read": "auth != null",
+          ".write": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'
+        }
+      }
+    },
+
+    "registrationSystem": {
+      "links": {
+        ".read": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+        "$token": {
+          ".read": "auth != null",
+          ".write": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+        }
+      },
+      "pending": {
+        "$adminUid": {
+          ".read": "auth.uid === $adminUid || root.child('users').child(auth.uid).child('role').val() === 'admin'",
+          "$requestId": {
+            ".write": "(!data.exists() && auth != null && newData.exists()) || auth.uid === $adminUid || root.child('users').child(auth.uid).child('role').val() === 'admin'",
+            ".validate": "!data.exists() ? (
+              newData.hasChildren(['id', 'adminUid', 'stageId', 'studentId', 'studentCode', 'nameFromID', 'nameInSystem', 'matchPercentage', 'qrCodeId', 'qrCodeUrl', 'faceDescriptor', 'status', 'createdAt'])
+            ) : true"
+          }
+        }
+      }
+    },
+
+    "users": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'admin'",
+        ".read": "auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'admin'"
+      }
+    },
+
+    "teacherAccounts": {
+      ".read": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      ".write": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+    },
+
+    "deletedAccounts": {
+      ".write": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      ".read": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+    },
+
+    "colleges": {
+      ".read": "auth != null",
+      ".write": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+    },
+
+    "stages": {
+      ".read": "auth != null",
+      ".write": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+    },
+
+    "academicYears": {
+      "$year": {
+        "userData": {
+          "$adminUid": {
+            "colleges": {
+              ".read": "auth != null",
+              ".write": "auth.uid === $adminUid || root.child('users').child(auth.uid).child('role').val() === 'admin'"
+            },
+            "stages": {
+              ".read": "auth != null",
+              ".write": "auth.uid === $adminUid || root.child('users').child(auth.uid).child('role').val() === 'admin'"
+            },
+            "stageData": {
+              "$stageId": {
+                "students": {
+                  ".read": "auth != null",
+                  // TODO: نقل auto-approve إلى Cloud Function لتحسين الأمان
+                  ".write": "auth.uid === $adminUid || root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'teacher' || (auth != null && !root.child('users').child(auth.uid).child('role').exists())"
+                },
+                "teacherRecords": {
+                  "$teacherId": {
+                    ".read": "auth.uid === $teacherId || auth.uid === $adminUid || root.child('users').child(auth.uid).child('role').val() === 'admin'",
+                    ".write": "auth.uid === $teacherId || auth.uid === $adminUid || root.child('users').child(auth.uid).child('role').val() === 'admin'"
+                  }
+                }
+              }
+            },
+            "telegramConfig": {
+              ".read": "auth.uid === $adminUid || root.child('users').child(auth.uid).child('role').val() === 'admin'",
+              ".write": "auth.uid === $adminUid || root.child('users').child(auth.uid).child('role').val() === 'admin'"
+            }
+          }
+        }
+      }
+    },
+
+    "$other": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}

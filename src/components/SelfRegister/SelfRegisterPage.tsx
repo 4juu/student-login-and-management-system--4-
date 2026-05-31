@@ -388,6 +388,12 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   };
 
   // ──────────────────────────────────────────
+  // 📊 خطوات التسجيل
+  // ──────────────────────────────────────────
+  const stepLabels = ['التحقق', 'الهوية', 'البصمة', 'تأكيد'];
+  const stepIcons = ['🔐', '🪪', '😊', '✅'];
+
+  // ──────────────────────────────────────────
   // 🎨 RENDER
   // ──────────────────────────────────────────
 
@@ -419,10 +425,44 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     );
   }
 
+  const renderStepIndicator = () => {
+    const activeIdx = ['enter-code', 'upload-id', 'capture-face', 'success'].indexOf(step);
+    return (
+      <div className="mb-6">
+        <div className="flex items-center justify-between">
+          {stepLabels.map((label, i) => {
+            const isActive = i === activeIdx;
+            const isDone = i < activeIdx;
+            return (
+              <div key={i} className="flex flex-col items-center flex-1 relative">
+                {i > 0 && (
+                  <div className={`absolute top-4 right-0 w-full h-0.5 -translate-y-1/2 ${isDone || isActive ? 'bg-purple-500' : 'bg-gray-200'}`} style={{ right: '50%', width: '100%', zIndex: 0 }} />
+                )}
+                <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
+                  isDone ? 'bg-purple-600 text-white' :
+                  isActive ? 'bg-purple-600 text-white scale-110 shadow-md' :
+                  'bg-gray-100 text-gray-400 border border-gray-200'
+                }`}>
+                  {isDone ? '✓' : stepIcons[i]}
+                </div>
+                <span className={`text-[10px] mt-1 font-medium transition-colors ${
+                  isActive ? 'text-purple-700' :
+                  isDone ? 'text-purple-500' :
+                  'text-gray-400'
+                }`}>{label}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   if (step === 'enter-code') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4" dir="rtl">
         <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 max-w-md w-full">
+          {renderStepIndicator()}
           <div className="text-center mb-6">
             <div className="text-5xl mb-3">🔐</div>
             <h2 className="text-2xl font-bold text-gray-800 mb-2">التحقق من الهوية</h2>
@@ -477,6 +517,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4" dir="rtl">
         <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 max-w-md w-full">
+          {renderStepIndicator()}
           <div className="text-center mb-6">
             <div className="text-5xl mb-3">{desc.emoji}</div>
             <h2 className="text-2xl font-bold text-red-700 mb-2">عدم تطابق الاسم</h2>

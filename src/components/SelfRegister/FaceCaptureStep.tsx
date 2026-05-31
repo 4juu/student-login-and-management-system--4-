@@ -96,7 +96,6 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
     };
   }, [modelsReady]);
 
-  // continuous detection for landmarks
   useEffect(() => {
     if (!cameraReady || capturing || !videoRef.current) return;
     const iv = window.setInterval(async () => {
@@ -120,7 +119,6 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
     return () => clearInterval(iv);
   }, [cameraReady, capturing]);
 
-  // draw landmarks
   useEffect(() => {
     const canvas = landmarkCanvasRef.current;
     const container = canvas?.parentElement;
