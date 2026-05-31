@@ -659,7 +659,15 @@ useEffect(() => {
     }));
   };
 
+  // 🛑 Local cache — يمنع أي Read/Write مكرر من Firebase لنفس الطالب في نفس الجلسة
+  const processedAttendanceRef = useRef(new Set<string>());
+
   const handleAttendanceRecord = (record: AttendanceRecord) => {
+    // 🛑 تحقق من الـ Cache المحلي — إذا تمت معالجة هذا الطالب مسبقاً، ارفض فوراً (لا Firebase, لا State, لا Notification)
+    const cacheKey = `${record.sessionId}_${record.studentId}`;
+    if (processedAttendanceRef.current.has(cacheKey)) return;
+    processedAttendanceRef.current.add(cacheKey);
+
     setAttendanceRecords(prev => [...prev, record]);
 
     // 🤖 إرسال إشعار تلغرام

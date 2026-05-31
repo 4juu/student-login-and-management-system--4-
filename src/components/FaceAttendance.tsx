@@ -41,7 +41,8 @@ interface DetectedFaceBox {
 
 type CameraFacing = 'user' | 'environment';
 
-const RECOGNITION_COOLDOWN = 30000;
+const RECOGNITION_COOLDOWN = 10000;
+const MIN_CONFIDENCE = 40;
 const ZOOM_STEPS = [1, 1.5, 2, 2.5, 3];
 
 export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
@@ -69,6 +70,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const rafRef = useRef<number>(0);
   const lastRecognitionRef = useRef<Map<string, number>>(new Map());
   const recognizedIdsRef = useRef<Set<string>>(new Set(alreadyPresentIds));
+  const alreadyPresentRef = useRef<Set<string>>(alreadyPresentIds);
   const logsRef = useRef<LogEntry[]>([]);
   const faceRunningRef = useRef(false);
   const lastFrameTime = useRef(0);
@@ -105,6 +107,12 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       clearDescriptorCache();
     }
   }, [studentsWithFace]);
+
+  // 🛑 مزامنة alreadyPresentRef + دمج المعرفات الجديدة لتفادي Closure قديم
+  useEffect(() => {
+    alreadyPresentRef.current = alreadyPresentIds;
+    alreadyPresentIds.forEach(id => recognizedIdsRef.current.add(id));
+  }, [alreadyPresentIds]);
 
   const cleanup = () => {
     faceRunningRef.current = false;
@@ -282,7 +290,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
         if (detections.length > 0 && hasCache) {
           const descriptors = detections.map((d: any) => normalizeDescriptor(d.descriptor));
-          const matches = await findBestMatchBatchFromCache(descriptors, 0.55);
+          const matches = await findBestMatchBatchFromCache(descriptors, 0.5);
 
           if (!faceRunningRef.current || !mountedRef.current) return;
 
@@ -290,7 +298,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
             const det = detections[fi];
             const box = det.detection.box;
             const qScore = det.detection.score;
-            if (qScore < 0.6 || box.width < 25 || box.height < 25) continue;
+            if (qScore < 0.65 || box.width < 30 || box.height < 30) continue;
 
             const boxKey = `${Math.round(box.x / 40)}_${Math.round(box.y / 40)}`;
 
@@ -304,9 +312,14 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
               const threshold = getCacheThreshold();
               const confidence = Math.round((1 - match.distance / threshold) * 100);
+              // 🛑 رفض المطابقة إذا كانت الثقة منخفضة — يمنع الـ False Positives
+              if (confidence < MIN_CONFIDENCE) {
+                detectedFaces.set(boxKey, { box, status: 'unknown', confidence: 0 });
+                continue;
+              }
               const lastTime = lastRecognitionRef.current.get(bestStudent.id) || 0;
               const isDuplicate = now - lastTime < RECOGNITION_COOLDOWN;
-              const isAlreadyMarked = recognizedIdsRef.current.has(bestStudent.id) || alreadyPresentIds.has(bestStudent.id);
+              const isAlreadyMarked = recognizedIdsRef.current.has(bestStudent.id) || alreadyPresentRef.current.has(bestStudent.id);
 
               if (isAlreadyMarked || isDuplicate) {
                 if (!logsRef.current.some(l => l.id === bestStudent.id)) {
@@ -368,7 +381,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           for (const det of detections) {
             const box = det.detection.box;
             const qScore = det.detection.score;
-            if (qScore < 0.6 || box.width < 25 || box.height < 25) continue;
+            if (qScore < 0.65 || box.width < 30 || box.height < 30) continue;
             const track = tracked.find((t: any) => calculateIoU(t.box, box) > 0.3);
             let matchDesc = det.descriptor;
 
@@ -385,7 +398,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
               }
             }
 
-            const adaptiveThreshold = qScore < 0.85 ? 0.48 : qScore < 0.92 ? 0.52 : 0.55;
+            const adaptiveThreshold = qScore < 0.85 ? 0.42 : qScore < 0.92 ? 0.46 : 0.50;
             let bestStudent: Student | null = null;
             let bestDist = Infinity;
             let bestConfidence = 0;
@@ -404,9 +417,14 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
             const boxKey = `${Math.round(box.x / 40)}_${Math.round(box.y / 40)}`;
 
             if (bestStudent) {
+              // 🛑 رفض المطابقة إذا كانت الثقة منخفضة — يمنع الـ False Positives
+              if (bestConfidence < MIN_CONFIDENCE) {
+                detectedFaces.set(boxKey, { box, status: 'unknown', confidence: 0 });
+                continue;
+              }
               const lastTime = lastRecognitionRef.current.get(bestStudent.id) || 0;
               const isDuplicate = now - lastTime < RECOGNITION_COOLDOWN;
-              const isAlreadyMarked = recognizedIdsRef.current.has(bestStudent.id) || alreadyPresentIds.has(bestStudent.id);
+              const isAlreadyMarked = recognizedIdsRef.current.has(bestStudent.id) || alreadyPresentRef.current.has(bestStudent.id);
 
               if (isAlreadyMarked || isDuplicate) {
                 if (!logsRef.current.some(l => l.id === bestStudent.id)) {
