@@ -410,6 +410,156 @@ const evaluateFrameQuality = (
   return { score, areaRatio, centerDist, quality, direction, rotationAngle, brightness, lightLevel };
 };
 
+// 🆕 استخراج نقاط المعالم من FaceLandmarks68
+export const extractLandmarkPoints = (
+  landmarks: faceapi.FaceLandmarks68
+): LandmarkPoints => ({
+  leftEye: landmarks.getLeftEye().map(p => ({ x: p.x, y: p.y })),
+  rightEye: landmarks.getRightEye().map(p => ({ x: p.x, y: p.y })),
+  nose: landmarks.getNose().map(p => ({ x: p.x, y: p.y })),
+  mouth: landmarks.getMouth().map(p => ({ x: p.x, y: p.y })),
+  jawOutline: landmarks.getJawOutline().map(p => ({ x: p.x, y: p.y })),
+});
+
+// 🆕 حساب أبعاد الوجه الهندسية من المعالم
+export const calculateFaceGeometry = (lm: LandmarkPoints) => {
+  const leC = lm.leftEye.reduce((s, p) => ({ x: s.x + p.x, y: s.y + p.y }), { x: 0, y: 0 });
+  const reC = lm.rightEye.reduce((s, p) => ({ x: s.x + p.x, y: s.y + p.y }), { x: 0, y: 0 });
+  const leX = leC.x / lm.leftEye.length;
+  const leY = leC.y / lm.leftEye.length;
+  const reX = reC.x / lm.rightEye.length;
+  const reY = reC.y / lm.rightEye.length;
+  const eyeDistance = Math.sqrt((reX - leX) ** 2 + (reY - leY) ** 2);
+
+  const noseLeft = lm.nose[0];
+  const noseRight = lm.nose[lm.nose.length - 1];
+  const noseWidth = Math.sqrt((noseRight.x - noseLeft.x) ** 2 + (noseRight.y - noseLeft.y) ** 2);
+
+  const mouthLeft = lm.mouth[0];
+  const mouthRight = lm.mouth[lm.mouth.length - 1];
+  const mouthWidth = Math.sqrt((mouthRight.x - mouthLeft.x) ** 2 + (mouthRight.y - mouthLeft.y) ** 2);
+
+  const jawTop = lm.jawOutline[0];
+  const jawBottom = lm.jawOutline[8];
+  const faceHeight = Math.sqrt((jawBottom.x - jawTop.x) ** 2 + (jawBottom.y - jawTop.y) ** 2);
+  const jawLeft = lm.jawOutline[0];
+  const jawRight = lm.jawOutline[16];
+  const faceWidth = Math.sqrt((jawRight.x - jawLeft.x) ** 2 + (jawRight.y - jawLeft.y) ** 2);
+  const faceAspectRatio = faceHeight > 0 ? faceWidth / faceHeight : 1;
+
+  return { eyeDistance, noseWidth, mouthWidth, faceAspectRatio };
+};
+
+// 🆕 رسم معالم الوجه على Canvas
+export const drawFaceLandmarks = (
+  ctx: CanvasRenderingContext2D,
+  capInfo: CaptureProgress,
+  displayWidth: number,
+  displayHeight: number,
+  mirrored: boolean
+) => {
+  const { landmarks, faceBox, frameWidth, frameHeight } = capInfo;
+  if (!landmarks || !faceBox || !frameWidth || !frameHeight) return;
+
+  const scaleX = displayWidth / frameWidth;
+  const scaleY = displayHeight / frameHeight;
+  const s = Math.max(scaleX, scaleY);
+  const ox = (displayWidth - frameWidth * s) / 2;
+  const oy = (displayHeight - frameHeight * s) / 2;
+
+  const mapX = (x: number) => (mirrored ? displayWidth - (x * s + ox) : x * s + ox);
+  const mapY = (y: number) => y * s + oy;
+  const mapW = (w: number) => w * s;
+  const mapH = (h: number) => h * s;
+
+  ctx.clearRect(0, 0, displayWidth, displayHeight);
+
+  // ── Face bounding box ──
+  ctx.strokeStyle = capInfo.directionMatch ? '#10b981' : '#8b5cf6';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(mapX(faceBox.x), mapY(faceBox.y), mapW(faceBox.width), mapH(faceBox.height));
+
+  // ── Helper: draw dots with lines ──
+  const drawPoints = (pts: Array<{ x: number; y: number }>, color: string) => {
+    if (pts.length === 0) return;
+    ctx.fillStyle = color;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(mapX(pts[0].x), mapY(pts[0].y));
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(mapX(pts[i].x), mapY(pts[i].y));
+    ctx.closePath();
+    ctx.stroke();
+    for (const p of pts) {
+      ctx.beginPath();
+      ctx.arc(mapX(p.x), mapY(p.y), 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  };
+
+  // Left eye
+  drawPoints(landmarks.leftEye, '#3b82f6');
+  // Right eye
+  drawPoints(landmarks.rightEye, '#3b82f6');
+  // Nose
+  drawPoints(landmarks.nose, '#ef4444');
+  // Mouth
+  drawPoints(landmarks.mouth, '#10b981');
+  // Jaw outline (light)
+  ctx.strokeStyle = 'rgba(156,163,175,0.4)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i < landmarks.jawOutline.length; i++) {
+    const p = landmarks.jawOutline[i];
+    i === 0 ? ctx.moveTo(mapX(p.x), mapY(p.y)) : ctx.lineTo(mapX(p.x), mapY(p.y));
+  }
+  ctx.stroke();
+
+  // ── Midline (vertical dashed) ──
+  const leftEyeCenter = landmarks.leftEye.reduce((s, p) => ({ x: s.x + p.x, y: s.y + p.y }), { x: 0, y: 0 });
+  const rightEyeCenter = landmarks.rightEye.reduce((s, p) => ({ x: s.x + p.x, y: s.y + p.y }), { x: 0, y: 0 });
+  const leX = leftEyeCenter.x / landmarks.leftEye.length;
+  const reX = rightEyeCenter.x / landmarks.rightEye.length;
+  const eyeMidX = (leX + reX) / 2;
+  const noseTip = landmarks.nose[landmarks.nose.length - 1];
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(mapX(eyeMidX), mapY(Math.max(0, faceBox.y - 10)));
+  ctx.lineTo(mapX(noseTip.x), mapY(noseTip.y));
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ── Direction indicator ──
+  if (capInfo.direction && capInfo.direction !== 'center') {
+    const dx = capInfo.direction === 'right' ? 1 : capInfo.direction === 'left' ? -1 : 0;
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const arrowY = mapY(faceBox.y + faceBox.height + 15);
+    const arrowX = mapX(faceBox.x + faceBox.width / 2);
+    ctx.moveTo(arrowX, arrowY);
+    ctx.lineTo(arrowX + dx * 20, arrowY + 10);
+    ctx.moveTo(arrowX, arrowY);
+    ctx.lineTo(arrowX + dx * 20, arrowY - 10);
+    ctx.stroke();
+  }
+
+  // ── Measurements text ──
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'right';
+  const labels: string[] = [];
+  if (capInfo.eyeDistance) labels.push(`👁 ${Math.round(capInfo.eyeDistance)}`);
+  if (capInfo.noseWidth) labels.push(`👃 ${Math.round(capInfo.noseWidth)}`);
+  if (capInfo.mouthWidth) labels.push(`👄 ${Math.round(capInfo.mouthWidth)}`);
+  if (labels.length) {
+    ctx.fillText(labels.join(' | '), displayWidth - 6, 14);
+  }
+};
+
 export interface MultiDescriptor {
   main: number[];
   angles?: number[];
@@ -666,6 +816,24 @@ export interface CaptureProgress {
   lightLevel: LightLevel;
   rotationAngle: number;
   rotationCoverage: number;
+  // 🆕 معالم الوجه للرسم على الفيديو
+  faceBox?: { x: number; y: number; width: number; height: number };
+  landmarks?: LandmarkPoints;
+  eyeDistance?: number;
+  noseWidth?: number;
+  mouthWidth?: number;
+  faceAspectRatio?: number;
+  directionMatch?: boolean;
+  frameWidth?: number;
+  frameHeight?: number;
+}
+
+export interface LandmarkPoints {
+  leftEye: Array<{ x: number; y: number }>;
+  rightEye: Array<{ x: number; y: number }>;
+  nose: Array<{ x: number; y: number }>;
+  mouth: Array<{ x: number; y: number }>;
+  jawOutline: Array<{ x: number; y: number }>;
 }
 
 const DIRECTION_LABELS: Record<FaceDirection, string> = {
@@ -709,7 +877,8 @@ export const extractFaceDescriptorMultiCapture = async (
     phase: 'stabilize' | 'capture',
     dir: FaceDirection,
     detected: boolean,
-    qInfo?: Partial<FrameQuality>
+    qInfo?: Partial<FrameQuality>,
+    extra?: { landmarks?: LandmarkPoints; faceBox?: { x: number; y: number; width: number; height: number }; frameWidth?: number; frameHeight?: number; eyeDistance?: number; noseWidth?: number; mouthWidth?: number; faceAspectRatio?: number }
   ) => {
     onProgress?.({
       progress: p,
@@ -724,6 +893,14 @@ export const extractFaceDescriptorMultiCapture = async (
       lightLevel: (qInfo?.lightLevel as LightLevel) || 'good',
       rotationAngle: qInfo?.rotationAngle || 0,
       rotationCoverage: Math.min(100, Math.round((coveredAngles.size / 12) * 100)),
+      landmarks: extra?.landmarks,
+      faceBox: extra?.faceBox,
+      eyeDistance: extra?.eyeDistance,
+      noseWidth: extra?.noseWidth,
+      mouthWidth: extra?.mouthWidth,
+      faceAspectRatio: extra?.faceAspectRatio,
+      frameWidth: extra?.frameWidth,
+      frameHeight: extra?.frameHeight,
     });
   };
 
@@ -749,7 +926,15 @@ export const extractFaceDescriptorMultiCapture = async (
           processed.height,
           input instanceof HTMLVideoElement ? input : undefined
         );
-        reportProgress(p, 'stabilize', 'center', true, q);
+        const lm = extractLandmarkPoints(det[0].landmarks);
+        const geo = calculateFaceGeometry(lm);
+        reportProgress(p, 'stabilize', 'center', true, q, {
+          landmarks: lm,
+          faceBox: { x: det[0].detection.box.x, y: det[0].detection.box.y, width: det[0].detection.box.width, height: det[0].detection.box.height },
+          frameWidth: processed.width,
+          frameHeight: processed.height,
+          ...geo,
+        });
         break;
       }
     } catch {}
@@ -814,7 +999,15 @@ export const extractFaceDescriptorMultiCapture = async (
         mirrorHorizontal
       );
 
-      reportProgress(progress, 'capture', requiredDir, true, q);
+      const lm = extractLandmarkPoints(det.landmarks);
+      const geo = calculateFaceGeometry(lm);
+      reportProgress(progress, 'capture', requiredDir, true, q, {
+        landmarks: lm,
+        faceBox: { x: det.detection.box.x, y: det.detection.box.y, width: det.detection.box.width, height: det.detection.box.height },
+        frameWidth: imgW,
+        frameHeight: imgH,
+        ...geo,
+      });
 
       if (q.score < MIN_SCORE || q.areaRatio < MIN_AREA || q.centerDist > MAX_CENTER) {
         await new Promise(r => setTimeout(r, INTERVAL_MS));

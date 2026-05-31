@@ -3,6 +3,7 @@ import { Student } from '../types/student';
 import {
   loadFaceModels, extractFaceDescriptorMultiCapture, areModelsLoaded,
   buildMultiDescriptor, checkForTamperingAsync,
+  drawFaceLandmarks,
   type CaptureProgress, type FaceDirection, type QualityLevel, type LightLevel,
 } from '../services/faceRecognition';
 
@@ -37,6 +38,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const mountedRef = useRef(true);
+  const landmarkCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const filtered = search.trim()
     ? students.filter(s =>
@@ -107,6 +109,25 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
       }
     }, 1000);
   }, [cameraReady, capturing]);
+
+  // 🖌️ رسم معالم الوجه على Canvas
+  useEffect(() => {
+    const canvas = landmarkCanvasRef.current;
+    const container = canvas?.parentElement;
+    if (!canvas || !container || !capInfo || !capInfo.landmarks) {
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      return;
+    }
+    const rect = container.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    drawFaceLandmarks(ctx, capInfo, canvas.width, canvas.height, facing === 'user');
+  }, [capInfo, facing]);
 
   const startCapture = async () => {
     if (!videoRef.current) return;
@@ -285,6 +306,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
             <div className="relative mb-3">
               <div className="relative rounded-2xl overflow-hidden bg-gray-900 mx-auto" style={{ width: 260, height: 260 }}>
                 <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }} />
+                <canvas ref={landmarkCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
                 {!cameraReady && !error && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
                     <div className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />

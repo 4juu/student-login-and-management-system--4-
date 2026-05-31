@@ -7,6 +7,7 @@ import {
   areModelsLoaded,
   normalizeDescriptor,
   checkForTamperingAsync,
+  drawFaceLandmarks,
   type CaptureProgress,
   type FaceDirection,
   type LightLevel,
@@ -53,6 +54,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const mountedRef = useRef(true);
+  const landmarkCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const [modelsReady, setModelsReady] = useState(areModelsLoaded());
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -341,6 +343,22 @@ const startActualCapture = async () => {
   }
 };
 
+  // 🖌️ رسم معالم الوجه على Canvas
+  useEffect(() => {
+    const canvas = landmarkCanvasRef.current;
+    const container = canvas?.parentElement;
+    if (!canvas || !container || !capInfo || !capInfo.landmarks) {
+      if (canvas) { const ctx = canvas.getContext('2d'); if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height); }
+      return;
+    }
+    const rect = container.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    drawFaceLandmarks(ctx, capInfo, canvas.width, canvas.height, true);
+  }, [capInfo]);
+
   const handleRetry = () => {
     setError('');
     setReadyToStart(true);
@@ -398,6 +416,7 @@ const startActualCapture = async () => {
                 className="w-full h-full object-cover"
                 style={{ transform: 'scaleX(-1)' }}
               />
+              <canvas ref={landmarkCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
               {cameraReady && !capturing && countdown === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -446,7 +465,7 @@ const startActualCapture = async () => {
 
                   {ALL_DIRS.map((dir) => {
                     const angles: Record<FaceDirection, number> = {
-                      right: 0, down: 90, left: 180, up: 270, center: 315
+                      right: 90, down: 180, left: 270, up: 0, center: 315
                     };
                     const a = (angles[dir] - 90) * (Math.PI / 180);
                     const cx = 100 + 92 * Math.cos(a);

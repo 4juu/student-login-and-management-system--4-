@@ -5,6 +5,7 @@ import {
   extractFaceDescriptorMultiCapture,
   buildMultiDescriptor,
   checkForTamperingAsync,
+  drawFaceLandmarks,
   type CaptureProgress,
 } from '../services/faceRecognition';
 
@@ -25,6 +26,7 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const autoQueued = useRef(false);
+  const landmarkCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const [modelsReady, setModelsReady] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -181,6 +183,23 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [filteredStudents.length, onClose]);
+
+  // 🖌️ رسم معالم الوجه على Canvas
+  useEffect(() => {
+    const canvas = landmarkCanvasRef.current;
+    const container = canvas?.parentElement;
+    if (!canvas || !container || !capInfo || !capInfo.landmarks) {
+      if (canvas) { const ctx = canvas.getContext('2d'); if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height); }
+      return;
+    }
+    const rect = container.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    drawFaceLandmarks(ctx, capInfo, canvas.width, canvas.height, true);
+  }, [capInfo]);
+
   const withFaceCount = students.filter(s => s.faceDescriptor).length;
 
   return (
@@ -206,6 +225,7 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
             className={`max-w-full max-h-full object-contain ${loading ? 'hidden' : ''}`}
             style={{ transform: 'scaleX(-1)' }}
           />
+          <canvas ref={landmarkCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
           {!loading && currentStudent && !capturing && countdown === 0 && !capInfo && (
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
@@ -241,7 +261,7 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
                 );
               })()}
               {ALL_DIRS.map(dir => {
-                const angles: Record<string, number> = { right: 0, down: 90, left: 180, up: 270, center: 315 };
+                const angles: Record<string, number> = { right: 90, down: 180, left: 270, up: 0, center: 315 };
                 const a = (angles[dir] - 90) * (Math.PI / 180);
                 const cx = 100 + 92 * Math.cos(a);
                 const cy = 100 + 92 * Math.sin(a);
