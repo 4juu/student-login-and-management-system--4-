@@ -84,6 +84,7 @@ const validateMultiDescriptor = (desc: any): desc is MultiDescriptor => {
 };
 
 export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExit }) => {
+  console.log('🚀 SelfRegisterPage تحمّلت، التوكن:', token);
   const [step, setStep] = useState<Step>('loading');
   const [link, setLink] = useState<RegistrationLink | null>(null);
   const [student, setStudent] = useState<Student | null>(null);

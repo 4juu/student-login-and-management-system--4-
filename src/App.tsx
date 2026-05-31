@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 import { ref as dbRef, onValue, off } from 'firebase/database';
 import { Student, AttendanceRecord, AttendanceSession, College, Stage } from './types/student';
 import { User } from './types/user';
@@ -206,13 +206,9 @@ useEffect(() => {
   }, []);
 
   useEffect(() => {
-    // 🆕 صفحة التسجيل الذاتي — نعرض فوراً ونسجل مجهول بخلفية
     if (registerToken) {
-      console.log('🎯 صفحة التسجيل الذاتي - شو فوراً');
+      console.log('🎯 registerToken موجود، نعرض صفحة التسجيل');
       setLoading(false);
-      signInAnonymously(auth).catch((e) =>
-        console.warn('⚠️ فشل anonymous auth:', e.message)
-      );
       return;
     }
 
