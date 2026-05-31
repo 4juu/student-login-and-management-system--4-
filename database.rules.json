@@ -1,101 +1,141 @@
 {
   "rules": {
-    "system": {
+    // ══════════════════════════════════════════════════════════
+    // 👥 المستخدمون
+    // ══════════════════════════════════════════════════════════
+    "users": {
       ".read": "auth != null",
-      ".write": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
-      "metadata": {
-        "currentAcademicYear": {
-          ".read": "auth != null",
-          ".write": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'
-        }
+      "$uid": {
+        ".write": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin' || (root.child('users').child(auth.uid).child('role').val() == 'college_admin' && root.child('users').child($uid).child('role').val() == 'teacher'))"
       }
     },
 
+    // ══════════════════════════════════════════════════════════
+    // 🏛️ أدمنية الكليات
+    // ══════════════════════════════════════════════════════════
+    "collegeAdmins": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'",
+      "$uid": {
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'"
+      }
+    },
+
+    // ══════════════════════════════════════════════════════════
+    // 🔐 حسابات التدريسيين
+    // ══════════════════════════════════════════════════════════
+    "teacherAccounts": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')",
+        ".write": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')"
+      }
+    },
+
+    // ══════════════════════════════════════════════════════════
+    // ⚙️ إعدادات النظام
+    // ══════════════════════════════════════════════════════════
+    "system": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'"
+    },
+
+    // ══════════════════════════════════════════════════════════
+    // 🗑️ الحسابات المحذوفة
+    // ══════════════════════════════════════════════════════════
+    "deletedAccounts": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'"
+    },
+
+    // ══════════════════════════════════════════════════════════
+    // 🔗 نظام التسجيل الذاتي — الروابط
+    // ══════════════════════════════════════════════════════════
     "registrationSystem": {
       "links": {
-        ".read": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+        ".read": true,
         "$token": {
-          ".read": "auth != null",
-          ".write": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+          ".read": true,
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')"
         }
       },
+
+      // ══════════════════════════════════════════════════════
+      // 📥 نظام التسجيل الذاتي — الطلبات المعلقة
+      // ══════════════════════════════════════════════════════
       "pending": {
         "$adminUid": {
-          ".read": "auth.uid === $adminUid || root.child('users').child(auth.uid).child('role').val() === 'admin'",
+          ".read": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin')",
           "$requestId": {
-            ".write": "(!data.exists() && auth != null && newData.exists()) || auth.uid === $adminUid || root.child('users').child(auth.uid).child('role').val() === 'admin'",
-            ".validate": "!data.exists() ? (
-              newData.hasChildren(['id', 'adminUid', 'stageId', 'studentId', 'studentCode', 'nameFromID', 'nameInSystem', 'matchPercentage', 'qrCodeId', 'qrCodeUrl', 'faceDescriptor', 'status', 'createdAt'])
-            ) : true"
+            ".write": "(!data.exists() && newData.exists()) || auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin'"
           }
         }
       }
     },
 
-    "users": {
-      ".read": "auth != null",
-      "$uid": {
-        ".write": "auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'admin'",
-        ".read": "auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'admin'"
-      }
-    },
-
-    "teacherAccounts": {
-      ".read": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
-      ".write": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
-    },
-
-    "deletedAccounts": {
-      ".write": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
-      ".read": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
-    },
-
+    // ══════════════════════════════════════════════════════════
+    // 🏛️ الكليات والمراحل
+    // ══════════════════════════════════════════════════════════
     "colleges": {
-      ".read": "auth != null",
-      ".write": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+      ".read": true,
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')"
     },
 
     "stages": {
-      ".read": "auth != null",
-      ".write": "auth.uid != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+      ".read": true,
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')"
     },
 
+    // ══════════════════════════════════════════════════════════
+    // 📚 البيانات الأكاديمية
+    // ══════════════════════════════════════════════════════════
     "academicYears": {
       "$year": {
+
         "userData": {
           "$adminUid": {
+            // قراءة: الأدمن صاحب البيانات + أي أدمن رئيسي + أدمن الكلية التابع له
+            ".read": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
+            // كتابة: نفس الشي
+            ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
+
+            // الكليات — قراءة للكل، كتابة للأدمن المالك
             "colleges": {
-              ".read": "auth != null",
-              ".write": "auth.uid === $adminUid || root.child('users').child(auth.uid).child('role').val() === 'admin'"
+              ".read": true,
+              ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin')"
             },
+
+            // المراحل — قراءة للكل، كتابة للأدمن المالك
             "stages": {
-              ".read": "auth != null",
-              ".write": "auth.uid === $adminUid || root.child('users').child(auth.uid).child('role').val() === 'admin'"
+              ".read": true,
+              ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin')"
             },
+
+            // بيانات المراحل
             "stageData": {
               "$stageId": {
+                // 👨‍🎓 الطلاب
                 "students": {
-                  ".read": "auth != null",
-                  // TODO: نقل auto-approve إلى Cloud Function لتحسين الأمان
-                  ".write": "auth.uid === $adminUid || root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'teacher' || (auth != null && !root.child('users').child(auth.uid).child('role').exists())"
+                  ".read": true,
+                  // TODO: نقل auto-approve إلى Cloud Function لإغلاق الكتابة بدون auth
+                  ".write": true
                 },
+
+                // 👨‍🏫 سجلات التدريسيين
                 "teacherRecords": {
                   "$teacherId": {
-                    ".read": "auth.uid === $teacherId || auth.uid === $adminUid || root.child('users').child(auth.uid).child('role').val() === 'admin'",
-                    ".write": "auth.uid === $teacherId || auth.uid === $adminUid || root.child('users').child(auth.uid).child('role').val() === 'admin'"
+                    ".read": "auth != null && (auth.uid == $teacherId || auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
+                    ".write": "auth != null && (auth.uid == $teacherId || auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)"
                   }
                 }
               }
-            },
-            "telegramConfig": {
-              ".read": "auth.uid === $adminUid || root.child('users').child(auth.uid).child('role').val() === 'admin'",
-              ".write": "auth.uid === $adminUid || root.child('users').child(auth.uid).child('role').val() === 'admin'"
             }
           }
         }
       }
     },
 
+    // ══════════════════════════════════════════════════════════
+    // ❌ رفض أي مسارات غير معرفة
+    // ══════════════════════════════════════════════════════════
     "$other": {
       ".read": false,
       ".write": false
