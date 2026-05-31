@@ -206,16 +206,13 @@ useEffect(() => {
   }, []);
 
   useEffect(() => {
-    // 🆕 تسجيل دخول مجهول لقراءة بيانات Firebase في صفحة التسجيل الذاتي
+    // 🆕 صفحة التسجيل الذاتي — نعرض فوراً ونسجل مجهول بخلفية
     if (registerToken) {
-      console.log('🎯 صفحة التسجيل الذاتي - تسجيل دخول مجهول');
-      signInAnonymously(auth).then(() => {
-        console.log('✅ تم تسجيل الدخول المجهول');
-      }).catch((e) => {
-        console.warn('⚠️ فشل anonymous auth:', e.message);
-      }).finally(() => {
-        setLoading(false);
-      });
+      console.log('🎯 صفحة التسجيل الذاتي - شو فوراً');
+      setLoading(false);
+      signInAnonymously(auth).catch((e) =>
+        console.warn('⚠️ فشل anonymous auth:', e.message)
+      );
       return;
     }
 
