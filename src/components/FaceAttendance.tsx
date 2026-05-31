@@ -623,6 +623,9 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const handleRegClose = () => {
     setShowReg(false);
     if (mountedRef.current) {
+      if (studentsWithFace.length > 0) {
+        buildDescriptorCache(studentsWithFace as any, 0.6);
+      }
       setTimeout(() => initCamera(), 400);
     }
   };
