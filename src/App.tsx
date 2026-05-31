@@ -1191,6 +1191,7 @@ if (loading || !tokenChecked) {
             const uid = isCollegeAdmin ? getAdminUid() : currentUser.uid;
             return await loadStudentsForStage(uid, stageId);
           }}
+          telegramConfig={telegramConfig}
           onClose={() => setShowSendLink(false)}
         />
       )}

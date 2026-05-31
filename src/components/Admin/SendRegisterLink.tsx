@@ -1,15 +1,20 @@
 // src/components/Admin/SendRegisterLink.tsx
 import React, { useState, useMemo } from 'react';
 import { Student, Stage, College } from '../../types/student';
+import { TelegramConfig } from '../../types/telegram';
 import {
   createBulkRegistrationLinks,
 } from '../../services/tokenService';
+import {
+  sendRegistrationLinksToTelegram,
+} from '../../services/telegramService';
 
 interface SendRegisterLinkProps {
   adminUid: string;
   colleges: College[];
   stages: Stage[];
   loadStudents: (stageId: string) => Promise<Student[]>;
+  telegramConfig?: TelegramConfig | null;
   onClose: () => void;
 }
 
@@ -345,6 +350,7 @@ export const SendRegisterLink: React.FC<SendRegisterLinkProps> = ({
   colleges,
   stages,
   loadStudents,
+  telegramConfig,
   onClose,
 }) => {
   const [selectedCollegeId, setSelectedCollegeId] = useState('');
@@ -496,7 +502,38 @@ const handleDownloadExcel = () => {
     const text = encodeURIComponent(
       `مرحباً ${link.studentName} 👋\n\nرابط تسجيل بصمة الوجه ورمز QR الخاص بك:\n\n${link.url}\n\nالرابط صالح لمدة ${expiryDays} يوم.`
     );
-    window.open(`https://wa.me/?text=${text}`, '_blank');
+    const a = document.createElement('a');
+    a.href = `https://wa.me/?text=${text}`;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const [sendingTelegram, setSendingTelegram] = useState(false);
+
+  const handleSendTelegram = async () => {
+    if (!telegramConfig || generatedLinks.length === 0) return;
+    setSendingTelegram(true);
+    try {
+      const result = await sendRegistrationLinksToTelegram(
+        telegramConfig,
+        selectedStageId,
+        generatedLinks.map(l => ({ studentName: l.studentName, studentCode: l.studentCode, url: l.url })),
+        selectedStage?.name || '',
+        expiryDays
+      );
+      if (result.success) {
+        alert(`✅ تم إرسال ${result.count} رابط إلى تيليغرام`);
+      } else {
+        alert('❌ ' + (result.error || 'فشل الإرسال'));
+      }
+    } catch (e: any) {
+      alert('❌ فشل الإرسال: ' + (e.message || ''));
+    } finally {
+      setSendingTelegram(false);
+    }
   };
 
   // ══════════════════════════════════════════
@@ -546,6 +583,19 @@ const handleDownloadExcel = () => {
               >
                 📗 تحميل Excel
               </button>
+
+              {telegramConfig?.channels[selectedStageId]?.chatId && (
+                <button
+                  onClick={handleSendTelegram}
+                  disabled={sendingTelegram}
+                  className="px-4 py-2.5 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition-all hover:scale-105 flex items-center gap-1.5 shadow-md"
+                >
+                  {sendingTelegram
+                    ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> جاري...</>
+                    : <>📨 تيليغرام</>
+                  }
+                </button>
+              )}
 
               <div className="flex-1" />
 

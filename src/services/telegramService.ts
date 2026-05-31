@@ -218,6 +218,44 @@ export async function sendTestMessage(
   return sendTelegramMessage(config.botToken, channel.chatId, message);
 }
 
+export function buildRegistrationLinksMessage(
+  links: Array<{ studentName: string; studentCode: string; url: string }>,
+  stageName: string,
+  expiryDays: number
+): string {
+  const header = `📨 <b>روابط تسجيل جديدة</b>\n━━━━━━━━━━━━━━━\n📚 <b>المرحلة:</b> ${escapeMarkdown(stageName)}\n📅 <b>تاريخ الإنشاء:</b> ${new Date().toLocaleDateString('ar-IQ')}\n⏳ <b>تنتهي بعد:</b> ${expiryDays} يوم\n━━━━━━━━━━━━━━━\n\n`;
+
+  const linkLines = links.map((l, i) => {
+    return `${i + 1}. <b>${escapeMarkdown(l.studentName)}</b> (${escapeMarkdown(l.studentCode)})\n<code>${l.url}</code>`;
+  });
+
+  const footer = `\n━━━━━━━━━━━━━━━\n✅ أرسل كل طالب رابطه الخاص لتسجيل بصمة الوجه ورمز QR`;
+
+  return header + linkLines.join('\n\n') + footer;
+}
+
+export async function sendRegistrationLinksToTelegram(
+  config: TelegramConfig,
+  stageId: string,
+  links: Array<{ studentName: string; studentCode: string; url: string }>,
+  stageName: string,
+  expiryDays: number
+): Promise<{ success: boolean; count: number; error?: string }> {
+  const channel = config.channels[stageId];
+  if (!channel || !channel.chatId) {
+    return { success: false, count: 0, error: 'لم يتم ربط تيليغرام بهذه المرحلة' };
+  }
+
+  const message = buildRegistrationLinksMessage(links, stageName, expiryDays);
+  const ok = await sendTelegramMessage(config.botToken, channel.chatId, message);
+
+  if (!ok) {
+    return { success: false, count: 0, error: 'فشل إرسال الرسالة إلى تيليغرام' };
+  }
+
+  return { success: true, count: links.length };
+}
+
 export async function verifyBotToken(botToken: string): Promise<{ ok: boolean; username?: string; error?: string }> {
   try {
     const res = await fetch(`${TELEGRAM_API}${botToken}/getMe`);
