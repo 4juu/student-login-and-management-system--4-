@@ -619,8 +619,13 @@ export const buildMultiDescriptor = (
   };
 };
 
-const toFloat32 = (input: number[] | string | Float32Array): Float32Array => {
+const toFloat32 = (input: any): Float32Array => {
   if (input instanceof Float32Array) return input;
+
+  // 🐛 MultiDescriptor { main, angles, ... } — استخرج .main
+  if (input && typeof input === 'object' && !Array.isArray(input) && 'main' in input) {
+    return toFloat32(input.main);
+  }
 
   if (typeof input === 'string') {
     return new Float32Array(ensureDecompressed(input));
