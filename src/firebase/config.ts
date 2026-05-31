@@ -18,6 +18,7 @@ const firebaseConfig = {
 // ============================================================
 // 🔥 التطبيق الرئيسي (للأدمن والتدريسي العادي)
 // ============================================================
+export const dbURL = firebaseConfig.databaseURL!.replace(/\/+$/, '');
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const database = getDatabase(app);
