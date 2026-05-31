@@ -137,7 +137,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
       const result = await extractFaceDescriptorMultiCapture(
         videoRef.current,
         (info) => { if (mountedRef.current) setCapInfo(info); },
-        false // 🛑 Raw feed من getUserMedia غير معكوس — CSS scaleX(-1) للعرض فقط
+        true // 🛑 الكاميرا الأمامية تعكس اليسار/اليمين — mirrorHorizontal=true يعكس التصحيح
       );
       if (!result || !result.descriptor) {
         setError('لم نتمكن من التقاط الوجه بوضوح. تأكد من الإضاءة وأن وجهك في المنتصف');
@@ -344,12 +344,35 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
                       );
                     })()}
                     {ALL_DIRS.map(dir => {
-                      const angles: Record<FaceDirection, number> = { right: 90, down: 180, left: 270, up: 0, center: 315 };
-                      const a = (angles[dir] - 90) * (Math.PI / 180);
-                      const cx = 100 + 92 * Math.cos(a);
-                      const cy = 100 + 92 * Math.sin(a);
+                      const isCenter = dir === 'center';
+                      const cx = isCenter ? 100 : 100 + 92 * Math.cos((({ right: 90, down: 180, left: 270, up: 0 }[dir] || 0) - 90) * (Math.PI / 180));
+                      const cy = isCenter ? 100 : 100 + 92 * Math.sin((({ right: 90, down: 180, left: 270, up: 0 }[dir] || 0) - 90) * (Math.PI / 180));
                       const done = capInfo.capturedDirections.has(dir);
-                      return <circle key={dir} cx={cx} cy={cy} r="6" fill={done ? '#10b981' : 'rgba(139,92,246,0.2)'} stroke={done ? '#065f46' : 'rgba(139,92,246,0.4)'} strokeWidth="2" />;
+                      const isCurrent = capInfo.direction === dir;
+                      const r = isCenter ? 10 : isCurrent ? 8 : 6;
+                      return (
+                        <g key={dir}>
+                          <circle cx={cx} cy={cy} r={r}
+                            fill={
+                              isCurrent ? '#f59e0b'
+                                : done ? '#10b981'
+                                : 'rgba(139,92,246,0.2)'
+                            }
+                            stroke={
+                              isCurrent ? '#d97706'
+                                : done ? '#065f46'
+                                : 'rgba(139,92,246,0.4)'
+                            }
+                            strokeWidth={isCurrent ? 3 : 2}
+                          />
+                          {isCurrent && (
+                            <circle cx={cx} cy={cy} r={r + 4} fill="none" stroke="#f59e0b" strokeWidth="2" opacity="0.5">
+                              <animate attributeName="r" values={`${r + 4};${r + 8};${r + 4}`} dur="1.2s" repeatCount="indefinite" />
+                              <animate attributeName="opacity" values="0.5;0;0.5" dur="1.2s" repeatCount="indefinite" />
+                            </circle>
+                          )}
+                        </g>
+                      );
                     })}
                   </svg>
                 )}
@@ -381,6 +404,20 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
                     <div className="h-full bg-purple-500 rounded-full transition-all" style={{ width: `${capInfo.rotationCoverage}%` }} />
                   </div>
                   <span className="text-[10px] font-bold text-purple-600">{capInfo.rotationCoverage}%</span>
+                </div>
+                {/* 🐛 Debug Overlay — القيم الرقمية للاتجاه */}
+                <div className="flex justify-center gap-3 text-[10px] font-mono">
+                  <span className={`px-2 py-0.5 rounded ${
+                    capInfo.directionMatch ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                  }`}>
+                    {capInfo.directionMatch ? '✅ مطابق' : '⏳ انتظر...'}
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-600">
+                    H: {capInfo.horizOffset !== undefined ? capInfo.horizOffset.toFixed(2) : '-'}
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-600">
+                    V: {capInfo.vertOffset !== undefined ? capInfo.vertOffset.toFixed(2) : '-'}
+                  </span>
                 </div>
                 <div className="flex justify-center gap-2 text-[10px] text-gray-500">
                   {ALL_DIRS.map(dir => (

@@ -312,15 +312,15 @@ export const detectFaceDirection = (
   const vert = (noseTip.y - eyeMidY) / eyeDist;
 
   if (mirrorHorizontal) {
-    if (horiz < -0.55) return 'right';
-    if (horiz > 0.55) return 'left';
+    if (horiz < -0.4) return 'right';
+    if (horiz > 0.4) return 'left';
   } else {
-    if (horiz < -0.55) return 'left';
-    if (horiz > 0.55) return 'right';
+    if (horiz < -0.4) return 'left';
+    if (horiz > 0.4) return 'right';
   }
 
-  if (vert < -0.25) return 'up';
-  if (vert > 1.1) return 'down';
+  if (vert < -0.15) return 'up';
+  if (vert > 0.6) return 'down';
 
   return 'center';
 };
@@ -826,6 +826,9 @@ export interface CaptureProgress {
   directionMatch?: boolean;
   frameWidth?: number;
   frameHeight?: number;
+  horizOffset?: number;
+  vertOffset?: number;
+  detectedDirection?: FaceDirection;
 }
 
 export interface LandmarkPoints {
@@ -856,7 +859,7 @@ export const extractFaceDescriptorMultiCapture = async (
 } | null> => {
   if (!modelsLoaded) await loadFaceModels();
 
-  const MAX_DURATION_MS = 10000;
+  const MAX_DURATION_MS = 15000;
   const STABILIZE_MS = 800;
   const INTERVAL_MS = 350;
   const MIN_SCORE = 0.45;
@@ -864,7 +867,7 @@ export const extractFaceDescriptorMultiCapture = async (
   const MAX_CENTER = 0.5;
   const MIN_GOOD = 5;
 
-  const REQUIRED_DIRECTIONS: FaceDirection[] = ['center', 'right', 'left'];
+  const REQUIRED_DIRECTIONS: FaceDirection[] = ['center', 'up', 'right', 'down', 'left'];
 
   const capturedDirections = new Set<FaceDirection>();
   const angleDescs = new Map<FaceDirection, Float32Array[]>();
@@ -878,7 +881,19 @@ export const extractFaceDescriptorMultiCapture = async (
     dir: FaceDirection,
     detected: boolean,
     qInfo?: Partial<FrameQuality>,
-    extra?: { landmarks?: LandmarkPoints; faceBox?: { x: number; y: number; width: number; height: number }; frameWidth?: number; frameHeight?: number; eyeDistance?: number; noseWidth?: number; mouthWidth?: number; faceAspectRatio?: number }
+    extra?: {
+      landmarks?: LandmarkPoints;
+      faceBox?: { x: number; y: number; width: number; height: number };
+      frameWidth?: number;
+      frameHeight?: number;
+      eyeDistance?: number;
+      noseWidth?: number;
+      mouthWidth?: number;
+      faceAspectRatio?: number;
+      horizOffset?: number;
+      vertOffset?: number;
+      detectedDirection?: FaceDirection;
+    }
   ) => {
     onProgress?.({
       progress: p,
@@ -901,6 +916,10 @@ export const extractFaceDescriptorMultiCapture = async (
       faceAspectRatio: extra?.faceAspectRatio,
       frameWidth: extra?.frameWidth,
       frameHeight: extra?.frameHeight,
+      horizOffset: extra?.horizOffset,
+      vertOffset: extra?.vertOffset,
+      detectedDirection: extra?.detectedDirection,
+      directionMatch: qInfo ? qInfo.direction === dir : undefined,
     });
   };
 
@@ -959,7 +978,7 @@ export const extractFaceDescriptorMultiCapture = async (
   reportProgress(10, 'capture', 'center', true);
 
   const captureStart = Date.now();
-  const DIRECTION_SEQUENCE: FaceDirection[] = ['center', 'right', 'left'];
+  const DIRECTION_SEQUENCE: FaceDirection[] = ['center', 'up', 'right', 'down', 'left'];
   let currentDirIndex = 0;
 
   while (Date.now() - captureStart < MAX_DURATION_MS) {
@@ -1001,15 +1020,39 @@ export const extractFaceDescriptorMultiCapture = async (
 
       const lm = extractLandmarkPoints(det.landmarks);
       const geo = calculateFaceGeometry(lm);
+
+      // حساب القيم الرقمية للأوفست
+      const nose = det.landmarks.getNose();
+      const leftEye = det.landmarks.getLeftEye();
+      const rightEye = det.landmarks.getRightEye();
+      const noseTip = nose[3];
+      const leC = { x: leftEye.reduce((s, p) => s + p.x, 0) / leftEye.length, y: leftEye.reduce((s, p) => s + p.y, 0) / leftEye.length };
+      const reC = { x: rightEye.reduce((s, p) => s + p.x, 0) / rightEye.length, y: rightEye.reduce((s, p) => s + p.y, 0) / rightEye.length };
+      const eyeDist = Math.sqrt((reC.x - leC.x) ** 2 + (reC.y - leC.y) ** 2);
+      const eyeMidX = (leC.x + reC.x) / 2;
+      const eyeMidY = (leC.y + reC.y) / 2;
+      const horiz = eyeDist > 0 ? (noseTip.x - eyeMidX) / eyeDist : 0;
+      const vert = eyeDist > 0 ? (noseTip.y - eyeMidY) / eyeDist : 0;
+
+      const dirMatch = q.direction === requiredDir;
       reportProgress(progress, 'capture', requiredDir, true, q, {
         landmarks: lm,
         faceBox: { x: det.detection.box.x, y: det.detection.box.y, width: det.detection.box.width, height: det.detection.box.height },
         frameWidth: imgW,
         frameHeight: imgH,
         ...geo,
+        horizOffset: horiz,
+        vertOffset: vert,
+        detectedDirection: q.direction,
       });
 
       if (q.score < MIN_SCORE || q.areaRatio < MIN_AREA || q.centerDist > MAX_CENTER) {
+        await new Promise(r => setTimeout(r, INTERVAL_MS));
+        continue;
+      }
+
+      // 🛑 إجبار تطابق الاتجاه — لا نقبل الإطار إلا إذا كان اتجاه الوجه يطابق المطلوب
+      if (!dirMatch) {
         await new Promise(r => setTimeout(r, INTERVAL_MS));
         continue;
       }
