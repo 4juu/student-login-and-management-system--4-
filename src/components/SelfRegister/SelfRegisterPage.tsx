@@ -100,6 +100,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   // 🔍 تحميل بيانات الرابط
   // ──────────────────────────────────────────
   useEffect(() => {
+    console.log('🔍 SelfRegisterPage useEffect شغال');
     let mounted = true;
 
     const timeout = setTimeout(() => {
