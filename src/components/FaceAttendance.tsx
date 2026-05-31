@@ -382,7 +382,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
             const qScore = det.detection.score;
             if (qScore < 0.65 || box.width < 30 || box.height < 30) continue;
             const track = tracked.find((t: any) => calculateIoU(t.box, box) > 0.3);
-            let matchDesc = det.descriptor;
+            let matchDesc = normalizeDescriptor(new Float32Array(det.descriptor));
 
             if (track) {
               const descs = trackDescriptors.get(track.id) || [];

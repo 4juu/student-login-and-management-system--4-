@@ -31,7 +31,7 @@ export function buildDescriptorCache(
     if (!s.faceDescriptor) continue;
     const arr = toFloat32(s.faceDescriptor);
     if (arr.length >= 128) {
-      _descCache.push({ id: s.id, desc: arr });
+      _descCache.push({ id: s.id, desc: normalizeDescriptor(arr) });
     }
   }
 }
@@ -268,8 +268,9 @@ const toFloat32 = (input: any): Float32Array => {
 };
 
 export const compareMultiDescriptor = (query: Float32Array, stored: MultiDescriptor): number => {
-  const mainDesc = toFloat32(stored.main);
-  const mainDist = faceapi.euclideanDistance(query, mainDesc);
+  const mainDesc = normalizeDescriptor(toFloat32(stored.main));
+  const qNorm = normalizeDescriptor(new Float32Array(query));
+  const mainDist = faceapi.euclideanDistance(qNorm, mainDesc);
   if (!stored.angles || stored.angles.length === 0) return mainDist;
 
   const chunkSize = TOP_DIMS * 2;
@@ -279,7 +280,7 @@ export const compareMultiDescriptor = (query: Float32Array, stored: MultiDescrip
   for (let i = 0; i < angleCount; i++) {
     const chunk = stored.angles.slice(i * chunkSize, (i + 1) * chunkSize);
     const angleDesc = decompressAngleDescriptor(chunk);
-    const dist = faceapi.euclideanDistance(query, angleDesc);
+    const dist = faceapi.euclideanDistance(qNorm, angleDesc);
     if (dist < bestAngleDist) bestAngleDist = dist;
   }
 
@@ -303,10 +304,11 @@ export const checkForTampering = <
   excludeId: string,
   threshold = 0.35
 ): TamperResult => {
+  const query = normalizeDescriptor(new Float32Array(descriptor));
   const matches: Array<{ id: string; name: string; distance: number }> = [];
   for (const s of allStudents) {
     if (s.id === excludeId || !s.faceDescriptor) continue;
-    const dist = compareFaces(descriptor, s.faceDescriptor as any);
+    const dist = compareFaces(query, s.faceDescriptor as any);
     if (dist < threshold) {
       matches.push({ id: s.id, name: s.name, distance: dist });
     }
@@ -322,17 +324,19 @@ export const checkForTamperingAsync = async <
   excludeId: string,
   threshold = 0.35
 ): Promise<TamperResult> => {
+  const query = normalizeDescriptor(new Float32Array(descriptor));
   const matches: Array<{ id: string; name: string; distance: number }> = [];
   const storedSimple: Array<{ id: string; name: string; desc: number[] }> = [];
 
   for (const s of allStudents) {
     if (s.id === excludeId || !s.faceDescriptor) continue;
     if (isMultiDescriptor(s.faceDescriptor)) {
-      const dist = compareMultiDescriptor(descriptor, s.faceDescriptor);
+      const dist = compareMultiDescriptor(query, s.faceDescriptor);
       if (dist < threshold) matches.push({ id: s.id, name: s.name, distance: dist });
     } else {
       const arr = toFloat32(s.faceDescriptor as any);
-      storedSimple.push({ id: s.id, name: s.name, desc: Array.from(arr) });
+      const normArr = normalizeDescriptor(new Float32Array(arr));
+      storedSimple.push({ id: s.id, name: s.name, desc: Array.from(normArr) });
     }
   }
 
@@ -343,7 +347,7 @@ export const checkForTamperingAsync = async <
   const w = getWorker();
   if (!w) {
     for (const s of storedSimple) {
-      const d = faceapi.euclideanDistance(descriptor, new Float32Array(s.desc));
+      const d = faceapi.euclideanDistance(query, new Float32Array(s.desc));
       if (d < threshold) matches.push({ id: s.id, name: s.name, distance: d });
     }
     return { isTamper: matches.length > 0, matchedStudents: matches };
@@ -361,7 +365,7 @@ export const checkForTamperingAsync = async <
       }
     };
     w.addEventListener('message', handler);
-    w.postMessage({ type: 'tamper', data: { query: Array.from(descriptor), storedDescriptors: storedSimple, threshold } });
+    w.postMessage({ type: 'tamper', data: { query: Array.from(query), storedDescriptors: storedSimple, threshold } });
     setTimeout(() => { w.removeEventListener('message', handler); resolve({ isTamper: matches.length > 0, matchedStudents: matches }); }, 15000);
   });
 };

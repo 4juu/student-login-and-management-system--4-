@@ -3,7 +3,7 @@ import { Student } from '../types/student';
 import {
   extractFaceDescriptor, detectSingleFace,
   buildMultiDescriptor, checkForTamperingAsync,
-  drawFaceLandmarks,
+  normalizeDescriptor, drawFaceLandmarks,
 } from '../services/faceRecognition';
 import * as faceapi from 'face-api.js';
 
@@ -126,7 +126,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
     try {
       const desc = await extractFaceDescriptor(videoRef.current);
       if (!desc) { setError('لم يتم التعرف على الوجه'); setCapturing(false); return; }
-      const normalized = desc;
+      const normalized = normalizeDescriptor(desc);
 
       if (students.length > 1 && selectedStudent) {
         const tamper = await checkForTamperingAsync(normalized, students, selectedStudent.id, 0.35);

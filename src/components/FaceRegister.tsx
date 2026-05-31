@@ -5,6 +5,7 @@ import {
   extractFaceDescriptor,
   buildMultiDescriptor,
   checkForTamperingAsync,
+  normalizeDescriptor,
 } from '../services/faceRecognition';
 
 interface FaceRegisterProps {
@@ -84,7 +85,8 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
         setCapturing(false);
         return;
       }
-      const tamper = await checkForTamperingAsync(descriptor, students, currentStudent.id, 0.35);
+      const normalized = normalizeDescriptor(new Float32Array(descriptor));
+      const tamper = await checkForTamperingAsync(normalized, students, currentStudent.id, 0.35);
       if (tamper.isTamper) {
         setMessage({
           type: 'error',
@@ -94,8 +96,8 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
         return;
       }
       const angleDescs = new Map<string, Float32Array[]>();
-      angleDescs.set('center', [descriptor]);
-      const multiDesc = buildMultiDescriptor(descriptor, angleDescs, 1, new Set(['center']));
+      angleDescs.set('center', [normalized]);
+      const multiDesc = buildMultiDescriptor(normalized, angleDescs, 1, new Set(['center']));
       onUpdateStudent(currentStudent.id, {
         faceDescriptor: multiDesc as any,
         faceRegisteredAt: new Date().toISOString(),
