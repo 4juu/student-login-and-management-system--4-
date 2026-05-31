@@ -94,10 +94,9 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     }
     if (!year) { setErrorMsg('تعذر تحميل السنة الدراسية'); goTo('invalid-link'); return null; }
 
-    const data = await dbFetch<Record<string, Student> | Student[]>(
-      `academicYears/${year}/userData/${adminUid}/stageData/${stageId}/students`,
-      signal
-    );
+    const studentPath = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}/students`;
+    console.log('📡 dbFetch loading students from:', `${dbURL}/${studentPath}.json`);
+    const data = await dbFetch<Record<string, Student> | Student[]>(studentPath, signal);
     if (!data) { setErrorMsg('لم نجد بيانات الطلاب'); goTo('invalid-link'); return null; }
 
     const studentsArr: Student[] = Array.isArray(data) ? data : Object.values(data);
