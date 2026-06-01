@@ -680,24 +680,8 @@ useEffect(() => {
     if (processedAttendanceRef.current.has(cacheKey)) return;
     processedAttendanceRef.current.add(cacheKey);
 
-    setAttendanceRecords(prev => [...prev, record]);
-
-    // 🤖 إرسال إشعار تلغرام - تم الإزالة حسب الطلب
-    // إذا كان нужно إعادة الإشعار، ازالة التعليق أدناه
-    // if (telegramConfig && selectedStageId) {
-    //   const stage = stages.find(s => s.id === selectedStageId);
-    //   sendAttendanceNotification(
-    //     telegramConfig,
-    //     selectedStageId,
-    //     record.studentName,
-    //     record.date,
-    //     record.time,
-    //     record.method || 'manual',
-    //     record.subjectName || stage?.name || selectedStage?.name,
-    //     record.teacherName
-    //   ).catch(() => {});
-    // }
-  };
+     setAttendanceRecords(prev => [...prev, record]);
+   };
 
   const handleClearRecords = () => {
     intentionalDeleteRef.current.records = true;
