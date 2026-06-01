@@ -1,5 +1,4 @@
 // src/services/nameMatching.ts
-import Fuse from 'fuse.js';
 
 // ============================================================
 // 🔤 مطابقة الأسماء العربية الذكية - هويات جامعية عراقية
@@ -242,124 +241,35 @@ export const matchArabicNames = (
 ): number => {
   if (!nameFromID || !nameInSystem) return 0;
 
-  // ===== المرحلة 1: التنظيف =====
   const norm1 = normalizeArabicName(nameFromID);
   const norm2 = normalizeArabicName(nameInSystem);
 
-  if (norm1 === norm2) return 100;
-  if (deepNormalize(norm1) === deepNormalize(norm2)) return 99;
+  if (norm1 === norm2) return AUTO_APPROVE_THRESHOLD;
+  if (deepNormalize(norm1) === deepNormalize(norm2)) return AUTO_APPROVE_THRESHOLD;
 
-  // ===== المرحلة 2: التقسيم الذكي =====
   const parts1 = smartSplitName(nameFromID);
   const parts2 = smartSplitName(nameInSystem);
 
-  if (parts1.length === 0 || parts2.length === 0) return 0;
+  if (parts1.length < 3 && parts2.length < 3) return 0;
 
-  // ===== المرحلة 3: مطابقة الأجزاء =====
-  const minLen = Math.min(parts1.length, parts2.length);
-  const maxLen = Math.max(parts1.length, parts2.length);
+  const longer = parts1.length >= parts2.length ? parts1 : parts2;
+  const shorter = parts1.length >= parts2.length ? parts2 : parts1;
 
-  const similarityMatrix: number[][] = [];
-  for (let i = 0; i < parts1.length; i++) {
-    similarityMatrix[i] = [];
-    for (let j = 0; j < parts2.length; j++) {
-      similarityMatrix[i][j] = stringSimilarity(parts1[i], parts2[j]);
-    }
-  }
-
-  // ===== المرحلة 4: المطابقة بالترتيب =====
-  let orderedMatchScore = 0;
-  let orderedMatches = 0;
-
-  const shorter = parts1.length <= parts2.length ? parts1 : parts2;
-  const longer  = parts1.length <= parts2.length ? parts2 : parts1;
-
-  let longerIndex = 0;
-  const matchDetails: { part: string; matchedWith: string; score: number }[] = [];
-
-  for (let i = 0; i < shorter.length; i++) {
-    let bestScore = 0;
-    let bestJ = -1;
-
-    for (let j = longerIndex; j < longer.length; j++) {
-      const sim = stringSimilarity(shorter[i], longer[j]);
-      if (sim > bestScore) {
-        bestScore = sim;
-        bestJ = j;
+  for (let si = 0; si <= shorter.length - 3; si++) {
+    for (let li = 0; li <= longer.length - 3; li++) {
+      let matchCount = 0;
+      for (let k = 0; k < 3; k++) {
+        if (stringSimilarity(shorter[si + k], longer[li + k]) >= 0.7) {
+          matchCount++;
+        } else {
+          break;
+        }
       }
-    }
-
-    if (bestScore >= 0.7 && bestJ !== -1) {
-      orderedMatchScore += bestScore;
-      orderedMatches++;
-      longerIndex = bestJ + 1;
-
-      matchDetails.push({
-        part: shorter[i],
-        matchedWith: longer[bestJ],
-        score: bestScore,
-      });
+      if (matchCount >= 3) return AUTO_APPROVE_THRESHOLD;
     }
   }
 
-  // ===== المرحلة 5: حساب النسبة =====
-  let percentage = 0;
-
-  if (orderedMatches === 0) {
-    percentage = 0;
-  } else if (orderedMatches === minLen && minLen === maxLen) {
-    percentage = Math.round((orderedMatchScore / orderedMatches) * 100);
-  } else if (orderedMatches === minLen) {
-    const avgScore = orderedMatchScore / orderedMatches;
-    const lengthPenalty = (maxLen - minLen) * 2;
-    percentage = Math.round(avgScore * 100 - lengthPenalty);
-  } else {
-    const avgScore = orderedMatchScore / orderedMatches;
-    const coverageRatio = orderedMatches / maxLen;
-    percentage = Math.round(avgScore * coverageRatio * 100);
-  }
-
-  // ===== 🎁 Bonus: الأسماء المركبة =====
-  // إذا كل أجزاء الاسم الأقصر متطابقة، وفيه اسم مركب مشترك
-  if (orderedMatches === minLen && minLen >= 3) {
-    const hasCompoundMatch = parts1.some(p1 =>
-      p1.startsWith('ال') && parts2.some(p2 => p2.includes(p1))
-    );
-    if (hasCompoundMatch) {
-      percentage = Math.min(100, percentage + 5);
-      console.log('🎁 Bonus +5% للاسم المركب المشترك');
-    }
-  }
-
-  // ===== المرحلة 6: تعزيز بـ Fuse.js =====
-  try {
-    const fuse = new Fuse([norm2], {
-      includeScore: true,
-      threshold: 0.6,
-      distance: 200,
-      minMatchCharLength: 2,
-    });
-
-    const fuseResult = fuse.search(norm1);
-    if (fuseResult.length > 0 && fuseResult[0].score !== undefined) {
-      const fuseScore = Math.round((1 - fuseResult[0].score) * 100);
-      percentage = Math.round(
-        Math.max(percentage, percentage * 0.75 + fuseScore * 0.25)
-      );
-    }
-  } catch {
-    // إذا Fuse فشل، نكمل بدونه
-  }
-
-  // ===== 🎯 إذا تطابق 3 أجزاء متتالية أو أكثر =====
-  if (orderedMatches >= 3) {
-    const avgScore = orderedMatchScore / orderedMatches;
-    if (avgScore >= 0.7) {
-      percentage = Math.max(percentage, AUTO_APPROVE_THRESHOLD);
-    }
-  }
-
-  return Math.min(100, Math.max(0, percentage));
+  return 0;
 };
 
 // ============================================================
