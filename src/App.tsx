@@ -26,7 +26,7 @@ import { PendingRegistrations } from './components/Admin/PendingRegistrations';
 import { auth, database } from './firebase/config';
 import { signIn, signOut } from './firebase/authService';
 import { TelegramConfig } from './types/telegram';
-import { sendAttendanceNotification, sendAbsenceNotification } from './services/telegramService';
+import { sendAbsenceNotification } from './services/telegramService';
 import {
   loadColleges,
   saveColleges,
@@ -682,20 +682,21 @@ useEffect(() => {
 
     setAttendanceRecords(prev => [...prev, record]);
 
-    // 🤖 إرسال إشعار تلغرام
-    if (telegramConfig && selectedStageId) {
-      const stage = stages.find(s => s.id === selectedStageId);
-      sendAttendanceNotification(
-        telegramConfig,
-        selectedStageId,
-        record.studentName,
-        record.date,
-        record.time,
-        record.method || 'manual',
-        record.subjectName || stage?.name || selectedStage?.name,
-        record.teacherName
-      ).catch(() => {});
-    }
+    // 🤖 إرسال إشعار تلغرام - تم الإزالة حسب الطلب
+    // إذا كان нужно إعادة الإشعار، ازالة التعليق أدناه
+    // if (telegramConfig && selectedStageId) {
+    //   const stage = stages.find(s => s.id === selectedStageId);
+    //   sendAttendanceNotification(
+    //     telegramConfig,
+    //     selectedStageId,
+    //     record.studentName,
+    //     record.date,
+    //     record.time,
+    //     record.method || 'manual',
+    //     record.subjectName || stage?.name || selectedStage?.name,
+    //     record.teacherName
+    //   ).catch(() => {});
+    // }
   };
 
   const handleClearRecords = () => {
