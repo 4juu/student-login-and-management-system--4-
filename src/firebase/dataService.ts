@@ -232,7 +232,7 @@ export const saveColleges = async (
   const saveKey = `colleges_${adminUid}`;
   
   debouncedSave(saveKey, async () => {
-    await set(ref(database, getCollegesPath(year, adminUid)), colleges);
+    await set(ref(database, getCollegesPath(year, adminUid)), colleges.map(c => stripUndefined(c as any)));
   });
 };
 
@@ -277,7 +277,7 @@ export const saveStages = async (
   const saveKey = `stages_${adminUid}`;
   
   debouncedSave(saveKey, async () => {
-    await set(ref(database, getStagesPath(year, adminUid)), stages);
+    await set(ref(database, getStagesPath(year, adminUid)), stages.map(s => stripUndefined(s as any)));
   });
 };
 
@@ -452,7 +452,7 @@ export const saveSessions = async (
   debouncedSave(saveKey, async () => {
     await set(
       ref(database, getTeacherDataPath(year, adminUid, stageId, teacherId, 'sessions')),
-      sessions
+      sessions.map(s => stripUndefined(s as any))
     );
   });
 };
