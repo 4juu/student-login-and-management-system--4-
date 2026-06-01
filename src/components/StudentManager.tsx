@@ -120,10 +120,10 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       id: Date.now().toString(),
       name: name.trim(),
       code,
-      group: group.trim() || undefined,
-      universityId: universityId.trim() || undefined,
-      qrCodeId: cleanQrCode || undefined,
       createdAt: new Date().toISOString(),
+      ...(group.trim() ? { group: group.trim() } : {}),
+      ...(universityId.trim() ? { universityId: universityId.trim() } : {}),
+      ...(cleanQrCode ? { qrCodeId: cleanQrCode } : {}),
     };
 
     onAddStudent(newStudent);
@@ -219,8 +219,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
           parsed.push({
             name: studentName,
             group: studentGroup,
-            universityId: studentUniId || undefined,
-            qrCodeId: studentQrCode || undefined,
+            ...(studentUniId ? { universityId: studentUniId } : {}),
+            ...(studentQrCode ? { qrCodeId: studentQrCode } : {}),
           });
         }
       }
@@ -295,9 +295,9 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
           name: student.name,
           code: String(currentCode),
           group: student.group,
-          universityId: uniId,
-          qrCodeId: qrCode,
           createdAt: new Date().toISOString(),
+          ...(uniId ? { universityId: uniId } : {}),
+          ...(qrCode ? { qrCodeId: qrCode } : {}),
         };
 
         newStudentsBatch.push(newStudent);

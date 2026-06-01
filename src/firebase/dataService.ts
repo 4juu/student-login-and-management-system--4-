@@ -131,6 +131,14 @@ const isDangerousEmpty = (newData: unknown[]): boolean => {
   return Array.isArray(newData) && newData.length === 0;
 };
 
+const stripUndefined = (obj: Record<string, unknown>): Record<string, unknown> => {
+  const clean: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined && v !== null) clean[k] = v;
+  }
+  return clean;
+};
+
 // ============================================================
 // ⏱️ DEBOUNCED SAVES (نفس الكود السابق)
 // ============================================================
@@ -315,7 +323,7 @@ export const saveStudents = async (
   const saveKey = `students_${adminUid}_${stageId}`;
   
   debouncedSave(saveKey, async () => {
-    await set(ref(database, getStagePath(year, adminUid, stageId, 'students')), students);
+    await set(ref(database, getStagePath(year, adminUid, stageId, 'students')), students.map(s => stripUndefined(s as any)));
   });
 };
 
