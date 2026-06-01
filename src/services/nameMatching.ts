@@ -351,6 +351,14 @@ export const matchArabicNames = (
     // إذا Fuse فشل، نكمل بدونه
   }
 
+  // ===== 🎯 إذا تطابق 3 أجزاء متتالية أو أكثر =====
+  if (orderedMatches >= 3) {
+    const avgScore = orderedMatchScore / orderedMatches;
+    if (avgScore >= 0.7) {
+      percentage = Math.max(percentage, AUTO_APPROVE_THRESHOLD);
+    }
+  }
+
   return Math.min(100, Math.max(0, percentage));
 };
 
