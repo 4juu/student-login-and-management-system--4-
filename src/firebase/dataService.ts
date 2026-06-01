@@ -127,9 +127,8 @@ const loadLocal = <T,>(key: string, fallback: T): T => {
   } catch { return fallback; }
 };
 
-const isDangerousEmpty = (newData: unknown[], localData: unknown[]): boolean => {
-  return Array.isArray(newData) && newData.length === 0 &&
-         Array.isArray(localData) && localData.length > 0;
+const isDangerousEmpty = (newData: unknown[]): boolean => {
+  return Array.isArray(newData) && newData.length === 0;
 };
 
 // ============================================================
@@ -213,8 +212,7 @@ export const saveColleges = async (
   forceDelete: boolean = false
 ): Promise<void> => {
   if (!forceDelete) {
-    const local = loadLocal<College[]>(LS.colleges(adminUid), []);
-    if (isDangerousEmpty(colleges, local)) {
+    if (isDangerousEmpty(colleges)) {
       console.warn('🛑 منع حفظ كليات فارغة');
       return;
     }
@@ -238,7 +236,9 @@ export const loadColleges = async (adminUid: string): Promise<College[]> => {
     if (snap.exists()) {
       const data = snap.val();
       const arr: College[] = Array.isArray(data) ? data : Object.values(data);
-      saveLocal(LS.colleges(adminUid), arr);
+      if (arr.length > 0 || local.length === 0) {
+        saveLocal(LS.colleges(adminUid), arr);
+      }
       return arr;
     }
     return local;
@@ -257,8 +257,7 @@ export const saveStages = async (
   forceDelete: boolean = false
 ): Promise<void> => {
   if (!forceDelete) {
-    const local = loadLocal<Stage[]>(LS.stages(adminUid), []);
-    if (isDangerousEmpty(stages, local)) {
+    if (isDangerousEmpty(stages)) {
       console.warn('🛑 منع حفظ مراحل فارغة');
       return;
     }
@@ -282,7 +281,9 @@ export const loadStages = async (adminUid: string): Promise<Stage[]> => {
     if (snap.exists()) {
       const data = snap.val();
       const arr: Stage[] = Array.isArray(data) ? data : Object.values(data);
-      saveLocal(LS.stages(adminUid), arr);
+      if (arr.length > 0 || local.length === 0) {
+        saveLocal(LS.stages(adminUid), arr);
+      }
       return arr;
     }
     return local;
@@ -302,8 +303,7 @@ export const saveStudents = async (
   forceDelete: boolean = false
 ): Promise<void> => {
   if (!forceDelete) {
-    const local = loadLocal<Student[]>(LS.students(adminUid, stageId), []);
-    if (isDangerousEmpty(students, local)) {
+    if (isDangerousEmpty(students)) {
       console.warn('🛑 منع حفظ طلاب فارغين');
       return;
     }
@@ -327,8 +327,11 @@ export const loadStudents = async (adminUid: string, stageId: string): Promise<S
     if (snap.exists()) {
       const data = snap.val();
       const arr: Student[] = Array.isArray(data) ? data : Object.values(data);
-      saveLocal(LS.students(adminUid, stageId), arr);
-      return arr;
+      if (arr.length > 0 || local.length === 0) {
+        saveLocal(LS.students(adminUid, stageId), arr);
+        return arr;
+      }
+      return local;
     }
     return local;
   } catch {
@@ -348,8 +351,7 @@ export const saveAttendanceRecords = async (
   forceDelete: boolean = false
 ): Promise<void> => {
   if (!forceDelete) {
-    const local = loadLocal<AttendanceRecord[]>(LS.records(adminUid, stageId, teacherId), []);
-    if (isDangerousEmpty(records, local)) {
+    if (isDangerousEmpty(records)) {
       console.warn('🛑 منع حفظ سجلات فارغة');
       return;
     }
@@ -391,7 +393,9 @@ export const loadAttendanceRecords = async (
       const data = compressedSnap.val();
       const compressed = Array.isArray(data) ? data : Object.values(data);
       const decompressed = compressed.map((c: any) => decompressRecord(c));
-      saveLocal(LS.records(adminUid, stageId, teacherId), decompressed);
+      if (decompressed.length > 0 || local.length === 0) {
+        saveLocal(LS.records(adminUid, stageId, teacherId), decompressed);
+      }
       return decompressed;
     }
     
@@ -402,7 +406,9 @@ export const loadAttendanceRecords = async (
     if (oldSnap.exists()) {
       const data = oldSnap.val();
       const arr: AttendanceRecord[] = Array.isArray(data) ? data : Object.values(data);
-      saveLocal(LS.records(adminUid, stageId, teacherId), arr);
+      if (arr.length > 0 || local.length === 0) {
+        saveLocal(LS.records(adminUid, stageId, teacherId), arr);
+      }
       return arr;
     }
     
@@ -424,8 +430,7 @@ export const saveSessions = async (
   forceDelete: boolean = false
 ): Promise<void> => {
   if (!forceDelete) {
-    const local = loadLocal<AttendanceSession[]>(LS.sessions(adminUid, stageId, teacherId), []);
-    if (isDangerousEmpty(sessions, local)) {
+    if (isDangerousEmpty(sessions)) {
       console.warn('🛑 منع حفظ جلسات فارغة');
       return;
     }
@@ -458,7 +463,9 @@ export const loadSessions = async (
     if (snap.exists()) {
       const data = snap.val();
       const arr: AttendanceSession[] = Array.isArray(data) ? data : Object.values(data);
-      saveLocal(LS.sessions(adminUid, stageId, teacherId), arr);
+      if (arr.length > 0 || local.length === 0) {
+        saveLocal(LS.sessions(adminUid, stageId, teacherId), arr);
+      }
       return arr;
     }
     return local;
