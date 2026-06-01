@@ -906,7 +906,8 @@ if (loading || !tokenChecked) {
 
         {!selectedStageId && (
           <div className="max-w-6xl mx-auto">
-            <div className="flex overflow-x-auto flex-nowrap md:flex-wrap gap-2 md:gap-3 pb-1 md:pb-0 justify-start md:justify-center mb-4 md:mb-6 scrollbar-none">
+            <div className="overflow-x-auto scrollbar-none">
+              <div className="flex flex-nowrap md:flex-wrap gap-2 md:gap-3 pb-1 md:pb-0 justify-start md:justify-center mb-4 md:mb-6">
               <button
                 onClick={() => setActiveTab('stage-selector')}
                 className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'stage-selector' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
@@ -970,6 +971,7 @@ if (loading || !tokenChecked) {
               >
                 👤 الملف الشخصي
               </button>
+            </div>
             </div>
 
             {isMainAdmin && activeTab === 'stage-selector' && (
