@@ -546,7 +546,7 @@ export const autoImproveDescriptor = (
   else {
     const currentArray = toFloat32(currentStored as any);
     const normalized = normalizeDescriptor(new Float32Array(currentArray));
-    return { main: compressFaceDescriptor(normalized), quality: newQuality, directions: newDirection, version: 2 };
+    return { main: Array.from(normalized), quality: newQuality, directions: newDirection, version: 2 };
   }
 
   if ((md.quality || 0) >= 0.85 && (md.directions || '').split(',').length >= 5) return null;
@@ -561,7 +561,7 @@ export const autoImproveDescriptor = (
   existingDirs.add(newDirection);
 
   return {
-    main: compressFaceDescriptor(normalized),
+    main: Array.from(normalized),
     angles: md.angles,
     quality: Math.max(md.quality || 0, newQuality),
     directions: [...existingDirs].join(','),

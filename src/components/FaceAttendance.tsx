@@ -89,7 +89,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   useEffect(() => {
     mountedRef.current = true;
     if (studentsWithFace.length > 0) {
-      buildDescriptorCache(studentsWithFace as any, 0.6);
+      buildDescriptorCache(studentsWithFace as any, 0.5);
     }
     if (areModelsLoaded()) { setModelsReady(true); initCamera(); return; }
     loadFaceModels().then(() => {
@@ -102,7 +102,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
   useEffect(() => {
     if (studentsWithFace.length > 0) {
-      buildDescriptorCache(studentsWithFace as any, 0.6);
+      buildDescriptorCache(studentsWithFace as any, 0.5);
     } else {
       clearDescriptorCache();
     }
