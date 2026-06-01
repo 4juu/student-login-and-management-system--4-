@@ -101,6 +101,8 @@ const [tokenChecked, setTokenChecked] = useState(false);
     stages: false,
   });
 
+  const userModifiedStudentsRef = useRef(false);
+
   const getAdminUid = (): string => {
     if (!currentUser) return '';
     if (currentUser.role === 'admin') return currentUser.uid;
@@ -402,12 +404,16 @@ useEffect(() => {
     setSelectedCollegeId(collegeId);
     setSelectedStageId(stageId);
     setDataLoaded(false);
+    userModifiedStudentsRef.current = false;
 
     try {
       const adminUid = getAdminUid();
       const teacherId = getTeacherId();
       const data = await loadStageData(adminUid, stageId, teacherId);
-      setStudents(data.students);
+
+      if (!userModifiedStudentsRef.current) {
+        setStudents(data.students);
+      }
       setAttendanceRecords(data.records);
       setSessions(data.sessions);
       setActiveSessionId(data.activeSessionId);
@@ -602,13 +608,18 @@ useEffect(() => {
     });
   };
 
-  const handleAddStudent = (student: Student) => setStudents(prev => [...prev, student]);
+  const handleAddStudent = (student: Student) => {
+    userModifiedStudentsRef.current = true;
+    setStudents(prev => [...prev, student]);
+  };
 
   const handleAddMultipleStudents = (newStudents: Student[]) => {
+    userModifiedStudentsRef.current = true;
     setStudents(prev => [...prev, ...newStudents]);
   };
 
   const handleUpdateStudent = (id: string, updates: Partial<Student>) => {
+    userModifiedStudentsRef.current = true;
     setStudents(prev =>
       prev.map(student => {
         if (student.id !== id) return student;
@@ -626,6 +637,7 @@ useEffect(() => {
 
   const handleDeleteStudent = (id: string) => {
     if (window.confirm('هل أنت متأكد من حذف هذا الطالب؟')) {
+      userModifiedStudentsRef.current = true;
       intentionalDeleteRef.current.students = true;
       intentionalDeleteRef.current.records = true;
       setStudents(prev => prev.filter(s => s.id !== id));
@@ -634,6 +646,7 @@ useEffect(() => {
   };
 
   const handleDeleteSelectedStudents = (ids: string[]) => {
+    userModifiedStudentsRef.current = true;
     intentionalDeleteRef.current.students = true;
     intentionalDeleteRef.current.records = true;
     setStudents(prev => prev.filter(s => !ids.includes(s.id)));
