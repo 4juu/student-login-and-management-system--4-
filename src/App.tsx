@@ -906,72 +906,80 @@ if (loading || !tokenChecked) {
 
         {!selectedStageId && (
           <div className="max-w-6xl mx-auto">
+            {/* ✅ التعديل الأساسي: أضفنا py-3 للـ container ليتيح مساحة للـ badge فوق الأزرار */}
             <div className="overflow-x-auto scrollbar-none">
-              <div className="flex flex-nowrap md:flex-wrap gap-2 md:gap-3 pb-1 md:pb-0 justify-start md:justify-center mb-4 md:mb-6">
-              <button
-                onClick={() => setActiveTab('stage-selector')}
-                className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'stage-selector' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
-              >
-                🎯 اختيار المرحلة
-              </button>
-              {isMainAdmin && (
-                <>
-                  <button
-                    onClick={() => setActiveTab('colleges')}
-                    className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'colleges' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
-                  >
-                    🏛️ إدارة الكليات
-                  </button>
+              <div className="flex flex-nowrap md:flex-wrap gap-2 md:gap-3 pt-3 pb-3 md:pb-3 md:pt-3 justify-start md:justify-center mb-4 md:mb-6">
+                <button
+                  onClick={() => setActiveTab('stage-selector')}
+                  className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'stage-selector' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                >
+                  🎯 اختيار المرحلة
+                </button>
+                {isMainAdmin && (
+                  <>
+                    <button
+                      onClick={() => setActiveTab('colleges')}
+                      className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'colleges' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                    >
+                      🏛️ إدارة الكليات
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('teachers')}
+                      className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'teachers' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                    >
+                      👨‍🏫 التدريسيين
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('system-settings')}
+                      className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'system-settings' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                    >
+                      ⚙️ إعدادات النظام
+                    </button>
+                  </>
+                )}
+                {(isMainAdmin || isCollegeAdmin) && (
+                  <>
+                    <button
+                      onClick={() => setShowSendLink(true)}
+                      className="shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md hover:from-purple-700 hover:to-pink-700 transition"
+                    >
+                      📨 إرسال روابط تسجيل
+                    </button>
+
+                    {/* ✅ الإصلاح الرئيسي: wrapper div مع overflow-visible يحمل الـ badge خارج الزر */}
+                    <div className="shrink-0 relative" style={{ overflow: 'visible' }}>
+                      <button
+                        onClick={() => setShowPendingRegistrations(true)}
+                        className="px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:from-amber-600 hover:to-orange-600 transition"
+                      >
+                        📋 طلبات التسجيل
+                      </button>
+                      {pendingCount > 0 && (
+                        <span
+                          className="absolute bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center animate-pulse shadow-lg"
+                          style={{ top: '-10px', right: '-10px', zIndex: 9999 }}
+                        >
+                          {pendingCount > 99 ? '99+' : pendingCount}
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
+                {isCollegeAdmin && (
                   <button
                     onClick={() => setActiveTab('teachers')}
-                    className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'teachers' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                    className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'teachers' ? 'bg-amber-600 text-white' : 'bg-white text-gray-700'}`}
                   >
-                    👨‍🏫 التدريسيين
+                    👨‍🏫 صلاحيات التدريسيين
                   </button>
-                  <button
-                    onClick={() => setActiveTab('system-settings')}
-                    className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'system-settings' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
-                  >
-                    ⚙️ إعدادات النظام
-                  </button>
-                </>
-              )}
-              {(isMainAdmin || isCollegeAdmin) && (
-                <>
-                  <button
-                    onClick={() => setShowSendLink(true)}
-                    className="shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md hover:from-purple-700 hover:to-pink-700 transition"
-                  >
-                    📨 إرسال روابط تسجيل
-                  </button>
-                  <button
-                    onClick={() => setShowPendingRegistrations(true)}
-                    className="shrink-0 relative px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:from-amber-600 hover:to-orange-600 transition"
-                  >
-                    📋 طلبات التسجيل
-                    {pendingCount > 0 && (
-                      <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center animate-pulse shadow-lg z-index-50">
-                        {pendingCount > 99 ? '99+' : pendingCount}
-                      </span>
-                    )}
-                  </button>
-                </>
-              )}
-              {isCollegeAdmin && (
+                )}
                 <button
-                  onClick={() => setActiveTab('teachers')}
-                  className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'teachers' ? 'bg-amber-600 text-white' : 'bg-white text-gray-700'}`}
+                  onClick={() => setActiveTab('profile')}
+                  className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'profile' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
                 >
-                  👨‍🏫 صلاحيات التدريسيين
+                  👤 الملف الشخصي
                 </button>
-              )}
-              <button
-                onClick={() => setActiveTab('profile')}
-                className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'profile' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
-              >
-                👤 الملف الشخصي
-              </button>
-            </div>
+              </div>
             </div>
 
             {isMainAdmin && activeTab === 'stage-selector' && (
