@@ -203,8 +203,21 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       const requestId = `${student.id}_${Date.now()}`;
       const pendingRef = ref(database, `registrationSystem/pending/${link.adminUid}/${requestId}`);
       await set(pendingRef, {
-        student, idData, matchPercentage,
-        faceDescriptor: cleanFaceDescriptor, token, createdAt: Date.now(),
+        id: requestId,
+        adminUid: link.adminUid,
+        stageId: link.stageId,
+        studentId: student.id,
+        studentCode: student.code,
+        nameFromID: idData?.name || '',
+        nameInSystem: student.name,
+        matchPercentage,
+        qrCodeUrl: idData?.qrUrl || '',
+        qrCodeId: idData?.qrId || '',
+        faceDescriptor: cleanFaceDescriptor,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        hasExistingQr: !!student.qrCodeId,
+        hasExistingFace: !!student.faceDescriptor,
       });
       await set(ref(database, `registrationSystem/links/${token}/used`), true);
       goTo('success');
