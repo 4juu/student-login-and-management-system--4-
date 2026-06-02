@@ -1077,7 +1077,7 @@ function App() {
         <div className="mt-12 text-center text-gray-600">
           <p className="text-sm">نظام تسجيل الحضور الإلكتروني - {new Date().getFullYear()}</p>
           <div className="mt-2 flex justify-center">
-            <TextScramble text="BY PH. Mujtaba Haitham" />
+            <TextScramble text="BY - PH. Mujtaba Haitham" />
           </div>
         </div>
       </div>
