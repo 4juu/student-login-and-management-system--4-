@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref as dbRef, onValue, off } from 'firebase/database';
 import { Student, AttendanceRecord, AttendanceSession, College, Stage } from './types/student';
@@ -54,11 +54,112 @@ interface AllStagesData {
   };
 }
 
+// ✨ TextScramble Component
+const CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*";
+
+function TextScramble({ text }: { text: string }) {
+  const [displayText, setDisplayText] = useState(text);
+  const [isHovering, setIsHovering] = useState(false);
+  const [isScrambling, setIsScrambling] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const frameRef = useRef(0);
+
+  const scramble = useCallback(() => {
+    setIsScrambling(true);
+    frameRef.current = 0;
+    const duration = text.length * 3;
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(() => {
+      frameRef.current++;
+      const progress = frameRef.current / duration;
+      const revealedLength = Math.floor(progress * text.length);
+      const newText = text
+        .split("")
+        .map((char, i) => {
+          if (char === " ") return " ";
+          if (i < revealedLength) return text[i];
+          return CHARS[Math.floor(Math.random() * CHARS.length)];
+        })
+        .join("");
+      setDisplayText(newText);
+      if (frameRef.current >= duration) {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        setDisplayText(text);
+        setIsScrambling(false);
+      }
+    }, 30);
+  }, [text]);
+
+  const handleMouseEnter = () => {
+    setIsHovering(true);
+    scramble();
+  };
+
+  const handleMouseLeave = () => {
+    setIsHovering(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+
+  return (
+    <div
+      className="group relative inline-flex flex-col cursor-pointer select-none"
+      dir="ltr"
+      style={{ unicodeBidi: 'embed' }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <span className="relative font-mono tracking-widest" style={{ fontSize: '0.7rem' }}>
+        {displayText.split("").map((char, i) => (
+          <span
+            key={i}
+            className="inline-block transition-all duration-150"
+            style={{
+              transitionDelay: `${i * 10}ms`,
+              color: isScrambling && char !== text[i] ? '#60a5fa' : '#94a3b8',
+              transform: isScrambling && char !== text[i] ? 'scale(1.15)' : 'scale(1)',
+              fontWeight: isScrambling && char !== text[i] ? 700 : 500,
+            }}
+          >
+            {char}
+          </span>
+        ))}
+      </span>
+
+      {/* Animated underline */}
+      <span className="relative h-px w-full mt-1 overflow-hidden">
+        <span
+          className="absolute inset-0 transition-transform duration-500 ease-out origin-left"
+          style={{
+            background: '#94a3b8',
+            transform: isHovering ? 'scaleX(1)' : 'scaleX(0)',
+          }}
+        />
+        <span className="absolute inset-0" style={{ background: '#1e293b' }} />
+      </span>
+
+      {/* Subtle glow on hover */}
+      <span
+        className="absolute rounded-lg transition-opacity duration-300"
+        style={{
+          inset: '-12px',
+          background: 'rgba(96, 165, 250, 0.05)',
+          opacity: isHovering ? 1 : 0,
+          zIndex: -1,
+        }}
+      />
+    </div>
+  );
+}
+
 function App() {
   // 🆕 كشف توكن التسجيل الذاتي من URL - بطرق متعددة لدعم كل المتصفحات
   const [registerToken, setRegisterToken] = useState<string | null>(null);
   const [tokenChecked, setTokenChecked] = useState(false);
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -119,29 +220,21 @@ function App() {
     const detectToken = () => {
       try {
         let token: string | null = null;
-
         const params = new URLSearchParams(window.location.search);
         token = params.get('reg');
 
-        // Safari / in-app browser
         if (!token && window.location.hash) {
           const hashStr = window.location.hash.replace(/^#\/?/, '');
           const hashParams = new URLSearchParams(hashStr);
           token = hashParams.get('reg');
         }
 
-        // fallback
         if (!token) {
           const match = window.location.href.match(/[?&#]reg=([^&#]+)/);
-          if (match?.[1]) {
-            token = decodeURIComponent(match[1]);
-          }
+          if (match?.[1]) token = decodeURIComponent(match[1]);
         }
 
-        // session backup
-        if (!token) {
-          token = sessionStorage.getItem('pendingRegToken');
-        }
+        if (!token) token = sessionStorage.getItem('pendingRegToken');
 
         if (token) {
           sessionStorage.setItem('pendingRegToken', token);
@@ -158,15 +251,11 @@ function App() {
 
     detectToken();
     window.addEventListener('pageshow', detectToken);
-    return () => {
-      window.removeEventListener('pageshow', detectToken);
-    };
+    return () => window.removeEventListener('pageshow', detectToken);
   }, []);
 
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      flushAllPendingSaves();
-    };
+    const handleBeforeUnload = () => flushAllPendingSaves();
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
@@ -229,10 +318,7 @@ function App() {
     const requestsRef = dbRef(database, path);
 
     const handleSnapshot = (snapshot: any) => {
-      if (!snapshot.exists()) {
-        setPendingCount(0);
-        return;
-      }
+      if (!snapshot.exists()) { setPendingCount(0); return; }
       const data = snapshot.val();
       const count = Object.values(data).filter((r: any) => r.status === 'pending').length;
       setPendingCount(count);
@@ -242,34 +328,24 @@ function App() {
       console.warn('⚠️ فشل الاستماع لطلبات التسجيل:', error);
     });
 
-    return () => {
-      off(requestsRef);
-      unsubscribe();
-    };
+    return () => { off(requestsRef); unsubscribe(); };
   }, [currentUser]);
 
   const loadInitialData = async (user: User) => {
     setDataLoaded(false);
     try {
       const adminUid = user.role === 'admin' ? user.uid : (user.adminId || user.uid);
-
-      const [collegesData, stagesData] = await Promise.all([
-        loadColleges(adminUid),
-        loadStages(adminUid),
-      ]);
+      const [collegesData, stagesData] = await Promise.all([loadColleges(adminUid), loadStages(adminUid)]);
 
       setColleges(collegesData);
       setStages(stagesData);
       setActiveTab('stage-selector');
 
-      // 🤖 تحميل تهيئة التلغرام
       try {
         const { loadTelegramConfig } = await import('./firebase/dataService');
         const config = await loadTelegramConfig(adminUid);
         setTelegramConfig(config);
-      } catch (e) {
-        console.warn('فشل تحميل تهيئة التلغرام:', e);
-      }
+      } catch (e) { console.warn('فشل تحميل تهيئة التلغرام:', e); }
 
       if (user.role === 'admin') {
         try {
@@ -281,9 +357,7 @@ function App() {
             );
             setAllTeachers(teachersList);
           }
-        } catch (e) {
-          console.warn('فشل تحميل قائمة التدريسيين:', e);
-        }
+        } catch (e) { console.warn('فشل تحميل قائمة التدريسيين:', e); }
       }
     } catch (error) {
       console.error('Error loading initial data:', error);
@@ -294,23 +368,18 @@ function App() {
 
   const loadAllAdminData = async () => {
     if (!currentUser || currentUser.role !== 'admin') return;
-
     setUniversityDataLoading(true);
     try {
       const { ref: dbRefImport, get } = await import('firebase/database');
       const adminUid = currentUser.uid;
-
       const allUserIds = [adminUid, ...allTeachers.map(t => t.uid)];
       const stagesDataMap: AllStagesData = {};
-
       const yearPath = `academicYears/${currentAcademicYear}/userData/${adminUid}`;
 
       await Promise.all(
         stages.map(async (stage) => {
           try {
-            const studentsSnap = await get(
-              dbRefImport(database, `${yearPath}/stageData/${stage.id}/students`)
-            );
+            const studentsSnap = await get(dbRefImport(database, `${yearPath}/stageData/${stage.id}/students`));
             let stageStudents: Student[] = [];
             if (studentsSnap.exists()) {
               const data = studentsSnap.val();
@@ -323,37 +392,22 @@ function App() {
             await Promise.all(
               allUserIds.map(async (userId) => {
                 try {
-                  const recSnap = await get(
-                    dbRefImport(database, `${yearPath}/stageData/${stage.id}/teacherRecords/${userId}/records`)
-                  );
+                  const recSnap = await get(dbRefImport(database, `${yearPath}/stageData/${stage.id}/teacherRecords/${userId}/records`));
                   if (recSnap.exists()) {
                     const data = recSnap.val();
-                    const arr: AttendanceRecord[] = Array.isArray(data) ? data : Object.values(data);
-                    allRecords.push(...arr);
+                    allRecords.push(...(Array.isArray(data) ? data : Object.values(data)));
                   }
-
-                  const sesSnap = await get(
-                    dbRefImport(database, `${yearPath}/stageData/${stage.id}/teacherRecords/${userId}/sessions`)
-                  );
+                  const sesSnap = await get(dbRefImport(database, `${yearPath}/stageData/${stage.id}/teacherRecords/${userId}/sessions`));
                   if (sesSnap.exists()) {
                     const data = sesSnap.val();
-                    const arr: AttendanceSession[] = Array.isArray(data) ? data : Object.values(data);
-                    allSessions.push(...arr);
+                    allSessions.push(...(Array.isArray(data) ? data : Object.values(data)));
                   }
-                } catch (e) {
-                  console.warn(`فشل جلب بيانات المستخدم ${userId} للمرحلة ${stage.id}`);
-                }
+                } catch (e) { console.warn(`فشل جلب بيانات المستخدم ${userId}`); }
               })
             );
 
-            stagesDataMap[stage.id] = {
-              students: stageStudents,
-              records: allRecords,
-              sessions: allSessions,
-            };
-          } catch (e) {
-            console.warn(`فشل تحميل بيانات المرحلة ${stage.id}:`, e);
-          }
+            stagesDataMap[stage.id] = { students: stageStudents, records: allRecords, sessions: allSessions };
+          } catch (e) { console.warn(`فشل تحميل بيانات المرحلة ${stage.id}`); }
         })
       );
 
@@ -378,15 +432,12 @@ function App() {
       const teacherId = getTeacherId();
       const data = await loadStageData(adminUid, stageId, teacherId);
 
-      if (!userModifiedStudentsRef.current) {
-        setStudents(data.students);
-      }
+      if (!userModifiedStudentsRef.current) setStudents(data.students);
       setAttendanceRecords(data.records);
       setSessions(data.sessions);
       setActiveSessionId(data.activeSessionId);
       setActiveTab('sessions');
 
-      // 🤖 تحميل تهيئة التلغرام
       const { loadTelegramConfig } = await import('./firebase/dataService');
       const config = await loadTelegramConfig(adminUid);
       setTelegramConfig(config);
@@ -424,9 +475,7 @@ function App() {
     setActiveTab('stage-selector');
   };
 
-  const handleResetComplete = () => {
-    resetData();
-  };
+  const handleResetComplete = () => resetData();
 
   useEffect(() => {
     if (currentUser?.role === 'admin' && dataLoaded) {
@@ -449,14 +498,10 @@ function App() {
       const force = intentionalDeleteRef.current.students;
       saveStudents(getAdminUid(), selectedStageId, students, force);
       if (force) intentionalDeleteRef.current.students = false;
-
       if (currentUser.role === 'admin' && universityDataLoaded) {
         setAllStagesData(prev => ({
           ...prev,
-          [selectedStageId]: {
-            ...(prev[selectedStageId] || { records: [], sessions: [] }),
-            students,
-          },
+          [selectedStageId]: { ...(prev[selectedStageId] || { records: [], sessions: [] }), students },
         }));
       }
     }
@@ -465,22 +510,12 @@ function App() {
   useEffect(() => {
     if (currentUser && dataLoaded && selectedStageId) {
       const force = intentionalDeleteRef.current.records;
-      saveAttendanceRecords(
-        getAdminUid(),
-        selectedStageId,
-        getTeacherId(),
-        attendanceRecords,
-        force
-      );
+      saveAttendanceRecords(getAdminUid(), selectedStageId, getTeacherId(), attendanceRecords, force);
       if (force) intentionalDeleteRef.current.records = false;
-
       if (currentUser.role === 'admin' && universityDataLoaded) {
         setAllStagesData(prev => ({
           ...prev,
-          [selectedStageId]: {
-            ...(prev[selectedStageId] || { students: [], sessions: [] }),
-            records: attendanceRecords,
-          },
+          [selectedStageId]: { ...(prev[selectedStageId] || { students: [], sessions: [] }), records: attendanceRecords },
         }));
       }
     }
@@ -489,22 +524,12 @@ function App() {
   useEffect(() => {
     if (currentUser && dataLoaded && selectedStageId) {
       const force = intentionalDeleteRef.current.sessions;
-      saveSessions(
-        getAdminUid(),
-        selectedStageId,
-        getTeacherId(),
-        sessions,
-        force
-      );
+      saveSessions(getAdminUid(), selectedStageId, getTeacherId(), sessions, force);
       if (force) intentionalDeleteRef.current.sessions = false;
-
       if (currentUser.role === 'admin' && universityDataLoaded) {
         setAllStagesData(prev => ({
           ...prev,
-          [selectedStageId]: {
-            ...(prev[selectedStageId] || { students: [], records: [] }),
-            sessions,
-          },
+          [selectedStageId]: { ...(prev[selectedStageId] || { students: [], records: [] }), sessions },
         }));
       }
     }
@@ -512,19 +537,12 @@ function App() {
 
   useEffect(() => {
     if (currentUser && dataLoaded && selectedStageId) {
-      saveActiveSession(
-        getAdminUid(),
-        selectedStageId,
-        getTeacherId(),
-        activeSessionId
-      );
+      saveActiveSession(getAdminUid(), selectedStageId, getTeacherId(), activeSessionId);
     }
   }, [activeSessionId, currentUser, dataLoaded, selectedStageId]);
 
   useEffect(() => {
-    if (currentUser && dataLoaded) {
-      saveUserData(currentUser.uid, currentUser);
-    }
+    if (currentUser && dataLoaded) saveUserData(currentUser.uid, currentUser);
   }, [currentUser, dataLoaded]);
 
   const handleLogin = async (email: string, password: string) => {
@@ -546,18 +564,12 @@ function App() {
   const handleDeleteCollege = (collegeId: string) => {
     intentionalDeleteRef.current.colleges = true;
     intentionalDeleteRef.current.stages = true;
-
     setColleges(prev => prev.filter(c => c.id !== collegeId));
     const stagesToDelete = stages.filter(s => s.collegeId === collegeId);
     setStages(prev => prev.filter(s => s.collegeId !== collegeId));
-
     stagesToDelete.forEach(stage => {
       deleteStageData(currentUser!.uid, stage.id);
-      setAllStagesData(prev => {
-        const updated = { ...prev };
-        delete updated[stage.id];
-        return updated;
-      });
+      setAllStagesData(prev => { const updated = { ...prev }; delete updated[stage.id]; return updated; });
     });
   };
 
@@ -567,11 +579,7 @@ function App() {
     intentionalDeleteRef.current.stages = true;
     setStages(prev => prev.filter(s => s.id !== stageId));
     deleteStageData(currentUser!.uid, stageId);
-    setAllStagesData(prev => {
-      const updated = { ...prev };
-      delete updated[stageId];
-      return updated;
-    });
+    setAllStagesData(prev => { const updated = { ...prev }; delete updated[stageId]; return updated; });
   };
 
   const handleAddStudent = (student: Student) => {
@@ -592,9 +600,7 @@ function App() {
         const merged: any = { ...student, ...updates };
         Object.keys(updates).forEach(key => {
           const value = (updates as any)[key];
-          if (value === undefined || value === null || value === '') {
-            delete merged[key];
-          }
+          if (value === undefined || value === null || value === '') delete merged[key];
         });
         return merged as Student;
       })
@@ -637,7 +643,6 @@ function App() {
     }));
   };
 
-  // 🛑 Local cache — يمنع أي Read/Write مكرر من Firebase لنفس الطالب في نفس الجلسة
   const processedAttendanceRef = useRef(new Set<string>());
 
   const handleAttendanceRecord = (record: AttendanceRecord) => {
@@ -708,25 +713,17 @@ function App() {
         const absentCount = attendanceRecords.filter(
           r => r.studentId === record.studentId && r.status === 'absent'
         ).length + 1;
-
         sendAbsenceNotification(
-          telegramConfig,
-          selectedStageId,
-          record.studentName,
-          date,
-          absentCount,
-          record.subjectName || stageName,
-          record.teacherName
+          telegramConfig, selectedStageId, record.studentName, date,
+          absentCount, record.subjectName || stageName, record.teacherName
         ).catch(() => {});
       }
     }
   };
 
   const handleTelegramConfigChange = (config: TelegramConfig | null) => setTelegramConfig(config);
-
   const handleUpdateProfile = (updatedUser: User) => setCurrentUser(updatedUser);
 
-  // 🆕 معالجة خروج الطالب من صفحة التسجيل الذاتي
   const handleExitSelfRegister = () => {
     setRegisterToken(null);
     sessionStorage.removeItem('pendingRegToken');
@@ -736,7 +733,6 @@ function App() {
     window.history.replaceState({}, '', url.toString());
   };
 
-  // ✨ متابعة الفأرة لتأثير التوهج الأبيض المتدرج (دخان)
   useEffect(() => {
     let lastButton: HTMLElement | null = null;
     const handleMouseMove = (e: MouseEvent) => {
@@ -763,16 +759,8 @@ function App() {
   const canEditStudents = isAdmin || isCollegeAdmin;
   const isMainAdmin = isAdmin;
 
-  // ════════════════════════════════════════════════════════════
-  // 🆕 صفحة التسجيل الذاتي - تظهر بمعزل تام عن باقي النظام
-  // ════════════════════════════════════════════════════════════
   if (registerToken) {
-    return (
-      <SelfRegisterPage
-        token={registerToken}
-        onExit={handleExitSelfRegister}
-      />
-    );
+    return <SelfRegisterPage token={registerToken} onExit={handleExitSelfRegister} />;
   }
 
   if (loading || !tokenChecked) {
@@ -789,70 +777,6 @@ function App() {
 
   const selectedStage = stages.find(s => s.id === selectedStageId);
   const selectedCollege = colleges.find(c => c.id === selectedCollegeId);
-
-  // ✨ مكوّن التوقيع بتأثير Bubble
-const BubbleSignature = () => {
-    const text = "BY PH. Mujtaba Haitham";
-    const chars = text.split("");
-
-    return (
-      <p
-        className="text-xs mt-1 text-center"
-        dir="ltr"
-        style={{ unicodeBidi: 'embed', lineHeight: '2' }}
-        onMouseLeave={() => setHoveredIndex(null)}
-      >
-        {chars.map((char, idx) => {
-          const dist = hoveredIndex === null ? 99 : Math.abs(hoveredIndex - idx);
-
-          const color =
-            dist === 0 ? '#ffffff' :
-            dist === 1 ? '#bfdbfe' :
-            dist === 2 ? '#93c5fd' :
-            '#6b7280';
-
-          const weight =
-            dist === 0 ? '800' :
-            dist === 1 ? '700' :
-            dist === 2 ? '600' :
-            '500';
-
-          const translateY =
-            dist === 0 ? '-4px' :
-            dist === 1 ? '-2px' :
-            dist === 2 ? '-1px' :
-            '0px';
-
-          const scale =
-            dist === 0 ? 1.3 :
-            dist === 1 ? 1.12 :
-            dist === 2 ? 1.04 :
-            1;
-
-          return (
-            <span
-              key={idx}
-              onMouseEnter={() => setHoveredIndex(idx)}
-              style={{
-                display: 'inline-block',
-                color,
-                fontWeight: weight,
-                transform: `translateY(${translateY}) scale(${scale})`,
-                transition:
-                  dist <= 2
-                    ? 'all 0.2s cubic-bezier(0.34, 1.4, 0.64, 1)'
-                    : 'all 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)',
-                cursor: 'default',
-                willChange: 'transform, color, font-weight',
-              }}
-            >
-              {char === " " ? "\u00A0" : char}
-            </span>
-          );
-        })}
-      </p>
-    );
-  };
 
   return (
     <div className="min-h-screen bg-slate-900" dir="rtl">
@@ -895,7 +819,6 @@ const BubbleSignature = () => {
               <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-indigo-100 text-indigo-800 rounded-lg text-sm font-medium">
                 🎓 {currentAcademicYear.replace('_', ' - ')}
               </div>
-
               <button
                 onClick={handleLogout}
                 className="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md flex items-center gap-2"
@@ -968,7 +891,6 @@ const BubbleSignature = () => {
                     >
                       📨 إرسال روابط تسجيل
                     </button>
-
                     <div className="shrink-0 relative" style={{ overflow: 'visible' }}>
                       <button
                         onClick={() => setShowPendingRegistrations(true)}
@@ -1029,11 +951,7 @@ const BubbleSignature = () => {
                         : 'bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700'
                     } ${stages.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    {universityDataLoading
-                      ? '⏳ جاري التحميل...'
-                      : universityDataLoaded
-                      ? '🔄 تحديث البيانات'
-                      : '⚡ تحميل بيانات الجامعة'}
+                    {universityDataLoading ? '⏳ جاري التحميل...' : universityDataLoaded ? '🔄 تحديث البيانات' : '⚡ تحميل بيانات الجامعة'}
                   </button>
                 </div>
               </div>
@@ -1043,20 +961,14 @@ const BubbleSignature = () => {
               {activeTab === 'stage-selector' && (
                 <StageSelector user={currentUser} colleges={colleges} stages={stages} onSelect={handleSelectStage} />
               )}
-
               {activeTab === 'colleges' && isMainAdmin && (
                 <CollegeManager
-                  colleges={colleges}
-                  stages={stages}
-                  adminUid={currentUser.uid}
-                  onAddCollege={handleAddCollege}
-                  onDeleteCollege={handleDeleteCollege}
-                  onAddStage={handleAddStage}
-                  onDeleteStage={handleDeleteStage}
+                  colleges={colleges} stages={stages} adminUid={currentUser.uid}
+                  onAddCollege={handleAddCollege} onDeleteCollege={handleDeleteCollege}
+                  onAddStage={handleAddStage} onDeleteStage={handleDeleteStage}
                   onSelectStage={handleSelectStage}
                 />
               )}
-
               {activeTab === 'teachers' && (isMainAdmin || isCollegeAdmin) && (
                 <TeacherManagement
                   currentUser={currentUser}
@@ -1064,20 +976,13 @@ const BubbleSignature = () => {
                   stages={isCollegeAdmin ? stages.filter(s => s.collegeId === currentUser.collegeId) : stages}
                 />
               )}
-
               {activeTab === 'system-settings' && isMainAdmin && (
                 <Settings
-                  students={students}
-                  attendanceRecords={attendanceRecords}
-                  currentUser={currentUser}
-                  onDataRestored={() => loadInitialData(currentUser)}
-                  onResetComplete={handleResetComplete}
-                  stages={stages}
-                  colleges={colleges}
-                  onTelegramConfigChange={handleTelegramConfigChange}
+                  students={students} attendanceRecords={attendanceRecords} currentUser={currentUser}
+                  onDataRestored={() => loadInitialData(currentUser)} onResetComplete={handleResetComplete}
+                  stages={stages} colleges={colleges} onTelegramConfigChange={handleTelegramConfigChange}
                 />
               )}
-
               {activeTab === 'profile' && (
                 <ProfileSettings currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />
               )}
@@ -1117,18 +1022,12 @@ const BubbleSignature = () => {
             <div key={`stage-tab-${activeTab}`} className="animate-pageEnter">
               {activeTab === 'sessions' && (
                 <SessionManager
-                  sessions={sessions}
-                  activeSessionId={activeSessionId}
-                  onCreateSession={handleCreateSession}
-                  onSelectSession={handleSelectSession}
-                  onDeleteSession={handleDeleteSession}
-                  onRenameSession={handleRenameSession}
-                  students={students}
-                  records={attendanceRecords}
-                  onMarkAbsent={handleMarkAbsent}
+                  sessions={sessions} activeSessionId={activeSessionId}
+                  onCreateSession={handleCreateSession} onSelectSession={handleSelectSession}
+                  onDeleteSession={handleDeleteSession} onRenameSession={handleRenameSession}
+                  students={students} records={attendanceRecords} onMarkAbsent={handleMarkAbsent}
                 />
               )}
-
               {activeTab === 'login' && (
                 <div className="max-w-lg mx-auto">
                   {!activeSessionId ? (
@@ -1144,64 +1043,50 @@ const BubbleSignature = () => {
                     </div>
                   ) : (
                     <AttendanceLogin
-                      students={students}
-                      activeSessionId={activeSessionId}
+                      students={students} activeSessionId={activeSessionId}
                       activeSession={sessions.find(s => s.id === activeSessionId) || null}
-                      records={attendanceRecords}
-                      onAttendanceRecord={handleAttendanceRecord}
-                      onUpdateStudent={handleUpdateStudent}
-                      currentUser={currentUser}
+                      records={attendanceRecords} onAttendanceRecord={handleAttendanceRecord}
+                      onUpdateStudent={handleUpdateStudent} currentUser={currentUser}
                     />
                   )}
                 </div>
               )}
-
               {activeTab === 'manage' && (
                 canEditStudents ? (
                   <StudentManager
-                    students={students}
-                    onAddStudent={handleAddStudent}
-                    onAddMultipleStudents={handleAddMultipleStudents}
-                    onUpdateStudent={handleUpdateStudent}
-                    onDeleteStudent={handleDeleteStudent}
-                    onDeleteSelectedStudents={handleDeleteSelectedStudents}
-                    onSortByName={handleSortByName}
-                    onSortByGroup={handleSortByGroup}
+                    students={students} onAddStudent={handleAddStudent}
+                    onAddMultipleStudents={handleAddMultipleStudents} onUpdateStudent={handleUpdateStudent}
+                    onDeleteStudent={handleDeleteStudent} onDeleteSelectedStudents={handleDeleteSelectedStudents}
+                    onSortByName={handleSortByName} onSortByGroup={handleSortByGroup}
                   />
                 ) : (
                   <StudentsViewer students={students} />
                 )
               )}
-
               {activeTab === 'records' && (
                 <AttendanceRecords
-                  records={attendanceRecords}
-                  sessions={sessions}
-                  students={students}
-                  activeSessionId={activeSessionId}
-                  onClearRecords={handleClearRecords}
+                  records={attendanceRecords} sessions={sessions} students={students}
+                  activeSessionId={activeSessionId} onClearRecords={handleClearRecords}
                 />
               )}
             </div>
           </div>
         )}
 
+        {/* ✨ Footer */}
         <div className="mt-12 text-center text-gray-600">
           <p className="text-sm">نظام تسجيل الحضور الإلكتروني - {new Date().getFullYear()}</p>
-          <BubbleSignature />
+          <div className="mt-2 flex justify-center">
+            <TextScramble text="BY PH. Mujtaba Haitham" />
+          </div>
         </div>
       </div>
 
       {/* ✨ الشات بوت الذكي */}
       <SmartChatBot
-        user={currentUser}
-        colleges={colleges}
-        stages={stages}
-        currentCollegeId={selectedCollegeId}
-        currentStageId={selectedStageId}
-        students={students}
-        records={attendanceRecords}
-        sessions={sessions}
+        user={currentUser} colleges={colleges} stages={stages}
+        currentCollegeId={selectedCollegeId} currentStageId={selectedStageId}
+        students={students} records={attendanceRecords} sessions={sessions}
         activeSessionId={activeSessionId}
         allTeachers={isMainAdmin ? allTeachers : []}
         allStagesData={isMainAdmin && universityDataLoaded ? allStagesData : {}}
@@ -1210,7 +1095,6 @@ const BubbleSignature = () => {
         universityDataLoading={universityDataLoading}
       />
 
-      {/* 🆕 نافذة إرسال روابط التسجيل الذاتي */}
       {showSendLink && currentUser && (isMainAdmin || isCollegeAdmin) && (
         <SendRegisterLink
           adminUid={currentUser.uid}
@@ -1225,7 +1109,6 @@ const BubbleSignature = () => {
         />
       )}
 
-      {/* 🆕 نافذة مراجعة طلبات التسجيل الذاتي */}
       {showPendingRegistrations && currentUser && (isMainAdmin || isCollegeAdmin) && (
         <PendingRegistrations
           adminUid={currentUser.uid}
