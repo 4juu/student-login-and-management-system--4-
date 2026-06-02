@@ -58,6 +58,7 @@ function App() {
   // 🆕 كشف توكن التسجيل الذاتي من URL - بطرق متعددة لدعم كل المتصفحات
 const [registerToken, setRegisterToken] = useState<string | null>(null);
 const [tokenChecked, setTokenChecked] = useState(false);
+const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1166,21 +1167,22 @@ if (loading || !tokenChecked) {
 
         <div className="mt-12 text-center text-gray-600">
           <p className="text-sm">نظام تسجيل الحضور الإلكتروني - {new Date().getFullYear()}</p>
-<p className="text-xs mt-1 overflow-hidden">
-  <span
-    style={{
+<p className="text-xs mt-1 text-center" onMouseLeave={() => setHoveredIndex(null)}>
+  {"BY PH. Mujtaba Haitham".split("").map((char, idx) => {
+    const distance = hoveredIndex !== null ? Math.abs(hoveredIndex - idx) : null;
+    let style: React.CSSProperties = {
       display: 'inline-block',
-      WebkitTextFillColor: 'transparent',
-      background: 'linear-gradient(to right, #94a3b8 0%, rgba(255,255,255,0.85) 40%, rgba(255,255,255,0.85) 60%, #94a3b8 100%)',
-      WebkitBackgroundClip: 'text',
-      backgroundClip: 'text',
-      backgroundRepeat: 'no-repeat',
-      backgroundSize: '50% 200%',
-      animation: 'shimmerSlide 2.5s linear 1.5s infinite',
-    }}
-  >
-    BY PH. Mujtaba Haitham
-  </span>
+      transition: 'all 0.3s ease-in-out',
+      cursor: 'default',
+      color: distance === 0 ? '#fff' : distance === 1 ? '#93c5fd' : '#64748b',
+      fontWeight: distance === 0 ? 900 : distance === 1 ? 500 : 300,
+    };
+    return (
+      <span key={idx} style={style} onMouseEnter={() => setHoveredIndex(idx)}>
+        {char === " " ? "\u00A0" : char}
+      </span>
+    );
+  })}
 </p>        </div>
       </div>
 
