@@ -492,53 +492,7 @@ export const Settings: React.FC<SettingsProps> = ({
         </div>
       )}
 
-      {/* Data Summary */}
-      <div className="mb-8">
-        <h3 className="text-lg font-semibold mb-3 text-gray-700">📊 ملخص البيانات الحالية</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <div className="bg-blue-500 rounded-full p-3">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">عدد الطلاب</p>
-                <p className="text-2xl font-bold text-gray-800">{(stats?.totalStudents ?? students.length).toLocaleString()}</p>
-              </div>
-            </div>
-          </div>
 
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <div className="bg-purple-500 rounded-full p-3">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">سجلات الحضور</p>
-                <p className="text-2xl font-bold text-gray-800">{(stats?.totalRecords ?? attendanceRecords.length).toLocaleString()}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <div className="bg-emerald-500 rounded-full p-3">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">حجم البيانات</p>
-                <p className="text-xl font-bold text-gray-800">{stats ? formatSize(stats.totalSizeKB) : formatBytes(dataSize)}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Backup Section */}
       <div className="mb-8">
