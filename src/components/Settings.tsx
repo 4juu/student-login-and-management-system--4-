@@ -15,6 +15,8 @@ import {
   sendTestMessage,
   verifyBotToken,
 } from '../services/telegramService';
+import { database } from '../firebase/config';
+import { ref, set } from 'firebase/database';
 
 interface SettingsProps {
   students: Student[];
@@ -315,56 +317,37 @@ export const Settings: React.FC<SettingsProps> = ({
     }
   };
 
-  const handleDownloadLocalBackup = () => {
-    try {
-      const backupData = {
-        students,
-        attendanceRecords,
-        timestamp: new Date().toISOString(),
-        academicYear: currentAcademicYear,
-        version: '2.0',
-      };
-      
-      const dataStr = JSON.stringify(backupData, null, 2);
-      const blob = new Blob([dataStr], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      const now = new Date();
-      const fileName = `نسخة_محلية_${currentAcademicYear}_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}.json`;
-      
-      link.setAttribute('href', url);
-      link.setAttribute('download', fileName);
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      
-      alert('✅ تم تنزيل النسخة المحلية بنجاح!');
-    } catch (error) {
-      console.error('Error downloading backup:', error);
-      alert('❌ حدث خطأ أثناء إنشاء النسخة الاحتياطية');
-    }
-  };
-
   const handleRestoreBackup = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const content = e.target?.result as string;
       if (content) {
         try {
-          JSON.parse(content);
-          if (window.confirm('هل أنت متأكد من استعادة النسخة الاحتياطية؟ سيتم تحديث الصفحة...')) {
+          const backup = JSON.parse(content);
+          
+          if (backup.data && backup.academicYear && backup.adminUid) {
+            // ✅ تنسيق نسخة Firebase الكاملة
+            const confirmed = window.confirm(
+              `هل أنت متأكد من استعادة النسخة الاحتياطية (${backup.academicYear})؟\n` +
+              `سيتم استبدال جميع البيانات في Firebase بهذه النسخة.`
+            );
+            if (!confirmed) return;
+
+            await set(ref(database, `academicYears/${backup.academicYear}/userData/${backup.adminUid}`), backup.data);
             alert('✅ تم استعادة النسخة الاحتياطية بنجاح! سيتم تحديث الصفحة...');
             onDataRestored();
             window.location.reload();
+          } else if (backup.students || backup.attendanceRecords) {
+            alert('⚠️ هذا التنسيق قديم (نسخة محلية). استخدم نسخة Firebase الكاملة للاستعادة.');
+          } else {
+            alert('❌ تنسيق ملف غير معروف');
           }
         } catch {
           alert('❌ فشل استعادة النسخة الاحتياطية. تأكد من صحة الملف.');
@@ -557,15 +540,7 @@ export const Settings: React.FC<SettingsProps> = ({
             </button>
           )}
 
-          <button
-            onClick={handleDownloadLocalBackup}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-md transition duration-200 flex items-center justify-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            📄 نسخة محلية (المرحلة)
-          </button>
+
 
           <button
             onClick={handleRestoreBackup}
