@@ -793,51 +793,58 @@ function App() {
   // ✨ مكوّن التوقيع بتأثير Bubble
 const BubbleSignature = () => {
     const text = "BY PH. Mujtaba Haitham";
+    const chars = text.split("");
+
     return (
       <p
         className="text-xs mt-1 text-center"
         dir="ltr"
-        style={{ unicodeBidi: 'embed' }}
+        style={{ unicodeBidi: 'embed', lineHeight: '2' }}
         onMouseLeave={() => setHoveredIndex(null)}
       >
-        {text.split("").map((char, idx) => {
-          const len = text.length;
-          const distance = hoveredIndex !== null
-            ? Math.min(
-                Math.abs(hoveredIndex - idx),
-                Math.abs(hoveredIndex - idx + len),
-                Math.abs(hoveredIndex - idx - len)
-              )
-            : null;
-          const style: React.CSSProperties = {
-            display: 'inline-block',
-            transition: 'all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)',
-            cursor: 'default',
-            color:
-              distance === 0 ? '#ffffff' :
-              distance === 1 ? '#bfdbfe' :
-              distance === 2 ? '#94a3b8' :
-              '#4b5563',
-            fontWeight:
-              distance === 0 ? 800 :
-              distance === 1 ? 700 :
-              distance === 2 ? 500 :
-              400,
-            transform:
-              distance === 0 ? 'translateY(-4px) scale(1.35)' :
-              distance === 1 ? 'translateY(-2px) scale(1.15)' :
-              distance === 2 ? 'translateY(-1px) scale(1.05)' :
-              'translateY(0) scale(1)',
-            letterSpacing:
-              distance === 0 ? '0.05em' :
-              distance === 1 ? '0.02em' :
-              '0',
-          };
+        {chars.map((char, idx) => {
+          const dist = hoveredIndex === null ? 99 : Math.abs(hoveredIndex - idx);
+
+          const color =
+            dist === 0 ? '#ffffff' :
+            dist === 1 ? '#bfdbfe' :
+            dist === 2 ? '#93c5fd' :
+            '#6b7280';
+
+          const weight =
+            dist === 0 ? '800' :
+            dist === 1 ? '700' :
+            dist === 2 ? '600' :
+            '500';
+
+          const translateY =
+            dist === 0 ? '-4px' :
+            dist === 1 ? '-2px' :
+            dist === 2 ? '-1px' :
+            '0px';
+
+          const scale =
+            dist === 0 ? 1.3 :
+            dist === 1 ? 1.12 :
+            dist === 2 ? 1.04 :
+            1;
+
           return (
             <span
               key={idx}
-              style={style}
               onMouseEnter={() => setHoveredIndex(idx)}
+              style={{
+                display: 'inline-block',
+                color,
+                fontWeight: weight,
+                transform: `translateY(${translateY}) scale(${scale})`,
+                transition:
+                  dist <= 2
+                    ? 'all 0.2s cubic-bezier(0.34, 1.4, 0.64, 1)'
+                    : 'all 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)',
+                cursor: 'default',
+                willChange: 'transform, color, font-weight',
+              }}
             >
               {char === " " ? "\u00A0" : char}
             </span>
