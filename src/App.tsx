@@ -54,10 +54,114 @@ interface AllStagesData {
   };
 }
 
+// 🎨 Glassmorphism Button Component
+const GlassButton = ({
+  onClick,
+  children,
+  className = '',
+  disabled = false,
+  variant = 'default',
+  style = {},
+}: {
+  onClick?: () => void;
+  children: React.ReactNode;
+  className?: string;
+  disabled?: boolean;
+  variant?: 'default' | 'danger' | 'gradient-purple' | 'gradient-amber' | 'gradient-green' | 'active' | 'gradient-blue';
+  style?: React.CSSProperties;
+}) => {
+  const baseStyle: React.CSSProperties = {
+    background: 'linear-gradient(135deg, #212433, #2d3148)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: '14px',
+    boxShadow: '0 10px 30px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+    backdropFilter: 'blur(12px)',
+    position: 'relative' as const,
+    overflow: 'hidden',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.6 : 1,
+    transition: 'all 0.3s ease',
+    color: 'white',
+  };
+
+  const variantStyles: Record<string, React.CSSProperties> = {
+    default: {
+      background: 'linear-gradient(135deg, #212433, #2d3148)',
+    },
+    danger: {
+      background: 'linear-gradient(135deg, #7f1d1d, #991b1b)',
+      border: '1px solid rgba(239, 68, 68, 0.3)',
+    },
+    'gradient-purple': {
+      background: 'linear-gradient(135deg, #6d28d9, #db2777)',
+      border: '1px solid rgba(139, 92, 246, 0.3)',
+    },
+    'gradient-amber': {
+      background: 'linear-gradient(135deg, #d97706, #ea580c)',
+      border: '1px solid rgba(245, 158, 11, 0.3)',
+    },
+    'gradient-green': {
+      background: 'linear-gradient(135deg, #059669, #10b981)',
+      border: '1px solid rgba(16, 185, 129, 0.3)',
+    },
+    'gradient-blue': {
+      background: 'linear-gradient(135deg, #1d4ed8, #2563eb)',
+      border: '1px solid rgba(59, 130, 246, 0.3)',
+    },
+    active: {
+      background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)',
+      border: '1px solid rgba(96, 165, 250, 0.4)',
+      boxShadow: '0 0 20px rgba(59, 130, 246, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+    },
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`glass-btn ${className}`}
+      style={{
+        ...baseStyle,
+        ...variantStyles[variant],
+        ...style,
+      }}
+    >
+      <span style={{ position: 'relative', zIndex: 1 }}>{children}</span>
+      <style>{`
+        .glass-btn {
+          transition: all 0.3s ease !important;
+        }
+        .glass-btn:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+          border-color: rgba(255, 255, 255, 0.15) !important;
+        }
+        .glass-btn:active:not(:disabled) {
+          transform: translateY(0px);
+          box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+        }
+        .glass-btn::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+          transition: left 0.5s ease;
+        }
+        .glass-btn:hover::before {
+          left: 100%;
+        }
+      `}</style>
+    </button>
+  );
+};
+
 function App() {
   // 🆕 كشف توكن التسجيل الذاتي من URL - بطرق متعددة لدعم كل المتصفحات
-const [registerToken, setRegisterToken] = useState<string | null>(null);
-const [tokenChecked, setTokenChecked] = useState(false);
+  const [registerToken, setRegisterToken] = useState<string | null>(null);
+  const [tokenChecked, setTokenChecked] = useState(false);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -113,88 +217,50 @@ const [tokenChecked, setTokenChecked] = useState(false);
     return currentUser?.uid || '';
   };
 
-  // 🆕 فحص متأخر للتوكن (للموبايل والـ in-app browsers)
-useEffect(() => {
-  const detectToken = () => {
-    try {
-      let token: string | null = null;
+  // 🆕 فحص متأخر للتوكن
+  useEffect(() => {
+    const detectToken = () => {
+      try {
+        let token: string | null = null;
+        const params = new URLSearchParams(window.location.search);
+        token = params.get('reg');
 
-      const params = new URLSearchParams(
-        window.location.search
-      );
-
-      token = params.get('reg');
-
-      // Safari / in-app browser
-      if (!token && window.location.hash) {
-        const hashStr =
-          window.location.hash.replace(/^#\/?/, '');
-
-        const hashParams =
-          new URLSearchParams(hashStr);
-
-        token = hashParams.get('reg');
-      }
-
-      // fallback
-      if (!token) {
-        const match =
-          window.location.href.match(
-            /[?&#]reg=([^&#]+)/
-          );
-
-        if (match?.[1]) {
-          token = decodeURIComponent(
-            match[1]
-          );
+        if (!token && window.location.hash) {
+          const hashStr = window.location.hash.replace(/^#\/?/, '');
+          const hashParams = new URLSearchParams(hashStr);
+          token = hashParams.get('reg');
         }
+
+        if (!token) {
+          const match = window.location.href.match(/[?&#]reg=([^&#]+)/);
+          if (match?.[1]) {
+            token = decodeURIComponent(match[1]);
+          }
+        }
+
+        if (!token) {
+          token = sessionStorage.getItem('pendingRegToken');
+        }
+
+        if (token) {
+          sessionStorage.setItem('pendingRegToken', token);
+          console.log('✅ token:', token);
+          setRegisterToken(token);
+        }
+
+        setTokenChecked(true);
+      } catch (e) {
+        console.error(e);
+        setTokenChecked(true);
       }
+    };
 
-      // session backup
-      if (!token) {
-        token =
-          sessionStorage.getItem(
-            'pendingRegToken'
-          );
-      }
-
-      if (token) {
-        sessionStorage.setItem(
-          'pendingRegToken',
-          token
-        );
-
-        console.log(
-          '✅ token:',
-          token
-        );
-
-        setRegisterToken(token);
-      }
-
-      setTokenChecked(true);
-
-    } catch (e) {
-      console.error(e);
-      setTokenChecked(true);
-    }
-  };
-
-  detectToken();
-
-  window.addEventListener(
-    'pageshow',
-    detectToken
-  );
-
-  return () => {
-    window.removeEventListener(
-      'pageshow',
-      detectToken
-    );
-  };
-
-}, []);
+    detectToken();
+    window.addEventListener('pageshow', detectToken);
+    return () => {
+      window.removeEventListener('pageshow', detectToken);
+    };
+  }, []);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -295,7 +361,6 @@ useEffect(() => {
       setStages(stagesData);
       setActiveTab('stage-selector');
 
-      // 🤖 تحميل تهيئة التلغرام
       try {
         const { loadTelegramConfig } = await import('./firebase/dataService');
         const config = await loadTelegramConfig(adminUid);
@@ -419,7 +484,6 @@ useEffect(() => {
       setActiveSessionId(data.activeSessionId);
       setActiveTab('sessions');
 
-      // 🤖 تحميل تهيئة التلغرام
       const { loadTelegramConfig } = await import('./firebase/dataService');
       const config = await loadTelegramConfig(adminUid);
       setTelegramConfig(config);
@@ -432,7 +496,6 @@ useEffect(() => {
 
   const handleBackToStages = () => {
     flushAllPendingSaves();
-
     setSelectedCollegeId(null);
     setSelectedStageId(null);
     setStudents([]);
@@ -671,17 +734,14 @@ useEffect(() => {
     }));
   };
 
-  // 🛑 Local cache — يمنع أي Read/Write مكرر من Firebase لنفس الطالب في نفس الجلسة
   const processedAttendanceRef = useRef(new Set<string>());
 
   const handleAttendanceRecord = (record: AttendanceRecord) => {
-    // 🛑 تحقق من الـ Cache المحلي — إذا تمت معالجة هذا الطالب مسبقاً، ارفض فوراً (لا Firebase, لا State, لا Notification)
     const cacheKey = `${record.sessionId}_${record.studentId}`;
     if (processedAttendanceRef.current.has(cacheKey)) return;
     processedAttendanceRef.current.add(cacheKey);
-
-     setAttendanceRecords(prev => [...prev, record]);
-   };
+    setAttendanceRecords(prev => [...prev, record]);
+  };
 
   const handleClearRecords = () => {
     intentionalDeleteRef.current.records = true;
@@ -759,24 +819,17 @@ useEffect(() => {
   };
 
   const handleTelegramConfigChange = (config: TelegramConfig | null) => setTelegramConfig(config);
-
   const handleUpdateProfile = (updatedUser: User) => setCurrentUser(updatedUser);
 
-  // 🆕 معالجة خروج الطالب من صفحة التسجيل الذاتي
   const handleExitSelfRegister = () => {
     setRegisterToken(null);
-
-    // ✅ نظف sessionStorage
     sessionStorage.removeItem('pendingRegToken');
-
-    // ✅ نظف URL
     const url = new URL(window.location.href);
     url.searchParams.delete('reg');
-    url.hash = ''; // نظف الـ hash أيضاً
+    url.hash = '';
     window.history.replaceState({}, '', url.toString());
   };
 
-  // ✨ متابعة الفأرة لتأثير التوهج الأبيض المتدرج (دخان)
   useEffect(() => {
     let lastButton: HTMLElement | null = null;
     const handleMouseMove = (e: MouseEvent) => {
@@ -803,9 +856,6 @@ useEffect(() => {
   const canEditStudents = isAdmin || isCollegeAdmin;
   const isMainAdmin = isAdmin;
 
-  // ════════════════════════════════════════════════════════════
-  // 🆕 صفحة التسجيل الذاتي - تظهر بمعزل تام عن باقي النظام
-  // ════════════════════════════════════════════════════════════
   if (registerToken) {
     return (
       <SelfRegisterPage
@@ -815,7 +865,7 @@ useEffect(() => {
     );
   }
 
-if (loading || !tokenChecked) {
+  if (loading || !tokenChecked) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <MorphingSquare className="w-16 h-16 bg-blue-500" />
@@ -832,12 +882,56 @@ if (loading || !tokenChecked) {
 
   return (
     <div className="min-h-screen bg-slate-900" dir="rtl">
+      {/* Global Glass Button Styles */}
+      <style>{`
+        @keyframes shimmer {
+          0% { left: -100%; }
+          100% { left: 100%; }
+        }
+        
+        * button:not(.no-glass) {
+          position: relative;
+          overflow: hidden;
+          transition: all 0.3s ease !important;
+        }
+
+        * button:not(.no-glass):not(:disabled)::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 60%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+          transition: none;
+          pointer-events: none;
+        }
+
+        * button:not(.no-glass):hover:not(:disabled)::after {
+          animation: shimmer 0.6s ease forwards;
+        }
+
+        * button:not(.no-glass):hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 8px 25px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08) !important;
+        }
+
+        * button:not(.no-glass):active:not(:disabled) {
+          transform: translateY(0) !important;
+        }
+      `}</style>
+
       <div className="container mx-auto px-3 md:px-4 py-3 md:py-6">
         <div className="mb-8">
           <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
             <div className="flex items-center gap-3">
               <div
-                className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center overflow-hidden border-2 border-white shadow-lg cursor-pointer"
+                className="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden cursor-pointer"
+                style={{
+                  background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)',
+                  border: '2px solid rgba(255,255,255,0.15)',
+                  boxShadow: '0 4px 15px rgba(59,130,246,0.4)',
+                }}
                 onClick={() => setActiveTab('profile')}
               >
                 {currentUser.photoURL ? (
@@ -847,20 +941,35 @@ if (loading || !tokenChecked) {
                 )}
               </div>
               <div className="text-right">
-                <p className="text-sm text-gray-600">مرحباً،</p>
-                <p className="font-bold text-gray-800">{currentUser.displayName}</p>
+                <p className="text-sm text-slate-400">مرحباً،</p>
+                <p className="font-bold text-white">{currentUser.displayName}</p>
                 {isMainAdmin && (
-                  <span className="inline-block mt-1 px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">
+                  <span className="inline-block mt-1 px-2 py-1 text-xs font-medium rounded-full"
+                    style={{
+                      background: 'linear-gradient(135deg, #581c87, #7c3aed)',
+                      color: '#e9d5ff',
+                      border: '1px solid rgba(139,92,246,0.3)',
+                    }}>
                     👑 أدمن رئيسي
                   </span>
                 )}
                 {isCollegeAdmin && (
-                  <span className="inline-block mt-1 px-2 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-full">
+                  <span className="inline-block mt-1 px-2 py-1 text-xs font-medium rounded-full"
+                    style={{
+                      background: 'linear-gradient(135deg, #78350f, #d97706)',
+                      color: '#fef3c7',
+                      border: '1px solid rgba(245,158,11,0.3)',
+                    }}>
                     🏛️ أدمن كلية
                   </span>
                 )}
                 {currentUser?.role === 'teacher' && (
-                  <span className="inline-block mt-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+                  <span className="inline-block mt-1 px-2 py-1 text-xs font-medium rounded-full"
+                    style={{
+                      background: 'linear-gradient(135deg, #1e3a8a, #2563eb)',
+                      color: '#bfdbfe',
+                      border: '1px solid rgba(59,130,246,0.3)',
+                    }}>
                     👨‍🏫 تدريسي
                   </span>
                 )}
@@ -868,92 +977,120 @@ if (loading || !tokenChecked) {
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-indigo-100 text-indigo-800 rounded-lg text-sm font-medium">
+              <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium"
+                style={{
+                  background: 'linear-gradient(135deg, #1e1b4b, #312e81)',
+                  border: '1px solid rgba(99,102,241,0.3)',
+                  color: '#a5b4fc',
+                  boxShadow: '0 4px 15px rgba(99,102,241,0.2)',
+                }}>
                 🎓 {currentAcademicYear.replace('_', ' - ')}
               </div>
 
-              <button
+              <GlassButton
                 onClick={handleLogout}
-                className="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md flex items-center gap-2"
+                variant="danger"
+                className="font-medium py-2 px-4"
               >
                 تسجيل الخروج
-              </button>
+              </GlassButton>
             </div>
           </div>
 
-          <h1 className="text-xl sm:text-3xl md:text-4xl font-bold text-gray-800 mb-1 sm:mb-2 text-center">
+          <h1 className="text-xl sm:text-3xl md:text-4xl font-bold text-white mb-1 sm:mb-2 text-center"
+            style={{ textShadow: '0 2px 10px rgba(59,130,246,0.3)' }}>
             نظام إدارة الحضور
           </h1>
 
           <div className="md:hidden text-center mb-2">
-            <span className="inline-block px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-xs font-medium">
+            <span className="inline-block px-3 py-1 rounded-full text-xs font-medium"
+              style={{
+                background: 'linear-gradient(135deg, #1e1b4b, #312e81)',
+                border: '1px solid rgba(99,102,241,0.3)',
+                color: '#a5b4fc',
+              }}>
               🎓 السنة الأكاديمية: {currentAcademicYear.replace('_', ' - ')}
             </span>
           </div>
 
           {selectedStage && (
-            <div className="bg-white rounded-lg shadow-sm p-3 flex items-center gap-2 text-sm flex-wrap mt-4">
-              <button onClick={handleBackToStages} className="text-blue-600 hover:underline font-medium">
+            <div className="rounded-xl p-3 flex items-center gap-2 text-sm flex-wrap mt-4"
+              style={{
+                background: 'linear-gradient(135deg, #212433, #2d3148)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+              }}>
+              <button
+                onClick={handleBackToStages}
+                className="font-medium transition-colors"
+                style={{ color: '#60a5fa' }}
+              >
                 🏠 جميع المراحل
               </button>
-              <span className="text-gray-400">›</span>
-              <span className="font-bold text-gray-700">{selectedCollege?.icon} {selectedCollege?.name}</span>
-              <span className="text-gray-400">›</span>
-              <span className="font-bold text-blue-700">📖 {selectedStage.name}</span>
+              <span style={{ color: 'rgba(255,255,255,0.3)' }}>›</span>
+              <span className="font-bold" style={{ color: 'rgba(255,255,255,0.8)' }}>{selectedCollege?.icon} {selectedCollege?.name}</span>
+              <span style={{ color: 'rgba(255,255,255,0.3)' }}>›</span>
+              <span className="font-bold" style={{ color: '#93c5fd' }}>📖 {selectedStage.name}</span>
             </div>
           )}
         </div>
 
         {!selectedStageId && (
           <div className="max-w-6xl mx-auto">
-            {/* ✅ التعديل الأساسي: أضفنا py-3 للـ container ليتيح مساحة للـ badge فوق الأزرار */}
             <div className="overflow-x-auto scrollbar-none">
               <div className="flex flex-nowrap md:flex-wrap gap-2 md:gap-3 pt-3 pb-3 md:pb-3 md:pt-3 justify-start md:justify-center mb-4 md:mb-6">
-                <button
+                <GlassButton
                   onClick={() => setActiveTab('stage-selector')}
-                  className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'stage-selector' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                  variant={activeTab === 'stage-selector' ? 'active' : 'default'}
+                  className="shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 font-medium text-sm sm:text-base"
                 >
                   🎯 اختيار المرحلة
-                </button>
+                </GlassButton>
+
                 {isMainAdmin && (
                   <>
-                    <button
+                    <GlassButton
                       onClick={() => setActiveTab('colleges')}
-                      className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'colleges' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                      variant={activeTab === 'colleges' ? 'active' : 'default'}
+                      className="shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 font-medium text-sm sm:text-base"
                     >
                       🏛️ إدارة الكليات
-                    </button>
-                    <button
+                    </GlassButton>
+                    <GlassButton
                       onClick={() => setActiveTab('teachers')}
-                      className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'teachers' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                      variant={activeTab === 'teachers' ? 'active' : 'default'}
+                      className="shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 font-medium text-sm sm:text-base"
                     >
                       👨‍🏫 التدريسيين
-                    </button>
-                    <button
+                    </GlassButton>
+                    <GlassButton
                       onClick={() => setActiveTab('system-settings')}
-                      className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'system-settings' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                      variant={activeTab === 'system-settings' ? 'active' : 'default'}
+                      className="shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 font-medium text-sm sm:text-base"
                     >
                       ⚙️ إعدادات النظام
-                    </button>
+                    </GlassButton>
                   </>
                 )}
+
                 {(isMainAdmin || isCollegeAdmin) && (
                   <>
-                    <button
+                    <GlassButton
                       onClick={() => setShowSendLink(true)}
-                      className="shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md hover:from-purple-700 hover:to-pink-700 transition"
+                      variant="gradient-purple"
+                      className="shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 font-medium text-sm sm:text-base"
                     >
                       📨 إرسال روابط تسجيل
-                    </button>
+                    </GlassButton>
 
-                    {/* ✅ الإصلاح الرئيسي: wrapper div مع overflow-visible يحمل الـ badge خارج الزر */}
                     <div className="shrink-0 relative" style={{ overflow: 'visible' }}>
-                      <button
+                      <GlassButton
                         onClick={() => setShowPendingRegistrations(true)}
-                        className="px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:from-amber-600 hover:to-orange-600 transition"
+                        variant="gradient-amber"
+                        className="px-3 sm:px-5 py-1.5 sm:py-2 font-medium text-sm sm:text-base"
                       >
                         📋 طلبات التسجيل
-                      </button>
+                      </GlassButton>
                       {pendingCount > 0 && (
                         <span
                           className="absolute bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center animate-pulse shadow-lg"
@@ -965,54 +1102,58 @@ if (loading || !tokenChecked) {
                     </div>
                   </>
                 )}
+
                 {isCollegeAdmin && (
-                  <button
+                  <GlassButton
                     onClick={() => setActiveTab('teachers')}
-                    className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'teachers' ? 'bg-amber-600 text-white' : 'bg-white text-gray-700'}`}
+                    variant={activeTab === 'teachers' ? 'active' : 'default'}
+                    className="shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 font-medium text-sm sm:text-base"
                   >
                     👨‍🏫 صلاحيات التدريسيين
-                  </button>
+                  </GlassButton>
                 )}
-                <button
+
+                <GlassButton
                   onClick={() => setActiveTab('profile')}
-                  className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'profile' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                  variant={activeTab === 'profile' ? 'active' : 'default'}
+                  className="shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 font-medium text-sm sm:text-base"
                 >
                   👤 الملف الشخصي
-                </button>
+                </GlassButton>
               </div>
             </div>
 
             {isMainAdmin && activeTab === 'stage-selector' && (
-              <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl">
+              <div className="mb-6 p-4 rounded-xl"
+                style={{
+                  background: 'linear-gradient(135deg, #1a0533, #2d1b4e)',
+                  border: '2px solid rgba(139,92,246,0.3)',
+                  boxShadow: '0 8px 30px rgba(139,92,246,0.15)',
+                }}>
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-center gap-3">
                     <span className="text-3xl">📊</span>
                     <div>
-                      <h3 className="font-bold text-purple-900">بيانات الجامعة الشاملة</h3>
-                      <p className="text-xs text-purple-700">
+                      <h3 className="font-bold" style={{ color: '#e9d5ff' }}>بيانات الجامعة الشاملة</h3>
+                      <p className="text-xs" style={{ color: '#c4b5fd' }}>
                         {universityDataLoaded
                           ? `✅ تم تحميل بيانات ${Object.keys(allStagesData).length} مرحلة`
                           : 'حمّل بيانات كل الكليات والمراحل للتحليلات والتقارير الشاملة'}
                       </p>
                     </div>
                   </div>
-                  <button
+                  <GlassButton
                     onClick={loadAllAdminData}
                     disabled={universityDataLoading || stages.length === 0}
-                    className={`px-5 py-2.5 rounded-lg font-bold text-white transition shadow-md ${
-                      universityDataLoading
-                        ? 'bg-gray-400 cursor-wait'
-                        : universityDataLoaded
-                        ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700'
-                        : 'bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700'
-                    } ${stages.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    variant={universityDataLoaded ? 'gradient-green' : 'gradient-purple'}
+                    className="px-5 py-2.5 font-bold"
                   >
                     {universityDataLoading
                       ? '⏳ جاري التحميل...'
                       : universityDataLoaded
                       ? '🔄 تحديث البيانات'
                       : '⚡ تحميل بيانات الجامعة'}
-                  </button>
+                  </GlassButton>
                 </div>
               </div>
             )}
@@ -1036,10 +1177,10 @@ if (loading || !tokenChecked) {
               )}
 
               {activeTab === 'teachers' && (isMainAdmin || isCollegeAdmin) && (
-                <TeacherManagement 
-                  currentUser={currentUser} 
-                  colleges={isCollegeAdmin ? colleges.filter(c => c.id === currentUser.collegeId) : colleges} 
-                  stages={isCollegeAdmin ? stages.filter(s => s.collegeId === currentUser.collegeId) : stages} 
+                <TeacherManagement
+                  currentUser={currentUser}
+                  colleges={isCollegeAdmin ? colleges.filter(c => c.id === currentUser.collegeId) : colleges}
+                  stages={isCollegeAdmin ? stages.filter(s => s.collegeId === currentUser.collegeId) : stages}
                 />
               )}
 
@@ -1066,30 +1207,34 @@ if (loading || !tokenChecked) {
         {selectedStageId && (
           <div className="max-w-6xl mx-auto">
             <div className="flex overflow-x-auto flex-nowrap md:flex-wrap gap-2 md:gap-3 pb-1 md:pb-0 justify-start md:justify-center mb-4 md:mb-6 scrollbar-none">
-              <button
+              <GlassButton
                 onClick={() => setActiveTab('sessions')}
-                className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'sessions' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                variant={activeTab === 'sessions' ? 'active' : 'default'}
+                className="shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 font-medium text-sm sm:text-base"
               >
                 📋 السجلات ({sessions.length})
-              </button>
-              <button
+              </GlassButton>
+              <GlassButton
                 onClick={() => setActiveTab('login')}
-                className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'login' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                variant={activeTab === 'login' ? 'active' : 'default'}
+                className="shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 font-medium text-sm sm:text-base"
               >
                 📝 تسجيل الحضور
-              </button>
-              <button
+              </GlassButton>
+              <GlassButton
                 onClick={() => setActiveTab('manage')}
-                className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'manage' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                variant={activeTab === 'manage' ? 'active' : 'default'}
+                className="shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 font-medium text-sm sm:text-base"
               >
                 👥 {canEditStudents ? `إدارة الطلاب (${students.length})` : `الطلاب (${students.length})`}
-              </button>
-              <button
+              </GlassButton>
+              <GlassButton
                 onClick={() => setActiveTab('records')}
-                className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'records' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                variant={activeTab === 'records' ? 'active' : 'default'}
+                className="shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 font-medium text-sm sm:text-base"
               >
                 📊 سجل الحضور ({attendanceRecords.length})
-              </button>
+              </GlassButton>
             </div>
 
             <div key={`stage-tab-${activeTab}`} className="animate-pageEnter">
@@ -1099,26 +1244,40 @@ if (loading || !tokenChecked) {
                   activeSessionId={activeSessionId}
                   onCreateSession={handleCreateSession}
                   onSelectSession={handleSelectSession}
-                onDeleteSession={handleDeleteSession}
-                onRenameSession={handleRenameSession}
-                students={students}
-                records={attendanceRecords}
-                onMarkAbsent={handleMarkAbsent}
+                  onDeleteSession={handleDeleteSession}
+                  onRenameSession={handleRenameSession}
+                  students={students}
+                  records={attendanceRecords}
+                  onMarkAbsent={handleMarkAbsent}
                 />
               )}
 
               {activeTab === 'login' && (
                 <div className="max-w-lg mx-auto">
                   {!activeSessionId ? (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-                      <p className="text-yellow-800 font-medium mb-4">لا يوجد سجل نشط!</p>
-                      <button onClick={() => setActiveTab('sessions')} className="bg-yellow-600 text-white py-2 px-6 rounded-md">
+                    <div className="rounded-xl p-6 text-center"
+                      style={{
+                        background: 'linear-gradient(135deg, #212433, #2d3148)',
+                        border: '1px solid rgba(234,179,8,0.3)',
+                        boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+                      }}>
+                      <p className="font-medium mb-4" style={{ color: '#fde047' }}>لا يوجد سجل نشط!</p>
+                      <GlassButton
+                        onClick={() => setActiveTab('sessions')}
+                        variant="gradient-amber"
+                        className="py-2 px-6"
+                      >
                         انتقل لإدارة السجلات
-                      </button>
+                      </GlassButton>
                     </div>
                   ) : students.length === 0 ? (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-                      <p className="text-yellow-800 font-medium">لا يوجد طلاب في هذه المرحلة</p>
+                    <div className="rounded-xl p-6 text-center"
+                      style={{
+                        background: 'linear-gradient(135deg, #212433, #2d3148)',
+                        border: '1px solid rgba(234,179,8,0.3)',
+                        boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+                      }}>
+                      <p className="font-medium" style={{ color: '#fde047' }}>لا يوجد طلاب في هذه المرحلة</p>
                     </div>
                   ) : (
                     <AttendanceLogin
@@ -1164,13 +1323,12 @@ if (loading || !tokenChecked) {
           </div>
         )}
 
-        <div className="mt-12 text-center text-gray-600">
+        <div className="mt-12 text-center" style={{ color: 'rgba(148,163,184,0.6)' }}>
           <p className="text-sm">نظام تسجيل الحضور الإلكتروني - {new Date().getFullYear()}</p>
           <p className="text-xs mt-1">🎓 السنة الأكاديمية: {currentAcademicYear.replace('_', ' - ')}</p>
         </div>
       </div>
 
-      {/* ✨ الشات بوت الذكي */}
       <SmartChatBot
         user={currentUser}
         colleges={colleges}
@@ -1188,7 +1346,6 @@ if (loading || !tokenChecked) {
         universityDataLoading={universityDataLoading}
       />
 
-      {/* 🆕 نافذة إرسال روابط التسجيل الذاتي */}
       {showSendLink && currentUser && (isMainAdmin || isCollegeAdmin) && (
         <SendRegisterLink
           adminUid={currentUser.uid}
@@ -1203,7 +1360,6 @@ if (loading || !tokenChecked) {
         />
       )}
 
-      {/* 🆕 نافذة مراجعة طلبات التسجيل الذاتي */}
       {showPendingRegistrations && currentUser && (isMainAdmin || isCollegeAdmin) && (
         <PendingRegistrations
           adminUid={currentUser.uid}
