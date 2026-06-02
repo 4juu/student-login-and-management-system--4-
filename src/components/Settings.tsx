@@ -10,6 +10,7 @@ import {
   getCurrentAcademicYear,
   saveTelegramConfig,
   loadTelegramConfig,
+  flushAllPendingSaves,
 } from '../firebase/dataService';
 import {
   sendTestMessage,
@@ -340,9 +341,26 @@ export const Settings: React.FC<SettingsProps> = ({
             );
             if (!confirmed) return;
 
+            // 🔄 تصريف أي عمليات حفظ معلقة قد تكتب بيانات قديمة بعد الاستعادة
+            await flushAllPendingSaves();
+
+            // 🗑️ مسح الكاش المحلي لمنع إرجاع بيانات قديمة
+            const uid = backup.adminUid;
+            Object.keys(localStorage).forEach(key => {
+              if (
+                key.startsWith(`colleges_${uid}`) ||
+                key.startsWith(`stages_${uid}`) ||
+                key.startsWith(`students_${uid}_`) ||
+                key.startsWith(`records_${uid}_`) ||
+                key.startsWith(`sessions_${uid}_`) ||
+                key.startsWith(`activeSession_${uid}_`)
+              ) {
+                localStorage.removeItem(key);
+              }
+            });
+
             await set(ref(database, `academicYears/${backup.academicYear}/userData/${backup.adminUid}`), backup.data);
             alert('✅ تم استعادة النسخة الاحتياطية بنجاح! سيتم تحديث الصفحة...');
-            onDataRestored();
             window.location.reload();
           } else if (backup.students || backup.attendanceRecords) {
             alert('⚠️ هذا التنسيق قديم (نسخة محلية). استخدم نسخة Firebase الكاملة للاستعادة.');
