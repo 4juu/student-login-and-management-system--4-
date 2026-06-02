@@ -1166,8 +1166,22 @@ if (loading || !tokenChecked) {
 
         <div className="mt-12 text-center text-gray-600">
           <p className="text-sm">نظام تسجيل الحضور الإلكتروني - {new Date().getFullYear()}</p>
-          <p className="text-xs mt-1">🎓 السنة الأكاديمية: {currentAcademicYear.replace('_', ' - ')}</p>
-        </div>
+<p className="text-xs mt-1 overflow-hidden">
+  <span
+    style={{
+      display: 'inline-block',
+      WebkitTextFillColor: 'transparent',
+      background: 'linear-gradient(to right, #94a3b8 0%, rgba(255,255,255,0.85) 40%, rgba(255,255,255,0.85) 60%, #94a3b8 100%)',
+      WebkitBackgroundClip: 'text',
+      backgroundClip: 'text',
+      backgroundRepeat: 'no-repeat',
+      backgroundSize: '50% 200%',
+      animation: 'shimmerSlide 2.5s linear 1.5s infinite',
+    }}
+  >
+    BY PH. Mujtaba Haitham
+  </span>
+</p>        </div>
       </div>
 
       {/* ✨ الشات بوت الذكي */}

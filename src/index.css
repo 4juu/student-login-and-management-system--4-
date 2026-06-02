@@ -1115,6 +1115,11 @@ button:not(:disabled):active {
   100% { background-position: 200% 0; }
 }
 
+@keyframes shimmerSlide {
+  0%   { background-position-x: 250%; }
+  100% { background-position-x: -100%; }
+}
+
 .dark .animate-skeleton {
   background: linear-gradient(90deg, rgb(51 65 85) 25%, rgb(71 85 105) 50%, rgb(51 65 85) 75%);
   background-size: 200% 100%;
