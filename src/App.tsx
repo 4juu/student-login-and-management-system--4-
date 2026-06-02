@@ -791,7 +791,7 @@ function App() {
   const selectedCollege = colleges.find(c => c.id === selectedCollegeId);
 
   // ✨ مكوّن التوقيع بتأثير Bubble
-  const BubbleSignature = () => {
+const BubbleSignature = () => {
     const text = "BY PH. Mujtaba Haitham";
     return (
       <p
@@ -801,25 +801,37 @@ function App() {
         onMouseLeave={() => setHoveredIndex(null)}
       >
         {text.split("").map((char, idx) => {
-          const distance = hoveredIndex !== null ? Math.abs(hoveredIndex - idx) : null;
+          const len = text.length;
+          const distance = hoveredIndex !== null
+            ? Math.min(
+                Math.abs(hoveredIndex - idx),
+                Math.abs(hoveredIndex - idx + len),
+                Math.abs(hoveredIndex - idx - len)
+              )
+            : null;
           const style: React.CSSProperties = {
             display: 'inline-block',
-            transition: 'all 0.3s ease-in-out',
+            transition: 'all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)',
             cursor: 'default',
             color:
               distance === 0 ? '#ffffff' :
-              distance === 1 ? '#93c5fd' :
+              distance === 1 ? '#bfdbfe' :
               distance === 2 ? '#94a3b8' :
               '#4b5563',
             fontWeight:
-              distance === 0 ? 900 :
-              distance === 1 ? 600 :
-              distance === 2 ? 400 :
-              300,
+              distance === 0 ? 800 :
+              distance === 1 ? 700 :
+              distance === 2 ? 500 :
+              400,
             transform:
-              distance === 0 ? 'translateY(-3px) scale(1.3)' :
-              distance === 1 ? 'translateY(-1px) scale(1.1)' :
+              distance === 0 ? 'translateY(-4px) scale(1.35)' :
+              distance === 1 ? 'translateY(-2px) scale(1.15)' :
+              distance === 2 ? 'translateY(-1px) scale(1.05)' :
               'translateY(0) scale(1)',
+            letterSpacing:
+              distance === 0 ? '0.05em' :
+              distance === 1 ? '0.02em' :
+              '0',
           };
           return (
             <span
