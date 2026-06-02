@@ -56,9 +56,9 @@ interface AllStagesData {
 
 function App() {
   // 🆕 كشف توكن التسجيل الذاتي من URL - بطرق متعددة لدعم كل المتصفحات
-const [registerToken, setRegisterToken] = useState<string | null>(null);
-const [tokenChecked, setTokenChecked] = useState(false);
-const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [registerToken, setRegisterToken] = useState<string | null>(null);
+  const [tokenChecked, setTokenChecked] = useState(false);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -115,87 +115,53 @@ const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   };
 
   // 🆕 فحص متأخر للتوكن (للموبايل والـ in-app browsers)
-useEffect(() => {
-  const detectToken = () => {
-    try {
-      let token: string | null = null;
+  useEffect(() => {
+    const detectToken = () => {
+      try {
+        let token: string | null = null;
 
-      const params = new URLSearchParams(
-        window.location.search
-      );
+        const params = new URLSearchParams(window.location.search);
+        token = params.get('reg');
 
-      token = params.get('reg');
-
-      // Safari / in-app browser
-      if (!token && window.location.hash) {
-        const hashStr =
-          window.location.hash.replace(/^#\/?/, '');
-
-        const hashParams =
-          new URLSearchParams(hashStr);
-
-        token = hashParams.get('reg');
-      }
-
-      // fallback
-      if (!token) {
-        const match =
-          window.location.href.match(
-            /[?&#]reg=([^&#]+)/
-          );
-
-        if (match?.[1]) {
-          token = decodeURIComponent(
-            match[1]
-          );
+        // Safari / in-app browser
+        if (!token && window.location.hash) {
+          const hashStr = window.location.hash.replace(/^#\/?/, '');
+          const hashParams = new URLSearchParams(hashStr);
+          token = hashParams.get('reg');
         }
+
+        // fallback
+        if (!token) {
+          const match = window.location.href.match(/[?&#]reg=([^&#]+)/);
+          if (match?.[1]) {
+            token = decodeURIComponent(match[1]);
+          }
+        }
+
+        // session backup
+        if (!token) {
+          token = sessionStorage.getItem('pendingRegToken');
+        }
+
+        if (token) {
+          sessionStorage.setItem('pendingRegToken', token);
+          console.log('✅ token:', token);
+          setRegisterToken(token);
+        }
+
+        setTokenChecked(true);
+      } catch (e) {
+        console.error(e);
+        setTokenChecked(true);
       }
+    };
 
-      // session backup
-      if (!token) {
-        token =
-          sessionStorage.getItem(
-            'pendingRegToken'
-          );
-      }
-
-      if (token) {
-        sessionStorage.setItem(
-          'pendingRegToken',
-          token
-        );
-
-        console.log(
-          '✅ token:',
-          token
-        );
-
-        setRegisterToken(token);
-      }
-
-      setTokenChecked(true);
-
-    } catch (e) {
-      console.error(e);
-      setTokenChecked(true);
-    }
-  };
-
-  detectToken();
-
-  window.addEventListener(
-    'pageshow',
-    detectToken
-  );
-
-  return () => {
-    window.removeEventListener(
-      'pageshow',
-      detectToken
-    );
-  };
-
-}, []);
+    detectToken();
+    window.addEventListener('pageshow', detectToken);
+    return () => {
+      window.removeEventListener('pageshow', detectToken);
+    };
+  }, []);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -433,7 +399,6 @@ useEffect(() => {
 
   const handleBackToStages = () => {
     flushAllPendingSaves();
-
     setSelectedCollegeId(null);
     setSelectedStageId(null);
     setStudents([]);
@@ -676,13 +641,11 @@ useEffect(() => {
   const processedAttendanceRef = useRef(new Set<string>());
 
   const handleAttendanceRecord = (record: AttendanceRecord) => {
-    // 🛑 تحقق من الـ Cache المحلي — إذا تمت معالجة هذا الطالب مسبقاً، ارفض فوراً (لا Firebase, لا State, لا Notification)
     const cacheKey = `${record.sessionId}_${record.studentId}`;
     if (processedAttendanceRef.current.has(cacheKey)) return;
     processedAttendanceRef.current.add(cacheKey);
-
-     setAttendanceRecords(prev => [...prev, record]);
-   };
+    setAttendanceRecords(prev => [...prev, record]);
+  };
 
   const handleClearRecords = () => {
     intentionalDeleteRef.current.records = true;
@@ -766,14 +729,10 @@ useEffect(() => {
   // 🆕 معالجة خروج الطالب من صفحة التسجيل الذاتي
   const handleExitSelfRegister = () => {
     setRegisterToken(null);
-
-    // ✅ نظف sessionStorage
     sessionStorage.removeItem('pendingRegToken');
-
-    // ✅ نظف URL
     const url = new URL(window.location.href);
     url.searchParams.delete('reg');
-    url.hash = ''; // نظف الـ hash أيضاً
+    url.hash = '';
     window.history.replaceState({}, '', url.toString());
   };
 
@@ -816,7 +775,7 @@ useEffect(() => {
     );
   }
 
-if (loading || !tokenChecked) {
+  if (loading || !tokenChecked) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <MorphingSquare className="w-16 h-16 bg-blue-500" />
@@ -830,6 +789,51 @@ if (loading || !tokenChecked) {
 
   const selectedStage = stages.find(s => s.id === selectedStageId);
   const selectedCollege = colleges.find(c => c.id === selectedCollegeId);
+
+  // ✨ مكوّن التوقيع بتأثير Bubble
+  const BubbleSignature = () => {
+    const text = "BY PH. Mujtaba Haitham";
+    return (
+      <p
+        className="text-xs mt-1 text-center"
+        dir="ltr"
+        style={{ unicodeBidi: 'embed' }}
+        onMouseLeave={() => setHoveredIndex(null)}
+      >
+        {text.split("").map((char, idx) => {
+          const distance = hoveredIndex !== null ? Math.abs(hoveredIndex - idx) : null;
+          const style: React.CSSProperties = {
+            display: 'inline-block',
+            transition: 'all 0.3s ease-in-out',
+            cursor: 'default',
+            color:
+              distance === 0 ? '#ffffff' :
+              distance === 1 ? '#93c5fd' :
+              distance === 2 ? '#94a3b8' :
+              '#4b5563',
+            fontWeight:
+              distance === 0 ? 900 :
+              distance === 1 ? 600 :
+              distance === 2 ? 400 :
+              300,
+            transform:
+              distance === 0 ? 'translateY(-3px) scale(1.3)' :
+              distance === 1 ? 'translateY(-1px) scale(1.1)' :
+              'translateY(0) scale(1)',
+          };
+          return (
+            <span
+              key={idx}
+              style={style}
+              onMouseEnter={() => setHoveredIndex(idx)}
+            >
+              {char === " " ? "\u00A0" : char}
+            </span>
+          );
+        })}
+      </p>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-slate-900" dir="rtl">
@@ -907,7 +911,6 @@ if (loading || !tokenChecked) {
 
         {!selectedStageId && (
           <div className="max-w-6xl mx-auto">
-            {/* ✅ التعديل الأساسي: أضفنا py-3 للـ container ليتيح مساحة للـ badge فوق الأزرار */}
             <div className="overflow-x-auto scrollbar-none">
               <div className="flex flex-nowrap md:flex-wrap gap-2 md:gap-3 pt-3 pb-3 md:pb-3 md:pt-3 justify-start md:justify-center mb-4 md:mb-6">
                 <button
@@ -947,7 +950,6 @@ if (loading || !tokenChecked) {
                       📨 إرسال روابط تسجيل
                     </button>
 
-                    {/* ✅ الإصلاح الرئيسي: wrapper div مع overflow-visible يحمل الـ badge خارج الزر */}
                     <div className="shrink-0 relative" style={{ overflow: 'visible' }}>
                       <button
                         onClick={() => setShowPendingRegistrations(true)}
@@ -1037,10 +1039,10 @@ if (loading || !tokenChecked) {
               )}
 
               {activeTab === 'teachers' && (isMainAdmin || isCollegeAdmin) && (
-                <TeacherManagement 
-                  currentUser={currentUser} 
-                  colleges={isCollegeAdmin ? colleges.filter(c => c.id === currentUser.collegeId) : colleges} 
-                  stages={isCollegeAdmin ? stages.filter(s => s.collegeId === currentUser.collegeId) : stages} 
+                <TeacherManagement
+                  currentUser={currentUser}
+                  colleges={isCollegeAdmin ? colleges.filter(c => c.id === currentUser.collegeId) : colleges}
+                  stages={isCollegeAdmin ? stages.filter(s => s.collegeId === currentUser.collegeId) : stages}
                 />
               )}
 
@@ -1100,11 +1102,11 @@ if (loading || !tokenChecked) {
                   activeSessionId={activeSessionId}
                   onCreateSession={handleCreateSession}
                   onSelectSession={handleSelectSession}
-                onDeleteSession={handleDeleteSession}
-                onRenameSession={handleRenameSession}
-                students={students}
-                records={attendanceRecords}
-                onMarkAbsent={handleMarkAbsent}
+                  onDeleteSession={handleDeleteSession}
+                  onRenameSession={handleRenameSession}
+                  students={students}
+                  records={attendanceRecords}
+                  onMarkAbsent={handleMarkAbsent}
                 />
               )}
 
@@ -1167,23 +1169,8 @@ if (loading || !tokenChecked) {
 
         <div className="mt-12 text-center text-gray-600">
           <p className="text-sm">نظام تسجيل الحضور الإلكتروني - {new Date().getFullYear()}</p>
-<p className="text-xs mt-1 text-center" onMouseLeave={() => setHoveredIndex(null)}>
-  {"BY PH. Mujtaba Haitham".split("").map((char, idx) => {
-    const distance = hoveredIndex !== null ? Math.abs(hoveredIndex - idx) : null;
-    let style: React.CSSProperties = {
-      display: 'inline-block',
-      transition: 'all 0.3s ease-in-out',
-      cursor: 'default',
-      color: distance === 0 ? '#fff' : distance === 1 ? '#93c5fd' : '#64748b',
-      fontWeight: distance === 0 ? 900 : distance === 1 ? 500 : 300,
-    };
-    return (
-      <span key={idx} style={style} onMouseEnter={() => setHoveredIndex(idx)}>
-        {char === " " ? "\u00A0" : char}
-      </span>
-    );
-  })}
-</p>        </div>
+          <BubbleSignature />
+        </div>
       </div>
 
       {/* ✨ الشات بوت الذكي */}
