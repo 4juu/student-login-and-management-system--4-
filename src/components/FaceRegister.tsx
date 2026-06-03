@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Student } from '../types/student';
 import {
-  loadFaceModels,
   extractFaceDescriptor,
   buildMultiDescriptor,
+  areModelsLoaded,
   checkForTamperingAsync,
   normalizeDescriptor,
 } from '../services/faceRecognition';
@@ -50,7 +50,14 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
     let mounted = true;
     (async () => {
       try {
-        await loadFaceModels();
+        const checkModels = () => new Promise<void>((resolve, reject) => {
+          if (areModelsLoaded()) { resolve(); return; }
+          const interval = setInterval(() => {
+            if (areModelsLoaded()) { clearInterval(interval); resolve(); }
+          }, 200);
+          setTimeout(() => { clearInterval(interval); reject(new Error('timeout')); }, 15000);
+        });
+        await checkModels();
         if (!mounted) return;
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
@@ -58,20 +65,13 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
         });
         if (!mounted) { stream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-        }
-        setLoading(false);
-      } catch (e) {
-        setMessage({ type: 'error', text: 'فشل فتح الكاميرا أو تحميل النظام' });
-        setLoading(false);
+        if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
+        if (mounted) setLoading(false);
+      } catch {
+        if (mounted) setLoading(false);
       }
     })();
-    return () => {
-      mounted = false;
-      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
-    };
+    return () => { mounted = false; };
   }, []);
 
   const handleCapture = async () => {

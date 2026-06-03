@@ -2,9 +2,51 @@ import * as faceapi from 'face-api.js';
 import { compressFaceDescriptor, ensureDecompressed } from './faceCompression';
 import { getWorker, workerFindBestMatch, workerBatchMatchAll } from './faceWorker';
 
+// ── Shared loading state ──
 let modelsLoaded = false;
 let loadingPromise: Promise<void> | null = null;
+let preloadStarted = false;
 
+// ── Performance metrics ──
+export interface FacePerfMetrics {
+  modelDownloadMs: number;
+  modelInitMs: number;
+  cameraStartMs: number;
+  firstDetectionMs: number;
+  matchMs: number;
+  totalStartupMs: number;
+  preloadCompleted: boolean;
+}
+
+let _perf: FacePerfMetrics = {
+  modelDownloadMs: 0,
+  modelInitMs: 0,
+  cameraStartMs: 0,
+  firstDetectionMs: 0,
+  matchMs: 0,
+  totalStartupMs: 0,
+  preloadCompleted: false,
+};
+const _perfTimers: Record<string, number> = {};
+
+export function startPerfTimer(label: string) { _perfTimers[label] = performance.now(); }
+export function endPerfTimer(label: string) {
+  if (_perfTimers[label]) {
+    const ms = performance.now() - _perfTimers[label];
+    if (label === 'modelDownload') _perf.modelDownloadMs = ms;
+    else if (label === 'modelInit') _perf.modelInitMs = ms;
+    else if (label === 'cameraStart') _perf.cameraStartMs = ms;
+    else if (label === 'firstDetection') _perf.firstDetectionMs = ms;
+    else if (label === 'match') _perf.matchMs = ms;
+    delete _perfTimers[label];
+  }
+}
+export function getPerfMetrics(): FacePerfMetrics { return { ..._perf }; }
+export function resetPerfMetrics() {
+  _perf = { modelDownloadMs: 0, modelInitMs: 0, cameraStartMs: 0, firstDetectionMs: 0, matchMs: 0, totalStartupMs: 0, preloadCompleted: false };
+}
+
+// ── Canvas pool ──
 const _cvs: HTMLCanvasElement[] = [];
 let _cvsIdx = 0;
 function allocCanvas(w: number, h: number): HTMLCanvasElement {
@@ -17,6 +59,7 @@ function allocCanvas(w: number, h: number): HTMLCanvasElement {
   return nc;
 }
 
+// ── Descriptor cache ──
 interface DescCacheEntry { id: string; desc: Float32Array }
 let _descCache: DescCacheEntry[] | null = null;
 let _cacheThreshold = 0.6;
@@ -39,49 +82,91 @@ export function getDescriptorCache(): DescCacheEntry[] | null { return _descCach
 export function clearDescriptorCache(): void { _descCache = null; }
 export function getCacheThreshold(): number { return _cacheThreshold; }
 
+// ── Model URLs ──
 const MODEL_URLS = [
   'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights',
   'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights',
 ];
+
+// ── Priority-based progressive loading ──
+// Stage 1: TinyFaceDetector (lightest, fastest)
+// Stage 2: FaceLandmark68TinyNet (medium)
+// Stage 3: FaceRecognitionNet (heaviest)
+// Stage 4: (future) Anti-spoofing
+
+let _loadProgress = 0;
+export function getLoadProgress(): number { return _loadProgress; }
 
 export const loadFaceModels = async (): Promise<void> => {
   if (modelsLoaded) return;
   if (loadingPromise) return loadingPromise;
 
   loadingPromise = (async () => {
+    startPerfTimer('modelDownload');
     for (let attempt = 0; attempt < 3; attempt++) {
-      const url = MODEL_URLS[attempt % MODEL_URLS.length];
+      const baseUrl = MODEL_URLS[attempt % MODEL_URLS.length];
       try {
-        await Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri(url),
-          faceapi.nets.faceLandmark68TinyNet.loadFromUri(url),
-          faceapi.nets.faceRecognitionNet.loadFromUri(url),
-        ]);
+        // Stage 1: FaceDetector (highest priority)
+        await faceapi.nets.tinyFaceDetector.loadFromUri(baseUrl);
+        _loadProgress = 33;
+        // Stage 2: Landmarks
+        await faceapi.nets.faceLandmark68TinyNet.loadFromUri(baseUrl);
+        _loadProgress = 66;
+        // Stage 3: Recognition (heaviest)
+        await faceapi.nets.faceRecognitionNet.loadFromUri(baseUrl);
+        _loadProgress = 100;
+        endPerfTimer('modelDownload');
         modelsLoaded = true;
+        _perf.preloadCompleted = true;
+        _perf.totalStartupMs = performance.now() - (_perfTimers['totalStartup'] || performance.now());
         loadingPromise = null;
         return;
       } catch (e) {
-        console.warn(`Model load attempt ${attempt + 1} failed:`, e);
-        loadingPromise = null;
+        console.warn(`Model load attempt ${attempt + 1} from ${baseUrl} failed:`, e);
+        _loadProgress = 0;
         if (attempt < 2) await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
       }
     }
     loadingPromise = null;
-    throw new Error('فشل تحميل الموديلات');
+    throw new Error('فشل تحميل موديلات التعرف على الوجه');
   })();
 
   return loadingPromise;
 };
 
-export const resetModels = () => { modelsLoaded = false; loadingPromise = null; };
+// ── Preload in background using requestIdleCallback ──
+export function startBackgroundPreload(): void {
+  if (preloadStarted || modelsLoaded) return;
+  preloadStarted = true;
+
+  startPerfTimer('totalStartup');
+
+  const doLoad = () => {
+    loadFaceModels().catch((err) => {
+      console.warn('Background preload failed, will retry on demand:', err);
+      preloadStarted = false;
+    });
+  };
+
+  if ('requestIdleCallback' in window) {
+    (window as any).requestIdleCallback(doLoad, { timeout: 3000 });
+  } else {
+    setTimeout(doLoad, 1000);
+  }
+}
+
+export function isPreloadStarted(): boolean { return preloadStarted; }
+export const resetModels = () => { modelsLoaded = false; loadingPromise = null; _loadProgress = 0; preloadStarted = false; };
 export const areModelsLoaded = () => modelsLoaded;
 
+// ── Detector options ──
 const getDetectorOptions = () =>
   new faceapi.TinyFaceDetectorOptions({
     inputSize: 320,
     scoreThreshold: 0.3,
   });
 
+// ── Frame preprocessing ──
 export const preprocessFrame = (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
   targetWidth = 480
@@ -102,6 +187,7 @@ export const preprocessFrame = (
   return canvas;
 };
 
+// ── Normalization ──
 export const normalizeDescriptor = (d: Float32Array): Float32Array => {
   const out = new Float32Array(d);
   let norm = 0;
@@ -120,7 +206,7 @@ const meanDescriptor = (descs: Float32Array[]): Float32Array => {
   return normalizeDescriptor(merged);
 };
 
-// ── رسم معالم الوجه — تتبع نمط المقال (slicing indices) ──
+// ── Face landmarks drawing ──
 export const drawFaceLandmarks = (
   ctx: CanvasRenderingContext2D,
   landmarks: faceapi.FaceLandmarks68,
@@ -148,7 +234,7 @@ export const drawFaceLandmarks = (
   ctx.lineWidth = 2;
   ctx.strokeRect(mirrored ? mapX(box.x + box.width) : mapX(box.x), mapY(box.y), mapW(box.width), mapW(box.height));
 
-  // معالم الوجه — بنفس نمط المقال (positions.slice)
+  // Face features
   const pos = landmarks.positions;
   const features = {
     jaw: pos.slice(0, 17),
@@ -291,6 +377,7 @@ const isMultiDescriptor = (d: any): d is MultiDescriptor => {
   return d !== null && typeof d === 'object' && !Array.isArray(d) && 'main' in d;
 };
 
+// ── Tamper detection ──
 export interface TamperResult {
   isTamper: boolean;
   matchedStudents: Array<{ id: string; name: string; distance: number }>;
@@ -370,6 +457,7 @@ export const checkForTamperingAsync = async <
   });
 };
 
+// ── IOU Tracker ──
 export interface TrackedFace {
   id: number;
   box: { x: number; y: number; width: number; height: number };
@@ -421,7 +509,7 @@ export class IOUTracker {
   }
 }
 
-// ── detect + descriptor (نمط المقال) ──
+// ── Face detection ──
 export const extractFaceDescriptor = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ): Promise<Float32Array | null> => {
@@ -457,7 +545,7 @@ export const detectSingleFace = async (
     .withFaceLandmarks(true);
 };
 
-// ── المقارنة ──
+// ── Comparison ──
 export const compareFaces = (
   desc1: Float32Array | number[],
   desc2: Float32Array | number[] | string | MultiDescriptor
@@ -527,6 +615,7 @@ export const findBestMatchBatchFromCache = async (
   return results.map(r => r ? { id: cache[r.index].id, distance: r.distance } : null);
 };
 
+// ── Auto-improve ──
 export const shouldAutoImprove = (stored: MultiDescriptor | number[] | string): boolean => {
   if (isMultiDescriptor(stored)) {
     const md = stored;

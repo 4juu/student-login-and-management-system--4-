@@ -2,7 +2,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Student } from '../../types/student';
 import {
-  loadFaceModels,
   extractFaceDescriptor,
   detectSingleFace,
   areModelsLoaded,
@@ -46,23 +45,19 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
   // تحميل النماذج
   useEffect(() => {
     mountedRef.current = true;
-    
     if (areModelsLoaded()) {
       setModelsReady(true);
       return;
     }
     
-    (async () => {
-      try {
-        setModelsLoading(true);
-        await loadFaceModels();
-        if (mountedRef.current) setModelsReady(true);
-      } catch (e: any) {
-        if (mountedRef.current) setError('فشل تحميل نظام التعرف على الوجوه');
-      } finally {
-        if (mountedRef.current) setModelsLoading(false);
+    const interval = setInterval(() => {
+      if (areModelsLoaded() && mountedRef.current) {
+        clearInterval(interval);
+        setModelsReady(true);
+        setModelsLoading(false);
       }
-    })();
+    }, 200);
+    setTimeout(() => clearInterval(interval), 15000);
     
     return () => { mountedRef.current = false; };
   }, []);

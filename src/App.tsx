@@ -43,6 +43,7 @@ import {
   flushAllPendingSaves,
   getCurrentAcademicYear,
 } from './firebase/dataService';
+import { startBackgroundPreload } from './services/faceRecognition';
 
 type Tab = 'stage-selector' | 'colleges' | 'login' | 'manage' | 'records' | 'settings' | 'sessions' | 'teachers' | 'profile' | 'system-settings';
 
@@ -295,6 +296,8 @@ function App() {
 
           setCurrentUser(userData);
           await loadInitialData(userData);
+          // 🚀 بدء تحميل موديلات التعرف على الوجه بالخلفية فور تحميل الواجهة
+          setTimeout(() => startBackgroundPreload(), 500);
         } catch (error) {
           console.error('❌ Error loading user:', error);
           setCurrentUser(null);

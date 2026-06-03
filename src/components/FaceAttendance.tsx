@@ -3,7 +3,7 @@ import { Student, AttendanceSession } from '../types/student';
 import { User } from '../types/user';
 import { FaceRegistration } from './FaceRegistration';
 import {
-  loadFaceModels, extractAllFaceDescriptors, normalizeDescriptor,
+  extractAllFaceDescriptors, normalizeDescriptor,
   areModelsLoaded, IOUTracker, shouldAutoImprove, autoImproveDescriptor,
   buildDescriptorCache, findBestMatchBatchFromCache, getDescriptorCache, getCacheThreshold,
   clearDescriptorCache, compareFaces,
@@ -91,12 +91,17 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     if (studentsWithFace.length > 0) {
       buildDescriptorCache(studentsWithFace as any, 0.5);
     }
-    if (areModelsLoaded()) { setModelsReady(true); initCamera(); return; }
-    loadFaceModels().then(() => {
-      if (mountedRef.current) { setModelsReady(true); initCamera(); }
-    }).catch(() => {
-      if (mountedRef.current) { setError('فشل تحميل موديلات التعرف'); }
-    });
+    if (areModelsLoaded()) { setModelsReady(true); initCamera(); }
+    else {
+      const interval = setInterval(() => {
+        if (areModelsLoaded() && mountedRef.current) {
+          clearInterval(interval);
+          setModelsReady(true);
+          initCamera();
+        }
+      }, 200);
+      setTimeout(() => clearInterval(interval), 15000);
+    }
     return () => { mountedRef.current = false; cleanup(); clearDescriptorCache(); };
   }, []);
 
@@ -257,6 +262,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     const detectedFaces = new Map<string, DetectedFaceBox>();
     const trackDescriptors = new Map<number, Float32Array[]>();
 
+    let frameSkipCount = 0;
     const processFrame = async () => {
       if (!faceRunningRef.current || !mountedRef.current) return;
 
@@ -267,6 +273,11 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
         return;
       }
 
+      frameSkipCount++;
+      if (frameSkipCount % 3 !== 0) {
+        rafRef.current = requestAnimationFrame(processFrame);
+        return;
+      }
       frameCount.current++;
 
       const cache = getDescriptorCache();
@@ -734,11 +745,13 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           </div>
         )}
 
-        <video ref={videoRef}
-          autoPlay playsInline muted
-          className="w-full h-full object-contain"
-          style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }}
-        />
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+          <video ref={videoRef}
+            autoPlay playsInline muted
+            className="max-w-full max-h-full object-contain"
+            style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none', minWidth: 320, minHeight: 240 }}
+          />
+        </div>
 
         <canvas ref={canvasRef}
           className="absolute inset-0 w-full h-full pointer-events-none"
