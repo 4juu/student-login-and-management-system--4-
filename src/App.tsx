@@ -924,7 +924,7 @@ function App() {
                   onClick={() => setActiveTab('profile')}
                   className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'profile' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
                 >
-                  👤 الملف الشخصي
+                   الملف الشخصي
                 </button>
               </div>
             </div>
