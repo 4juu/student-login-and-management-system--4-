@@ -862,7 +862,7 @@ function App() {
                   onClick={() => setActiveTab('stage-selector')}
                   className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'stage-selector' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
                 >
-                  🎯 اختيار المرحلة
+                   اختيار المرحلة
                 </button>
                 {isMainAdmin && (
                   <>
@@ -870,19 +870,19 @@ function App() {
                       onClick={() => setActiveTab('colleges')}
                       className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'colleges' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
                     >
-                      🏛️ إدارة الكليات
+                       إدارة الكليات
                     </button>
                     <button
                       onClick={() => setActiveTab('teachers')}
                       className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'teachers' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
                     >
-                      👨‍🏫 التدريسيين
+                       التدريسيين
                     </button>
                     <button
                       onClick={() => setActiveTab('system-settings')}
                       className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'system-settings' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
                     >
-                      ⚙️ إعدادات النظام
+                       إعدادات النظام
                     </button>
                   </>
                 )}
@@ -892,14 +892,14 @@ function App() {
                       onClick={() => setShowSendLink(true)}
                       className="shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md hover:from-purple-700 hover:to-pink-700 transition"
                     >
-                      📨 إرسال روابط تسجيل
+                       إرسال روابط تسجيل
                     </button>
                     <div className="shrink-0 relative" style={{ overflow: 'visible' }}>
                       <button
                         onClick={() => setShowPendingRegistrations(true)}
                         className="px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:from-amber-600 hover:to-orange-600 transition"
                       >
-                        📋 طلبات التسجيل
+                         طلبات التسجيل
                       </button>
                       {pendingCount > 0 && (
                         <span
