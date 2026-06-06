@@ -207,6 +207,41 @@ export async function sendDailyReport(
   return sendTelegramMessage(config.botToken, channel.chatId, message);
 }
 
+export function buildAbsenceGroupReport(
+  subjectName: string,
+  groupName: string,
+  date: string,
+  absentStudents: Array<{ name: string; count: number }>
+): string {
+  const lines = absentStudents.map(
+    (s, i) => `${i + 1}) ${escapeMarkdown(s.name)} - عدد الغيابات: ${s.count}`
+  );
+
+  return (
+    `❌ <b>غيابات يوم ${escapeMarkdown(date)}</b>\n` +
+    `▪️ <b>المادة:</b> ${escapeMarkdown(subjectName)}\n` +
+    (groupName ? `▪️ <b>الكروب:</b> ${escapeMarkdown(groupName)}\n` : '') +
+    `▪️ <b>التاريخ:</b> ${escapeMarkdown(date)}\n\n` +
+    lines.join('\n') + '\n\n' +
+    `🔢 <b>مجموع الغائبين اليوم:</b> ${absentStudents.length}`
+  );
+}
+
+export async function sendAbsenceGroupReport(
+  config: TelegramConfig,
+  stageId: string,
+  subjectName: string,
+  groupName: string,
+  date: string,
+  absentStudents: Array<{ name: string; count: number }>
+): Promise<boolean> {
+  const channel = config.channels[stageId];
+  if (!channel || !channel.enabled || !channel.notifyOnAbsence) return false;
+
+  const message = buildAbsenceGroupReport(subjectName, groupName, date, absentStudents);
+  return sendTelegramMessage(config.botToken, channel.chatId, message);
+}
+
 export async function sendTestMessage(
   config: TelegramConfig,
   stageId: string

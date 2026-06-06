@@ -26,6 +26,8 @@ interface SmartCompressedRecord {
   t: number;           // timestamp (Unix - أصغر من ISO string)
   se: string;          // sessionId
   m: 'q' | 'm';        // method (q=qr, m=manual)
+  su?: string;         // subjectName
+  a?: number;          // absenceCount
 }
 
 /**
@@ -41,6 +43,8 @@ export const compressRecord = (record: AttendanceRecord): SmartCompressedRecord 
     t: new Date(record.timestamp).getTime(),
     se: record.sessionId,
     m: record.method === 'qr' ? 'q' : 'm',
+    su: record.subjectName || undefined,
+    a: record.absenceCount || undefined,
   };
 };
 
@@ -62,6 +66,8 @@ export const decompressRecord = (compressed: SmartCompressedRecord): AttendanceR
     sessionId: compressed.se,
     status: 'present',
     method: compressed.m === 'q' ? 'qr' : 'manual',
+    subjectName: compressed.su,
+    absenceCount: compressed.a,
   };
 };
 
