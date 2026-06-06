@@ -31,6 +31,7 @@ export interface AttendanceRecord {
   academicYear?: string;
   teacherName?: string;
   subjectName?: string;
+  absenceCount?: number;
 }
 
 export interface AttendanceSession {

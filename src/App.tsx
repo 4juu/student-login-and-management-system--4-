@@ -26,7 +26,7 @@ import { PendingRegistrations } from './components/Admin/PendingRegistrations';
 import { auth, database } from './firebase/config';
 import { signIn, signOut } from './firebase/authService';
 import { TelegramConfig } from './types/telegram';
-import { sendAbsenceNotification } from './services/telegramService';
+import { sendAbsenceGroupReport } from './services/telegramService';
 import {
   loadColleges,
   saveColleges,
@@ -686,41 +686,83 @@ function App() {
     const stage = stages.find(s => s.id === selectedStageId);
     const stageName = stage?.name || '';
     const now = new Date();
-    const date = now.toLocaleDateString('ar-EG');
+    const dateKey = now.toISOString().slice(0, 10); // YYYY-MM-DD
     const time = now.toLocaleTimeString('ar-EG');
 
-    const newRecords: AttendanceRecord[] = studentIds.map(studentId => {
+    const subjectName = currentUser?.bio || currentUser?.displayName || stageName;
+    const teacherName = currentUser?.displayName;
+
+    // تجميع الطلاب حسب الكروب
+    const studentsByGroup = new Map<string, typeof studentIds>();
+    for (const studentId of studentIds) {
       const student = students.find(s => s.id === studentId);
-      return {
-        id: `absent_${Date.now()}_${studentId}`,
-        studentId,
-        studentName: student?.name || '',
-        studentCode: student?.code || '',
-        studentGroup: student?.group,
-        timestamp: now.toISOString(),
-        date,
-        time,
-        sessionId,
-        status: 'absent' as const,
-        method: 'manual' as const,
-        academicYear: currentAcademicYear,
-        teacherName: currentUser?.displayName,
-        subjectName: currentUser?.bio || currentUser?.displayName,
-      };
-    });
+      if (!student) continue;
+      const group = student.group || 'بدون كروب';
+      if (!studentsByGroup.has(group)) studentsByGroup.set(group, []);
+      studentsByGroup.get(group)!.push(studentId);
+    }
 
-    setAttendanceRecords(prev => [...prev, ...newRecords]);
+    const allNewRecords: AttendanceRecord[] = [];
 
-    if (telegramConfig && selectedStageId) {
-      for (const record of newRecords) {
-        const absentCount = attendanceRecords.filter(
-          r => r.studentId === record.studentId && r.status === 'absent'
-        ).length + 1;
-        sendAbsenceNotification(
-          telegramConfig, selectedStageId, record.studentName, date,
-          absentCount, record.subjectName || stageName, record.teacherName
+    for (const [group, groupStudentIds] of studentsByGroup) {
+      const absentStudents: Array<{ name: string; count: number }> = [];
+      const groupRecords: AttendanceRecord[] = [];
+
+      for (const studentId of groupStudentIds) {
+        const student = students.find(s => s.id === studentId);
+        if (!student) continue;
+
+        // تجاهل التكرار: نفس الطالب + نفس التاريخ + نفس المادة
+        const alreadyMarked = attendanceRecords.some(
+          r => r.studentId === studentId &&
+               r.status === 'absent' &&
+               r.timestamp?.startsWith(dateKey) &&
+               r.subjectName === subjectName
+        );
+        if (alreadyMarked) continue;
+
+        // عدد الغيابات التراكمي
+        const existingCount = attendanceRecords.filter(
+          r => r.studentId === studentId && r.status === 'absent'
+        ).length;
+
+        const absenceCount = existingCount + 1;
+
+        const record: AttendanceRecord = {
+          id: `absent_${Date.now()}_${studentId}`,
+          studentId,
+          studentName: student.name,
+          studentCode: student.code || '',
+          studentGroup: student.group,
+          timestamp: now.toISOString(),
+          date: dateKey,
+          time,
+          sessionId,
+          status: 'absent',
+          method: 'manual',
+          academicYear: currentAcademicYear,
+          teacherName,
+          subjectName,
+          absenceCount,
+        };
+
+        groupRecords.push(record);
+        absentStudents.push({ name: student.name, count: absenceCount });
+      }
+
+      allNewRecords.push(...groupRecords);
+
+      // إرسال تقرير واحد لكل كروب
+      if (telegramConfig && selectedStageId && groupRecords.length > 0) {
+        sendAbsenceGroupReport(
+          telegramConfig, selectedStageId, subjectName, group,
+          dateKey, absentStudents
         ).catch(() => {});
       }
+    }
+
+    if (allNewRecords.length > 0) {
+      setAttendanceRecords(prev => [...prev, ...allNewRecords]);
     }
   };
 
