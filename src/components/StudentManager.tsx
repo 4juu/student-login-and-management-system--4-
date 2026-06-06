@@ -1420,31 +1420,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         </div>
       )}
 
-      {students.length > 0 && (
-        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-blue-800">
-            <span>📊 <strong>إجمالي:</strong> {students.length}</span>
-            <span>🔳 <strong>مربوط QR:</strong> {studentsWithQr}</span>
-            {studentsWithoutQr > 0 && (
-              <span className="text-emerald-700">⏳ <strong>بانتظار QR:</strong> {studentsWithoutQr}</span>
-            )}
-            <span>🪪 <strong>رقم جامعي:</strong> {studentsWithUniId}</span>
-            <span className="text-purple-700">😊 <strong>بصمة وجه:</strong> {studentsWithFace}</span>
-            {compressionStats.totalSizeKB > 0 && (
-              <span className="text-emerald-700">
-                💾 <strong>حجم البصمات:</strong> {compressionStats.totalSizeKB < 1024 ? `${compressionStats.totalSizeKB.toFixed(1)} KB` : `${(compressionStats.totalSizeKB / 1024).toFixed(2)} MB`}
-              </span>
-            )}
-            {selectedIds.size > 0 && (
-              <span>| <strong>المحدد:</strong> {selectedIds.size}</span>
-            )}
-            {filteredStudents.length > pageSize && (
-              <span className="text-purple-700">| <strong>الصفحة:</strong> {safeCurrentPage}/{totalPages}</span>
-            )}
-          </div>
-        </div>
-      )}
-
       {showFaceRegister && onUpdateStudent && (
         <FaceRegister
           students={students}
