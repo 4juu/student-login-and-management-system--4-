@@ -78,7 +78,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   const [matchPercentage, setMatchPercentage] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const goTo = (s: Step) => { if (step !== s) setStep(s); };
+  const goTo = (s: Step) => { console.log('🔄 goTo:', s, 'current step:', step, 'willSet:', step !== s); if (step !== s) setStep(s); };
 
   const loadStudent = async (adminUid: string, stageId: string, studentId: string, signal: AbortSignal, linkYear?: string): Promise<Student | null> => {
     let year = linkYear || '';
@@ -159,24 +159,29 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   }, [token]);
 
   const handleIdExtracted = async (result: IDExtractionResult) => {
+    console.log('📌 handleIdExtracted called', { hasStudent: !!student, hasLink: !!link, name: result.name });
     try {
       setIdData(result);
-      if (!student || !link) return;
+      if (!student || !link) { console.log('⛔ student/link null'); return; }
       const pct = matchArabicNames(student.name, result.name || result.fullName || '');
+      console.log('📊 matchPercentage:', pct, 'MIN_MATCH:', MIN_MATCH);
       setMatchPercentage(pct);
 
       if (pct < MIN_MATCH) {
+        console.log('🔀 going to name-mismatch');
         goTo('name-mismatch');
         return;
       }
 
-      // حفظ QR في Firebase بشكل غير متزامن - لا يمنع استكمال الخطوات
+      console.log('✅ match success, proceeding to capture-face');
       saveQRAsync(result).catch(e => console.warn('⚠️ فشل حفظ QR:', e));
+
+      goTo('capture-face');
+      console.log('✅ goTo capture-face called');
     } catch (e) {
       console.error('❌ خطأ في معالجة الهوية:', e);
+      goTo('capture-face');
     }
-
-    goTo('capture-face');
   };
 
   const saveQRAsync = async (result: IDExtractionResult) => {
