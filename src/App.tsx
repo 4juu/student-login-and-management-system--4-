@@ -268,6 +268,8 @@ function App() {
     if (registerToken) {
       console.log('🎯 registerToken موجود، نعرض صفحة التسجيل');
       setLoading(false);
+      // 🚀 بدء تحميل موديلات التعرف على الوجه بالخلفية فوراً
+      setTimeout(() => startBackgroundPreload(), 500);
       return;
     }
 

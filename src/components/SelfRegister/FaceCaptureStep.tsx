@@ -5,6 +5,8 @@ import {
   extractFaceDescriptor,
   detectSingleFace,
   areModelsLoaded,
+  isPreloadStarted,
+  startBackgroundPreload,
   normalizeDescriptor,
   checkForTamperingAsync,
   buildMultiDescriptor,
@@ -45,21 +47,31 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
   // تحميل النماذج
   useEffect(() => {
     mountedRef.current = true;
-    if (areModelsLoaded()) {
-      setModelsReady(true);
-      return;
-    }
-    
-    const interval = setInterval(() => {
+
+    const checkModels = () => {
       if (areModelsLoaded() && mountedRef.current) {
-        clearInterval(interval);
         setModelsReady(true);
         setModelsLoading(false);
+        return true;
       }
-    }, 200);
-    setTimeout(() => clearInterval(interval), 15000);
-    
-    return () => { mountedRef.current = false; };
+      return false;
+    };
+
+    if (checkModels()) return;
+
+    // بدء التحميل إذا لم يبدأ بعد
+    if (!isPreloadStarted()) {
+      startBackgroundPreload();
+    }
+
+    setModelsLoading(true);
+
+    const interval = setInterval(checkModels, 200);
+
+    return () => {
+      mountedRef.current = false;
+      clearInterval(interval);
+    };
   }, []);
 
   // فتح الكاميرا
@@ -223,6 +235,15 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraReady(false);
 
+    // إذا كانت النماذج لم تزل غير محملة، أعد تشغيل التحميل
+    if (!areModelsLoaded()) {
+      if (!isPreloadStarted()) {
+        startBackgroundPreload();
+      }
+      setModelsLoading(true);
+      return;
+    }
+
     (async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -270,6 +291,12 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
           <div className="text-center py-6">
             <div className="inline-block w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-3" />
             <p className="text-sm text-gray-600 font-medium">جاري تحميل نظام التعرف...</p>
+            <button
+              onClick={onCancel}
+              className="mt-4 py-2 px-6 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg active:scale-95 text-sm"
+            >
+              إلغاء
+            </button>
           </div>
         )}
 
