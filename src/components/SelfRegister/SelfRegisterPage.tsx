@@ -159,17 +159,28 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   }, [token]);
 
   const handleIdExtracted = async (result: IDExtractionResult) => {
-    setIdData(result);
-    if (!student || !link) return;
-    const pct = matchArabicNames(student.name, result.name || result.fullName || '');
-    setMatchPercentage(pct);
+    try {
+      setIdData(result);
+      if (!student || !link) return;
+      const pct = matchArabicNames(student.name, result.name || result.fullName || '');
+      setMatchPercentage(pct);
 
-    if (pct < MIN_MATCH) {
-      goTo('name-mismatch');
-      return;
+      if (pct < MIN_MATCH) {
+        goTo('name-mismatch');
+        return;
+      }
+
+      // حفظ QR في Firebase بشكل غير متزامن - لا يمنع استكمال الخطوات
+      saveQRAsync(result).catch(e => console.warn('⚠️ فشل حفظ QR:', e));
+    } catch (e) {
+      console.error('❌ خطأ في معالجة الهوية:', e);
     }
 
-    // حفظ QR في Firebase مباشرة
+    goTo('capture-face');
+  };
+
+  const saveQRAsync = async (result: IDExtractionResult) => {
+    if (!student || !link || !result.qrId) return;
     try {
       const year = await getActiveAcademicYear();
       const path = `academicYears/${year}/userData/${link.adminUid}/stageData/${link.stageId}/students`;
@@ -177,7 +188,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       if (data) {
         const arr: Student[] = Array.isArray(data) ? data : Object.values(data);
         const idx = arr.findIndex((s) => s.id === student.id);
-        if (idx !== -1 && result.qrId) {
+        if (idx !== -1) {
           arr[idx] = { ...arr[idx], qrCodeId: result.qrId };
           await set(ref(database, path), arr);
         }
@@ -185,8 +196,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     } catch (e) {
       console.warn('⚠️ فشل حفظ QR:', e);
     }
-
-    goTo('capture-face');
   };
 
   const handleFaceCaptured = async (descriptor: MultiDescriptor) => {

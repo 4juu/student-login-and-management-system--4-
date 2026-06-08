@@ -68,6 +68,7 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
       if (preview) URL.revokeObjectURL(preview);
       setPreview(null);
       setFile(null);
+      setProcessing(false);
       onExtracted(result);
     } catch (e: any) {
       setError(e.message || 'حدث خطأ غير متوقع');
