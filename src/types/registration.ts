@@ -58,6 +58,7 @@ export interface RegistrationProgress {
 export interface IDExtractionResult {
   success: boolean;
   name?: string;
+  fullName?: string;
   qrUrl?: string;
   qrId?: string;
   error?: string;

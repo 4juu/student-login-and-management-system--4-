@@ -326,9 +326,9 @@ export const getAllTeachersForCollege = async (collegeId: string): Promise<User[
     const snap = await get(ref(database, 'users'));
     if (!snap.exists()) return [];
     
-    return Object.values(snap.val()).filter(
+    return Object.values(snap.val() as Record<string, any>).filter(
       (user: any) => (user.role === 'teacher' || user.role === 'college_admin') && user.collegeId === collegeId
-    );
+    ) as User[];
   } catch (error) {
     console.error('❌ خطأ جلب التدريسيين:', error);
     return [];

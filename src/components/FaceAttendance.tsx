@@ -46,12 +46,11 @@ const MIN_CONFIDENCE = 40;
 const ZOOM_STEPS = [1, 1.5, 2, 2.5, 3];
 
 export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
-  students, activeSession, onMarkAttendance, onUpdateStudent,
-  alreadyPresentIds, currentUser, onClose,
+  students, onMarkAttendance, onUpdateStudent,
+  alreadyPresentIds, onClose,
 }) => {
   const [mode, setMode] = useState<FaceMode>('loading');
   const [error, setError] = useState('');
-  const [modelsReady, setModelsReady] = useState(areModelsLoaded());
   const [showReg, setShowReg] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [showLog, setShowLog] = useState(false);
@@ -91,12 +90,11 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     if (studentsWithFace.length > 0) {
       buildDescriptorCache(studentsWithFace as any, 0.5);
     }
-    if (areModelsLoaded()) { setModelsReady(true); initCamera(); }
+    if (areModelsLoaded()) { initCamera(); }
     else {
       const interval = setInterval(() => {
         if (areModelsLoaded() && mountedRef.current) {
           clearInterval(interval);
-          setModelsReady(true);
           initCamera();
         }
       }, 200);

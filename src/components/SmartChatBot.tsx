@@ -890,16 +890,6 @@ ${dataContext}`;
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  const handleReset = useCallback(() => {
-    setMessages([]);
-    setError(null);
-    setCurrentModelIndex(0);
-    setFailedModels(new Set());
-    setShowStudentCard(false);
-    setStudentSearchQuery('');
-    setSelectedStudentCard(null);
-  }, []);
-
   const formatMessage = (content: string): React.ReactNode => {
     const lines = content.split('\n');
     return lines.map((line, i) => {
@@ -929,27 +919,6 @@ ${dataContext}`;
         </React.Fragment>
       );
     });
-  };
-
-  const getTodayStatus = useCallback((card: StudentQuickCard): { sessions: { name: string; present: boolean }[] } => {
-    const todayKey = fixDate(new Date());
-    const todaySessions = card.attendedSessions.filter(
-      as_ => as_.session._normalizedDate === todayKey
-    );
-    return { sessions: todaySessions.map(as_ => ({ name: as_.session.name, present: as_.present })) };
-  }, [fixDate]);
-
-  // 🆕 معالج تحميل بيانات الجامعة
-  const handleLoadUniversityData = async () => {
-    if (!onRequestUniversityData || universityDataLoading) return;
-    await onRequestUniversityData();
-    // إضافة رسالة تأكيد
-    setMessages(prev => [...prev, {
-      id: `${Date.now()}_bot`,
-      type: 'bot',
-      content: `✅ **تم تحميل بيانات الجامعة الشاملة!**\n\nالحين أكدر أجاوبك عن:\n• كل الكليات والمراحل\n• إحصائيات شاملة\n• مقارنات بين المراحل\n• تقارير الجامعة كاملة`,
-      timestamp: new Date(),
-    }]);
   };
 
   return (

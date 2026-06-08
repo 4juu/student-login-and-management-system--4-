@@ -1024,7 +1024,7 @@ function App() {
               {activeTab === 'system-settings' && isMainAdmin && (
                 <Settings
                   students={students} attendanceRecords={attendanceRecords} currentUser={currentUser}
-                  onDataRestored={() => loadInitialData(currentUser)} onResetComplete={handleResetComplete}
+                  onResetComplete={handleResetComplete}
                   stages={stages} colleges={colleges} onTelegramConfigChange={handleTelegramConfigChange}
                 />
               )}

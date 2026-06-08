@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ref, get, set } from 'firebase/database';
+import { ref, set } from 'firebase/database';
 import { database, dbURL } from '../../firebase/config';
 import { Student } from '../../types/student';
 import { RegistrationLink, IDExtractionResult } from '../../types/registration';
@@ -9,7 +9,6 @@ import {
 } from '../../services/tokenService';
 import {
   matchArabicNames,
-  getMatchDescription,
 } from '../../services/nameMatching';
 import { IDCardUpload } from './IDCardUpload';
 import { FaceCaptureStep } from './FaceCaptureStep';
@@ -58,11 +57,7 @@ const deepSanitize = (obj: any): any => {
   return obj;
 };
 
-const validateMultiDescriptor = (desc: any): desc is MultiDescriptor => {
-  if (!desc || typeof desc !== 'object') return false;
-  if (!desc.main || !Array.isArray(desc.main)) return false;
-  return desc.main.length > 0;
-};
+
 
 const dbFetch = async <T,>(path: string, signal?: AbortSignal): Promise<T | null> => {
   const url = `${dbURL}/${path}.json`;
@@ -199,7 +194,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     goTo('submitting');
     const cleanFaceDescriptor = deepSanitize(descriptor);
     try {
-      const year = await getActiveAcademicYear();
       const requestId = `${student.id}_${Date.now()}`;
       const pendingRef = ref(database, `registrationSystem/pending/${link.adminUid}/${requestId}`);
       await set(pendingRef, {
@@ -256,38 +250,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     );
   }
 
-  const renderStepIndicator = () => {
-    const activeIdx = ['upload-id', 'capture-face', 'success'].indexOf(step);
-    return (
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          {stepLabels.map((label, i) => {
-            const isActive = i === activeIdx;
-            const isDone = i < activeIdx;
-            return (
-              <div key={i} className="flex flex-col items-center flex-1 relative">
-                {i > 0 && (
-                  <div className={`absolute top-4 right-0 w-full h-0.5 -translate-y-1/2 ${isDone || isActive ? 'bg-purple-500' : 'bg-gray-200'}`} style={{ right: '50%', width: '100%', zIndex: 0 }} />
-                )}
-                <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
-                  isDone ? 'bg-purple-600 text-white' :
-                  isActive ? 'bg-purple-600 text-white scale-110 shadow-md' :
-                  'bg-gray-100 text-gray-400 border border-gray-200'
-                }`}>
-                  {isDone ? '✓' : stepIcons[i]}
-                </div>
-                <span className={`text-[10px] mt-1 font-medium transition-colors ${
-                  isActive ? 'text-purple-700' :
-                  isDone ? 'text-purple-500' :
-                  'text-gray-400'
-                }`}>{label}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
+
 
   if (step === 'upload-id' && student) {
     return <IDCardUpload student={student} onExtracted={handleIdExtracted} onCancel={onExit} />;

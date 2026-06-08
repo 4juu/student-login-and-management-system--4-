@@ -22,7 +22,6 @@ import { ref, set } from 'firebase/database';
 interface SettingsProps {
   students: Student[];
   attendanceRecords: AttendanceRecord[];
-  onDataRestored: () => void;
   currentUser?: User;
   onResetComplete?: () => void;
   stages?: Stage[];
@@ -33,7 +32,6 @@ interface SettingsProps {
 export const Settings: React.FC<SettingsProps> = ({
   students,
   attendanceRecords,
-  onDataRestored,
   currentUser,
   onResetComplete,
   stages = [],
@@ -379,20 +377,7 @@ export const Settings: React.FC<SettingsProps> = ({
     }
   };
 
-  const formatBytes = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
-  };
 
-  const calculateDataSize = () => {
-    const dataString = JSON.stringify({ students, attendanceRecords });
-    return dataString.length;
-  };
-
-  const dataSize = calculateDataSize();
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">

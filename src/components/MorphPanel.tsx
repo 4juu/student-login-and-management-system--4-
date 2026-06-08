@@ -223,7 +223,6 @@ export function MorphPanel({
       <InputForm
         input={input}
         onInputChange={onInputChange}
-        onSend={onSend}
         isTyping={isTyping}
         inputRef={inputRef}
         onKeyDown={onKeyDown}
@@ -247,14 +246,12 @@ function DockBar({ onToggle }: { onToggle: () => void }) {
 function InputForm({
   input,
   onInputChange,
-  onSend,
   isTyping,
   inputRef,
   onKeyDown,
 }: {
   input: string
   onInputChange: (value: string) => void
-  onSend: () => void
   isTyping: boolean
   inputRef: React.RefObject<HTMLTextAreaElement | null>
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void

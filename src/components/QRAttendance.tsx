@@ -73,7 +73,7 @@ const playError = () => {
 };
 
 export const QRAttendance: React.FC<QRAttendanceProps> = ({
-  students, activeSession, onMarkAttendance, onUpdateStudent, alreadyPresentIds, onClose,
+  students, onMarkAttendance, onUpdateStudent, alreadyPresentIds, onClose,
 }) => {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const trackRef = useRef<MediaStreamTrack | null>(null);
@@ -83,7 +83,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const startingRef = useRef(false);
   const toastCounterRef = useRef(0);
   const toastSequenceRef = useRef<Map<number, number>>(new Map());
-  const lastRestartRef = useRef(0);
   const qrCodeInputRef = useRef<HTMLInputElement | null>(null);
 
   const [cameraReady, setCameraReady] = useState(false);
@@ -99,7 +98,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const [canZoom, setCanZoom] = useState(false);
   const [hasTorch, setHasTorch] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
   const [cameraStatus, setCameraStatus] = useState<'starting' | 'ready' | 'error' | 'restarting'>('starting');
   const [facing, setFacing] = useState<CameraFacing>('environment');
 
@@ -189,7 +187,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     if (!mountedRef.current || startingRef.current) return;
     startingRef.current = true;
     setCameraStatus('starting');
-    setErrorMsg('');
     setCameraReady(false);
 
     try {
@@ -279,10 +276,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     } catch (err: any) {
       if (!mountedRef.current) return;
       setCameraStatus('error');
-      const msg = err?.message || '';
-      if (msg.includes('NotAllowed') || msg.includes('Permission')) setErrorMsg('يرجى السماح باستخدام الكاميرا');
-      else if (msg.includes('NotFound')) setErrorMsg('لا توجد كاميرا');
-      else setErrorMsg(`فشل: ${msg.slice(0, 60)}`);
       setTimeout(() => { if (mountedRef.current) startCamera(cf); }, 4000);
     } finally {
       startingRef.current = false;
