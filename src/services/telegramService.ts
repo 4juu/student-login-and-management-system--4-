@@ -1,9 +1,28 @@
-import { TelegramConfig } from '../types/telegram';
+import { TelegramConfig, SendQueueItem } from '../types/telegram';
 
 const TELEGRAM_API = 'https://api.telegram.org/bot';
 
-function escapeMarkdown(text: string): string {
-  return text.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+export function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export function getArabicDayName(dateStr: string): string {
+  const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+  const date = new Date(dateStr + (dateStr.includes('T') ? '' : 'T00:00:00'));
+  return days[date.getDay()];
+}
+
+export function formatDisplayDate(dateStr: string): string {
+  const parts = dateStr.split('-');
+  if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  return dateStr;
 }
 
 export async function sendTelegramMessage(
@@ -50,11 +69,11 @@ export function buildAttendanceMessage(
   return (
     `✅ <b>تسجيل حضور</b>\n` +
     `━━━━━━━━━━━━━━━\n` +
-    `📚 <b>المادة:</b> ${escapeMarkdown(subject)}\n` +
-    (teacherName ? `👨‍🏫 <b>الدكتور:</b> ${escapeMarkdown(teacherName)}\n` : '') +
-    `👤 <b>الطالب:</b> ${escapeMarkdown(studentName)}\n` +
-    `📅 <b>التاريخ:</b> ${escapeMarkdown(date)}\n` +
-    `⏰ <b>الوقت:</b> ${escapeMarkdown(time)}\n` +
+    `📚 <b>المادة:</b> ${escapeHtml(subject)}\n` +
+    (teacherName ? `👨‍🏫 <b>الدكتور:</b> ${escapeHtml(teacherName)}\n` : '') +
+    `👤 <b>الطالب:</b> ${escapeHtml(studentName)}\n` +
+    `📅 <b>التاريخ:</b> ${escapeHtml(date)}\n` +
+    `⏰ <b>الوقت:</b> ${escapeHtml(time)}\n` +
     `${methodEmoji} <b>طريقة التسجيل:</b> ${method === 'qr' ? 'QR' : method === 'face' ? 'بصمة وجه' : 'يدوي'}\n` +
     `━━━━━━━━━━━━━━━\n` +
     `🟢 <b>حاضر</b>`
@@ -74,10 +93,10 @@ export function buildAbsenceAlertMessage(
   return (
     `${emoji} <b>تنبيه غياب</b>\n` +
     `━━━━━━━━━━━━━━━\n` +
-    `📚 <b>المادة:</b> ${escapeMarkdown(subject)}\n` +
-    (teacherName ? `👨‍🏫 <b>الدكتور:</b> ${escapeMarkdown(teacherName)}\n` : '') +
-    `👤 <b>الطالب:</b> ${escapeMarkdown(studentName)}\n` +
-    `📅 <b>التاريخ:</b> ${escapeMarkdown(date)}\n` +
+    `📚 <b>المادة:</b> ${escapeHtml(subject)}\n` +
+    (teacherName ? `👨‍🏫 <b>الدكتور:</b> ${escapeHtml(teacherName)}\n` : '') +
+    `👤 <b>الطالب:</b> ${escapeHtml(studentName)}\n` +
+    `📅 <b>التاريخ:</b> ${escapeHtml(date)}\n` +
     `🔴 <b>عدد الغيابات:</b> ${absenceCount}\n` +
     `━━━━━━━━━━━━━━━\n` +
     `${absenceCount >= 3 ? '🚨 إنذار: تجاوز حد الغياب المسموح' : absenceCount >= 2 ? '⚠️ غياب متكرر يرجى الانتباه' : '📌 تم تسجيل الغياب'}`
@@ -99,9 +118,9 @@ export function buildDailyReportMessage(
   return (
     `📊 <b>التقرير اليومي</b>\n` +
     `━━━━━━━━━━━━━━━\n` +
-    `📚 <b>المادة:</b> ${escapeMarkdown(subject)}\n` +
-    (teacherName ? `👨‍🏫 <b>الدكتور:</b> ${escapeMarkdown(teacherName)}\n` : '') +
-    `📅 <b>التاريخ:</b> ${escapeMarkdown(date)}\n` +
+    `📚 <b>المادة:</b> ${escapeHtml(subject)}\n` +
+    (teacherName ? `👨‍🏫 <b>الدكتور:</b> ${escapeHtml(teacherName)}\n` : '') +
+    `📅 <b>التاريخ:</b> ${escapeHtml(date)}\n` +
     `━━━━━━━━━━━━━━━\n` +
     `👥 <b>إجمالي الطلاب:</b> ${totalStudents}\n` +
     `🟢 <b>الحاضرون:</b> ${presentCount}\n` +
@@ -109,7 +128,7 @@ export function buildDailyReportMessage(
     `📈 <b>نسبة الحضور:</b> ${presentPercent}%\n` +
     `━━━━━━━━━━━━━━━\n` +
     (absentStudents.length > 0
-      ? `❌ <b>الغائبون:</b>\n${escapeMarkdown(absentStudents.map(n => `• ${n}`).join('\n'))}`
+      ? `❌ <b>الغائبون:</b>\n${escapeHtml(absentStudents.map(n => `• ${n}`).join('\n'))}`
       : `🎉 <b>غياب صفري! لا يوجد غائبون</b>`) +
     `\n━━━━━━━━━━━━━━━\n` +
     `✅ <i>تقرير تلقائي من نظام الحضور</i>`
@@ -120,7 +139,7 @@ export function buildTestMessage(stageName: string): string {
   return (
     `✅ <b>تم ربط القناة بنجاح!</b>\n` +
     `━━━━━━━━━━━━━━━\n` +
-    `📚 <b>المادة:</b> ${escapeMarkdown(stageName)}\n` +
+    `📚 <b>المادة:</b> ${escapeHtml(stageName)}\n` +
     `━━━━━━━━━━━━━━━\n` +
     `🟢 <b>سيتم إرسال إشعارات الحضور والغياب إلى هذه القناة تلقائياً</b>`
   );
@@ -213,17 +232,25 @@ export function buildAbsenceGroupReport(
   date: string,
   absentStudents: Array<{ name: string; count: number }>
 ): string {
+  const dayName = getArabicDayName(date);
+  const displayDate = formatDisplayDate(date);
+
   const lines = absentStudents.map(
-    (s, i) => `${i + 1}) ${escapeMarkdown(s.name)} - عدد الغيابات: ${s.count}`
+    (s, i) => `${i + 1}. ${escapeHtml(s.name)} - ${s.count} ❌ <b>غايب</b>`
   );
 
   return (
-    `❌ <b>غيابات يوم ${escapeMarkdown(date)}</b>\n` +
-    `▪️ <b>المادة:</b> ${escapeMarkdown(subjectName)}\n` +
-    (groupName ? `▪️ <b>الكروب:</b> ${escapeMarkdown(groupName)}\n` : '') +
-    `▪️ <b>التاريخ:</b> ${escapeMarkdown(date)}\n\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `❌ <b>غيابات يوم ${escapeHtml(dayName)}</b>\n` +
+    `📅 المصادف ${escapeHtml(displayDate)}\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `📚 <b>المادة:</b> ${escapeHtml(subjectName)}\n` +
+    (groupName ? `👥 <b>الكروب:</b> ${escapeHtml(groupName)}\n` : '') +
+    `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
     lines.join('\n') + '\n\n' +
-    `🔢 <b>مجموع الغائبين اليوم:</b> ${absentStudents.length}`
+    `━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `🔢 <b>مجموع الغائبين اليوم:</b> ${absentStudents.length}\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━`
   );
 }
 
@@ -258,10 +285,10 @@ export function buildRegistrationLinksMessage(
   stageName: string,
   expiryDays: number
 ): string {
-  const header = `📨 <b>روابط تسجيل جديدة</b>\n━━━━━━━━━━━━━━━\n📚 <b>المرحلة:</b> ${escapeMarkdown(stageName)}\n📅 <b>تاريخ الإنشاء:</b> ${new Date().toLocaleDateString('ar-IQ')}\n⏳ <b>تنتهي بعد:</b> ${expiryDays} يوم\n━━━━━━━━━━━━━━━\n\n`;
+  const header = `📨 <b>روابط تسجيل جديدة</b>\n━━━━━━━━━━━━━━━\n📚 <b>المرحلة:</b> ${escapeHtml(stageName)}\n📅 <b>تاريخ الإنشاء:</b> ${new Date().toLocaleDateString('ar-IQ')}\n⏳ <b>تنتهي بعد:</b> ${expiryDays} يوم\n━━━━━━━━━━━━━━━\n\n`;
 
   const linkLines = links.map((l, i) => {
-    return `${i + 1}. <b>${escapeMarkdown(l.studentName)}</b> (${escapeMarkdown(l.studentCode)})\n<code>${l.url}</code>`;
+    return `${i + 1}. <b>${escapeHtml(l.studentName)}</b> (${escapeHtml(l.studentCode)})\n<code>${l.url}</code>`;
   });
 
   const footer = `\n━━━━━━━━━━━━━━━\n✅ أرسل كل طالب رابطه الخاص لتسجيل بصمة الوجه ورمز QR`;
@@ -301,5 +328,58 @@ export async function verifyBotToken(botToken: string): Promise<{ ok: boolean; u
     return { ok: false, error: data.description };
   } catch (e: any) {
     return { ok: false, error: e.message };
+  }
+}
+
+export function buildQueueFromGroups(
+  config: TelegramConfig,
+  stageId: string,
+  subjectName: string,
+  date: string,
+  groups: Array<{
+    groupName: string;
+    absentStudents: Array<{ name: string; count: number }>;
+  }>
+): SendQueueItem[] {
+  const stageChannels = config.channels[stageId];
+  if (!stageChannels || !stageChannels.enabled || !stageChannels.notifyOnAbsence) return [];
+
+  const queue: SendQueueItem[] = [];
+  for (const group of groups) {
+    if (group.absentStudents.length === 0) continue;
+    const message = buildAbsenceGroupReport(subjectName, group.groupName, date, group.absentStudents);
+    queue.push({
+      id: `${Date.now()}_${group.groupName}`,
+      chatId: stageChannels.chatId,
+      channelLabel: stageChannels.stageName,
+      groupName: group.groupName,
+      message,
+      status: 'pending',
+    });
+  }
+
+  return queue;
+}
+
+export async function sendQueuedMessages(
+  items: SendQueueItem[],
+  botToken: string,
+  onProgress: (items: SendQueueItem[]) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  for (let i = 0; i < items.length; i++) {
+    if (signal?.aborted) break;
+
+    items[i].status = 'sending';
+    onProgress([...items]);
+
+    const ok = await sendTelegramMessage(botToken, items[i].chatId, items[i].message);
+
+    items[i].status = ok ? 'sent' : 'failed';
+    onProgress([...items]);
+
+    if (i < items.length - 1 && !signal?.aborted) {
+      await sleep(3000);
+    }
   }
 }

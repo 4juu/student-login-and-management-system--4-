@@ -12,3 +12,33 @@ export interface TelegramConfig {
   };
   updatedAt: string;
 }
+
+export interface SendQueueItem {
+  id: string;
+  chatId: string;
+  channelLabel: string;
+  groupName: string;
+  message: string;
+  status: 'pending' | 'sending' | 'sent' | 'failed';
+}
+
+export interface GroupSendProgress {
+  groupName: string;
+  channels: {
+    channelLabel: string;
+    status: 'pending' | 'sending' | 'sent' | 'failed';
+  }[];
+  allDone: boolean;
+}
+
+export interface AbsenceSendLogEntry {
+  id: string;
+  date: string;
+  time: string;
+  subjectName: string;
+  groups: string[];
+  studentCount: number;
+  channelsSent: number;
+  totalChannels: number;
+  completedAt: string;
+}

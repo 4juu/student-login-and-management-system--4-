@@ -17,6 +17,7 @@ import { CollegeManager } from './components/CollegeManager';
 import { StageSelector } from './components/StageSelector';
 import { SmartChatBot } from './components/SmartChatBot';
 import { MorphingSquare } from './components/MorphingSquare';
+import { SendProgressModal } from './components/SendProgressModal';
 
 // 🆕 نظام التسجيل الذاتي
 import { SelfRegisterPage } from './components/SelfRegister/SelfRegisterPage';
@@ -25,8 +26,8 @@ import { PendingRegistrations } from './components/Admin/PendingRegistrations';
 
 import { auth, database } from './firebase/config';
 import { signIn, signOut } from './firebase/authService';
-import { TelegramConfig } from './types/telegram';
-import { sendAbsenceGroupReport } from './services/telegramService';
+import { TelegramConfig, AbsenceSendLogEntry, GroupSendProgress } from './types/telegram';
+import { buildQueueFromGroups, sendQueuedMessages } from './services/telegramService';
 import {
   loadColleges,
   saveColleges,
@@ -192,6 +193,18 @@ function App() {
 
   // 🤖 تهيئة التلغرام
   const [telegramConfig, setTelegramConfig] = useState<TelegramConfig | null>(null);
+
+  // 🚀 حالة إرسال الغيابات
+  const [sendModalOpen, setSendModalOpen] = useState(false);
+  const [sendGroups, setSendGroups] = useState<GroupSendProgress[]>([]);
+  const [sendSubjectName, setSendSubjectName] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [sendDoneCount, setSendDoneCount] = useState(0);
+  const [sendTotalGroups, setSendTotalGroups] = useState(0);
+  const sendAbortRef = useRef<AbortController | null>(null);
+
+  // 📋 سجل إرسال الغيابات (جلسة فقط)
+  const [absenceSendLogs, setAbsenceSendLogs] = useState<AbsenceSendLogEntry[]>([]);
 
   // 🆕 السنة الأكاديمية الحالية
   const currentAcademicYear = getCurrentAcademicYear();
@@ -688,13 +701,12 @@ function App() {
     const stage = stages.find(s => s.id === selectedStageId);
     const stageName = stage?.name || '';
     const now = new Date();
-    const dateKey = now.toISOString().slice(0, 10); // YYYY-MM-DD
+    const dateKey = now.toISOString().slice(0, 10);
     const time = now.toLocaleTimeString('ar-EG');
 
     const subjectName = currentUser?.bio || currentUser?.displayName || stageName;
     const teacherName = currentUser?.displayName;
 
-    // تجميع الطلاب حسب الكروب
     const studentsByGroup = new Map<string, typeof studentIds>();
     for (const studentId of studentIds) {
       const student = students.find(s => s.id === studentId);
@@ -705,6 +717,10 @@ function App() {
     }
 
     const allNewRecords: AttendanceRecord[] = [];
+    const groupDataList: Array<{
+      groupName: string;
+      absentStudents: Array<{ name: string; count: number }>;
+    }> = [];
 
     for (const [group, groupStudentIds] of studentsByGroup) {
       const absentStudents: Array<{ name: string; count: number }> = [];
@@ -714,7 +730,6 @@ function App() {
         const student = students.find(s => s.id === studentId);
         if (!student) continue;
 
-        // تجاهل التكرار: نفس الطالب + نفس التاريخ + نفس المادة
         const alreadyMarked = attendanceRecords.some(
           r => r.studentId === studentId &&
                r.status === 'absent' &&
@@ -723,7 +738,6 @@ function App() {
         );
         if (alreadyMarked) continue;
 
-        // عدد الغيابات التراكمي
         const existingCount = attendanceRecords.filter(
           r => r.studentId === studentId && r.status === 'absent'
         ).length;
@@ -752,19 +766,74 @@ function App() {
         absentStudents.push({ name: student.name, count: absenceCount });
       }
 
-      allNewRecords.push(...groupRecords);
-
-      // إرسال تقرير واحد لكل كروب
-      if (telegramConfig && selectedStageId && groupRecords.length > 0) {
-        sendAbsenceGroupReport(
-          telegramConfig, selectedStageId, subjectName, group,
-          dateKey, absentStudents
-        ).catch(() => {});
+      if (groupRecords.length > 0) {
+        allNewRecords.push(...groupRecords);
+        groupDataList.push({ groupName: group, absentStudents });
       }
     }
 
     if (allNewRecords.length > 0) {
       setAttendanceRecords(prev => [...prev, ...allNewRecords]);
+    }
+
+    // 🚀 إرسال عبر التلغرام (خلفية)
+    if (telegramConfig && selectedStageId && groupDataList.length > 0) {
+      const progressGroups: GroupSendProgress[] = groupDataList.map(g => ({
+        groupName: g.groupName,
+        channels: [{
+          channelLabel: telegramConfig.channels[selectedStageId]?.stageName || '',
+          status: 'pending' as const,
+        }],
+        allDone: false,
+      }));
+
+      setSendSubjectName(subjectName);
+      setSendGroups(progressGroups);
+      setSendDoneCount(0);
+      setSendTotalGroups(groupDataList.length);
+      setSendModalOpen(true);
+      setIsSending(true);
+
+      const controller = new AbortController();
+      sendAbortRef.current = controller;
+
+      const queue = buildQueueFromGroups(telegramConfig, selectedStageId, subjectName, dateKey, groupDataList);
+
+      sendQueuedMessages(queue, telegramConfig.botToken, (updatedItems) => {
+        const done = updatedItems.filter(i => i.status === 'sent' || i.status === 'failed').length;
+        setSendDoneCount(done);
+        setSendGroups(prev => prev.map(g => {
+          const item = updatedItems.find(i => i.groupName === g.groupName);
+          if (!item) return g;
+          return {
+            ...g,
+            channels: g.channels.map(ch => ({
+              ...ch,
+              status: item.status,
+            })),
+            allDone: item.status === 'sent' || item.status === 'failed',
+          };
+        }));
+      }, controller.signal).then(() => {
+        setIsSending(false);
+        if (!controller.signal.aborted) {
+          const allSent = queue.filter(i => i.status === 'sent').length;
+          const logEntry: AbsenceSendLogEntry = {
+            id: `log_${Date.now()}`,
+            date: dateKey,
+            time,
+            subjectName,
+            groups: groupDataList.map(g => g.groupName),
+            studentCount: allNewRecords.length,
+            channelsSent: allSent,
+            totalChannels: queue.length,
+            completedAt: new Date().toISOString(),
+          };
+          setAbsenceSendLogs(prev => [logEntry, ...prev]);
+        }
+      }).catch(() => {
+        setIsSending(false);
+      });
     }
   };
 
@@ -1162,6 +1231,42 @@ function App() {
           dataAdminUid={isCollegeAdmin ? getAdminUid() : undefined}
           onClose={() => setShowPendingRegistrations(false)}
         />
+      )}
+
+      {/* 🚀 نافذة إرسال الغيابات */}
+      <SendProgressModal
+        isOpen={sendModalOpen}
+        subjectName={sendSubjectName}
+        groups={sendGroups}
+        onHide={() => setSendModalOpen(false)}
+        isSending={isSending}
+        totalDone={sendDoneCount}
+        totalGroups={sendTotalGroups}
+      />
+
+      {/* 📋 سجل الإرسال */}
+      {absenceSendLogs.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-40 max-w-xs w-full">
+          <details className="bg-white/90 backdrop-blur-sm border border-gray-200 rounded-xl shadow-lg">
+            <summary className="px-4 py-2.5 text-sm font-bold text-gray-700 cursor-pointer hover:bg-gray-50 rounded-xl flex items-center gap-2">
+              📋 سجل الإرسال ({absenceSendLogs.length})
+            </summary>
+            <div className="px-4 pb-3 space-y-2 max-h-60 overflow-y-auto">
+              {absenceSendLogs.map(log => (
+                <div key={log.id} className="text-[10px] bg-gray-50 rounded-lg p-2 border border-gray-100">
+                  <div className="font-bold text-gray-700">{log.subjectName}</div>
+                  <div className="text-gray-500">{log.date} - {log.time}</div>
+                  <div className="text-gray-400">
+                    {log.groups.join('، ')} | {log.studentCount} طالب
+                  </div>
+                  <div className="text-green-600">
+                    ✅ {log.channelsSent}/{log.totalChannels} قناة
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+        </div>
       )}
     </div>
   );
