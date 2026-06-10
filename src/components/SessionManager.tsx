@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { AttendanceSession, Student, AttendanceRecord } from '../types/student';
 import { getCurrentAcademicYear } from '../firebase/dataService';
+import { AbsenceSendLogEntry, GroupSendProgress } from '../types/telegram';
 
 interface SessionManagerProps {
   sessions: AttendanceSession[];
@@ -12,6 +13,13 @@ interface SessionManagerProps {
   students?: Student[];
   records?: AttendanceRecord[];
   onMarkAbsent?: (sessionId: string, studentIds: string[]) => void;
+  absenceSendLogs?: AbsenceSendLogEntry[];
+  isSending?: boolean;
+  currentSendingSessionId?: string | null;
+  sendGroups?: GroupSendProgress[];
+  sendDoneCount?: number;
+  sendTotalGroups?: number;
+  completedGroupData?: Record<string, GroupSendProgress[]>;
 }
 
 export const SessionManager: React.FC<SessionManagerProps> = ({
@@ -24,6 +32,11 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
   records = [],
   onMarkAbsent,
   onRenameSession,
+  absenceSendLogs = [],
+  isSending = false,
+  currentSendingSessionId = null,
+  sendGroups = [],
+  completedGroupData = {},
 }) => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [sessionName, setSessionName] = useState('');
@@ -31,6 +44,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editSessionName, setEditSessionName] = useState('');
+  const [sendLogSessionId, setSendLogSessionId] = useState<string | null>(null);
 
   const currentAcademicYear = useMemo(() => getCurrentAcademicYear(), []);
 
@@ -130,6 +144,98 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
 
   const sessionPresentCount = (sessionId: string) =>
     records.filter(r => r.sessionId === sessionId).length;
+
+  const renderSendLogModal = () => {
+    const isThisSending = isSending && currentSendingSessionId === sendLogSessionId;
+    const log = absenceSendLogs.find(l => l.sessionId === sendLogSessionId);
+    const groupData = isThisSending ? sendGroups : (log ? completedGroupData[sendLogSessionId!] : []);
+    const hasData = isThisSending || (log && groupData.length > 0);
+
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden border border-slate-600" dir="rtl">
+          <div className="shrink-0 px-6 pt-6 pb-4 border-b border-slate-700">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-lg font-bold text-white">📋 سجل إرسال الغيابات</h2>
+              <button onClick={() => setSendLogSessionId(null)} className="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+            </div>
+            {log && <p className="text-sm text-slate-400">📚 {log.subjectName} | {log.groups.join('، ')}</p>}
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2 min-h-0">
+            {!hasData ? (
+              <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                <svg className="w-12 h-12 mb-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                </svg>
+                <p className="text-sm">لم يتم إرسال أي غيابات اليوم</p>
+              </div>
+            ) : (
+              groupData.map((group) => (
+                <div
+                  key={group.groupName}
+                  className={`flex items-center gap-3 p-3 rounded-xl border transition ${
+                    group.allDone
+                      ? 'bg-green-900/40 border-green-700'
+                      : 'bg-blue-900/40 border-blue-700'
+                  }`}
+                >
+                  <div className="shrink-0">
+                    {group.allDone ? (
+                      <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="11" stroke="#22c55e" strokeWidth="2" fill="#14532d" />
+                        <path d="M7 13l3 3 7-7" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="3" />
+                        <path d="M12 2a10 10 0 019.95 9" stroke="#60a5fa" strokeWidth="3" strokeLinecap="round" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-white text-sm truncate">{group.groupName}</span>
+                      <span className="text-[10px] text-slate-400 shrink-0">
+                        {group.channels.length} {group.channels.length > 1 ? 'قنوات' : 'قناة'}
+                      </span>
+                    </div>
+                    {group.channels.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {group.channels.map((ch) => (
+                          <span
+                            key={ch.channelLabel}
+                            className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                              ch.status === 'sent'
+                                ? 'bg-green-900 text-green-300'
+                                : ch.status === 'failed'
+                                ? 'bg-red-900 text-red-300'
+                                : 'bg-slate-600 text-slate-400'
+                            }`}
+                          >
+                            {ch.channelLabel}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="shrink-0 px-6 py-4 border-t border-slate-700 flex gap-2">
+            <button
+              onClick={() => setSendLogSessionId(null)}
+              className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium py-2.5 px-4 rounded-xl transition"
+            >
+              إغلاق
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -286,6 +392,12 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
                   >
                     حذف
                   </button>
+                  <button
+                    onClick={() => setSendLogSessionId(session.id)}
+                    className="bg-slate-700 hover:bg-slate-600 text-white font-medium py-1.5 sm:py-2 px-3 sm:px-4 rounded-md transition duration-200 text-xs sm:text-sm"
+                  >
+                    📋 سجل الإرسال
+                  </button>
                 </div>
               </div>
             </div>
@@ -372,6 +484,9 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
           </div>
         </div>
       )}
+
+      {/* 📋 نافذة سجل إرسال الغيابات */}
+      {sendLogSessionId && renderSendLogModal()}
 
       {sessions.length > 0 && (
         <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">

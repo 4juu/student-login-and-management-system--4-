@@ -33,6 +33,7 @@ export interface GroupSendProgress {
 
 export interface AbsenceSendLogEntry {
   id: string;
+  sessionId: string;
   date: string;
   time: string;
   subjectName: string;

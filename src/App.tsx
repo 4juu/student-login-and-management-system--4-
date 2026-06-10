@@ -202,9 +202,11 @@ function App() {
   const [sendDoneCount, setSendDoneCount] = useState(0);
   const [sendTotalGroups, setSendTotalGroups] = useState(0);
   const sendAbortRef = useRef<AbortController | null>(null);
+  const [currentSendingSessionId, setCurrentSendingSessionId] = useState<string | null>(null);
 
   // 📋 سجل إرسال الغيابات (جلسة فقط)
   const [absenceSendLogs, setAbsenceSendLogs] = useState<AbsenceSendLogEntry[]>([]);
+  const [completedGroupData, setCompletedGroupData] = useState<Record<string, GroupSendProgress[]>>({});
 
   // 🆕 السنة الأكاديمية الحالية
   const currentAcademicYear = getCurrentAcademicYear();
@@ -793,6 +795,7 @@ function App() {
       setSendTotalGroups(groupDataList.length);
       setSendModalOpen(true);
       setIsSending(true);
+      setCurrentSendingSessionId(sessionId);
 
       const controller = new AbortController();
       sendAbortRef.current = controller;
@@ -820,6 +823,7 @@ function App() {
           const allSent = queue.filter(i => i.status === 'sent').length;
           const logEntry: AbsenceSendLogEntry = {
             id: `log_${Date.now()}`,
+            sessionId,
             date: dateKey,
             time,
             subjectName,
@@ -830,9 +834,23 @@ function App() {
             completedAt: new Date().toISOString(),
           };
           setAbsenceSendLogs(prev => [logEntry, ...prev]);
+          const completedGroups: GroupSendProgress[] = groupDataList.map(g => {
+            const items = queue.filter(i => i.groupName === g.groupName);
+            return {
+              groupName: g.groupName,
+              channels: items.map(i => ({
+                channelLabel: i.channelLabel,
+                status: i.status as 'sent' | 'failed' | 'pending',
+              })),
+              allDone: items.every(i => i.status === 'sent' || i.status === 'failed'),
+            };
+          });
+          setCompletedGroupData(prev => ({ ...prev, [sessionId]: completedGroups }));
         }
+        setCurrentSendingSessionId(null);
       }).catch(() => {
         setIsSending(false);
+        setCurrentSendingSessionId(null);
       });
     }
   };
@@ -1142,6 +1160,13 @@ function App() {
                   onCreateSession={handleCreateSession} onSelectSession={handleSelectSession}
                   onDeleteSession={handleDeleteSession} onRenameSession={handleRenameSession}
                   students={students} records={attendanceRecords} onMarkAbsent={handleMarkAbsent}
+                  absenceSendLogs={absenceSendLogs}
+                  isSending={isSending}
+                  currentSendingSessionId={currentSendingSessionId}
+                  sendGroups={sendGroups}
+                  sendDoneCount={sendDoneCount}
+                  sendTotalGroups={sendTotalGroups}
+                  completedGroupData={completedGroupData}
                 />
               )}
               {activeTab === 'login' && (
@@ -1239,36 +1264,10 @@ function App() {
         subjectName={sendSubjectName}
         groups={sendGroups}
         onHide={() => setSendModalOpen(false)}
-        onReopen={() => setSendModalOpen(true)}
         isSending={isSending}
         totalDone={sendDoneCount}
         totalGroups={sendTotalGroups}
       />
-
-      {/* 📋 سجل الإرسال */}
-      {absenceSendLogs.length > 0 && (
-        <div className="fixed bottom-4 right-4 z-40 max-w-xs w-full">
-          <details className="bg-white/90 backdrop-blur-sm border border-gray-200 rounded-xl shadow-lg">
-            <summary className="px-4 py-2.5 text-sm font-bold text-gray-700 cursor-pointer hover:bg-gray-50 rounded-xl flex items-center gap-2">
-              📋 سجل الإرسال ({absenceSendLogs.length})
-            </summary>
-            <div className="px-4 pb-3 space-y-2 max-h-60 overflow-y-auto">
-              {absenceSendLogs.map(log => (
-                <div key={log.id} className="text-[10px] bg-gray-50 rounded-lg p-2 border border-gray-100">
-                  <div className="font-bold text-gray-700">{log.subjectName}</div>
-                  <div className="text-gray-500">{log.date} - {log.time}</div>
-                  <div className="text-gray-400">
-                    {log.groups.join('، ')} | {log.studentCount} طالب
-                  </div>
-                  <div className="text-green-600">
-                    ✅ {log.channelsSent}/{log.totalChannels} قناة
-                  </div>
-                </div>
-              ))}
-            </div>
-          </details>
-        </div>
-      )}
     </div>
   );
 }

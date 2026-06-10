@@ -26,7 +26,6 @@ interface SendProgressModalProps {
   subjectName: string;
   groups: GroupProgress[];
   onHide: () => void;
-  onReopen?: () => void;
   isSending: boolean;
   totalDone: number;
   totalGroups: number;
@@ -45,7 +44,7 @@ const AnimatedCheck: React.FC = () => {
 
   return (
     <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="11" stroke="#22c55e" strokeWidth="2" fill="#f0fdf4" />
+      <circle cx="12" cy="12" r="11" stroke="#22c55e" strokeWidth="2" fill="#14532d" />
       <path
         ref={pathRef}
         d="M7 13l3 3 7-7"
@@ -79,7 +78,7 @@ const PendingDot: React.FC = () => (
 
 const FailedIcon: React.FC = () => (
   <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
-    <circle cx="12" cy="12" r="11" stroke="#ef4444" strokeWidth="2" fill="#fef2f2" />
+    <circle cx="12" cy="12" r="11" stroke="#ef4444" strokeWidth="2" fill="#7f1d1d" />
     <path d="M8 8l8 8M16 8l-8 8" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" />
   </svg>
 );
@@ -89,24 +88,11 @@ export const SendProgressModal: React.FC<SendProgressModalProps> = ({
   subjectName,
   groups,
   onHide,
+  onReopen,
   isSending,
   totalDone,
   totalGroups,
 }) => {
-  if (!isOpen && totalDone < totalGroups) {
-    return (
-      <button
-        onClick={() => { if (typeof onReopen === 'function') onReopen(); else onHide(); }}
-        className="fixed bottom-4 left-4 z-50 bg-white/90 backdrop-blur-sm border border-sky-200 rounded-full shadow-lg px-4 py-2 flex items-center gap-2 hover:bg-white transition"
-      >
-        <Spinner />
-        <span className="text-sm font-medium text-sky-700">
-          📨 إرسال... {totalDone}/{totalGroups}
-        </span>
-      </button>
-    );
-  }
-
   if (!isOpen) return null;
 
   const percent = totalGroups > 0 ? Math.round((totalDone / totalGroups) * 100) : 0;
@@ -116,16 +102,16 @@ export const SendProgressModal: React.FC<SendProgressModalProps> = ({
       <style>{styles}</style>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onHide} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
-        <div className="shrink-0 px-6 pt-6 pb-4 border-b border-gray-100">
+      <div className="relative bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden border border-slate-600">
+        <div className="shrink-0 px-6 pt-6 pb-4 border-b border-slate-700">
           <div className="flex items-center justify-between mb-1">
-            <h2 className="text-lg font-bold text-gray-800">🎯 إرسال إشعارات الغياب</h2>
-            <div className="text-xs text-gray-500">
+            <h2 className="text-lg font-bold text-white">🎯 إرسال إشعارات الغياب</h2>
+            <div className="text-xs text-slate-400">
               {totalDone === totalGroups ? '✅ اكتمل' : `${totalDone}/${totalGroups}`}
             </div>
           </div>
-          <p className="text-sm text-gray-500 mb-3">📚 {subjectName}</p>
-          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+          <p className="text-sm text-slate-400 mb-3">📚 {subjectName}</p>
+          <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full transition-all duration-500 ${
                 totalDone === totalGroups ? 'bg-green-500' : 'bg-blue-500'
@@ -133,7 +119,7 @@ export const SendProgressModal: React.FC<SendProgressModalProps> = ({
               style={{ width: `${percent}%` }}
             />
           </div>
-          <p className="text-[10px] text-gray-400 mt-1">
+          <p className="text-[10px] text-slate-500 mt-1">
             {totalDone === totalGroups
               ? 'تم إرسال جميع الإشعارات بنجاح'
               : `جاري الإرسال... ${percent}%`}
@@ -146,10 +132,10 @@ export const SendProgressModal: React.FC<SendProgressModalProps> = ({
               key={group.groupName}
               className={`flex items-center gap-3 p-3 rounded-xl border transition ${
                 group.allDone
-                  ? 'bg-green-50 border-green-200'
+                  ? 'bg-green-900/40 border-green-700'
                   : group.channels.some(c => c.status === 'sending')
-                  ? 'bg-blue-50 border-blue-200'
-                  : 'bg-gray-50 border-gray-100'
+                  ? 'bg-blue-900/40 border-blue-700'
+                  : 'bg-slate-700/50 border-slate-600'
               }`}
             >
               <div className="shrink-0">
@@ -165,10 +151,10 @@ export const SendProgressModal: React.FC<SendProgressModalProps> = ({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-bold text-gray-800 text-sm truncate">
+                  <span className="font-bold text-white text-sm truncate">
                     {group.groupName}
                   </span>
-                  <span className="text-[10px] text-gray-400 shrink-0">
+                  <span className="text-[10px] text-slate-400 shrink-0">
                     {group.channels.length} {group.channels.length > 1 ? 'قنوات' : 'قناة'}
                   </span>
                 </div>
@@ -179,12 +165,12 @@ export const SendProgressModal: React.FC<SendProgressModalProps> = ({
                         key={ch.channelLabel}
                         className={`text-[10px] px-1.5 py-0.5 rounded-full ${
                           ch.status === 'sent'
-                            ? 'bg-green-100 text-green-700'
+                            ? 'bg-green-900 text-green-300'
                             : ch.status === 'failed'
-                            ? 'bg-red-100 text-red-700'
+                            ? 'bg-red-900 text-red-300'
                             : ch.status === 'sending'
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-gray-100 text-gray-500'
+                            ? 'bg-blue-900 text-blue-300'
+                            : 'bg-slate-600 text-slate-400'
                         }`}
                       >
                         {ch.channelLabel}
@@ -197,7 +183,7 @@ export const SendProgressModal: React.FC<SendProgressModalProps> = ({
           ))}
         </div>
 
-        <div className="shrink-0 px-6 py-4 border-t border-gray-100 flex gap-2">
+        <div className="shrink-0 px-6 py-4 border-t border-slate-700 flex gap-2">
           {totalDone === totalGroups ? (
             <button
               onClick={onHide}
@@ -208,7 +194,7 @@ export const SendProgressModal: React.FC<SendProgressModalProps> = ({
           ) : (
             <button
               onClick={onHide}
-              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 px-4 rounded-xl transition"
+              className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium py-2.5 px-4 rounded-xl transition"
             >
               {isSending ? '📨 الإرسال في الخلفية' : 'إخفاء'}
             </button>
