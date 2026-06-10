@@ -1239,6 +1239,7 @@ function App() {
         subjectName={sendSubjectName}
         groups={sendGroups}
         onHide={() => setSendModalOpen(false)}
+        onReopen={() => setSendModalOpen(true)}
         isSending={isSending}
         totalDone={sendDoneCount}
         totalGroups={sendTotalGroups}
