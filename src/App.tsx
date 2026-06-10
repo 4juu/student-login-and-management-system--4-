@@ -704,8 +704,8 @@ function App() {
     const dateKey = now.toISOString().slice(0, 10);
     const time = now.toLocaleTimeString('ar-EG');
 
-    const subjectName = currentUser?.bio || currentUser?.displayName || stageName;
-    const teacherName = currentUser?.displayName;
+    const subjectName = currentUser?.bio || currentUser?.displayName || stageName || '';
+    const teacherName = currentUser?.displayName || '';
 
     const studentsByGroup = new Map<string, typeof studentIds>();
     for (const studentId of studentIds) {

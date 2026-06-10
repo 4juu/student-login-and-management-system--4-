@@ -96,7 +96,7 @@ export const SendProgressModal: React.FC<SendProgressModalProps> = ({
   if (!isOpen && totalDone < totalGroups) {
     return (
       <button
-        onClick={onReopen || onHide}
+        onClick={() => { if (typeof onReopen === 'function') onReopen(); else onHide(); }}
         className="fixed bottom-4 left-4 z-50 bg-white/90 backdrop-blur-sm border border-sky-200 rounded-full shadow-lg px-4 py-2 flex items-center gap-2 hover:bg-white transition"
       >
         <Spinner />
