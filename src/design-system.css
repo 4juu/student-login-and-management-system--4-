@@ -1,0 +1,466 @@
+/* ============================================ */
+/* 🎨 Premium Dark Glassmorphism Design System   */
+/* Stripe · Linear · Vercel Inspired            */
+/* ============================================ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* ============================================ */
+/* 🪟 Glass Card                                */
+/* ============================================ */
+.glass-card {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.glass-card-sm {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card-sm:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* ============================================ */
+/* 🔵 Unified Buttons                           */
+/* ============================================ */
+.btn-base {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  border: none;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  white-space: nowrap;
+  user-select: none;
+  min-height: 44px;
+  text-decoration: none;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  text-align: center;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #4F46E5, #7C3AED, #9333EA);
+  color: white;
+  box-shadow: 0 10px 30px rgba(124, 58, 237, 0.35);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: scale(1.03);
+  filter: brightness(1.1);
+  box-shadow: 0 14px 36px rgba(124, 58, 237, 0.45);
+}
+
+.btn-primary:active:not(:disabled) { transform: scale(0.97); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.btn-secondary:active:not(:disabled) { transform: scale(0.97); }
+.btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-danger {
+  background: #EF4444;
+  color: white;
+  box-shadow: 0 8px 24px rgba(239, 68, 68, 0.3);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #DC2626;
+  transform: scale(1.03);
+  box-shadow: 0 10px 30px rgba(239, 68, 68, 0.4);
+}
+
+.btn-danger:active:not(:disabled) { transform: scale(0.97); }
+.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ============================================ */
+/* 🪟 Glass Nav                                 */
+/* ============================================ */
+.glass-nav {
+  background: rgba(15, 15, 25, 0.6);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 12px 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+.glass-nav:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* ============================================ */
+/* 🏆 College Card                               */
+/* ============================================ */
+.college-card {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.college-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  border-color: rgba(124, 58, 237, 0.3);
+}
+
+.college-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(124, 58, 237, 0.04));
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.college-card:hover::before { opacity: 1; }
+
+/* ============================================ */
+/* 🏷️ Stage Card                                */
+/* ============================================ */
+.stage-card {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+.stage-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  border-color: rgba(124, 58, 237, 0.25);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+/* ============================================ */
+/* 🪟 Glass Modal                               */
+/* ============================================ */
+.glass-modal {
+  background: rgba(15, 15, 25, 0.9);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+  animation: modalEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+@keyframes modalEnter {
+  from { opacity: 0; transform: scale(0.92) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ============================================ */
+/* 🪟 Glass Input                               */
+/* ============================================ */
+.glass-input {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  color: white;
+  padding: 12px 16px;
+  font-size: 0.9375rem;
+  transition: all 0.25s ease;
+  outline: none;
+  width: 100%;
+  line-height: 1.5;
+  min-height: 44px;
+}
+
+.glass-input::placeholder { color: rgba(148, 163, 184, 0.7); }
+
+.glass-input:focus {
+  border-color: rgba(124, 58, 237, 0.5);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ============================================ */
+/* 🪟 Glass Table                               */
+/* ============================================ */
+.table-container {
+  overflow-x: auto;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.15);
+  -webkit-overflow-scrolling: touch;
+}
+
+.glass-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.glass-table thead th {
+  background: rgba(255, 255, 255, 0.04);
+  color: #CBD5E1;
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 12px 16px;
+  text-align: right;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+
+.glass-table tbody tr { transition: all 0.2s ease; }
+.glass-table tbody tr:hover { background: rgba(255, 255, 255, 0.04); }
+
+.glass-table tbody td {
+  padding: 12px 16px;
+  color: #F1F5F9;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  font-size: 0.875rem;
+  vertical-align: middle;
+}
+
+/* ============================================ */
+/* 🎯 Badge                                     */
+/* ============================================ */
+.glass-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.badge-purple {
+  background: rgba(124, 58, 237, 0.15);
+  color: #A78BFA;
+  border-color: rgba(124, 58, 237, 0.2);
+}
+.badge-amber {
+  background: rgba(245, 158, 11, 0.15);
+  color: #FCD34D;
+  border-color: rgba(245, 158, 11, 0.2);
+}
+.badge-blue {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93C5FD;
+  border-color: rgba(59, 130, 246, 0.2);
+}
+.badge-green {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6EE7B7;
+  border-color: rgba(16, 185, 129, 0.2);
+}
+.badge-red {
+  background: rgba(239, 68, 68, 0.15);
+  color: #FCA5A5;
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+/* ============================================ */
+/* 📦 Container Helpers                          */
+/* ============================================ */
+.glass-container {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+/* Tab buttons */
+.tab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
+  color: #CBD5E1;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  min-height: 40px;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.tab-btn.active {
+  background: linear-gradient(135deg, #4F46E5, #7C3AED);
+  color: white;
+  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.25);
+}
+
+/* Stage button */
+.stage-btn {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+/* ============================================ */
+/* 📱 Responsive                                */
+/* ============================================ */
+.hide-mobile { display: none; }
+@media (min-width: 640px) { .hide-mobile { display: revert; } }
+
+.show-mobile { display: revert; }
+@media (min-width: 640px) { .show-mobile { display: none; } }
+
+/* ============================================ */
+/* 📊 Animated Progress Bar                     */
+/* ============================================ */
+.progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #4F46E5, #7C3AED, #9333EA);
+  transition: width 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.25) 50%, transparent 100%);
+  animation: progressShimmer 2.5s ease-in-out infinite;
+}
+
+@keyframes progressShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.progress-bar-green { background: linear-gradient(90deg, #10B981, #059669); }
+.progress-bar-yellow { background: linear-gradient(90deg, #F59E0B, #D97706); }
+.progress-bar-red { background: linear-gradient(90deg, #EF4444, #DC2626); }
+
+/* ============================================ */
+/* 🎬 Animations                                */
+/* ============================================ */
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(40px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-pageEnter {
+  animation: pageEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeUp {
+  animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ============================================ */
+/* 🌟 Scrollbar                                 */
+/* ============================================ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+
+/* ============================================ */
+/* 📦 Grid Helpers                               */
+/* ============================================ */
+.grid-auto {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+@media (min-width: 640px) { .grid-auto { gap: 20px; } }
+@media (min-width: 768px) { .grid-auto { grid-template-columns: repeat(2, 1fr); gap: 20px; } }
+@media (min-width: 1024px) { .grid-auto { grid-template-columns: repeat(3, 1fr); gap: 24px; } }
+
+.grid-auto-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+@media (min-width: 640px) { .grid-auto-2 { grid-template-columns: repeat(2, 1fr); gap: 16px; } }
+@media (min-width: 1024px) { .grid-auto-2 { gap: 20px; } }

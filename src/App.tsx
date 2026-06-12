@@ -17,6 +17,7 @@ import { CollegeManager } from './components/CollegeManager';
 import { StageSelector } from './components/StageSelector';
 import { SmartChatBot } from './components/SmartChatBot';
 import { MorphingSquare } from './components/MorphingSquare';
+import Aurora from './components/Aurora';
 import { SendProgressModal } from './components/SendProgressModal';
 
 // 🆕 نظام التسجيل الذاتي
@@ -899,21 +900,48 @@ function App() {
 
   if (loading || !tokenChecked) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <MorphingSquare className="w-16 h-16 bg-blue-500" />
+      <div className="min-h-screen relative">
+        <Aurora
+          colorStops={['#0A0A0F', '#4F46E5', '#7C3AED']}
+          blend={0.5}
+          amplitude={1.0}
+          speed={0.3}
+        />
+        <div className="relative z-10 flex items-center justify-center min-h-screen">
+          <MorphingSquare className="w-16 h-16 bg-blue-500" />
+        </div>
       </div>
     );
   }
 
   if (!currentUser) {
-    return <Login onLogin={handleLogin} />;
+    return (
+      <div className="relative min-h-screen">
+        <Aurora
+          colorStops={['#0A0A0F', '#4F46E5', '#7C3AED']}
+          blend={0.5}
+          amplitude={1.0}
+          speed={0.3}
+        />
+        <div className="relative z-10">
+          <Login onLogin={handleLogin} />
+        </div>
+      </div>
+    );
   }
 
   const selectedStage = stages.find(s => s.id === selectedStageId);
   const selectedCollege = colleges.find(c => c.id === selectedCollegeId);
 
   return (
-    <div className="min-h-screen bg-slate-900" dir="rtl">
+    <div className="relative min-h-screen" dir="rtl">
+      <Aurora
+        colorStops={['#0A0A0F', '#4F46E5', '#7C3AED']}
+        blend={0.5}
+        amplitude={1.0}
+        speed={0.3}
+      />
+      <div className="relative z-10">
       <div className="container mx-auto px-3 md:px-4 py-3 md:py-6">
         <div className="mb-8">
           <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
@@ -991,7 +1019,7 @@ function App() {
               <div className="flex flex-nowrap md:flex-wrap gap-2 md:gap-3 pt-3 pb-3 md:pb-3 md:pt-3 justify-start md:justify-center mb-4 md:mb-6">
                 <button
                   onClick={() => setActiveTab('stage-selector')}
-                  className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'stage-selector' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                  className={`tab-btn shrink-0 ${activeTab === 'stage-selector' ? 'active' : ''}`}
                 >
                    اختيار المرحلة
                 </button>
@@ -999,19 +1027,19 @@ function App() {
                   <>
                     <button
                       onClick={() => setActiveTab('colleges')}
-                      className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'colleges' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                      className={`tab-btn shrink-0 ${activeTab === 'colleges' ? 'active' : ''}`}
                     >
                        إدارة الكليات
                     </button>
                     <button
                       onClick={() => setActiveTab('teachers')}
-                      className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'teachers' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                      className={`tab-btn shrink-0 ${activeTab === 'teachers' ? 'active' : ''}`}
                     >
                        التدريسيين
                     </button>
                     <button
                       onClick={() => setActiveTab('system-settings')}
-                      className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'system-settings' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                      className={`tab-btn shrink-0 ${activeTab === 'system-settings' ? 'active' : ''}`}
                     >
                        إعدادات النظام
                     </button>
@@ -1021,14 +1049,14 @@ function App() {
                   <>
                     <button
                       onClick={() => setShowSendLink(true)}
-                      className="shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md hover:from-purple-700 hover:to-pink-700 transition"
+                      className="btn-base btn-primary shrink-0"
                     >
                        إرسال روابط تسجيل
                     </button>
                     <div className="shrink-0 relative" style={{ overflow: 'visible' }}>
                       <button
                         onClick={() => setShowPendingRegistrations(true)}
-                        className="px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:from-amber-600 hover:to-orange-600 transition"
+                        className="btn-base btn-secondary"
                       >
                          طلبات التسجيل
                       </button>
@@ -1046,14 +1074,14 @@ function App() {
                 {isCollegeAdmin && (
                   <button
                     onClick={() => setActiveTab('teachers')}
-                    className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'teachers' ? 'bg-amber-600 text-white' : 'bg-white text-gray-700'}`}
+                    className={`tab-btn shrink-0 ${activeTab === 'teachers' ? 'active' : ''}`}
                   >
                     👨‍🏫 صلاحيات التدريسيين
                   </button>
                 )}
                 <button
                   onClick={() => setActiveTab('profile')}
-                  className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'profile' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                  className={`tab-btn shrink-0 ${activeTab === 'profile' ? 'active' : ''}`}
                 >
                    الملف الشخصي
                 </button>
@@ -1061,13 +1089,13 @@ function App() {
             </div>
 
             {isMainAdmin && activeTab === 'stage-selector' && (
-              <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl">
+              <div className="mb-6 p-4 glass-card-sm">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-center gap-3">
                     <span className="text-3xl">📊</span>
                     <div>
-                      <h3 className="font-bold text-purple-900">بيانات الجامعة الشاملة</h3>
-                      <p className="text-xs text-purple-700">
+                      <h3 className="font-bold text-white">بيانات الجامعة الشاملة</h3>
+                      <p className="text-xs text-white/60">
                         {universityDataLoaded
                           ? `✅ تم تحميل بيانات ${Object.keys(allStagesData).length} مرحلة`
                           : 'حمّل بيانات كل الكليات والمراحل للتحليلات والتقارير الشاملة'}
@@ -1077,12 +1105,12 @@ function App() {
                   <button
                     onClick={loadAllAdminData}
                     disabled={universityDataLoading || stages.length === 0}
-                    className={`px-5 py-2.5 rounded-lg font-bold text-white transition shadow-md ${
+                    className={`px-5 py-2.5 rounded-lg font-bold text-white transition shadow-md btn-base ${
                       universityDataLoading
-                        ? 'bg-gray-400 cursor-wait'
+                        ? 'opacity-60 cursor-wait'
                         : universityDataLoaded
-                        ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700'
-                        : 'bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700'
+                        ? 'btn-primary'
+                        : 'btn-primary'
                     } ${stages.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     {universityDataLoading ? '⏳ جاري التحميل...' : universityDataLoaded ? '🔄 تحديث البيانات' : '⚡ تحميل بيانات الجامعة'}
@@ -1129,25 +1157,25 @@ function App() {
             <div className="flex overflow-x-auto flex-nowrap md:flex-wrap gap-2 md:gap-3 pb-1 md:pb-0 justify-start md:justify-center mb-4 md:mb-6 scrollbar-none">
               <button
                 onClick={() => setActiveTab('sessions')}
-                className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'sessions' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                className={`tab-btn shrink-0 ${activeTab === 'sessions' ? 'active' : ''}`}
               >
                 📋 السجلات ({sessions.length})
               </button>
               <button
                 onClick={() => setActiveTab('login')}
-                className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'login' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                className={`tab-btn shrink-0 ${activeTab === 'login' ? 'active' : ''}`}
               >
                 📝 تسجيل الحضور
               </button>
               <button
                 onClick={() => setActiveTab('manage')}
-                className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'manage' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                className={`tab-btn shrink-0 ${activeTab === 'manage' ? 'active' : ''}`}
               >
                 👥 {canEditStudents ? `إدارة الطلاب (${students.length})` : `الطلاب (${students.length})`}
               </button>
               <button
                 onClick={() => setActiveTab('records')}
-                className={`shrink-0 px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg font-medium text-sm sm:text-base ${activeTab === 'records' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                className={`tab-btn shrink-0 ${activeTab === 'records' ? 'active' : ''}`}
               >
                 📊 سجل الحضور ({attendanceRecords.length})
               </button>
@@ -1172,15 +1200,15 @@ function App() {
               {activeTab === 'login' && (
                 <div className="max-w-lg mx-auto">
                   {!activeSessionId ? (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-                      <p className="text-yellow-800 font-medium mb-4">لا يوجد سجل نشط!</p>
-                      <button onClick={() => setActiveTab('sessions')} className="bg-yellow-600 text-white py-2 px-6 rounded-md">
+                    <div className="glass-card-sm p-6 text-center">
+                      <p className="text-amber-300 font-medium mb-4">لا يوجد سجل نشط!</p>
+                      <button onClick={() => setActiveTab('sessions')} className="btn-base btn-primary px-6 py-2">
                         انتقل لإدارة السجلات
                       </button>
                     </div>
                   ) : students.length === 0 ? (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-                      <p className="text-yellow-800 font-medium">لا يوجد طلاب في هذه المرحلة</p>
+                    <div className="glass-card-sm p-6 text-center">
+                      <p className="text-amber-300 font-medium">لا يوجد طلاب في هذه المرحلة</p>
                     </div>
                   ) : (
                     <AttendanceLogin
@@ -1215,7 +1243,7 @@ function App() {
         )}
 
         {/* ✨ Footer */}
-        <div className="mt-12 text-center text-gray-600">
+        <div className="mt-12 text-center text-white/40">
           <p className="text-sm">نظام تسجيل الحضور الإلكتروني - {new Date().getFullYear()}</p>
           <div className="mt-2 flex justify-center">
             <TextScramble text="BY - PH. Mujtaba Haitham" />
@@ -1268,6 +1296,7 @@ function App() {
         totalDone={sendDoneCount}
         totalGroups={sendTotalGroups}
       />
+      </div>
     </div>
   );
 }

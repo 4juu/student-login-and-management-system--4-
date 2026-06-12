@@ -243,7 +243,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   if (step === 'loading') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4" dir="rtl">
+      <div className="min-h-screen bg-[#0A0A0F] flex items-center justify-center p-4" dir="rtl">
         <div className="w-full max-w-md"><SkeletonCard /></div>
       </div>
     );
@@ -251,12 +251,12 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   if (step === 'invalid-link') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4" dir="rtl">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+      <div className="min-h-screen bg-[#0A0A0F] flex items-center justify-center p-4" dir="rtl">
+        <div className="glass-card p-8 max-w-md w-full text-center">
           <div className="text-6xl mb-4">⚠️</div>
-          <h2 className="text-2xl font-bold text-red-700 mb-2">رابط غير صالح</h2>
-          <p className="text-gray-600 mb-6">{errorMsg}</p>
-          <button onClick={onExit} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg w-full">
+          <h2 className="text-2xl font-bold text-red-400 mb-2">رابط غير صالح</h2>
+          <p className="text-white/60 mb-6">{errorMsg}</p>
+          <button onClick={onExit} className="btn-base btn-primary w-full py-3">
             العودة للرئيسية
           </button>
         </div>
@@ -272,17 +272,17 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   if (step === 'name-mismatch' && student && idData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-orange-50 flex items-center justify-center p-4" dir="rtl">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+      <div className="min-h-screen bg-[#0A0A0F] flex items-center justify-center p-4" dir="rtl">
+        <div className="glass-card p-8 max-w-md w-full text-center">
           <div className="text-6xl mb-4">⚠️</div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">الاسم غير متطابق</h2>
-          <p className="text-sm text-gray-500 mb-4">نسبة التطابق: {matchPercentage}% (المطلوب {MIN_MATCH}% فأكثر)</p>
-          <div className="bg-gray-50 rounded-xl p-4 mb-4 text-right">
-            <p className="text-sm text-gray-500">المسجل بالنظام: <span className="text-gray-800 font-bold">{student.name}</span></p>
-            <p className="text-sm text-gray-500">المستخرج من الهوية: <span className="text-gray-800 font-bold">{idData.name || idData.fullName}</span></p>
+          <h2 className="text-2xl font-bold text-white mb-2">الاسم غير متطابق</h2>
+          <p className="text-sm text-white/50 mb-4">نسبة التطابق: {matchPercentage}% (المطلوب {MIN_MATCH}% فأكثر)</p>
+          <div className="glass-card-sm p-4 mb-4 text-right">
+            <p className="text-sm text-white/50">المسجل بالنظام: <span className="text-white font-bold">{student.name}</span></p>
+            <p className="text-sm text-white/50">المستخرج من الهوية: <span className="text-white font-bold">{idData.name || idData.fullName}</span></p>
           </div>
-          <p className="text-sm text-gray-600 mb-6">الاسم في الهوية لا يتطابق مع الاسم المسجل في النظام. حاول تصوير الهوية بشكل أوضح أو تأكد من استخدام الهوية الصحيحة.</p>
-          <button onClick={handleRetryId} className="w-full py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg">
+          <p className="text-sm text-white/60 mb-6">الاسم في الهوية لا يتطابق مع الاسم المسجل في النظام. حاول تصوير الهوية بشكل أوضح أو تأكد من استخدام الهوية الصحيحة.</p>
+          <button onClick={handleRetryId} className="btn-base btn-secondary w-full py-3">
             🔄 إعادة التصوير
           </button>
         </div>
@@ -304,11 +304,11 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   if (step === 'submitting') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4" dir="rtl">
+      <div className="min-h-screen bg-[#0A0A0F] flex items-center justify-center p-4" dir="rtl">
         <div className="text-center">
-          <div className="inline-block w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4" />
-          <p className="text-gray-700 font-bold text-lg">جاري إرسال البيانات...</p>
-          <p className="text-sm text-gray-500 mt-2">لا تغلق الصفحة</p>
+          <div className="inline-block w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4" />
+          <p className="text-white font-bold text-lg">جاري إرسال البيانات...</p>
+          <p className="text-sm text-white/50 mt-2">لا تغلق الصفحة</p>
         </div>
       </div>
     );
@@ -320,14 +320,14 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   if (step === 'error') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4" dir="rtl">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+      <div className="min-h-screen bg-[#0A0A0F] flex items-center justify-center p-4" dir="rtl">
+        <div className="glass-card p-8 max-w-md w-full text-center">
           <div className="text-6xl mb-4">❌</div>
-          <h2 className="text-2xl font-bold text-red-700 mb-2">حدث خطأ</h2>
-          <p className="text-gray-600 mb-6">{errorMsg}</p>
+          <h2 className="text-2xl font-bold text-red-400 mb-2">حدث خطأ</h2>
+          <p className="text-white/60 mb-6">{errorMsg}</p>
           <div className="grid grid-cols-2 gap-2">
-            <button onClick={onExit} className="py-3 bg-gray-200 text-gray-700 font-bold rounded-lg">خروج</button>
-            <button onClick={() => goTo('upload-id')} className="py-3 bg-purple-600 text-white font-bold rounded-lg">إعادة</button>
+            <button onClick={onExit} className="btn-base btn-secondary py-3">خروج</button>
+            <button onClick={() => goTo('upload-id')} className="btn-base btn-primary py-3">إعادة</button>
           </div>
         </div>
       </div>

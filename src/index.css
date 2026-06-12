@@ -35,48 +35,48 @@
 }
 
 :root {
-  --background: oklch(0.99 0.003 264.695);
-  --foreground: oklch(0.125 0.015 264.695);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.135 0.015 264.695);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.135 0.015 264.695);
-  --primary: oklch(0.185 0.02 264.695);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.955 0.008 264.695);
-  --secondary-foreground: oklch(0.185 0.02 264.695);
-  --muted: oklch(0.955 0.008 264.695);
-  --muted-foreground: oklch(0.535 0.015 264.695);
-  --accent: oklch(0.955 0.008 264.695);
-  --accent-foreground: oklch(0.185 0.02 264.695);
-  --destructive: oklch(0.588 0.22 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.91 0.008 264.695);
-  --input: oklch(0.91 0.008 264.695);
-  --ring: oklch(0.68 0.02 264.695);
+  --background: #0A0A0F;
+  --foreground: #F1F5F9;
+  --card: rgba(255, 255, 255, 0.05);
+  --card-foreground: #F1F5F9;
+  --popover: rgba(15, 15, 25, 0.95);
+  --popover-foreground: #F1F5F9;
+  --primary: #4F46E5;
+  --primary-foreground: #FFFFFF;
+  --secondary: rgba(255, 255, 255, 0.06);
+  --secondary-foreground: #F1F5F9;
+  --muted: rgba(255, 255, 255, 0.04);
+  --muted-foreground: #94A3B8;
+  --accent: rgba(124, 58, 237, 0.15);
+  --accent-foreground: #A78BFA;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: rgba(124, 58, 237, 0.5);
   --radius: 0.75rem;
 }
 
 .dark {
-  --background: oklch(0.125 0.015 264.695);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.135 0.015 264.695);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.135 0.015 264.695);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.185 0.02 264.695);
-  --secondary: oklch(0.26 0.015 264.695);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.26 0.015 264.695);
-  --muted-foreground: oklch(0.68 0.015 264.695);
-  --accent: oklch(0.26 0.015 264.695);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.588 0.22 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.26 0.015 264.695);
-  --input: oklch(0.26 0.015 264.695);
-  --ring: oklch(0.45 0.02 264.695);
+  --background: #0A0A0F;
+  --foreground: #F1F5F9;
+  --card: rgba(255, 255, 255, 0.05);
+  --card-foreground: #F1F5F9;
+  --popover: rgba(15, 15, 25, 0.95);
+  --popover-foreground: #F1F5F9;
+  --primary: #4F46E5;
+  --primary-foreground: #FFFFFF;
+  --secondary: rgba(255, 255, 255, 0.06);
+  --secondary-foreground: #F1F5F9;
+  --muted: rgba(255, 255, 255, 0.04);
+  --muted-foreground: #94A3B8;
+  --accent: rgba(124, 58, 237, 0.15);
+  --accent-foreground: #A78BFA;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: rgba(124, 58, 237, 0.5);
 }
 
 /* ============================================ */
@@ -102,24 +102,25 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
-    font-family: 'Cairo', 'Tajawal', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    font-size: 15px;
-    line-height: 1.7;
+    font-family: 'IBM Plex Sans Arabic', 'Cairo', 'Tajawal', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 16px;
+    line-height: 1.8;
+    font-weight: 500;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     transition: background-color 0.3s ease, color 0.3s ease;
   }
 
   .dark body {
-    background-color: rgb(15 23 42);
-    color: rgb(226 232 240);
+    background-color: #0A0A0F;
+    color: rgb(241 245 249);
   }
 
   /* === Typography === */
-  h1 { font-size: 1.75rem; font-weight: 800; line-height: 1.3; color: rgb(15 23 42); }
-  h2 { font-size: 1.5rem; font-weight: 700; line-height: 1.35; color: rgb(30 41 59); }
-  h3 { font-size: 1.25rem; font-weight: 700; line-height: 1.4; color: rgb(30 41 59); }
-  h4 { font-size: 1.1rem; font-weight: 600; line-height: 1.4; color: rgb(51 65 85); }
+  h1 { font-size: 1.75rem; font-weight: 700; line-height: 1.5; color: #FFFFFF; }
+  h2 { font-size: 1.5rem; font-weight: 700; line-height: 1.5; color: #FFFFFF; }
+  h3 { font-size: 1.25rem; font-weight: 600; line-height: 1.5; color: #F1F5F9; }
+  h4 { font-size: 1.1rem; font-weight: 600; line-height: 1.5; color: #CBD5E1; }
 
   .dark h1,
   .dark h2,
@@ -128,7 +129,7 @@
 
   /* === Inputs === */
   input, select, textarea {
-    font-family: 'Cairo', 'Tajawal', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'IBM Plex Sans Arabic', 'Cairo', 'Tajawal', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     font-size: 0.9375rem;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
@@ -152,7 +153,7 @@
 
   /* === Buttons === */
   button {
-    font-family: 'Cairo', 'Tajawal', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'IBM Plex Sans Arabic', 'Cairo', 'Tajawal', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.35s ease, transform 0.25s ease;
