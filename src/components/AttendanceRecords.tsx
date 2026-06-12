@@ -70,6 +70,8 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
       isoDate: normalizeAnyDate(s.date),
     })).sort((a, b) => a.isoDate.localeCompare(b.isoDate)).reverse(),
   [sessions, normalizeAnyDate]);
+
+  const [exportType, setExportType] = useState<'single' | 'range'>('range');
   const [startDate, setStartDate] = useState<string>(firstDate);
   const [endDate, setEndDate] = useState<string>(lastDate);
   const [singleDate, setSingleDate] = useState<string>(lastDate);
