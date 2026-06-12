@@ -10,6 +10,17 @@ import { TelegramConfig } from "../types/telegram";
 
 const MAX_RETRIES = 3;
 const retryQueues = new Map<string, { fn: () => Promise<void>; attempts: number }>();
+const pendingSaves = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingSaveFunctions = new Map<string, () => Promise<void>>();
+
+export const cancelAllPendingSaves = (): void => {
+  for (const [key, timeout] of pendingSaves) {
+    clearTimeout(timeout);
+    pendingSaves.delete(key);
+    pendingSaveFunctions.delete(key);
+  }
+  retryQueues.clear();
+};
 
 const retryWithBackoff = async (key: string, fn: () => Promise<void>, attempt: number = 1): Promise<void> => {
   try {
@@ -144,8 +155,6 @@ const stripUndefined = (obj: Record<string, unknown>): Record<string, unknown> =
 // ============================================================
 
 const SAVE_DELAY = 2000;
-const pendingSaves = new Map<string, ReturnType<typeof setTimeout>>();
-const pendingSaveFunctions = new Map<string, () => Promise<void>>();
 
 const debouncedSave = (key: string, saveFn: () => Promise<void>): void => {
   const existing = pendingSaves.get(key);

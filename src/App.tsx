@@ -43,6 +43,7 @@ import {
   saveUserData,
   deleteStageData,
   flushAllPendingSaves,
+  cancelAllPendingSaves,
   getCurrentAcademicYear,
 } from './firebase/dataService';
 import { startBackgroundPreload } from './services/faceRecognition';
@@ -683,6 +684,7 @@ function App() {
   };
 
   const handleClearRecords = () => {
+    cancelAllPendingSaves();
     intentionalDeleteRef.current.records = true;
     setAttendanceRecords([]);
   };
