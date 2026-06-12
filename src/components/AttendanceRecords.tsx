@@ -14,7 +14,7 @@ interface AttendanceRecordsProps {
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
 const DEFAULT_PAGE_SIZE = 100;
 
-export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
+export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
   records,
   sessions,
   students = [],
@@ -48,11 +48,28 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
       normalizeAnyDate(a.date).localeCompare(normalizeAnyDate(b.date))
     ), [sessions, normalizeAnyDate]);
 
-  const today = new Date().toISOString().split('T')[0];
-  const firstDate = sortedSessions.length > 0 ? normalizeAnyDate(sortedSessions[0].date) : today;
-  const lastDate = sortedSessions.length > 0 ? normalizeAnyDate(sortedSessions[sortedSessions.length - 1].date) : today;
+  const { today, firstDate, lastDate } = useMemo(() => {
+    const t = new Date().toISOString().split('T')[0];
+    const f = sortedSessions.length > 0 ? normalizeAnyDate(sortedSessions[0].date) : t;
+    const l = sortedSessions.length > 0 ? normalizeAnyDate(sortedSessions[sortedSessions.length - 1].date) : t;
+    return { today: t, firstDate: f, lastDate: l };
+  }, [sortedSessions, normalizeAnyDate]);
 
-  const [exportType, setExportType] = useState<'single' | 'range'>('range');
+  const sessionRecordCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const record of records) {
+      counts.set(record.sessionId, (counts.get(record.sessionId) || 0) + 1);
+    }
+    return counts;
+  }, [records]);
+
+  const normalizedDateOptions = useMemo(() =>
+    [...sessions].map(s => ({
+      id: s.id,
+      name: s.name,
+      isoDate: normalizeAnyDate(s.date),
+    })).sort((a, b) => a.isoDate.localeCompare(b.isoDate)).reverse(),
+  [sessions, normalizeAnyDate]);
   const [startDate, setStartDate] = useState<string>(firstDate);
   const [endDate, setEndDate] = useState<string>(lastDate);
   const [singleDate, setSingleDate] = useState<string>(lastDate);
@@ -511,25 +528,11 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
                 onChange={e => setSingleDate(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 font-bold text-gray-800"
               >
-                {[...sessions].reverse().map(s => {
-                  const arabicNumbers = '٠١٢٣٤٥٦٧٨٩';
-                  const englishNumbers = '0123456789';
-                  let normalized = s.date.replace(/[٠-٩]/g, (d) => englishNumbers[arabicNumbers.indexOf(d)]);
-                  normalized = normalized.replace(/[‏‎\u200E\u200F]/g, '').trim();
-
-                  let isoDate = normalized;
-                  const slashMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-                  if (slashMatch) {
-                    const [, day, month, year] = slashMatch;
-                    isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                  }
-
-                  return (
-                    <option key={s.id} value={isoDate}>
-                      {s.name} ({isoDate})
-                    </option>
-                  );
-                })}
+                {normalizedDateOptions.map(s => (
+                  <option key={s.id} value={s.isoDate}>
+                    {s.name} ({s.isoDate})
+                  </option>
+                ))}
               </select>
             </div>
           )}
@@ -574,14 +577,11 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
                 className="px-2 sm:px-3 py-1.5 border border-gray-300 rounded-md text-xs sm:text-sm font-medium"
               >
                 <option value="all">جميع الأيام ({records.length})</option>
-                {sessions.map((session) => {
-                  const sessRecords = records.filter(r => r.sessionId === session.id).length;
-                  return (
-                    <option key={session.id} value={session.id}>
-                      {session.name} ({sessRecords})
-                    </option>
-                  );
-                })}
+                {sessions.map((session) => (
+                  <option key={session.id} value={session.id}>
+                    {session.name} ({sessionRecordCounts.get(session.id) || 0})
+                  </option>
+                ))}
               </select>
             )}
 
@@ -793,4 +793,4 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
       </div>
     </div>
   );
-};
+});
