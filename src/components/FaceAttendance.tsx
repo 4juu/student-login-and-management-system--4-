@@ -653,7 +653,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black flex flex-col" dir="rtl">
+    <div className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-2 sm:p-4" dir="rtl">
+      <div className="w-full max-w-5xl max-h-[98vh] bg-black rounded-2xl flex flex-col overflow-hidden shadow-2xl">
       <header className="flex items-center justify-between px-3 py-2 bg-gray-900/90 border-b border-white/10"
         style={{ paddingTop: 'max(0.5rem,env(safe-area-inset-top))' }}>
         <div className="flex items-center gap-2">
@@ -817,6 +818,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           onClose={handleRegClose}
         />
       )}
+      </div>
     </div>
   );
 };

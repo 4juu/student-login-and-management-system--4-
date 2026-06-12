@@ -375,7 +375,8 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black text-white flex flex-col" dir="rtl">
+    <div className="fixed inset-0 z-[9999] bg-black/80 text-white flex items-center justify-center p-2 sm:p-4" dir="rtl">
+      <div className="w-full max-w-2xl max-h-[98vh] bg-black rounded-2xl flex flex-col overflow-hidden shadow-2xl">
       <header className="flex items-center justify-between px-3 py-2 bg-gray-900/95 border-b border-white/10"
         style={{ paddingTop: 'max(0.5rem,env(safe-area-inset-top))' }}>
         <h2 className="text-sm font-bold flex items-center gap-1.5">🔳 QR</h2>
@@ -508,6 +509,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         </div>
       )}
 
+      </div>
       <style>{`
         @keyframes scanLine{0%,100%{top:8%;opacity:.5}50%{top:88%;opacity:1}}
         .animate-scan-line{animation:scanLine 1.8s ease-in-out infinite;position:absolute}

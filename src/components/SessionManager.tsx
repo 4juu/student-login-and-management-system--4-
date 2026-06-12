@@ -57,7 +57,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
   const presentStudentIdsForSession = useMemo(() => {
     if (!absentSessionId) return new Set<string>();
     return new Set(
-      records.filter(r => r.sessionId === absentSessionId).map(r => r.studentId)
+      records.filter(r => r.sessionId === absentSessionId && r.status === 'present').map(r => r.studentId)
     );
   }, [records, absentSessionId]);
 
@@ -143,7 +143,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
   };
 
   const sessionPresentCount = (sessionId: string) =>
-    records.filter(r => r.sessionId === sessionId).length;
+    records.filter(r => r.sessionId === sessionId && r.status === 'present').length;
 
   const renderSendLogModal = () => {
     const isThisSending = isSending && currentSendingSessionId === sendLogSessionId;
