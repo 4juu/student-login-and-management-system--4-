@@ -653,10 +653,38 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black" dir="rtl">
+    <div className="fixed inset-0 z-[9999] bg-black/80 flex flex-col" dir="rtl">
+      <div className="w-full max-w-5xl mx-auto bg-black flex flex-col shadow-2xl flex-1 overflow-hidden">
+      <header className="flex items-center justify-between px-3 py-2 bg-gray-900/90"
+        style={{ paddingTop: 'max(0.5rem,env(safe-area-inset-top))' }}>
+        <div className="flex items-center gap-2">
+          <div className={`px-3 py-1 rounded-full text-white text-xs font-bold transition-all duration-300 flex items-center gap-1.5 ${modeConfig[mode].bg}`}>
+            <span>{modeConfig[mode].icon}</span>
+            <span className="truncate max-w-[140px]">{modeConfig[mode].text}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => setShowLog(!showLog)}
+            className={`${showLog ? 'bg-blue-600' : 'bg-white/10'} hover:bg-white/20 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition active:scale-95 flex items-center gap-1`}>
+            <span>📋</span>
+            {counts.marked + counts.already > 0 && (
+              <span className="bg-emerald-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center">{counts.marked + counts.already}</span>
+            )}
+          </button>
+          <button onClick={handleShowReg}
+            className="bg-purple-600/80 hover:bg-purple-600 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition active:scale-95 flex items-center gap-1">
+            <span>📸</span>
+            <span className="hidden sm:inline">بصمة</span>
+          </button>
+          <button onClick={handleClose}
+            className="bg-white/10 hover:bg-white/20 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition active:scale-95">
+            ✕
+          </button>
+        </div>
+      </header>
 
       {showLog && (
-        <div className="absolute top-4 right-4 z-30 w-64 bg-gray-900/98 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl max-h-[70vh] flex flex-col">
+        <div className="absolute top-12 right-2 z-30 w-64 bg-gray-900/98 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl max-h-[70vh] flex flex-col">
           <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
             <p className="text-white font-bold text-xs flex items-center gap-1.5">
               📋 سجل الحضور
@@ -698,13 +726,13 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       )}
 
       {error && (
-        <div className="absolute top-20 left-4 right-4 z-10 bg-red-600/90 text-white p-3 rounded-xl text-sm font-bold text-center">
+        <div className="absolute top-14 left-4 right-4 z-10 bg-red-600/90 text-white p-3 rounded-xl text-sm font-bold text-center">
           {error}
           <button onClick={initCamera} className="block mx-auto mt-2 bg-white/20 px-4 py-1.5 rounded-lg text-xs">🔄 إعادة</button>
         </div>
       )}
 
-      <div className="absolute inset-0 bg-gray-900 flex items-center justify-center overflow-hidden">
+      <div className="flex-1 relative bg-gray-900 flex items-center justify-center overflow-hidden">
         {studentsWithFace.length === 0 && mode !== 'loading' && (
           <div className="absolute inset-0 flex items-center justify-center z-20">
             <div className="bg-gray-800/90 rounded-2xl p-6 text-center max-w-xs">
@@ -719,8 +747,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
         <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
           <video ref={videoRef}
             autoPlay playsInline muted
-            className="w-full h-full object-cover"
-            style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }}
+            className="max-w-full max-h-full object-contain"
+            style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none', minWidth: 320, minHeight: 240 }}
           />
         </div>
 
@@ -728,52 +756,48 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           className="absolute inset-0 w-full h-full pointer-events-none"
         />
 
-        {cameraReady && mode === 'active' && studentsWithFace.length > 0 && (
-          <div className="absolute top-24 left-1/2 -translate-x-1/2 pointer-events-none z-10">
-            <div className="bg-black/50 backdrop-blur-sm text-white/80 px-4 py-2 rounded-full text-xs font-medium flex items-center gap-2 border border-white/10">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-              </span>
-              أنظر إلى الكاميرا للتسجيل
-            </div>
-          </div>
-        )}
-
-        {mode === 'active' && (
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
-            <button onClick={toggleCamera}
-              className="w-10 h-10 flex items-center justify-center bg-black/50 text-white rounded-full active:scale-90 text-sm backdrop-blur-sm border border-white/10"
-              title="تبديل الكاميرا">
-              🔄
-            </button>
-            <button onClick={handleClose}
-              className="w-10 h-10 flex items-center justify-center bg-black/50 text-white rounded-full active:scale-90 text-sm backdrop-blur-sm border border-white/10"
-              title="إغلاق">
-              ✕
-            </button>
-            <button onClick={() => setShowLog(!showLog)}
-              className="w-10 h-10 flex items-center justify-center bg-black/50 text-white rounded-full active:scale-90 text-sm backdrop-blur-sm border border-white/10 relative"
-              title="السجل">
-              📋
-              {counts.marked + counts.already > 0 && (
-                <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center">{counts.marked + counts.already}</span>
-              )}
-            </button>
-            <button onClick={handleShowReg}
-              className="w-10 h-10 flex items-center justify-center bg-purple-600/80 text-white rounded-full active:scale-90 text-sm backdrop-blur-sm border border-white/10"
-              title="تسجيل بصمة">
-              📸
-            </button>
-            {hasTorch && (
-              <button onClick={toggleTorch}
-                className={`w-10 h-10 flex items-center justify-center rounded-full active:scale-90 text-sm backdrop-blur-sm border border-white/10 ${
-                  torchOn ? 'bg-yellow-500 text-black' : 'bg-black/50 text-white'
-                }`}
-                title="فلاش">
-                {torchOn ? '💡' : '🔦'}
-              </button>
+        {cameraReady && (
+          <div className="absolute bottom-4 left-4 right-4 z-10">
+            {mode === 'active' && studentsWithFace.length > 0 && (
+              <div className="flex justify-center mb-2 pointer-events-none">
+                <div className="bg-gray-900/70 backdrop-blur-sm text-white/80 px-4 py-2 rounded-full text-xs font-medium flex items-center gap-2 border border-white/10">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                  </span>
+                  أنظر إلى الكاميرا للتسجيل
+                </div>
+              </div>
             )}
+
+            <div className="flex items-center justify-center gap-2 bg-gray-900/80 backdrop-blur-sm rounded-2xl px-3 py-2 border border-white/10 mx-auto w-fit">
+              <button onClick={toggleCamera}
+                className="w-9 h-9 flex items-center justify-center bg-white/15 text-white rounded-full active:scale-90 text-sm"
+                title="تبديل الكاميرا">
+                🔄
+              </button>
+
+              <div className="flex items-center gap-1 px-1 border-r border-l border-white/10">
+                {ZOOM_STEPS.map(s => (
+                  <button key={s} onClick={() => applyZoom(s)}
+                    className={`px-2 py-1 rounded-md text-[10px] font-bold transition active:scale-90 ${
+                      Math.abs(zoom - s) < 0.01 ? 'bg-emerald-500 text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'
+                    }`}>
+                    {s}x
+                  </button>
+                ))}
+              </div>
+
+              {hasTorch && (
+                <button onClick={toggleTorch}
+                  className={`w-9 h-9 flex items-center justify-center rounded-full active:scale-90 text-sm ${
+                    torchOn ? 'bg-yellow-500 text-black' : 'bg-white/15 text-white'
+                  }`}
+                  title="فلاش">
+                  {torchOn ? '💡' : '🔦'}
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -794,6 +818,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           onClose={handleRegClose}
         />
       )}
+      </div>
     </div>
   );
 };
