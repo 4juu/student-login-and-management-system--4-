@@ -1072,8 +1072,8 @@ function App() {
                       </button>
                       {pendingCount > 0 && (
                         <span
-                          className="absolute bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center animate-pulse shadow-lg"
-                          style={{ top: '-10px', right: '-10px', zIndex: 9999 }}
+                          className="absolute bg-red-500 text-white text-xs font-bold rounded-full min-w-[22px] h-[22px] px-1.5 flex items-center justify-center shadow-lg"
+                          style={{ top: '-8px', left: '-8px', zIndex: 9999, animation: 'pulse-badge 1.5s ease-in-out infinite' }}
                         >
                           {pendingCount > 99 ? '99+' : pendingCount}
                         </span>
@@ -1189,6 +1189,24 @@ function App() {
               >
                 📊 سجل الحضور ({attendanceRecords.length})
               </button>
+              {(isMainAdmin || isCollegeAdmin) && (
+                <div className="shrink-0 relative" style={{ overflow: 'visible' }}>
+                  <button
+                    onClick={() => setShowPendingRegistrations(true)}
+                    className="btn-base btn-secondary text-xs py-1.5 px-2"
+                  >
+                    📋 طلبات التسجيل
+                  </button>
+                  {pendingCount > 0 && (
+                    <span
+                      className="absolute bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[20px] h-[20px] px-1 flex items-center justify-center shadow-lg"
+                      style={{ top: '-7px', left: '-7px', zIndex: 9999, animation: 'pulse-badge 1.5s ease-in-out infinite' }}
+                    >
+                      {pendingCount > 99 ? '99+' : pendingCount}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             <div key={`stage-tab-${activeTab}`} className="animate-pageEnter">

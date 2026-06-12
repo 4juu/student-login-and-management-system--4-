@@ -464,3 +464,11 @@
 }
 @media (min-width: 640px) { .grid-auto-2 { grid-template-columns: repeat(2, 1fr); gap: 16px; } }
 @media (min-width: 1024px) { .grid-auto-2 { gap: 20px; } }
+
+/* ============================================ */
+/* 🔴 Badge Pulse Animation                     */
+/* ============================================ */
+@keyframes pulse-badge {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.85; }
+}
