@@ -310,7 +310,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
         ];
 
         targetSessions.forEach(session => {
-          const isPresent = records.some(r => r.sessionId === session.id && r.studentId === student.id);
+          const isPresent = records.some(r => r.sessionId === session.id && r.studentId === student.id && r.status === 'present');
           if (isPresent) {
             row.push('✅');
           } else {
@@ -675,6 +675,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
             <thead className="bg-gray-50 sticky top-0">
               <tr>
                 <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">#</th>
+                <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
                 <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الرمز</th>
                 <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الاسم</th>
                 <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الكروب</th>
@@ -684,7 +685,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
             <tbody className="bg-white divide-y divide-gray-200">
               {paginatedRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-3 sm:px-6 py-8 text-center text-gray-500 text-sm font-medium">
+                  <td colSpan={6} className="px-3 sm:px-6 py-8 text-center text-gray-500 text-sm font-medium">
                     {searchRecord || selectedSessionId !== 'all'
                       ? '🔍 لا توجد نتائج مطابقة'
                       : 'لا توجد سجلات حضور مدخلة'}
@@ -696,6 +697,13 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = ({
                   return (
                     <tr key={record.id} className="hover:bg-gray-50">
                       <td className="px-3 sm:px-6 py-3 text-sm text-gray-500">{globalIndex}</td>
+                      <td className="px-3 sm:px-6 py-3">
+                        {record.status === 'present' ? (
+                          <span className="px-2 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">✅ حاضر</span>
+                        ) : (
+                          <span className="px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">❌ غائب</span>
+                        )}
+                      </td>
                       <td className="px-3 sm:px-6 py-3">
                         <span className="px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
                           {record.studentCode}

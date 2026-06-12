@@ -372,7 +372,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                   {/* معلومات إضافية */}
                   <div className="flex gap-2 flex-wrap mb-3">
                     <span className="text-[10px] bg-white border border-gray-300 rounded-full px-2 py-1">
-                      🔳 QR: <code className="font-mono">{req.qrCodeId.slice(0, 16)}...</code>
+                      🔳 QR: <code className="font-mono">{req.qrCodeId ? `${req.qrCodeId.slice(0, 16)}...` : '—'}</code>
                     </span>
                     <span className="text-[10px] bg-white border border-gray-300 rounded-full px-2 py-1">
                       😊 بصمة وجه مسجلة
