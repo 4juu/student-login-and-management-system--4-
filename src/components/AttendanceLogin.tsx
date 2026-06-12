@@ -54,10 +54,10 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
     const student = students.find((s) => s.code === codeToCheck);
 
     if (student) {
-      const alreadyExists = records.some(
-        r => r.sessionId === activeSessionId && r.studentId === student.id
+      const alreadyPresent = records.some(
+        r => r.sessionId === activeSessionId && r.studentId === student.id && r.status === 'present'
       );
-      if (alreadyExists) {
+      if (alreadyPresent) {
         setMessage({ type: 'error', text: `⚠️ ${student.name} مسجل حضور مسبقاً` });
         setCode('');
         return;
@@ -134,7 +134,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
 
   const alreadyPresentIds = React.useMemo(() => {
     const ids = new Set<string>();
-    records.filter(r => r.sessionId === activeSessionId).forEach(r => ids.add(r.studentId));
+    records.filter(r => r.sessionId === activeSessionId && r.status === 'present').forEach(r => ids.add(r.studentId));
     return ids;
   }, [records, activeSessionId]);
 

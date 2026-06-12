@@ -667,10 +667,19 @@ function App() {
   const processedAttendanceRef = useRef(new Set<string>());
 
   const handleAttendanceRecord = (record: AttendanceRecord) => {
-    const cacheKey = `${record.sessionId}_${record.studentId}`;
-    if (processedAttendanceRef.current.has(cacheKey)) return;
-    processedAttendanceRef.current.add(cacheKey);
-    setAttendanceRecords(prev => [...prev, record]);
+    if (record.status === 'present') {
+      const cacheKey = `${record.sessionId}_${record.studentId}`;
+      if (processedAttendanceRef.current.has(cacheKey)) return;
+      processedAttendanceRef.current.add(cacheKey);
+      setAttendanceRecords(prev => {
+        const filtered = prev.filter(
+          r => !(r.sessionId === record.sessionId && r.studentId === record.studentId && r.status === 'absent')
+        );
+        return [...filtered, record];
+      });
+    } else {
+      setAttendanceRecords(prev => [...prev, record]);
+    }
   };
 
   const handleClearRecords = () => {
