@@ -1,9 +1,15 @@
 node_modules
 dist
 
-dev.log
-dev_err.log
-dev_out.log
-dev_stderr.log
-dev_stdout.log
+.dev.log
+.dev_err.log
+.dev_out.log
+.dev_stderr.log
+.dev_stdout.log
 tmp.json
+
+# UI/UX Pro Max skill files (should not be committed)
+.opencode/
+*.pyc
+__pycache__/
+*.pyo
