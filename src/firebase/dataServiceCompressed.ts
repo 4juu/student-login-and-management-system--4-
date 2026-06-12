@@ -25,27 +25,35 @@ interface SmartCompressedRecord {
   g?: string;          // studentGroup
   t: number;           // timestamp (Unix - أصغر من ISO string)
   se: string;          // sessionId
-  m: 'q' | 'm';        // method (q=qr, m=manual)
+  m: 'q' | 'm' | 'f';  // method (q=qr, m=manual, f=face)
   su?: string;         // subjectName
   a?: number;          // absenceCount
+  st?: 'p' | 'a';     // status (p=present, a=absent)
 }
 
 /**
  * 🗜️ ضغط سجل عادي إلى سجل ذكي
  */
 export const compressRecord = (record: AttendanceRecord): SmartCompressedRecord => {
-  return {
+  const m = record.method === 'qr' ? 'q' as const : record.method === 'face' ? 'f' as const : 'm' as const;
+
+  const compressed: SmartCompressedRecord = {
     i: record.id,
     s: record.studentId,
     n: record.studentName,
     c: record.studentCode,
-    g: record.studentGroup,
     t: new Date(record.timestamp).getTime(),
     se: record.sessionId,
-    m: record.method === 'qr' ? 'q' : 'm',
-    su: record.subjectName || undefined,
-    a: record.absenceCount || undefined,
+    m,
   };
+
+  if (record.studentGroup) compressed.g = record.studentGroup;
+  if (record.subjectName) compressed.su = record.subjectName;
+  if (record.absenceCount) compressed.a = record.absenceCount;
+  if (record.status === 'absent') compressed.st = 'a';
+  else if (record.status === 'present') compressed.st = 'p';
+
+  return compressed;
 };
 
 /**
@@ -64,8 +72,8 @@ export const decompressRecord = (compressed: SmartCompressedRecord): AttendanceR
     date: date.toLocaleDateString('ar-EG'),
     time: date.toLocaleTimeString('ar-EG'),
     sessionId: compressed.se,
-    status: 'present',
-    method: compressed.m === 'q' ? 'qr' : 'manual',
+    status: compressed.st === 'a' ? 'absent' : 'present',
+    method: compressed.m === 'q' ? 'qr' : compressed.m === 'f' ? 'face' : 'manual',
     subjectName: compressed.su,
     absenceCount: compressed.a,
   };
