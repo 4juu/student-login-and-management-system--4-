@@ -746,9 +746,8 @@ function App() {
 
         const alreadyMarked = attendanceRecords.some(
           r => r.studentId === studentId &&
-               r.status === 'absent' &&
-               r.timestamp?.startsWith(dateKey) &&
-               r.subjectName === subjectName
+               r.sessionId === sessionId &&
+               (r.status === 'absent' || r.status === 'present')
         );
         if (alreadyMarked) continue;
 
