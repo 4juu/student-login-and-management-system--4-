@@ -778,8 +778,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           </div>
 
           <div className="mt-4">
-            <div className="relative w-full max-w-lg mx-auto rounded-2xl overflow-hidden border border-gray-100 bg-black shadow-lg"
-              style={{ aspectRatio: '4 / 3' }}>
+            <div className="relative w-full max-w-md mx-auto rounded-2xl overflow-hidden border border-gray-100 bg-black shadow-lg"
+              style={{ aspectRatio: '3 / 4' }}>
               <video ref={videoRef}
                 autoPlay playsInline muted
                 className="absolute inset-0 w-full h-full object-cover"
