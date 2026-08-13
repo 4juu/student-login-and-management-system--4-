@@ -72,6 +72,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const alreadyPresentRef = useRef<Set<string>>(alreadyPresentIds);
   const logsRef = useRef<LogEntry[]>([]);
   const faceRunningRef = useRef(false);
+  const faceLoopStartedRef = useRef(false);
   const lastFrameTime = useRef(0);
   const frameCount = useRef(0);
 
@@ -87,19 +88,19 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
   useEffect(() => {
     mountedRef.current = true;
-    if (studentsWithFace.length > 0) {
-      buildDescriptorCache(studentsWithFace as any, 0.5);
-    }
-    if (areModelsLoaded()) { initCamera(); }
-    else {
-      const interval = setInterval(() => {
-        if (areModelsLoaded() && mountedRef.current) {
-          clearInterval(interval);
-          initCamera();
-        }
-      }, 200);
-      setTimeout(() => clearInterval(interval), 15000);
-    }
+    setTimeout(() => {
+      if (studentsWithFace.length > 0) {
+        buildDescriptorCache(studentsWithFace as any, 0.5);
+      }
+    }, 0);
+    initCamera();
+    const interval = setInterval(() => {
+      if (areModelsLoaded() && mountedRef.current && !faceLoopStartedRef.current) {
+        clearInterval(interval);
+        startFaceLoop();
+      }
+    }, 200);
+    setTimeout(() => clearInterval(interval), 30000);
     return () => { mountedRef.current = false; cleanup(); clearDescriptorCache(); };
   }, []);
 
@@ -119,6 +120,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
   const cleanup = () => {
     faceRunningRef.current = false;
+    faceLoopStartedRef.current = false;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (trackRef.current && torchOn) {
       try { trackRef.current.applyConstraints({ advanced: [{ torch: false } as any] }); } catch {}
@@ -136,7 +138,6 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     setCameraReady(false);
     try {
       await cleanup();
-      await new Promise(r => setTimeout(r, 300));
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: facing, width: { ideal: 640 }, height: { ideal: 480 } },
@@ -156,7 +157,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
         await videoRef.current.play();
         setCameraReady(true);
         setMode('active');
-        startFaceLoop();
+        if (areModelsLoaded()) startFaceLoop();
       }
     } catch (e: any) {
       if (!mountedRef.current) return;
@@ -227,6 +228,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
   const stopFaceLoop = useCallback(() => {
     faceRunningRef.current = false;
+    faceLoopStartedRef.current = false;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (trackerRef.current) trackerRef.current.reset();
   }, []);
@@ -252,6 +254,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   };
 
   const startFaceLoop = useCallback(() => {
+    if (faceLoopStartedRef.current) return;
+    faceLoopStartedRef.current = true;
     if (!faceRunningRef.current) faceRunningRef.current = true;
     if (!trackerRef.current) trackerRef.current = new IOUTracker();
     lastFrameTime.current = performance.now();
@@ -272,7 +276,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       }
 
       frameSkipCount++;
-      if (frameSkipCount % 3 !== 0) {
+      if (frameSkipCount % 2 !== 0) {
         rafRef.current = requestAnimationFrame(processFrame);
         return;
       }
@@ -282,7 +286,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       const hasCache = cache && cache.length > 0;
 
       try {
-        const detections = await extractAllFaceDescriptors(video, 480);
+        const detections = await extractAllFaceDescriptors(video, 320);
 
         if (!faceRunningRef.current || !mountedRef.current) return;
 
@@ -635,7 +639,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       if (studentsWithFace.length > 0) {
         buildDescriptorCache(studentsWithFace as any, 0.6);
       }
-      setTimeout(() => initCamera(), 400);
+      setTimeout(() => initCamera(), 0);
     }
   };
 
@@ -653,8 +657,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/80 flex flex-col" dir="rtl">
-      <div className="w-full max-w-5xl mx-auto bg-black flex flex-col shadow-2xl flex-1 overflow-hidden">
+    <div className="fixed inset-0 z-[9999] bg-black flex flex-col" dir="rtl">
+      <div className="w-full h-full bg-black flex flex-col flex-1 overflow-hidden">
       <header className="flex items-center justify-between px-3 py-2 bg-gray-900/90"
         style={{ paddingTop: 'max(0.5rem,env(safe-area-inset-top))' }}>
         <div className="flex items-center gap-2">
@@ -744,13 +748,22 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           </div>
         )}
 
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+        <div className="absolute inset-0 bg-gray-900">
           <video ref={videoRef}
             autoPlay playsInline muted
-            className="max-w-full max-h-full object-contain"
-            style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none', minWidth: 320, minHeight: 240 }}
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }}
           />
         </div>
+
+        {cameraReady && !areModelsLoaded() && (
+          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-10">
+            <div className="bg-gray-900/80 backdrop-blur-sm text-white/90 px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 border border-white/10">
+              <div className="w-3 h-3 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+              جاري تحميل موديلات التعرف...
+            </div>
+          </div>
+        )}
 
         <canvas ref={canvasRef}
           className="absolute inset-0 w-full h-full pointer-events-none"

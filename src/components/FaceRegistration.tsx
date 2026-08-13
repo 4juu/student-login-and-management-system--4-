@@ -55,7 +55,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
       if (!mountedRef.current) { s.getTracks().forEach(t => t.stop()); return; }
       streamRef.current = s;
       if (videoRef.current) { videoRef.current.srcObject = s; await videoRef.current.play(); }
-      setTimeout(() => { if (mountedRef.current) setCameraReady(true); }, 500);
+      if (mountedRef.current) setCameraReady(true);
     } catch (e: any) {
       if (!mountedRef.current) return;
       if (e.name === 'NotAllowedError') setError('الرجاء السماح باستخدام الكاميرا');
@@ -74,7 +74,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
 
   const handleCameraChoice = (f: 'user' | 'environment') => {
     setFacing(f); setFaceDetected(false); setDetLandmarks(null); setDetBox(null);
-    setStep('capture'); setTimeout(() => openCamera(f), 400);
+    setStep('capture'); openCamera(f);
   };
 
   // continuous detection loop — article pattern
@@ -83,7 +83,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
     detectIntervalRef.current = window.setInterval(async () => {
       if (!videoRef.current || !mountedRef.current) return;
       try {
-        const det = await detectSingleFace(videoRef.current, 480);
+        const det = await detectSingleFace(videoRef.current, 320);
         if (!mountedRef.current) return;
         if (det) {
           setFaceDetected(true);
@@ -95,7 +95,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
           setFaceDetected(false);
         }
       } catch {}
-    }, 300);
+    }, 150);
     return () => { if (detectIntervalRef.current) { clearInterval(detectIntervalRef.current); detectIntervalRef.current = null; } };
   }, [cameraReady, capturing]);
 
@@ -239,7 +239,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
             {error && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs">{error}</div>}
 
             <div className="relative mb-3">
-              <div className="relative rounded-2xl overflow-hidden bg-gray-900 mx-auto" style={{ width: 260, height: 260 }}>
+              <div className="relative rounded-2xl overflow-hidden bg-gray-900 w-full" style={{ aspectRatio: '4 / 3' }}>
                 <video ref={videoRef} autoPlay playsInline muted
                   className="w-full h-full object-cover"
                   style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }} />

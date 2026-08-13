@@ -101,9 +101,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
           await videoRef.current.play();
         }
         
-        setTimeout(() => {
-          if (!cancelled && mountedRef.current) setCameraReady(true);
-        }, 500);
+        if (!cancelled && mountedRef.current) setCameraReady(true);
       } catch (e: any) {
         if (cancelled) return;
         if (e.name === 'NotAllowedError') setError('يرجى السماح باستخدام الكاميرا');
@@ -128,7 +126,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
       if (!videoRef.current || !mountedRef.current) return;
       
       try {
-        const det = await detectSingleFace(videoRef.current, 150);
+        const det = await detectSingleFace(videoRef.current, 320);
         if (!mountedRef.current) return;
         
         if (det) {
@@ -146,7 +144,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
           setDetBox(null);
         }
       } catch {}
-    }, 300);
+    }, 150);
     
     return () => clearInterval(iv);
   }, [cameraReady, capturing]);
@@ -262,9 +260,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
           await videoRef.current.play();
         }
         
-        setTimeout(() => {
-          if (mountedRef.current) setCameraReady(true);
-        }, 500);
+        if (mountedRef.current) setCameraReady(true);
       } catch (e: any) {
         if (mountedRef.current) setError(e.message || 'فشل فتح الكاميرا');
       }

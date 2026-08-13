@@ -3,7 +3,6 @@ import { Student } from '../types/student';
 import {
   extractFaceDescriptor,
   buildMultiDescriptor,
-  areModelsLoaded,
   checkForTamperingAsync,
   normalizeDescriptor,
 } from '../services/faceRecognition';
@@ -50,15 +49,6 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
     let mounted = true;
     (async () => {
       try {
-        const checkModels = () => new Promise<void>((resolve, reject) => {
-          if (areModelsLoaded()) { resolve(); return; }
-          const interval = setInterval(() => {
-            if (areModelsLoaded()) { clearInterval(interval); resolve(); }
-          }, 200);
-          setTimeout(() => { clearInterval(interval); reject(new Error('timeout')); }, 15000);
-        });
-        await checkModels();
-        if (!mounted) return;
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
           audio: false,
@@ -165,16 +155,18 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
       </header>
 
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        <div className="flex-1 bg-black flex items-center justify-center relative min-h-[300px]">
+        <div className="flex-1 bg-black relative min-h-[300px] overflow-hidden">
           {loading && (
-            <div className="text-center">
-              <div className="inline-block w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-3" />
-              <p>جاري التحميل...</p>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center">
+                <div className="inline-block w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-3" />
+                <p>جاري التحميل...</p>
+              </div>
             </div>
           )}
 
           <video ref={videoRef} autoPlay playsInline muted
-            className={`max-w-full max-h-full object-contain ${loading ? 'hidden' : ''}`}
+            className={`absolute inset-0 w-full h-full object-cover ${loading ? 'hidden' : ''}`}
             style={{ transform: 'scaleX(-1)' }}
           />
 
