@@ -115,7 +115,7 @@ export default function Aurora(props: {
   blend?: number;
   amplitude?: number;
 }) {
-  const { colorStops = ['#3A29FF', '#FF94B4', '#FF3232'], speed = 1.0, blend = 0.5, amplitude = 1.0 } = props;
+  const { colorStops = ['#3A29FF', '#FF94B4', '#FF3232'], blend = 0.5, amplitude = 1.0 } = props;
   const propsRef = useRef(props);
   propsRef.current = props;
 
@@ -177,8 +177,7 @@ export default function Aurora(props: {
     let animateId = 0;
     const update = (t: number) => {
       animateId = requestAnimationFrame(update);
-      const { time = t * 0.01, speed = 1.0 } = propsRef.current;
-      program.uniforms.uTime.value = time * speed * 0.1;
+      program.uniforms.uTime.value = t * 0.01 * (propsRef.current.speed ?? 1) * 0.1;
       program.uniforms.uAmplitude.value = propsRef.current.amplitude ?? 1.0;
       program.uniforms.uBlend.value = propsRef.current.blend ?? blend;
       const stops = propsRef.current.colorStops ?? colorStops;

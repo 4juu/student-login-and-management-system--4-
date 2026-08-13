@@ -48,7 +48,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
       normalizeAnyDate(a.date).localeCompare(normalizeAnyDate(b.date))
     ), [sessions, normalizeAnyDate]);
 
-  const { today, firstDate, lastDate } = useMemo(() => {
+  const { firstDate, lastDate } = useMemo(() => {
     const t = new Date().toISOString().split('T')[0];
     const f = sortedSessions.length > 0 ? normalizeAnyDate(sortedSessions[0].date) : t;
     const l = sortedSessions.length > 0 ? normalizeAnyDate(sortedSessions[sortedSessions.length - 1].date) : t;

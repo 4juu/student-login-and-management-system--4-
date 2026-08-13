@@ -283,9 +283,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   allTeachers: _allTeachers = [],
   allStagesData = {},
   // 🆕 Props جديدة
-  onRequestUniversityData,
   universityDataLoaded = false,
-  universityDataLoading = false,
 }) => {
   const isAdmin = user.role === 'admin';
   const currentCollege = colleges.find(c => c.id === currentCollegeId);

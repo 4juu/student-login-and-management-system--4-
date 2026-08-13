@@ -238,9 +238,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   const handleRetryId = () => goTo('upload-id');
 
-  const stepLabels = ['الهوية', 'البصمة', 'تأكيد'];
-  const stepIcons = ['🪪', '😊', '✅'];
-
   if (step === 'loading') {
     return (
       <div className="min-h-screen bg-[#0A0A0F] flex items-center justify-center p-4" dir="rtl">

@@ -30,8 +30,6 @@ interface SettingsProps {
 }
 
 export const Settings: React.FC<SettingsProps> = ({
-  students,
-  attendanceRecords,
   currentUser,
   onResetComplete,
   stages = [],

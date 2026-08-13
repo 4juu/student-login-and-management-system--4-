@@ -200,7 +200,6 @@ export function MorphPanel({
   onToggle,
   input,
   onInputChange,
-  onSend,
   isTyping,
   inputRef,
   onKeyDown,

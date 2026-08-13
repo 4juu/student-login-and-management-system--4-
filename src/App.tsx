@@ -273,6 +273,11 @@ function App() {
   }, []);
 
   useEffect(() => {
+    // 🚀 بدء تحميل موديلات التعرف بالخلفية من أول لحظة فتح الموقع
+    startBackgroundPreload();
+  }, []);
+
+  useEffect(() => {
     const handleBeforeUnload = () => flushAllPendingSaves();
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {

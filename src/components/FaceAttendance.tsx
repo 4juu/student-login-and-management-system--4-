@@ -4,7 +4,8 @@ import { User } from '../types/user';
 import { FaceRegistration } from './FaceRegistration';
 import {
   extractAllFaceDescriptors, normalizeDescriptor,
-  areModelsLoaded, IOUTracker, shouldAutoImprove, autoImproveDescriptor,
+  areModelsLoaded, isDetectorReady, detectAllFacesOnly,
+  IOUTracker, shouldAutoImprove, autoImproveDescriptor,
   buildDescriptorCache, findBestMatchBatchFromCache, getDescriptorCache, getCacheThreshold,
   clearDescriptorCache, compareFaces,
 } from '../services/faceRecognition';
@@ -53,13 +54,14 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const [error, setError] = useState('');
   const [showReg, setShowReg] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [showLog, setShowLog] = useState(false);
   const [facing, setFacing] = useState<CameraFacing>('user');
   const [cameraReady, setCameraReady] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [hasTorch, setHasTorch] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const [facePresent, setFacePresent] = useState(false);
+  const [warmup, setWarmup] = useState(0);
+  const [presentIds, setPresentIds] = useState<Set<string>>(new Set(alreadyPresentIds));
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -83,9 +85,32 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       Array.isArray(s.faceDescriptor) ? s.faceDescriptor.length > 0 : true
     )), [students]);
 
+  const roster = useMemo(() => {
+    const list = [...studentsWithFace];
+    list.sort((a, b) => {
+      const ap = presentIds.has(a.id) ? 1 : 0;
+      const bp = presentIds.has(b.id) ? 1 : 0;
+      if (ap !== bp) return bp - ap;
+      return a.name.localeCompare(b.name, 'ar');
+    });
+    return list;
+  }, [studentsWithFace, presentIds]);
+
+  const avatarColors = ['bg-blue-500', 'bg-emerald-500', 'bg-purple-500', 'bg-rose-500', 'bg-amber-500', 'bg-teal-500', 'bg-indigo-500', 'bg-pink-500'];
+  const avatarColor = (s: Student) => avatarColors[s.name.length % avatarColors.length];
+
   const addLog = (entry: LogEntry) => {
     logsRef.current = [entry, ...logsRef.current].slice(0, 50);
     setLogs(logsRef.current);
+  };
+
+  const markPresent = (id: string) => {
+    setPresentIds(prev => {
+      if (prev.has(id)) return prev;
+      const n = new Set(prev);
+      n.add(id);
+      return n;
+    });
   };
 
   useEffect(() => {
@@ -97,12 +122,11 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     }, 0);
     initCamera();
     const interval = setInterval(() => {
-      if (areModelsLoaded() && mountedRef.current && !faceLoopStartedRef.current) {
-        clearInterval(interval);
-        startFaceLoop();
-      }
+      if (!mountedRef.current) return;
+      setWarmup(areModelsLoaded() ? 2 : isDetectorReady() ? 1 : 0);
+      if (isDetectorReady() && !faceLoopStartedRef.current) startFaceLoop();
     }, 200);
-    setTimeout(() => clearInterval(interval), 30000);
+    setTimeout(() => clearInterval(interval), 60000);
     return () => { mountedRef.current = false; cleanup(); clearDescriptorCache(); };
   }, []);
 
@@ -118,6 +142,12 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   useEffect(() => {
     alreadyPresentRef.current = alreadyPresentIds;
     alreadyPresentIds.forEach(id => recognizedIdsRef.current.add(id));
+    setPresentIds(prev => {
+      let changed = false;
+      const n = new Set(prev);
+      alreadyPresentIds.forEach(id => { if (!n.has(id)) { n.add(id); changed = true; } });
+      return changed ? n : prev;
+    });
   }, [alreadyPresentIds]);
 
   const cleanup = () => {
@@ -159,7 +189,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
         await videoRef.current.play();
         setCameraReady(true);
         setMode('active');
-        if (areModelsLoaded()) startFaceLoop();
+        if (isDetectorReady()) startFaceLoop();
       }
     } catch (e: any) {
       if (!mountedRef.current) return;
@@ -286,16 +316,27 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
       const cache = getDescriptorCache();
       const hasCache = cache && cache.length > 0;
+      const recognitionReady = areModelsLoaded();
 
       try {
-        const detections = await extractAllFaceDescriptors(video, 320);
+        let detections: any[] = [];
+        if (recognitionReady) {
+          detections = await extractAllFaceDescriptors(video, 320);
+        } else if (isDetectorReady()) {
+          detections = await detectAllFacesOnly(video, 320);
+        } else {
+          if (faceRunningRef.current && mountedRef.current) {
+            rafRef.current = requestAnimationFrame(processFrame);
+          }
+          return;
+        }
 
         if (!faceRunningRef.current || !mountedRef.current) return;
 
         const now = Date.now();
-        const tracked = trackerRef.current?.update(
+        const tracked = recognitionReady ? (trackerRef.current?.update(
           detections.map((d: any) => ({ box: d.detection.box, descriptor: d.descriptor }))
-        ) || [];
+        ) || []) : [];
 
         if (detections.length === 0) {
           frameCount.current = Math.min(frameCount.current + 1, 100);
@@ -309,7 +350,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           setFacePresent(hasAnyFace);
         }
 
-        if (detections.length > 0 && hasCache) {
+        if (recognitionReady && detections.length > 0 && hasCache) {
           const descriptors = detections.map((d: any) => normalizeDescriptor(d.descriptor));
           const matches = await findBestMatchBatchFromCache(descriptors, 0.5);
 
@@ -370,6 +411,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
                   if (!mountedRef.current) return;
                   setMode('marked');
                   try { await onMarkAttendance(bestStudent!); } catch {}
+                  markPresent(bestStudent!.id);
                   playSuccess();
                   if (!logsRef.current.some(l => l.id === bestStudent!.id)) {
                     addLog({
@@ -397,7 +439,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
               detectedFaces.set(boxKey, { box, status: 'unknown', confidence: 0 });
             }
           }
-        } else if (detections.length > 0 && !hasCache && studentsWithFace.length > 0) {
+        } else if (recognitionReady && detections.length > 0 && !hasCache && studentsWithFace.length > 0) {
           for (const det of detections) {
             const box = det.detection.box;
             const qScore = det.detection.score;
@@ -473,6 +515,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
                   if (!mountedRef.current) return;
                   setMode('marked');
                   try { await onMarkAttendance(bestStudent!); } catch {}
+                  markPresent(bestStudent!.id);
                   playSuccess();
                   if (!logsRef.current.some(l => l.id === bestStudent!.id)) {
                     addLog({
@@ -508,7 +551,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           }
         }
 
-        drawBoxes(video, canvas, detectedFaces, facing);
+        drawBoxes(video, canvas, detectedFaces, facing, recognitionReady);
       } catch {}
 
       if (faceRunningRef.current && mountedRef.current) {
@@ -524,7 +567,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     video: HTMLVideoElement,
     canvas: HTMLCanvasElement,
     faces: Map<string, DetectedFaceBox>,
-    camFacing: string
+    camFacing: string,
+    recognitionReady: boolean
   ) => {
     const rect = canvas.getBoundingClientRect();
     if (Math.abs(canvas.width - rect.width) > 1 || Math.abs(canvas.height - rect.height) > 1) {
@@ -544,6 +588,20 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     const offX = (canvas.width - dispW) / 2;
     const offY = (canvas.height - dispH) / 2;
     const mirrorX = camFacing === 'user';
+
+    if (!recognitionReady) {
+      faces.forEach(face => {
+        const box = face.box;
+        const dx = mirrorX ? offX + dispW - (box.x + box.width) * scale : offX + box.x * scale;
+        const dy = offY + box.y * scale;
+        const dw = box.width * scale;
+        const dh = box.height * scale;
+        ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(dx, dy, dw, dh);
+      });
+      return;
+    }
 
     faces.forEach(face => {
       const box = face.box;
@@ -669,214 +727,206 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/80 text-white flex flex-col" dir="rtl">
-      <div className="w-full max-w-2xl mx-auto bg-black rounded-2xl flex flex-col shadow-2xl flex-1 my-2 sm:my-4 overflow-hidden">
-      <header className="flex items-center justify-between px-3 py-2 bg-gray-900/95 border-b border-white/10"
-        style={{ paddingTop: 'max(0.5rem,env(safe-area-inset-top))' }}>
-        <div className="flex items-center gap-2 min-w-0">
-          <h1 className="hidden sm:flex items-center text-white font-bold text-sm shrink-0">👤 بصمة الوجه</h1>
-          <div className={`px-3 py-1 rounded-full text-white text-xs font-bold transition-all duration-300 flex items-center gap-1.5 ${modeConfig[mode].bg}`}>
-            <span>{modeConfig[mode].icon}</span>
-            <span className="truncate max-w-[140px]">{modeConfig[mode].text}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button onClick={() => setShowLog(!showLog)}
-            className={`${showLog ? 'bg-blue-600' : 'bg-white/10'} hover:bg-white/20 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition active:scale-95 flex items-center gap-1`}>
-            <span>📋</span>
-            {counts.marked + counts.already > 0 && (
-              <span className="bg-emerald-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center">{counts.marked + counts.already}</span>
-            )}
-          </button>
-          <button onClick={handleShowReg}
-            className="bg-purple-600/80 hover:bg-purple-600 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition active:scale-95 flex items-center gap-1">
-            <span>📸</span>
-            <span className="hidden sm:inline">بصمة</span>
-          </button>
-          <button onClick={handleClose}
-            className="bg-white/10 hover:bg-white/20 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition active:scale-95">
-            ✕
-          </button>
-        </div>
-      </header>
-
-      {showLog && (
-        <div className="absolute top-12 right-2 z-30 w-64 bg-gray-900/98 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl max-h-[70vh] flex flex-col">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
-            <p className="text-white font-bold text-xs flex items-center gap-1.5">
-              📋 سجل الحضور
-              <span className="text-[10px] text-gray-400 font-normal">({logs.length})</span>
-            </p>
-            <button onClick={() => setShowLog(false)}
-              className="text-gray-400 hover:text-white text-sm">✕</button>
-          </div>
-          <div className="flex gap-2 px-3 py-1.5 text-[10px] border-b border-white/5">
-            <span className="text-emerald-400">✅ {counts.marked} جديد</span>
-            <span className="text-amber-400">⚠️ {counts.already} مسبق</span>
-          </div>
-          <div className="flex-1 overflow-y-auto px-2 py-1.5 space-y-1">
-            {logs.length === 0 && (
-              <p className="text-gray-500 text-[10px] text-center py-4">بانتظار التعرف...</p>
-            )}
-            {logs.map((entry, i) => (
-              <div key={`${entry.id}-${i}`}
-                className={`px-2.5 py-1.5 rounded-lg text-[11px] ${
-                  entry.status === 'marked' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
-                  : entry.status === 'already' ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
-                  : 'bg-blue-500/10 text-blue-300 border border-blue-500/20'
-                }`}>
-                <div className="flex items-center justify-between">
-                  <span className="font-bold truncate max-w-[120px]">
-                    {entry.status === 'marked' ? '✅ ' : entry.status === 'already' ? '⚠️ ' : '⏳ '}
-                    {entry.name}
+    <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm text-white flex flex-col" dir="rtl">
+      <div className="w-full max-w-2xl mx-auto bg-white text-gray-900 rounded-3xl shadow-2xl flex flex-col flex-1 my-2 sm:my-4 overflow-hidden">
+        <header className="flex items-center justify-between px-4 py-3 border-b border-gray-100"
+          style={{ paddingTop: 'max(0.75rem,env(safe-area-inset-top))' }}>
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-base shrink-0">👤</div>
+            <div className="min-w-0">
+              <h1 className="font-extrabold text-sm leading-tight">تسجيل الحضور ببصمة الوجه</h1>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className={`px-2 py-0.5 rounded-full text-white text-[10px] font-bold flex items-center gap-1 ${modeConfig[mode].bg}`}>
+                  <span>{modeConfig[mode].icon}</span>
+                  <span className="truncate max-w-[110px]">{modeConfig[mode].text}</span>
+                </span>
+                {warmup < 2 && (
+                  <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                    <span className={`w-1.5 h-1.5 rounded-full ${warmup === 0 ? 'bg-red-400 animate-pulse' : 'bg-amber-400 animate-pulse'}`} />
+                    {warmup === 0 ? 'تحميل الموديلات...' : 'الإحماء جاري...'}
                   </span>
-                  <span className="text-[9px] opacity-70 shrink-0">{entry.confidence}%</span>
-                </div>
-                <div className="flex items-center justify-between mt-0.5">
-                  <span className="text-[9px] opacity-50">#{entry.code}</span>
-                  <span className="text-[9px] opacity-50">{entry.time}</span>
-                </div>
+                )}
               </div>
-            ))}
+            </div>
           </div>
-        </div>
-      )}
-
-      {error && (
-        <div className="absolute top-14 left-4 right-4 z-10 bg-red-600/90 text-white p-3 rounded-xl text-sm font-bold text-center">
-          {error}
-          <button onClick={initCamera} className="block mx-auto mt-2 bg-white/20 px-4 py-1.5 rounded-lg text-xs">🔄 إعادة</button>
-        </div>
-      )}
-
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        <div className="relative w-full max-w-lg mx-auto rounded-xl overflow-hidden border border-emerald-500/20 bg-gray-900"
-          style={{ aspectRatio: '4 / 3' }}>
-          <video ref={videoRef}
-            autoPlay playsInline muted
-            className="absolute inset-0 w-full h-full object-cover"
-            style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }}
-          />
-
-          {studentsWithFace.length === 0 && mode !== 'loading' && (
-            <div className="absolute inset-0 flex items-center justify-center z-20">
-              <div className="bg-gray-800/90 rounded-2xl p-6 text-center max-w-xs mx-4">
-                <div className="text-4xl mb-3">📸</div>
-                <p className="text-white font-bold text-lg">لا يوجد طلاب ببصمة وجه</p>
-                <p className="text-gray-400 text-sm mt-1">سجل بصمات الوجوه أولاً</p>
-                <button onClick={handleShowReg} className="mt-4 bg-purple-600 text-white px-5 py-2 rounded-xl text-sm font-bold">📸 إضافة بصمة الآن</button>
-              </div>
-            </div>
-          )}
-
-          {cameraReady && !areModelsLoaded() && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10">
-              <div className="bg-black/70 backdrop-blur-sm text-white/90 px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 border border-white/10 whitespace-nowrap">
-                <div className="w-3 h-3 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-                جاري تحميل موديلات التعرف...
-              </div>
-            </div>
-          )}
-
-          <canvas ref={canvasRef}
-            className="absolute inset-0 w-full h-full pointer-events-none"
-          />
-
-          {cameraReady && (
-            <button onClick={toggleCamera}
-              className="absolute top-3 left-3 z-10 w-9 h-9 flex items-center justify-center bg-black/50 border border-white/15 text-white rounded-full active:scale-90 text-sm backdrop-blur-sm"
-              title="تبديل الكاميرا">
-              🔄
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button onClick={handleShowReg}
+              className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 flex items-center gap-1">
+              <span>📸</span>
+              <span className="hidden sm:inline">بصمة</span>
             </button>
-          )}
+            <button onClick={handleClose}
+              className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95">
+              ✕
+            </button>
+          </div>
+        </header>
 
-          {cameraReady && mode === 'active' && studentsWithFace.length > 0 && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className={`w-[68%] aspect-[3/4] max-w-[260px] rounded-2xl border-2 transition-colors duration-300 ${
-                facePresent ? 'border-emerald-400/90 bg-emerald-400/5' : 'border-white/25'
-              }`} />
-            </div>
-          )}
-
-          {mode === 'loading' && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
-              <div className="text-center">
-                <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                <p className="text-white font-bold text-sm">جاري تجهيز الكاميرا...</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {cameraReady && mode === 'active' && studentsWithFace.length > 0 && (
-          <div className="flex justify-center">
-            <div className="bg-gray-800/80 border border-white/10 text-white/80 px-4 py-2 rounded-full text-xs font-medium flex items-center gap-2">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-              </span>
-              أنظر إلى الكاميرا للتسجيل
-            </div>
+        {error && (
+          <div className="mx-4 mt-3 bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm font-bold text-center">
+            {error}
+            <button onClick={initCamera} className="block mx-auto mt-2 bg-red-600 text-white px-4 py-1.5 rounded-lg text-xs">🔄 إعادة</button>
           </div>
         )}
 
-        {cameraReady && (
-          <div className="flex items-center justify-center gap-2 bg-gray-800/80 rounded-xl px-3 py-2 border border-white/10 w-fit mx-auto">
-            <div className="flex items-center gap-1">
-              {ZOOM_STEPS.map(s => (
-                <button key={s} onClick={() => applyZoom(s)}
-                  className={`px-2.5 py-1.5 rounded-md text-[10px] font-bold transition active:scale-90 ${
-                    Math.abs(zoom - s) < 0.01 ? 'bg-emerald-500 text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'
-                  }`}>
-                  {s}x
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
+          <div className="grid grid-cols-3 gap-2 mt-4">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-center">
+              <div className="text-2xl font-extrabold text-emerald-600">{presentIds.size}</div>
+              <div className="text-[10px] text-emerald-700 font-bold mt-0.5">✅ حاضر اليوم</div>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-center">
+              <div className="text-2xl font-extrabold text-amber-600">{counts.already}</div>
+              <div className="text-[10px] text-amber-700 font-bold mt-0.5">⚠️ مسجل مسبقاً</div>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-3 text-center">
+              <div className="text-2xl font-extrabold text-gray-600">{Math.max(0, studentsWithFace.length - presentIds.size)}</div>
+              <div className="text-[10px] text-gray-500 font-bold mt-0.5">⏳ المتبقي</div>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <div className="relative w-full max-w-sm mx-auto rounded-2xl overflow-hidden border border-gray-100 bg-black shadow-lg"
+              style={{ aspectRatio: '4 / 3' }}>
+              <video ref={videoRef}
+                autoPlay playsInline muted
+                className="absolute inset-0 w-full h-full object-cover"
+                style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }}
+              />
+
+              {studentsWithFace.length === 0 && mode !== 'loading' && (
+                <div className="absolute inset-0 flex items-center justify-center z-20 bg-black">
+                  <div className="text-center px-4">
+                    <div className="text-4xl mb-2">📸</div>
+                    <p className="text-white font-bold text-sm">لا يوجد طلاب ببصمة وجه</p>
+                    <p className="text-white/50 text-xs mt-1">سجل بصمات الوجوه أولاً</p>
+                    <button onClick={handleShowReg} className="mt-3 bg-purple-600 text-white px-4 py-2 rounded-xl text-xs font-bold">📸 إضافة بصمة الآن</button>
+                  </div>
+                </div>
+              )}
+
+              <canvas ref={canvasRef}
+                className="absolute inset-0 w-full h-full pointer-events-none"
+              />
+
+              {cameraReady && (
+                <button onClick={toggleCamera}
+                  className="absolute top-2.5 left-2.5 z-10 w-8 h-8 flex items-center justify-center bg-black/50 border border-white/20 text-white rounded-full active:scale-90 text-xs backdrop-blur-sm"
+                  title="تبديل الكاميرا">
+                  🔄
                 </button>
-              ))}
+              )}
+
+              {cameraReady && mode === 'active' && studentsWithFace.length > 0 && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className={`w-[62%] aspect-[3/4] rounded-[28px] border-2 transition-all duration-300 ${
+                    facePresent
+                      ? 'border-emerald-400/90 bg-emerald-400/10 shadow-[0_0_30px_rgba(52,211,153,0.35)]'
+                      : 'border-white/30'
+                  }`} />
+                </div>
+              )}
+
+              {mode === 'loading' && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black">
+                  <div className="text-center">
+                    <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                    <p className="text-white font-bold text-sm">جاري تجهيز الكاميرا...</p>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {hasTorch && (
-              <button onClick={toggleTorch}
-                className={`w-9 h-9 flex items-center justify-center rounded-full active:scale-90 text-sm ${
-                  torchOn ? 'bg-yellow-500 text-black' : 'bg-white/15 text-white'
-                }`}
-                title="فلاش">
-                {torchOn ? '💡' : '🔦'}
-              </button>
+            <div className="flex items-center justify-center gap-2 mt-2.5">
+              <div className="flex gap-1">
+                {[0, 1, 2].map(i => (
+                  <div key={i} className={`w-8 h-1.5 rounded-full transition-all duration-500 ${
+                    warmup > i ? 'bg-emerald-500' : warmup === i && i === 0 ? 'bg-red-400 animate-pulse' : warmup === i ? 'bg-amber-400 animate-pulse' : 'bg-gray-200'
+                  }`} />
+                ))}
+              </div>
+              <span className="text-[10px] font-bold text-gray-400">
+                {warmup === 2 ? 'النظام جاهز للتعرف' : warmup === 1 ? 'الإحماء جاري...' : 'تحميل موديلات التعرف...'}
+              </span>
+            </div>
+
+            {cameraReady && (
+              <div className="flex items-center justify-center gap-2 mt-2">
+                <div className="flex items-center gap-1 bg-gray-100 rounded-xl px-2 py-1.5">
+                  {ZOOM_STEPS.map(s => (
+                    <button key={s} onClick={() => applyZoom(s)}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition active:scale-90 ${
+                        Math.abs(zoom - s) < 0.01 ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 shadow-sm'
+                      }`}>
+                      {s}x
+                    </button>
+                  ))}
+                </div>
+                {hasTorch && (
+                  <button onClick={toggleTorch}
+                    className={`w-8 h-8 flex items-center justify-center rounded-full active:scale-90 text-sm ${
+                      torchOn ? 'bg-yellow-400 text-black' : 'bg-gray-100 text-gray-500'
+                    }`}
+                    title="فلاش">
+                    {torchOn ? '💡' : '🔦'}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {cameraReady && mode === 'active' && studentsWithFace.length > 0 && (
+              <p className="text-center text-[11px] text-gray-400 font-medium mt-2">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  </span>
+                  أنظر إلى الكاميرا للتسجيل التلقائي
+                </span>
+              </p>
             )}
           </div>
-        )}
 
-        <div className="grid grid-cols-2 gap-2 max-w-lg mx-auto">
-          <div className="bg-gray-800/60 rounded-xl p-3 border border-emerald-500/20 text-center">
-            <div className="text-xl font-bold text-emerald-400">{counts.marked}</div>
-            <div className="text-[11px] text-white/70">✅ مسجل جديد</div>
-          </div>
-          <div className="bg-gray-800/60 rounded-xl p-3 border border-amber-500/20 text-center">
-            <div className="text-xl font-bold text-amber-400">{counts.already}</div>
-            <div className="text-[11px] text-white/70">⚠️ مسجل مسبقاً</div>
-          </div>
-        </div>
-
-        {logs.length > 0 && (
-          <div className="w-full max-w-lg mx-auto pb-2">
-            <p className="text-white/60 text-[11px] font-bold mb-1.5">📋 آخر المسجلين</p>
-            <div className="space-y-1.5">
-              {logs.map((entry, i) => (
-                <div key={`${entry.id}-${i}`}
-                  className={`px-2.5 py-1.5 rounded-lg text-[11px] flex items-center justify-between ${
-                    entry.status === 'marked' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
-                    : entry.status === 'already' ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
-                    : 'bg-blue-500/10 text-blue-300 border border-blue-500/20'
-                  }`}>
-                  <span className="font-bold truncate">
-                    {entry.status === 'marked' ? '✅ ' : entry.status === 'already' ? '⚠️ ' : '⏳ '}
-                    {entry.name}
-                  </span>
-                  <span className="text-[10px] opacity-70 shrink-0 ms-2">{entry.confidence}% · {entry.time}</span>
-                </div>
-              ))}
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-extrabold text-sm">🎓 الطلاب ({roster.length})</h3>
+              <span className="text-[10px] text-gray-400 font-bold">{presentIds.size} حاضر</span>
+            </div>
+            <div className="space-y-1.5 pb-2">
+              {roster.map(student => {
+                const present = presentIds.has(student.id);
+                return (
+                  <div key={student.id}
+                    className={`flex items-center gap-3 p-2.5 rounded-2xl border transition-all duration-500 ${
+                      present ? 'bg-emerald-50 border-emerald-300' : 'bg-white border-gray-100'
+                    }`}>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0 ${avatarColor(student)}`}>
+                      {student.name.trim().charAt(0) || '؟'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm truncate">{student.name}</p>
+                      <p className="text-[10px] text-gray-400">#{student.code}{student.group ? ` · ${student.group}` : ''}</p>
+                    </div>
+                    {present ? (
+                      <span className="flex items-center gap-1 text-emerald-600 text-xs font-extrabold shrink-0">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                        </span>
+                        حاضر
+                      </span>
+                    ) : (
+                      <span className="text-gray-300 text-xs shrink-0">بانتظار...</span>
+                    )}
+                  </div>
+                );
+              })}
+              {roster.length === 0 && studentsWithFace.length === 0 && (
+                <div className="text-center py-8 text-gray-400 text-sm">لا يوجد طلاب ببصمة وجه في هذه المرحلة</div>
+              )}
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       {showReg && onUpdateStudent && (
@@ -886,7 +936,6 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           onClose={handleRegClose}
         />
       )}
-      </div>
     </div>
   );
 };

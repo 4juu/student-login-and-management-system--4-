@@ -37,7 +37,7 @@ const AnimatedCheck: React.FC = () => {
   useEffect(() => {
     if (pathRef.current) {
       pathRef.current.classList.remove('draw-check');
-      void pathRef.current.offsetWidth;
+      void pathRef.current.getBoundingClientRect();
       pathRef.current.classList.add('draw-check');
     }
   }, []);
@@ -88,7 +88,6 @@ export const SendProgressModal: React.FC<SendProgressModalProps> = ({
   subjectName,
   groups,
   onHide,
-  onReopen,
   isSending,
   totalDone,
   totalGroups,

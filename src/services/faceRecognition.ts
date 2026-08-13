@@ -95,7 +95,11 @@ const MODEL_URLS = [
 // Stage 4: (future) Anti-spoofing
 
 let _loadProgress = 0;
+let _detectorReady = false;
+let _landmarksReady = false;
 export function getLoadProgress(): number { return _loadProgress; }
+export function isDetectorReady(): boolean { return _detectorReady; }
+export function isLandmarksReady(): boolean { return _landmarksReady; }
 
 export const loadFaceModels = async (): Promise<void> => {
   if (modelsLoaded) return;
@@ -108,9 +112,11 @@ export const loadFaceModels = async (): Promise<void> => {
       try {
         // Stage 1: FaceDetector (highest priority)
         await faceapi.nets.tinyFaceDetector.loadFromUri(baseUrl);
+        _detectorReady = true;
         _loadProgress = 33;
         // Stage 2: Landmarks
         await faceapi.nets.faceLandmark68TinyNet.loadFromUri(baseUrl);
+        _landmarksReady = true;
         _loadProgress = 66;
         // Stage 3: Recognition (heaviest)
         await faceapi.nets.faceRecognitionNet.loadFromUri(baseUrl);
@@ -152,7 +158,7 @@ export function startBackgroundPreload(): void {
 }
 
 export function isPreloadStarted(): boolean { return preloadStarted; }
-export const resetModels = () => { modelsLoaded = false; loadingPromise = null; _loadProgress = 0; preloadStarted = false; };
+export const resetModels = () => { modelsLoaded = false; loadingPromise = null; _loadProgress = 0; _detectorReady = false; _landmarksReady = false; preloadStarted = false; };
 export const areModelsLoaded = () => modelsLoaded;
 
 // ── Detector options ──
@@ -528,6 +534,14 @@ export const extractAllFaceDescriptors = async (
     .detectAllFaces(processed, getDetectorOptions())
     .withFaceLandmarks(true)
     .withFaceDescriptors();
+};
+
+export const detectAllFacesOnly = async (
+  input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
+  targetWidth = 320
+) => {
+  const processed = preprocessFrame(input, targetWidth);
+  return faceapi.detectAllFaces(processed, getDetectorOptions());
 };
 
 export const detectSingleFace = async (
