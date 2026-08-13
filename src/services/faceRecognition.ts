@@ -157,8 +157,36 @@ export function startBackgroundPreload(): void {
   setTimeout(doLoad, 0);
 }
 
+let _detectorPreloadStarted = false;
+
+export function startDetectorPreload(): void {
+  if (_detectorPreloadStarted || _detectorReady || modelsLoaded) return;
+  _detectorPreloadStarted = true;
+
+  const doLoad = async () => {
+    try {
+      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URLS[0]);
+      _detectorReady = true;
+      try {
+        const c = document.createElement('canvas');
+        c.width = 160;
+        c.height = 120;
+        faceapi.detectAllFaces(c, getDetectorOptions());
+      } catch {}
+    } catch {
+      _detectorPreloadStarted = false;
+    }
+  };
+
+  if ('requestIdleCallback' in window) {
+    (window as any).requestIdleCallback(doLoad, { timeout: 2500 });
+  } else {
+    setTimeout(doLoad, 800);
+  }
+}
+
 export function isPreloadStarted(): boolean { return preloadStarted; }
-export const resetModels = () => { modelsLoaded = false; loadingPromise = null; _loadProgress = 0; _detectorReady = false; _landmarksReady = false; preloadStarted = false; };
+export const resetModels = () => { modelsLoaded = false; loadingPromise = null; _loadProgress = 0; _detectorReady = false; _landmarksReady = false; preloadStarted = false; _detectorPreloadStarted = false; };
 export const areModelsLoaded = () => modelsLoaded;
 
 // ── Detector options ──

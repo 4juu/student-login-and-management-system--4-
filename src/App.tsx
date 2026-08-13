@@ -46,7 +46,7 @@ import {
   cancelAllPendingSaves,
   getCurrentAcademicYear,
 } from './firebase/dataService';
-import { startBackgroundPreload } from './services/faceRecognition';
+import { startDetectorPreload, startBackgroundPreload } from './services/faceRecognition';
 
 type Tab = 'stage-selector' | 'colleges' | 'login' | 'manage' | 'records' | 'settings' | 'sessions' | 'teachers' | 'profile' | 'system-settings';
 
@@ -273,8 +273,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    // 🚀 بدء تحميل موديلات التعرف بالخلفية من أول لحظة فتح الموقع
-    startBackgroundPreload();
+    // 🚀 تحميل موديل الكشف الخفيف بالخلفية من أول لحظة فتح الموقع (بدون تثبيت)
+    startDetectorPreload();
   }, []);
 
   useEffect(() => {
@@ -290,8 +290,8 @@ function App() {
     if (registerToken) {
       console.log('🎯 registerToken موجود، نعرض صفحة التسجيل');
       setLoading(false);
-      // 🚀 بدء تحميل موديلات التعرف على الوجه بالخلفية فوراً
-      setTimeout(() => startBackgroundPreload(), 500);
+      // 🚀 تحميل موديل الكشف الخفيف فوراً
+      setTimeout(() => startDetectorPreload(), 500);
       return;
     }
 
@@ -320,8 +320,8 @@ function App() {
 
           setCurrentUser(userData);
           await loadInitialData(userData);
-          // 🚀 بدء تحميل موديلات التعرف على الوجه بالخلفية فور تحميل الواجهة
-          setTimeout(() => startBackgroundPreload(), 500);
+          // 🚀 تحميل موديل الكشف الخفيف فور تحميل الواجهة
+          setTimeout(() => startDetectorPreload(), 500);
         } catch (error) {
           console.error('❌ Error loading user:', error);
           setCurrentUser(null);

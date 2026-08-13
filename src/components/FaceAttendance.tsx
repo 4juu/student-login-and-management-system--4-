@@ -59,7 +59,6 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const [zoom, setZoom] = useState(1);
   const [hasTorch, setHasTorch] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
-  const [facePresent, setFacePresent] = useState(false);
   const [warmup, setWarmup] = useState(0);
   const [presentIds, setPresentIds] = useState<Set<string>>(new Set(alreadyPresentIds));
 
@@ -70,7 +69,6 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const trackerRef = useRef<IOUTracker | null>(null);
   const mountedRef = useRef(true);
   const rafRef = useRef<number>(0);
-  const facePresentRef = useRef(false);
   const lastRecognitionRef = useRef<Map<string, number>>(new Map());
   const recognizedIdsRef = useRef<Set<string>>(new Set(alreadyPresentIds));
   const alreadyPresentRef = useRef<Set<string>>(alreadyPresentIds);
@@ -342,12 +340,6 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           frameCount.current = Math.min(frameCount.current + 1, 100);
         } else {
           frameCount.current = 0;
-        }
-
-        const hasAnyFace = detections.some((d: any) => (d.detection?.box?.width || 0) >= 30);
-        if (hasAnyFace !== facePresentRef.current) {
-          facePresentRef.current = hasAnyFace;
-          setFacePresent(hasAnyFace);
         }
 
         if (recognitionReady && detections.length > 0 && hasCache) {
@@ -786,7 +778,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           </div>
 
           <div className="mt-4">
-            <div className="relative w-full max-w-sm mx-auto rounded-2xl overflow-hidden border border-gray-100 bg-black shadow-lg"
+            <div className="relative w-full max-w-lg mx-auto rounded-2xl overflow-hidden border border-gray-100 bg-black shadow-lg"
               style={{ aspectRatio: '4 / 3' }}>
               <video ref={videoRef}
                 autoPlay playsInline muted
@@ -815,16 +807,6 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
                   title="تبديل الكاميرا">
                   🔄
                 </button>
-              )}
-
-              {cameraReady && mode === 'active' && studentsWithFace.length > 0 && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className={`w-[62%] aspect-[3/4] rounded-[28px] border-2 transition-all duration-300 ${
-                    facePresent
-                      ? 'border-emerald-400/90 bg-emerald-400/10 shadow-[0_0_30px_rgba(52,211,153,0.35)]'
-                      : 'border-white/30'
-                  }`} />
-                </div>
               )}
 
               {mode === 'loading' && (
