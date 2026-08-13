@@ -148,11 +148,7 @@ export function startBackgroundPreload(): void {
     });
   };
 
-  if ('requestIdleCallback' in window) {
-    (window as any).requestIdleCallback(doLoad, { timeout: 3000 });
-  } else {
-    setTimeout(doLoad, 1000);
-  }
+  setTimeout(doLoad, 0);
 }
 
 export function isPreloadStarted(): boolean { return preloadStarted; }

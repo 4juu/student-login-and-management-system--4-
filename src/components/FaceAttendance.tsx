@@ -59,6 +59,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const [zoom, setZoom] = useState(1);
   const [hasTorch, setHasTorch] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
+  const [facePresent, setFacePresent] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -67,6 +68,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const trackerRef = useRef<IOUTracker | null>(null);
   const mountedRef = useRef(true);
   const rafRef = useRef<number>(0);
+  const facePresentRef = useRef(false);
   const lastRecognitionRef = useRef<Map<string, number>>(new Map());
   const recognizedIdsRef = useRef<Set<string>>(new Set(alreadyPresentIds));
   const alreadyPresentRef = useRef<Set<string>>(alreadyPresentIds);
@@ -301,6 +303,12 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           frameCount.current = 0;
         }
 
+        const hasAnyFace = detections.some((d: any) => (d.detection?.box?.width || 0) >= 30);
+        if (hasAnyFace !== facePresentRef.current) {
+          facePresentRef.current = hasAnyFace;
+          setFacePresent(hasAnyFace);
+        }
+
         if (detections.length > 0 && hasCache) {
           const descriptors = detections.map((d: any) => normalizeDescriptor(d.descriptor));
           const matches = await findBestMatchBatchFromCache(descriptors, 0.5);
@@ -530,15 +538,19 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     const vw = video.videoWidth, vh = video.videoHeight;
     if (!vw || !vh) return;
 
-    const sx = canvas.width / vw, sy = canvas.height / vh;
+    const scale = Math.max(canvas.width / vw, canvas.height / vh);
+    const dispW = vw * scale;
+    const dispH = vh * scale;
+    const offX = (canvas.width - dispW) / 2;
+    const offY = (canvas.height - dispH) / 2;
     const mirrorX = camFacing === 'user';
 
     faces.forEach(face => {
       const box = face.box;
-      const dx = mirrorX ? canvas.width - box.x * sx - box.width * sx : box.x * sx;
-      const dy = box.y * sy;
-      const dw = box.width * sx;
-      const dh = box.height * sy;
+      const dx = mirrorX ? offX + dispW - (box.x + box.width) * scale : offX + box.x * scale;
+      const dy = offY + box.y * scale;
+      const dw = box.width * scale;
+      const dh = box.height * scale;
 
       let stroke: string;
       let bg: string;
@@ -657,17 +669,18 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black flex flex-col" dir="rtl">
-      <div className="w-full h-full bg-black flex flex-col flex-1 overflow-hidden">
-      <header className="flex items-center justify-between px-3 py-2 bg-gray-900/90"
+    <div className="fixed inset-0 z-[9999] bg-black/80 text-white flex flex-col" dir="rtl">
+      <div className="w-full max-w-2xl mx-auto bg-black rounded-2xl flex flex-col shadow-2xl flex-1 my-2 sm:my-4 overflow-hidden">
+      <header className="flex items-center justify-between px-3 py-2 bg-gray-900/95 border-b border-white/10"
         style={{ paddingTop: 'max(0.5rem,env(safe-area-inset-top))' }}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <h1 className="hidden sm:flex items-center text-white font-bold text-sm shrink-0">👤 بصمة الوجه</h1>
           <div className={`px-3 py-1 rounded-full text-white text-xs font-bold transition-all duration-300 flex items-center gap-1.5 ${modeConfig[mode].bg}`}>
             <span>{modeConfig[mode].icon}</span>
             <span className="truncate max-w-[140px]">{modeConfig[mode].text}</span>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button onClick={() => setShowLog(!showLog)}
             className={`${showLog ? 'bg-blue-600' : 'bg-white/10'} hover:bg-white/20 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition active:scale-95 flex items-center gap-1`}>
             <span>📋</span>
@@ -736,89 +749,131 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
         </div>
       )}
 
-      <div className="flex-1 relative bg-gray-900 flex items-center justify-center overflow-hidden">
-        {studentsWithFace.length === 0 && mode !== 'loading' && (
-          <div className="absolute inset-0 flex items-center justify-center z-20">
-            <div className="bg-gray-800/90 rounded-2xl p-6 text-center max-w-xs">
-              <div className="text-4xl mb-3">📸</div>
-              <p className="text-white font-bold text-lg">لا يوجد طلاب ببصمة وجه</p>
-              <p className="text-gray-400 text-sm mt-1">سجل بصمات الوجوه أولاً</p>
-              <button onClick={handleShowReg} className="mt-4 bg-purple-600 text-white px-5 py-2 rounded-xl text-sm font-bold">📸 إضافة بصمة الآن</button>
-            </div>
-          </div>
-        )}
-
-        <div className="absolute inset-0 bg-gray-900">
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        <div className="relative w-full max-w-lg mx-auto rounded-xl overflow-hidden border border-emerald-500/20 bg-gray-900"
+          style={{ aspectRatio: '4 / 3' }}>
           <video ref={videoRef}
             autoPlay playsInline muted
             className="absolute inset-0 w-full h-full object-cover"
             style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }}
           />
+
+          {studentsWithFace.length === 0 && mode !== 'loading' && (
+            <div className="absolute inset-0 flex items-center justify-center z-20">
+              <div className="bg-gray-800/90 rounded-2xl p-6 text-center max-w-xs mx-4">
+                <div className="text-4xl mb-3">📸</div>
+                <p className="text-white font-bold text-lg">لا يوجد طلاب ببصمة وجه</p>
+                <p className="text-gray-400 text-sm mt-1">سجل بصمات الوجوه أولاً</p>
+                <button onClick={handleShowReg} className="mt-4 bg-purple-600 text-white px-5 py-2 rounded-xl text-sm font-bold">📸 إضافة بصمة الآن</button>
+              </div>
+            </div>
+          )}
+
+          {cameraReady && !areModelsLoaded() && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10">
+              <div className="bg-black/70 backdrop-blur-sm text-white/90 px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 border border-white/10 whitespace-nowrap">
+                <div className="w-3 h-3 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                جاري تحميل موديلات التعرف...
+              </div>
+            </div>
+          )}
+
+          <canvas ref={canvasRef}
+            className="absolute inset-0 w-full h-full pointer-events-none"
+          />
+
+          {cameraReady && (
+            <button onClick={toggleCamera}
+              className="absolute top-3 left-3 z-10 w-9 h-9 flex items-center justify-center bg-black/50 border border-white/15 text-white rounded-full active:scale-90 text-sm backdrop-blur-sm"
+              title="تبديل الكاميرا">
+              🔄
+            </button>
+          )}
+
+          {cameraReady && mode === 'active' && studentsWithFace.length > 0 && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className={`w-[68%] aspect-[3/4] max-w-[260px] rounded-2xl border-2 transition-colors duration-300 ${
+                facePresent ? 'border-emerald-400/90 bg-emerald-400/5' : 'border-white/25'
+              }`} />
+            </div>
+          )}
+
+          {mode === 'loading' && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+              <div className="text-center">
+                <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                <p className="text-white font-bold text-sm">جاري تجهيز الكاميرا...</p>
+              </div>
+            </div>
+          )}
         </div>
 
-        {cameraReady && !areModelsLoaded() && (
-          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-10">
-            <div className="bg-gray-900/80 backdrop-blur-sm text-white/90 px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 border border-white/10">
-              <div className="w-3 h-3 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-              جاري تحميل موديلات التعرف...
+        {cameraReady && mode === 'active' && studentsWithFace.length > 0 && (
+          <div className="flex justify-center">
+            <div className="bg-gray-800/80 border border-white/10 text-white/80 px-4 py-2 rounded-full text-xs font-medium flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+              </span>
+              أنظر إلى الكاميرا للتسجيل
             </div>
           </div>
         )}
-
-        <canvas ref={canvasRef}
-          className="absolute inset-0 w-full h-full pointer-events-none"
-        />
 
         {cameraReady && (
-          <div className="absolute bottom-4 left-4 right-4 z-10">
-            {mode === 'active' && studentsWithFace.length > 0 && (
-              <div className="flex justify-center mb-2 pointer-events-none">
-                <div className="bg-gray-900/70 backdrop-blur-sm text-white/80 px-4 py-2 rounded-full text-xs font-medium flex items-center gap-2 border border-white/10">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-                  </span>
-                  أنظر إلى الكاميرا للتسجيل
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-center justify-center gap-2 bg-gray-900/80 backdrop-blur-sm rounded-2xl px-3 py-2 border border-white/10 mx-auto w-fit">
-              <button onClick={toggleCamera}
-                className="w-9 h-9 flex items-center justify-center bg-white/15 text-white rounded-full active:scale-90 text-sm"
-                title="تبديل الكاميرا">
-                🔄
-              </button>
-
-              <div className="flex items-center gap-1 px-1 border-r border-l border-white/10">
-                {ZOOM_STEPS.map(s => (
-                  <button key={s} onClick={() => applyZoom(s)}
-                    className={`px-2 py-1 rounded-md text-[10px] font-bold transition active:scale-90 ${
-                      Math.abs(zoom - s) < 0.01 ? 'bg-emerald-500 text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'
-                    }`}>
-                    {s}x
-                  </button>
-                ))}
-              </div>
-
-              {hasTorch && (
-                <button onClick={toggleTorch}
-                  className={`w-9 h-9 flex items-center justify-center rounded-full active:scale-90 text-sm ${
-                    torchOn ? 'bg-yellow-500 text-black' : 'bg-white/15 text-white'
-                  }`}
-                  title="فلاش">
-                  {torchOn ? '💡' : '🔦'}
+          <div className="flex items-center justify-center gap-2 bg-gray-800/80 rounded-xl px-3 py-2 border border-white/10 w-fit mx-auto">
+            <div className="flex items-center gap-1">
+              {ZOOM_STEPS.map(s => (
+                <button key={s} onClick={() => applyZoom(s)}
+                  className={`px-2.5 py-1.5 rounded-md text-[10px] font-bold transition active:scale-90 ${
+                    Math.abs(zoom - s) < 0.01 ? 'bg-emerald-500 text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'
+                  }`}>
+                  {s}x
                 </button>
-              )}
+              ))}
             </div>
+
+            {hasTorch && (
+              <button onClick={toggleTorch}
+                className={`w-9 h-9 flex items-center justify-center rounded-full active:scale-90 text-sm ${
+                  torchOn ? 'bg-yellow-500 text-black' : 'bg-white/15 text-white'
+                }`}
+                title="فلاش">
+                {torchOn ? '💡' : '🔦'}
+              </button>
+            )}
           </div>
         )}
 
-        {mode === 'loading' && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
-            <div className="text-center">
-              <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-              <p className="text-white font-bold text-sm">جاري تحميل موديلات التعرف...</p>
+        <div className="grid grid-cols-2 gap-2 max-w-lg mx-auto">
+          <div className="bg-gray-800/60 rounded-xl p-3 border border-emerald-500/20 text-center">
+            <div className="text-xl font-bold text-emerald-400">{counts.marked}</div>
+            <div className="text-[11px] text-white/70">✅ مسجل جديد</div>
+          </div>
+          <div className="bg-gray-800/60 rounded-xl p-3 border border-amber-500/20 text-center">
+            <div className="text-xl font-bold text-amber-400">{counts.already}</div>
+            <div className="text-[11px] text-white/70">⚠️ مسجل مسبقاً</div>
+          </div>
+        </div>
+
+        {logs.length > 0 && (
+          <div className="w-full max-w-lg mx-auto pb-2">
+            <p className="text-white/60 text-[11px] font-bold mb-1.5">📋 آخر المسجلين</p>
+            <div className="space-y-1.5">
+              {logs.map((entry, i) => (
+                <div key={`${entry.id}-${i}`}
+                  className={`px-2.5 py-1.5 rounded-lg text-[11px] flex items-center justify-between ${
+                    entry.status === 'marked' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
+                    : entry.status === 'already' ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
+                    : 'bg-blue-500/10 text-blue-300 border border-blue-500/20'
+                  }`}>
+                  <span className="font-bold truncate">
+                    {entry.status === 'marked' ? '✅ ' : entry.status === 'already' ? '⚠️ ' : '⏳ '}
+                    {entry.name}
+                  </span>
+                  <span className="text-[10px] opacity-70 shrink-0 ms-2">{entry.confidence}% · {entry.time}</span>
+                </div>
+              ))}
             </div>
           </div>
         )}

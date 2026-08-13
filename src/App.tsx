@@ -444,6 +444,7 @@ function App() {
   };
 
   const handleSelectStage = async (collegeId: string, stageId: string) => {
+    startBackgroundPreload();
     setSelectedCollegeId(collegeId);
     setSelectedStageId(stageId);
     setDataLoaded(false);
