@@ -268,7 +268,8 @@ interface StudentQuickCard {
   absentCount: number;
   percentage: string;
   isPresentToday: boolean;
-  attendedSessions: { session: AttendanceSession & { _normalizedDate: string }; present: boolean }[];
+  isAbsentToday: boolean;
+  attendedSessions: { session: AttendanceSession & { _normalizedDate: string }; present: boolean; absent: boolean }[];
   attendedDays: { date: string; label: string; count: number }[];
   absentDays: { date: string; label: string; count: number }[];
 }
@@ -437,51 +438,51 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     });
 
     const studentRecords = scRecords.filter(r => r.studentId === student.id);
-    const attendedSessionIds = new Set(studentRecords.map(r => r.sessionId));
+    const presentSessionIds = new Set(studentRecords.filter(r => r.status === 'present').map(r => r.sessionId));
+    const absentSessionIds = new Set(studentRecords.filter(r => r.status === 'absent').map(r => r.sessionId));
 
     const todaySessionIds = new Set<string>();
     fixedSessions.forEach(s => { if (s._normalizedDate === todayKey) todaySessionIds.add(s.id); });
-    scRecords.forEach(r => {
-      const sess = fixedSessions.find(s => s.id === r.sessionId);
-      if (sess && sess._normalizedDate === todayKey) todaySessionIds.add(r.sessionId);
-    });
-    const isPresentToday = studentRecords.some(r => todaySessionIds.has(r.sessionId));
+    const isPresentToday = studentRecords.some(r => r.status === 'present' && todaySessionIds.has(r.sessionId));
+    const isAbsentToday = studentRecords.some(r => r.status === 'absent' && todaySessionIds.has(r.sessionId));
 
-    const attendedCount = sortedSessions.filter(s => attendedSessionIds.has(s.id)).length;
-    const absentCount = sortedSessions.length - attendedCount;
-    const percentage = sortedSessions.length > 0
-      ? ((attendedCount / sortedSessions.length) * 100).toFixed(1)
+    const attendedCount = presentSessionIds.size;
+    const absentCount = absentSessionIds.size;
+    const percentage = (attendedCount + absentCount) > 0
+      ? ((attendedCount / (attendedCount + absentCount)) * 100).toFixed(1)
       : '0';
 
     const attendedSessions = sortedSessions.map(s => ({
       session: s,
-      present: attendedSessionIds.has(s.id),
+      present: presentSessionIds.has(s.id),
+      absent: absentSessionIds.has(s.id),
     }));
 
-    const sessionByDate = new Map<string, number>();
-    fixedSessions.forEach(s => {
-      if (!s._normalizedDate) return;
-      sessionByDate.set(s._normalizedDate, (sessionByDate.get(s._normalizedDate) || 0) + 1);
-    });
-    const attendedDateSet = new Set<string>();
+    const sessionById = new Map(fixedSessions.map(s => [s.id, s]));
+    const sessionDateOf = (record: AttendanceRecord): string => {
+      const sess = sessionById.get(record.sessionId);
+      return sess?._normalizedDate || '';
+    };
+    const attendedDates = new Set<string>();
+    const absentDates = new Set<string>();
     studentRecords.forEach(r => {
-      const sess = fixedSessions.find(s => s.id === r.sessionId);
-      if (sess && sess._normalizedDate) attendedDateSet.add(sess._normalizedDate);
+      const d = sessionDateOf(r);
+      if (!d) return;
+      if (r.status === 'present') attendedDates.add(d);
+      else if (r.status === 'absent') absentDates.add(d);
     });
-    const attendedDays = [...attendedDateSet].sort().reverse().map(date => ({
+    const attendedDays = [...attendedDates].sort().reverse().map(date => ({
       date,
       label: formatDateWithDay(date),
-      count: studentRecords.filter(r => {
-        const sess = fixedSessions.find(s => s.id === r.sessionId);
-        return sess?._normalizedDate === date;
-      }).length,
+      count: studentRecords.filter(r => r.status === 'present' && sessionDateOf(r) === date).length,
     }));
-    const absentDays = [...sessionByDate.keys()]
-      .filter(d => !attendedDateSet.has(d))
-      .sort().reverse()
-      .map(date => ({ date, label: formatDateWithDay(date), count: sessionByDate.get(date) || 0 }));
+    const absentDays = [...absentDates].sort().reverse().map(date => ({
+      date,
+      label: formatDateWithDay(date),
+      count: studentRecords.filter(r => r.status === 'absent' && sessionDateOf(r) === date).length,
+    }));
 
-    return { student, attendedCount, absentCount, percentage, isPresentToday, attendedSessions, attendedDays, absentDays };
+    return { student, attendedCount, absentCount, percentage, isPresentToday, isAbsentToday, attendedSessions, attendedDays, absentDays };
   }, [scope, fixDate]);
 
   const handleStudentSearch = useCallback((query: string) => {
@@ -580,23 +581,19 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       return String(a.name || '').localeCompare(String(b.name || ''), 'ar');
     });
 
-    const sessionById = new Map(sortedSessions.map(s => [s.id, s]));
     const groups = Array.from(new Set(students.map(s => s.group).filter(Boolean))) as string[];
     groups.sort((a, b) => a.localeCompare(b, 'ar'));
 
     // 📊 إحصاءات اليوم
     const todaySessionIds = new Set<string>();
     sortedSessions.forEach(s => { if (s.date === todayDate) todaySessionIds.add(s.id); });
-    records.forEach(r => {
-      const session = sessionById.get(r.sessionId);
-      if (session && session.date === todayDate) todaySessionIds.add(r.sessionId);
-      if (r.date && r.date === todayDate) todaySessionIds.add(r.sessionId);
-    });
-    const todaySessionList = sortedSessions.filter(s => todaySessionIds.has(s.id));
     const todayRecords = records.filter(r => todaySessionIds.has(r.sessionId));
-    const presentTodayIds = new Set(todayRecords.map(r => r.studentId));
+    const presentTodayIds = new Set(todayRecords.filter(r => r.status === 'present').map(r => r.studentId));
+    const absentTodayIds = new Set(todayRecords.filter(r => r.status === 'absent').map(r => r.studentId));
+    const todaySessionList = sortedSessions.filter(s => todaySessionIds.has(s.id));
     const presentToday = students.filter(s => presentTodayIds.has(s.id));
-    const absentToday = students.filter(s => !presentTodayIds.has(s.id));
+    const absentToday = students.filter(s => absentTodayIds.has(s.id));
+    const unrecordedToday = students.length - presentToday.length - absentToday.length;
 
     // 🚨 إجابات مؤكدة
     let context = `# 🚨 إجابات مؤكدة 100% من قاعدة البيانات\n\n`;
@@ -604,7 +601,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     context += `- إجمالي الطلاب: **${students.length}**\n`;
     context += `- إجمالي المحاضرات: **${sortedSessions.length}**\n`;
     if (todaySessionList.length > 0) {
-      context += `- حضور اليوم: ✅ **${presentToday.length}** حاضر / ❌ **${absentToday.length}** غائب\n`;
+      context += `- حضور اليوم: ✅ **${presentToday.length}** حاضر / ❌ **${absentToday.length}** غائب${unrecordedToday > 0 ? ` / ⬜ **${unrecordedToday}** غير مسجل` : ''}\n`;
       context += `- نسبة حضور اليوم: **${students.length > 0 ? ((presentToday.length / students.length) * 100).toFixed(1) : '0'}%**\n`;
       context += `- محاضرات اليوم: **${todaySessionList.length}**\n`;
     }
@@ -613,7 +610,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       groups.forEach(g => {
         const gStudents = students.filter(s => s.group === g);
         const gIds = new Set(gStudents.map(s => s.id));
-        const gRecs = records.filter(r => gIds.has(r.sessionId));
+        const gRecs = records.filter(r => gIds.has(r.studentId) && r.status === 'present');
         const possible = gStudents.length * sortedSessions.length;
         const rate = possible > 0 ? ((gRecs.length / possible) * 100).toFixed(1) : '0';
         const gp = gStudents.filter(s => presentTodayIds.has(s.id)).length;
@@ -621,7 +618,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       });
     }
     const totalPossible = students.length * sortedSessions.length;
-    const overallRate = totalPossible > 0 ? ((records.length / totalPossible) * 100).toFixed(2) : '0';
+    const overallRate = totalPossible > 0 ? ((records.filter(r => r.status === 'present').length / totalPossible) * 100).toFixed(2) : '0';
     context += `\n- 📈 نسبة الحضور العامة: **${overallRate}%**\n\n`;
     context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
@@ -637,10 +634,9 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       if (todaySessionList.length > 0) {
         context += `## 🌟 تفصيل محاضرات اليوم:\n\n`;
         todaySessionList.forEach((session, idx) => {
-          const sRecs = records.filter(r => r.sessionId === session.id);
-          const sPresent = new Set(sRecs.map(r => r.studentId));
-          const sPresentCount = students.filter(s => sPresent.has(s.id)).length;
-          const sAbsentCount = students.length - sPresentCount;
+          const sRecs = records.filter(r => r.sessionId === session.id && r.status === 'present');
+          const sPresentCount = sRecs.length;
+          const sAbsentCount = records.filter(r => r.sessionId === session.id && r.status === 'absent').length;
           const sRate = students.length > 0 ? ((sPresentCount / students.length) * 100).toFixed(1) : '0';
           context += `**${idx + 1}. ${session.name}** | ✅${sPresentCount} ❌${sAbsentCount} | ${sRate}%\n`;
         });
@@ -650,10 +646,10 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       // جميع المحاضرات بالتفصيل — أسماء الحاضرين والغائبين لكل سجل
       context += `## 📅 تفاصيل جميع المحاضرات:\n`;
       sortedSessions.forEach((session, idx) => {
-        const sRecs = records.filter(r => r.sessionId === session.id);
-        const presentIds = new Set(sRecs.map(r => r.studentId));
+        const presentIds = new Set(records.filter(r => r.sessionId === session.id && r.status === 'present').map(r => r.studentId));
+        const absentIds = new Set(records.filter(r => r.sessionId === session.id && r.status === 'absent').map(r => r.studentId));
         const presentStudents = students.filter(s => presentIds.has(s.id));
-        const absentStudents = students.filter(s => !presentIds.has(s.id));
+        const absentStudents = students.filter(s => absentIds.has(s.id));
         const isT = session.date === todayDate ? ' 🌟' : '';
         context += `\n---\n### ${idx + 1}. ${session.name}${isT}\n`;
         context += `📅 التاريخ: ${formatDateWithDay(session.date)}\n`;
@@ -671,10 +667,9 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       });
       sortedStudents.forEach(student => {
         const studentRecords = records.filter(r => r.studentId === student.id);
-        const attendedIds = new Set(studentRecords.map(r => r.sessionId));
-        const attendedCount = sortedSessions.filter(s => attendedIds.has(s.id)).length;
-        const absentCount = sortedSessions.length - attendedCount;
-        const pct = sortedSessions.length > 0 ? ((attendedCount / sortedSessions.length) * 100).toFixed(1) : '0';
+        const attendedCount = studentRecords.filter(r => r.status === 'present').length;
+        const absentCount = studentRecords.filter(r => r.status === 'absent').length;
+        const pct = (attendedCount + absentCount) > 0 ? ((attendedCount / (attendedCount + absentCount)) * 100).toFixed(1) : '0';
         const isPresent = presentTodayIds.has(student.id);
         context += `${isPresent ? '✅' : '❌'} ${student.name} | كود:${student.code || '-'} | كروب:${student.group || '-'} | حضور:${attendedCount} | غياب:${absentCount} | ${pct}%\n`;
       });
@@ -689,7 +684,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
         context += `## 🏛️ ملخص المراحل:\n`;
         Object.entries(accessibleData.stagesMap).forEach(([_stageId, stageData]) => {
           const tp = stageData.students.length * stageData.sessions.length;
-          const r = tp > 0 ? ((stageData.records.length / tp) * 100).toFixed(1) : '0';
+          const r = tp > 0 ? ((stageData.records.filter(rr => rr.status === 'present').length / tp) * 100).toFixed(1) : '0';
           context += `- **${stageData.collegeName} / ${stageData.stageName}**: ${stageData.students.length} طالب | ${stageData.sessions.length} جلسة | ${r}%\n`;
         });
       } else if (!universityDataLoaded) {
@@ -729,17 +724,13 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     }
 
     const fixedSessions = sessions.map(s => ({ ...s, _normalizedDate: fixDate((s as any).date) }));
-    const sessionsLookup = new Map(fixedSessions.map(s => [s.id, s]));
     const todaySessionIdsSet = new Set<string>();
     fixedSessions.forEach(s => { if (s._normalizedDate === todayKey) todaySessionIdsSet.add(s.id); });
-    records.forEach(r => {
-      const sess = sessionsLookup.get(r.sessionId);
-      if (sess && sess._normalizedDate === todayKey) todaySessionIdsSet.add(r.sessionId);
-    });
     const todayRecords = records.filter(r => todaySessionIdsSet.has(r.sessionId));
-    const presentIds = new Set(todayRecords.map(r => r.studentId));
+    const presentIds = new Set(todayRecords.filter(r => r.status === 'present').map(r => r.studentId));
+    const absentIds = new Set(todayRecords.filter(r => r.status === 'absent').map(r => r.studentId));
     const present = students.filter(s => presentIds.has(s.id));
-    const absent = students.filter(s => !presentIds.has(s.id));
+    const absent = students.filter(s => absentIds.has(s.id));
     const THRESHOLD = 50;
 
     if (asksPresent && !asksAbsent) {
@@ -773,8 +764,8 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       if (students.length > THRESHOLD) {
         let perSessionSummary = '';
         todaySessionsList.forEach(sess => {
-          const sRecs = records.filter(r => r.sessionId === sess.id);
-          perSessionSummary += `\n• سجل "${sess.name}": ${sRecs.length}/${students.length} حاضر`;
+          const presentCount = records.filter(r => r.sessionId === sess.id && r.status === 'present').length;
+          perSessionSummary += `\n• سجل "${sess.name}": ${presentCount}/${students.length} حاضر`;
         });
         hint += `\n\n[🚨 عدد كبير (${students.length}). فصّل كل سجل:${perSessionSummary}]`;
         return hint;
@@ -782,9 +773,10 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       let sessionsBreakdown = `\n\n[🚨 فصّل كل سجل لحاله:\n`;
       todaySessionsList.forEach((sess, idx) => {
         const sRecs = records.filter(r => r.sessionId === sess.id);
-        const sPresentIds = new Set(sRecs.map(r => r.studentId));
+        const sPresentIds = new Set(sRecs.filter(r => r.status === 'present').map(r => r.studentId));
+        const sAbsentIds = new Set(sRecs.filter(r => r.status === 'absent').map(r => r.studentId));
         const sPresent = students.filter(s => sPresentIds.has(s.id));
-        const sAbsent = students.filter(s => !sPresentIds.has(s.id));
+        const sAbsent = students.filter(s => sAbsentIds.has(s.id));
         sessionsBreakdown += `━━━ السجل ${idx + 1}: "${sess.name}" ━━━\n`;
         sessionsBreakdown += `✅ (${sPresent.length}): ${sPresent.map(s => `${s.name}`).join(' | ') || 'لا أحد'}\n`;
         sessionsBreakdown += `❌ (${sAbsent.length}): ${sAbsent.map(s => `${s.name}`).join(' | ') || 'لا أحد'}\n\n`;
@@ -801,10 +793,11 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
         question.includes(student.code);
       if (matches) {
         const studentRecords = records.filter(r => r.studentId === student.id);
-        const attendedSessionIds = new Set(studentRecords.map(r => r.sessionId));
-        const attendedCount = sessions.filter(s => attendedSessionIds.has(s.id)).length;
-        const absentCount = sessions.length - attendedCount;
-        const percentage = sessions.length > 0 ? ((attendedCount / sessions.length) * 100).toFixed(1) : '0';
+        const attendedSessionIds = new Set(studentRecords.filter(r => r.status === 'present').map(r => r.sessionId));
+        const absentSessionIds = new Set(studentRecords.filter(r => r.status === 'absent').map(r => r.sessionId));
+        const attendedCount = attendedSessionIds.size;
+        const absentCount = absentSessionIds.size;
+        const percentage = (attendedCount + absentCount) > 0 ? ((attendedCount / (attendedCount + absentCount)) * 100).toFixed(1) : '0';
         const isPresentToday = presentIds.has(student.id);
         hint += `\n\n[🚨 الطالب "${student.name}": كود ${student.code} | كروب ${student.group || '-'} | حضور ${attendedCount}/${sessions.length} | غياب ${absentCount} | نسبة ${percentage}% | اليوم: ${isPresentToday ? '✅ حاضر' : '❌ غائب'}]`;
         break;
@@ -827,21 +820,28 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
 
     const dayReportFor = (student: Student): { attendedDays: string[]; absentDays: string[] } => {
       const sRecs = scRecords.filter(r => r.studentId === student.id);
-      const sessionByDate = new Map<string, number>();
-      fixedSessions.forEach(s => {
-        if (!s._normalizedDate) return;
-        sessionByDate.set(s._normalizedDate, (sessionByDate.get(s._normalizedDate) || 0) + 1);
-      });
       const attendedDates = new Set<string>();
+      const absentDates = new Set<string>();
       sRecs.forEach(r => {
         const sess = sessionById.get(r.sessionId);
-        if (sess?._normalizedDate) attendedDates.add(sess._normalizedDate);
+        if (!sess?._normalizedDate) return;
+        if (r.status === 'present') attendedDates.add(sess._normalizedDate);
+        else if (r.status === 'absent') absentDates.add(sess._normalizedDate);
       });
       return {
         attendedDays: [...attendedDates].sort().reverse(),
-        absentDays: [...sessionByDate.keys()].filter(d => !attendedDates.has(d)).sort().reverse(),
+        absentDays: [...absentDates].sort().reverse(),
       };
     };
+
+    const todaySessions = fixedSessions.filter(s => s._normalizedDate === todayKey);
+    const todaySessionIdSet = new Set(todaySessions.map(s => s.id));
+    const todayPresentIds = new Set(
+      scRecords.filter(r => todaySessionIdSet.has(r.sessionId) && r.status === 'present').map(r => r.studentId)
+    );
+    const todayAbsentIds = new Set(
+      scRecords.filter(r => todaySessionIdSet.has(r.sessionId) && r.status === 'absent').map(r => r.studentId)
+    );
 
     // 1) من سوى الموقع / الأدمن
     if (/مدير|مسؤول|من سوى|من صمم|من برمج|صاحب الموقع|owner|admin|developer/i.test(q)) {
@@ -856,37 +856,38 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       if (!nameMatch && !codeMatch) continue;
 
       const sRecs = scRecords.filter(r => r.studentId === student.id);
-      const attendedIds = new Set(sRecs.map(r => r.sessionId));
-      const attendedCount = fixedSessions.filter(s => attendedIds.has(s.id)).length;
-      const absentCount = fixedSessions.length - attendedCount;
-      const pct = fixedSessions.length > 0 ? ((attendedCount / fixedSessions.length) * 100).toFixed(1) : '0';
+      const presentSessionIds = new Set(sRecs.filter(r => r.status === 'present').map(r => r.sessionId));
+      const absentSessionIds = new Set(sRecs.filter(r => r.status === 'absent').map(r => r.sessionId));
+      const attendedCount = presentSessionIds.size;
+      const absentCount = absentSessionIds.size;
+      const pct = (attendedCount + absentCount) > 0 ? ((attendedCount / (attendedCount + absentCount)) * 100).toFixed(1) : '0';
       const { attendedDays, absentDays } = dayReportFor(student);
 
-      const todaySessions = fixedSessions.filter(s => s._normalizedDate === todayKey);
-      const todayPresent = todaySessions.length > 0 && sRecs.some(r => todaySessions.some(s => s.id === r.sessionId));
+      let todayStatus = '';
+      if (todaySessions.length === 0) todayStatus = 'لا توجد محاضرات اليوم';
+      else if (todayPresentIds.has(student.id)) todayStatus = '✅ حاضر';
+      else if (todayAbsentIds.has(student.id)) todayStatus = '❌ غائب';
+      else todayStatus = 'غير مسجل اليوم';
 
       let text = `📋 الطالب: **${student.name}**\n`;
       text += `🆔 الكود: ${student.code || '-'} | كروب: ${student.group || '-'}\n`;
-      text += `📅 اليوم: ${todaySessions.length === 0 ? 'لا توجد محاضرات اليوم' : todayPresent ? '✅ حاضر' : '❌ غائب'}\n\n`;
+      text += `📅 اليوم: ${todayStatus}\n\n`;
       text += `✅ أيام الحضور (${attendedDays.length}):\n`;
       if (attendedDays.length === 0) text += `  لا يوجد\n`;
       attendedDays.forEach(d => { text += `  • ${formatDateWithDay(d)}\n`; });
       text += `\n❌ أيام الغياب (${absentDays.length}):\n`;
       if (absentDays.length === 0) text += `  لا يوجد\n`;
       absentDays.forEach(d => { text += `  • ${formatDateWithDay(d)}\n`; });
-      text += `\n📊 النسبة: **${pct}%** (حضور ${attendedCount} / غياب ${absentCount} من ${fixedSessions.length} محاضرة)`;
+      text += `\n📊 النسبة: **${pct}%** (حضور ${attendedCount} / غياب ${absentCount})`;
       return { handled: true, text };
     }
-
-    const todaySessions = fixedSessions.filter(s => s._normalizedDate === todayKey);
 
     // 3) منو حضر اليوم — حضور اليوم فقط
     if (/منو حضر|اللي حضر|من حضر|الموجودين|الحاضرين اليوم|حضور اليوم|شو حاضر/i.test(q)) {
       if (todaySessions.length === 0) {
         return { handled: true, text: `📅 لا توجد بيانات حضور لليوم (${formatDateWithDay(todayKey)})` };
       }
-      const todayIds = new Set(scRecords.filter(r => todaySessions.some(s => s.id === r.sessionId)).map(r => r.studentId));
-      const present = scStudents.filter(s => todayIds.has(s.id));
+      const present = scStudents.filter(s => todayPresentIds.has(s.id));
       if (present.length === 0) return { handled: true, text: '🚨 لا يوجد حاضرين اليوم' };
       let text = `✅ حضور اليوم فقط (${present.length}):\n`;
       present.forEach(s => { text += `  • ${s.name} (${s.code || '-'}${s.group ? `, ${s.group}` : ''})\n`; });
@@ -898,9 +899,8 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       if (todaySessions.length === 0) {
         return { handled: true, text: `📅 لا توجد بيانات حضور لليوم (${formatDateWithDay(todayKey)})` };
       }
-      const todayIds = new Set(scRecords.filter(r => todaySessions.some(s => s.id === r.sessionId)).map(r => r.studentId));
-      const absent = scStudents.filter(s => !todayIds.has(s.id));
-      if (absent.length === 0) return { handled: true, text: '✅ الكل حاضر اليوم — لا يوجد غائبين' };
+      const absent = scStudents.filter(s => todayAbsentIds.has(s.id));
+      if (absent.length === 0) return { handled: true, text: '✅ لا يوجد طلاب مسجلين غياب اليوم' };
       let text = `❌ غياب اليوم (${absent.length}):\n`;
       absent.forEach(s => { text += `  • ${s.name} (${s.code || '-'}${s.group ? `, ${s.group}` : ''})\n`; });
       return { handled: true, text };
@@ -911,14 +911,15 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       if (todaySessions.length === 0) {
         return { handled: true, text: `📅 لا توجد محاضرات اليوم (${formatDateWithDay(todayKey)})` };
       }
-      const todayIds = new Set(scRecords.filter(r => todaySessions.some(s => s.id === r.sessionId)).map(r => r.studentId));
-      const presentCount = scStudents.filter(s => todayIds.has(s.id)).length;
-      const absentCount = scStudents.length - presentCount;
+      const presentCount = scStudents.filter(s => todayPresentIds.has(s.id)).length;
+      const absentCount = scStudents.filter(s => todayAbsentIds.has(s.id)).length;
+      const notRecordedCount = scStudents.length - presentCount - absentCount;
       const pct = scStudents.length > 0 ? ((presentCount / scStudents.length) * 100).toFixed(1) : '0';
       let text = `📊 إحصائيات اليوم (${formatDateWithDay(todayKey)}):\n`;
       text += `  ✅ الحاضرون: **${presentCount}**\n`;
       text += `  ❌ الغائبون: **${absentCount}**\n`;
-      text += `  📈 النسبة: **${pct}%**`;
+      if (notRecordedCount > 0) text += `  ⬜ غير مسجل اليوم: **${notRecordedCount}**\n`;
+      text += `  📈 نسبة الحضور: **${pct}%**`;
       return { handled: true, text };
     }
 
@@ -1170,11 +1171,12 @@ ${dataContext}`;
                         {showSuggestions && studentSuggestions.length > 0 && (
                           <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-200 z-[70] overflow-hidden max-h-[320px] overflow-y-auto">
                             {studentSuggestions.map(student => {
-                              const sRecords = records.filter(r => r.studentId === student.id);
-                              const attendedIds = new Set(sRecords.map(r => r.sessionId));
-                              const sAttended = sessions.filter(s => attendedIds.has(s.id)).length;
-                              const sTotal = sessions.length;
-                              const sPct = sTotal > 0 ? ((sAttended / sTotal) * 100).toFixed(1) : '0';
+                              const sRecords = scope.records.filter(r => r.studentId === student.id);
+                              const presentIds = new Set(sRecords.filter(r => r.status === 'present').map(r => r.sessionId));
+                              const absentIds = new Set(sRecords.filter(r => r.status === 'absent').map(r => r.sessionId));
+                              const sAttended = presentIds.size;
+                              const sAbsent = absentIds.size;
+                              const sPct = (sAttended + sAbsent) > 0 ? ((sAttended / (sAttended + sAbsent)) * 100).toFixed(1) : '0';
                               return (
                               <button
                                 key={student.id}
@@ -1191,7 +1193,7 @@ ${dataContext}`;
                                     {student.group && ` • كروب: ${student.group}`}
                                   </p>
                                   <p className="text-[10px] mt-0.5 text-gray-400">
-                                    ✅ {sAttended} / ❌ {sTotal - sAttended} — {sPct}%
+                                    ✅ {sAttended} / ❌ {sAbsent} — {sPct}%
                                   </p>
                                 </div>
                                 <span className="text-gray-400 text-xs"><ChevronLeft className="w-4 h-4" /></span>
@@ -1223,9 +1225,19 @@ ${dataContext}`;
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <div className={`text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 ${selectedStudentCard.isPresentToday ? 'bg-green-500/10 text-green-700' : 'bg-red-500/10 text-red-700'}`}>
-                              {selectedStudentCard.isPresentToday ? <><CircleCheck className="w-3.5 h-3.5" /> حاضر اليوم</> : <><CircleX className="w-3.5 h-3.5" /> غائب اليوم</>}
-                            </div>
+                            {selectedStudentCard.isPresentToday ? (
+                              <div className="text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 bg-green-500/10 text-green-700">
+                                <CircleCheck className="w-3.5 h-3.5" /> حاضر اليوم
+                              </div>
+                            ) : selectedStudentCard.isAbsentToday ? (
+                              <div className="text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 bg-red-500/10 text-red-700">
+                                <CircleX className="w-3.5 h-3.5" /> غائب اليوم
+                              </div>
+                            ) : (
+                              <div className="text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 bg-gray-500/10 text-gray-600">
+                                <CircleX className="w-3.5 h-3.5" /> غير مسجل اليوم
+                              </div>
+                            )}
                             <button
                               onClick={() => { setShowStudentCard(false); setSelectedStudentCard(null); setStudentSearchQuery(''); }}
                               className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-red-50 text-red-400 hover:text-red-600 text-sm transition flex-shrink-0"
@@ -1334,15 +1346,20 @@ ${dataContext}`;
                                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm ${
                                  as_.present
                                    ? 'bg-green-50 border border-green-200 text-green-800'
-                                   : 'bg-red-50 border border-red-200 text-red-800'
+                                   : as_.absent
+                                   ? 'bg-red-50 border border-red-200 text-red-800'
+                                   : 'bg-gray-50 border border-gray-200 text-gray-500'
                                }`}>
-                            <span className="flex-shrink-0">{as_.present ? <CircleCheck className="w-5 h-5 text-green-600" /> : <CircleX className="w-5 h-5 text-red-600" />}</span>
+                            <span className="flex-shrink-0">{as_.present ? <CircleCheck className="w-5 h-5 text-green-600" /> : as_.absent ? <CircleX className="w-5 h-5 text-red-600" /> : <CircleX className="w-5 h-5 text-gray-400" />}</span>
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold truncate">{as_.session.name}</p>
-                              <p className={`text-[11px] mt-0.5 ${as_.present ? 'text-green-600' : 'text-red-600'}`}>
+                              <p className={`text-[11px] mt-0.5 ${as_.present ? 'text-green-600' : as_.absent ? 'text-red-600' : 'text-gray-400'}`}>
                                 {formatDateWithDay(as_.session._normalizedDate)}
                               </p>
                             </div>
+                            {!as_.present && !as_.absent && (
+                              <span className="text-[10px] font-medium text-gray-400 flex-shrink-0">غير مسجل</span>
+                            )}
                           </div>
                         ))
                       )}
