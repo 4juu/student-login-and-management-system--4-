@@ -57,6 +57,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [facing, setFacing] = useState<CameraFacing>('user');
   const [cameraReady, setCameraReady] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [hasTorch, setHasTorch] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
@@ -201,6 +202,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const initCamera = async () => {
     if (!mountedRef.current) return;
     setCameraReady(false);
+    setVideoReady(false);
     try {
       await cleanup();
 
@@ -236,6 +238,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       const newFacing: CameraFacing = facing === 'user' ? 'environment' : 'user';
       stopFaceLoop();
       facingRef.current = newFacing;
+      setVideoReady(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: newFacing, width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } },
@@ -850,6 +853,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
               style={{ aspectRatio: '3 / 4' }}>
               <video ref={videoRef}
                 autoPlay playsInline muted
+                onLoadedMetadata={() => setVideoReady(true)}
                 className="absolute inset-0 w-full h-full object-cover"
                 style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }}
               />
@@ -877,7 +881,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
                 </button>
               )}
 
-              {mode === 'loading' && (
+              {(mode === 'loading' || !videoReady) && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black">
                   <div className="text-center">
                     <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />

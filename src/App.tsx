@@ -728,9 +728,23 @@ function App() {
     const subjectName = currentUser?.bio || currentUser?.displayName || stageName || '';
     const teacherName = currentUser?.displayName || '';
 
+    const studentMap = new Map(students.map(s => [s.id, s] as const));
+
+    const markedForSession = new Set(
+      attendanceRecords
+        .filter(r => r.sessionId === sessionId && (r.status === 'absent' || r.status === 'present'))
+        .map(r => r.studentId)
+    );
+
+    const absentCountMap = new Map<string, number>();
+    for (const r of attendanceRecords) {
+      if (r.status !== 'absent') continue;
+      absentCountMap.set(r.studentId, (absentCountMap.get(r.studentId) || 0) + 1);
+    }
+
     const studentsByGroup = new Map<string, typeof studentIds>();
     for (const studentId of studentIds) {
-      const student = students.find(s => s.id === studentId);
+      const student = studentMap.get(studentId);
       if (!student) continue;
       const group = student.group || 'بدون كروب';
       if (!studentsByGroup.has(group)) studentsByGroup.set(group, []);
@@ -748,25 +762,16 @@ function App() {
       const groupRecords: AttendanceRecord[] = [];
 
       for (const studentId of groupStudentIds) {
-        const student = students.find(s => s.id === studentId);
+        const student = studentMap.get(studentId);
         if (!student) continue;
 
-        const alreadyMarked = attendanceRecords.some(
-          r => r.studentId === studentId &&
-               r.sessionId === sessionId &&
-               (r.status === 'absent' || r.status === 'present')
-        );
-        if (alreadyMarked) continue;
+        if (markedForSession.has(studentId)) continue;
 
         const dedupeKey = `${sessionId}_${studentId}`;
         if (markAbsentInFlightRef.current.has(dedupeKey)) continue;
         markAbsentInFlightRef.current.add(dedupeKey);
 
-        const existingCount = attendanceRecords.filter(
-          r => r.studentId === studentId && r.status === 'absent'
-        ).length;
-
-        const absenceCount = existingCount + 1;
+        const absenceCount = (absentCountMap.get(studentId) || 0) + 1;
 
         const record: AttendanceRecord = {
           id: `absent_${Date.now()}_${studentId}`,

@@ -142,8 +142,14 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
     }
   };
 
-  const sessionPresentCount = (sessionId: string) =>
-    records.filter(r => r.sessionId === sessionId && r.status === 'present').length;
+  const presentCountBySession = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of records) {
+      if (r.status !== 'present') continue;
+      counts.set(r.sessionId, (counts.get(r.sessionId) || 0) + 1);
+    }
+    return counts;
+  }, [records]);
 
   const renderSendLogModal = () => {
     const isThisSending = isSending && currentSendingSessionId === sendLogSessionId;
@@ -367,7 +373,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
                     )}
                   </div>
                   <p className="text-xs sm:text-sm text-gray-600 mt-1">
-                    📅 {session.date} | ✅ {sessionPresentCount(session.id)} حاضر
+                    📅 {session.date} | ✅ {presentCountBySession.get(session.id) || 0} حاضر
                   </p>
                 </div>
                 

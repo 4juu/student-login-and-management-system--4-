@@ -22,6 +22,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   const [error, setError] = useState('');
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
   const [cameraReady, setCameraReady] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [faceDetected, setFaceDetected] = useState(false);
 
@@ -48,7 +49,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   useEffect(() => { mountedRef.current = true; if (step === 'search') setTimeout(() => searchRef.current?.focus(), 300);   }, [step]);
 
   const openCamera = useCallback(async (f: 'user' | 'environment') => {
-    setError(''); setCameraReady(false);
+    setError(''); setCameraReady(false); setVideoReady(false);
     try {
       if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
       const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: f, width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } }, audio: false });
@@ -241,11 +242,12 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
             <div className="relative mb-3">
               <div className="relative rounded-2xl overflow-hidden bg-gray-900 w-full" style={{ aspectRatio: '4 / 3' }}>
                 <video ref={videoRef} autoPlay playsInline muted
+                  onLoadedMetadata={() => setVideoReady(true)}
                   className="w-full h-full object-cover"
                   style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }} />
                 <canvas ref={landmarkCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
-                {!cameraReady && !error && (
+                {(!cameraReady || !videoReady) && !error && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
                     <div className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
                   </div>
