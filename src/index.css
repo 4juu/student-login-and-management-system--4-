@@ -35,48 +35,48 @@
 }
 
 :root {
-  --background: #0A0A0F;
-  --foreground: #F1F5F9;
-  --card: rgba(255, 255, 255, 0.05);
-  --card-foreground: #F1F5F9;
-  --popover: rgba(15, 15, 25, 0.95);
-  --popover-foreground: #F1F5F9;
-  --primary: #4F46E5;
+  --background: #0B1220;
+  --foreground: #E6EDF7;
+  --card: rgba(255, 255, 255, 0.04);
+  --card-foreground: #E6EDF7;
+  --popover: rgba(11, 18, 32, 0.97);
+  --popover-foreground: #E6EDF7;
+  --primary: #2563EB;
   --primary-foreground: #FFFFFF;
-  --secondary: rgba(255, 255, 255, 0.06);
-  --secondary-foreground: #F1F5F9;
+  --secondary: rgba(255, 255, 255, 0.05);
+  --secondary-foreground: #E6EDF7;
   --muted: rgba(255, 255, 255, 0.04);
   --muted-foreground: #94A3B8;
-  --accent: rgba(124, 58, 237, 0.15);
-  --accent-foreground: #A78BFA;
+  --accent: rgba(37, 99, 235, 0.16);
+  --accent-foreground: #93C5FD;
   --destructive: #EF4444;
   --destructive-foreground: #FFFFFF;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.12);
-  --ring: rgba(124, 58, 237, 0.5);
+  --border: rgba(148, 163, 184, 0.14);
+  --input: rgba(148, 163, 184, 0.22);
+  --ring: rgba(59, 130, 246, 0.5);
   --radius: 0.75rem;
 }
 
 .dark {
-  --background: #0A0A0F;
-  --foreground: #F1F5F9;
-  --card: rgba(255, 255, 255, 0.05);
-  --card-foreground: #F1F5F9;
-  --popover: rgba(15, 15, 25, 0.95);
-  --popover-foreground: #F1F5F9;
-  --primary: #4F46E5;
+  --background: #0B1220;
+  --foreground: #E6EDF7;
+  --card: rgba(255, 255, 255, 0.04);
+  --card-foreground: #E6EDF7;
+  --popover: rgba(11, 18, 32, 0.97);
+  --popover-foreground: #E6EDF7;
+  --primary: #2563EB;
   --primary-foreground: #FFFFFF;
-  --secondary: rgba(255, 255, 255, 0.06);
-  --secondary-foreground: #F1F5F9;
+  --secondary: rgba(255, 255, 255, 0.05);
+  --secondary-foreground: #E6EDF7;
   --muted: rgba(255, 255, 255, 0.04);
   --muted-foreground: #94A3B8;
-  --accent: rgba(124, 58, 237, 0.15);
-  --accent-foreground: #A78BFA;
+  --accent: rgba(37, 99, 235, 0.16);
+  --accent-foreground: #93C5FD;
   --destructive: #EF4444;
   --destructive-foreground: #FFFFFF;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.12);
-  --ring: rgba(124, 58, 237, 0.5);
+  --border: rgba(148, 163, 184, 0.14);
+  --input: rgba(148, 163, 184, 0.22);
+  --ring: rgba(59, 130, 246, 0.5);
 }
 
 /* ============================================ */
@@ -112,7 +112,7 @@
   }
 
   .dark body {
-    background-color: #0A0A0F;
+    background-color: #0B1220;
     color: rgb(241 245 249);
   }
 
@@ -964,10 +964,10 @@
   animation: fadeIn 0.3s ease-out;
 }
 
-/* == Page Transitions (fade + translateY + scale) == */
+/* == Page Transitions (fade + translateY) == */
 @keyframes pageEnter {
-  from { opacity: 0; transform: translateY(40px) scale(0.97); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-pageEnter {
@@ -985,8 +985,8 @@
 
 /* == تحسين انتقالات البطاقات == */
 @keyframes cardEnter {
-  from { opacity: 0; transform: translateY(20px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-cardEnter {
@@ -1017,66 +1017,19 @@
 }
 
 /* ============================================ */
-/* ✨ Glow + Glass Effect — لكل الأزرار         */
+/* ✨ Interaction States — هادئة أكاديمية        */
 /* ============================================ */
 
 /* 🏗️ هيكل الزر الأساسي */
 button {
   position: relative;
   isolation: isolate;
-  overflow: hidden;
 }
 
-/* 🥚 طبقة التوهج الأبيض (دخان متدرج) */
-button::after {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  inset: -2px;
-  border-radius: inherit;
-  background: radial-gradient(
-    circle 350px at
-    var(--glow-x, 50%) var(--glow-y, 50%),
-    rgba(255, 255, 255, 0.7) 0%,
-    rgba(255, 255, 255, 0.12) 30%,
-    transparent 60%
-  );
-  pointer-events: none;
-  opacity: 0;
-  transform: scale(0.92);
-  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-  will-change: opacity, transform;
-  filter: blur(0.8px);
-}
-
-button:not(:disabled):hover::after {
-  opacity: 1;
-  transform: scale(1);
-}
-
-/* 🪟 تأثير الزجاج (Glassmorphism) */
-button:not(:disabled):hover {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.04);
-}
-
-/* سطوع إضافي عند الضغط */
+/* هدوء عند الضغط */
 button:not(:disabled):active {
   transform: scale(0.98);
   transition-duration: 0.08s;
-}
-
-/* 🖤 دارك مود — توهج أبيض نقي مخملي */
-.dark button::after {
-  background: radial-gradient(
-    circle 350px at
-    var(--glow-x, 50%) var(--glow-y, 50%),
-    rgba(255, 255, 255, 0.45) 0%,
-    rgba(255, 255, 255, 0.06) 30%,
-    transparent 60%
-  );
 }
 
 @keyframes scanLine {

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useLayoutEffect, lazy,
 import { Student, AttendanceRecord, AttendanceSession } from '../types/student';
 import { User } from '../types/user';
 import { QRAttendance } from './QRAttendance';
+import { Camera, Info, TriangleAlert, User as UserIcon, Zap } from 'lucide-react';
 
 // 🚀 شاشة الحضور بالبصمة تُحمَّل عند فتحها فقط (مكتبة الوجوه ثقيلة)
 const LazyFaceAttendance = lazy(() =>
@@ -50,7 +51,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
 
   const checkAndSubmit = (codeToCheck: string) => {
     if (!activeSessionId) {
-      setMessage({ type: 'error', text: '⚠️ لا يوجد سجل نشط!\nالرجاء تفعيل سجل أولاً' });
+      setMessage({ type: 'error', text: 'لا يوجد سجل نشط!\nالرجاء تفعيل سجل أولاً' });
       setCode('');
       return;
     }
@@ -62,7 +63,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
         r => r.sessionId === activeSessionId && r.studentId === student.id && r.status === 'present'
       );
       if (alreadyPresent) {
-        setMessage({ type: 'error', text: `⚠️ ${student.name} مسجل حضور مسبقاً` });
+        setMessage({ type: 'error', text: `${student.name} مسجل حضور مسبقاً` });
         setCode('');
         return;
       }
@@ -87,11 +88,11 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
       onAttendanceRecord(record);
       setMessage({
         type: 'success',
-        text: `✅ مرحباً ${student.name}!\n${student.group ? `🏷️ الكروب: ${student.group}\n` : ''}تم تسجيل حضورك بنجاح`,
+        text: `مرحباً ${student.name}!\n${student.group ? `الكروب: ${student.group}\n` : ''}تم تسجيل حضورك بنجاح`,
       });
       setCode('');
     } else {
-      setMessage({ type: 'error', text: '❌ الرمز غير صحيح\nحاول مرة أخرى' });
+      setMessage({ type: 'error', text: 'الرمز غير صحيح\nحاول مرة أخرى' });
       setCode('');
     }
   };
@@ -185,13 +186,13 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
             disabled={!activeSessionId}
             className="w-full relative overflow-hidden bg-gradient-to-r from-purple-500 via-violet-500 to-indigo-600 hover:from-purple-600 hover:via-violet-600 hover:to-indigo-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 group transition-all duration-200 mb-3"
           >
-            <span className="text-3xl group-hover:scale-110 transition-transform">👤</span>
+            <UserIcon className="w-10 h-10 group-hover:scale-110 transition-transform" />
             <div className="text-right">
               <div className="text-base sm:text-lg">تسجيل الحضور ببصمة الوجه</div>
               <div className="text-[10px] sm:text-xs opacity-90 font-normal">تعرف تلقائي على الوجه وسجل الحضور</div>
             </div>
-            <span className="absolute top-1 left-2 bg-yellow-400 text-yellow-900 text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow">
-              جديد ⚡
+            <span className="absolute top-1 left-2 bg-yellow-400 text-yellow-900 text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow inline-flex items-center gap-0.5">
+              جديد <Zap className="w-2.5 h-2.5" />
             </span>
           </button>
 
@@ -200,24 +201,24 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
             disabled={!activeSessionId}
             className="w-full relative overflow-hidden bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-600 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 group transition-all duration-200"
           >
-            <span className="text-3xl group-hover:scale-110 transition-transform">📷</span>
+            <Camera className="w-10 h-10 group-hover:scale-110 transition-transform" />
             <div className="text-right">
               <div className="text-base sm:text-lg">تسجيل حضور عن طريق هوية الطالب QR Code</div>
               <div className="text-[10px] sm:text-xs opacity-90 font-normal">افتح الكاميرا وامسح رمز QR</div>
             </div>
-            <span className="absolute top-1 left-2 bg-yellow-400 text-yellow-900 text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow">
-              جديد ⚡
+            <span className="absolute top-1 left-2 bg-yellow-400 text-yellow-900 text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow inline-flex items-center gap-0.5">
+              جديد <Zap className="w-2.5 h-2.5" />
             </span>
           </button>
 
           {students.length > 0 && studentsWithUniId === 0 && (
-            <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800 text-center">
-              ⚠️ لم يتم إضافة أرقام جامعية بعد
+            <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800 text-center flex items-center justify-center gap-1">
+              <TriangleAlert className="w-4 h-4" /> لم يتم إضافة أرقام جامعية بعد
             </div>
           )}
           {students.length > 0 && studentsWithUniId > 0 && studentsWithUniId < students.length && (
-            <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 text-center">
-              ℹ️ {studentsWithUniId} من {students.length} طالب لديهم رقم جامعي للـ QR
+            <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 text-center flex items-center justify-center gap-1">
+              <Info className="w-4 h-4" /> {studentsWithUniId} من {students.length} طالب لديهم رقم جامعي للـ QR
             </div>
           )}
         </div>

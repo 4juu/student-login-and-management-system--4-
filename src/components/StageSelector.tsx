@@ -1,6 +1,7 @@
 import React from 'react';
 import { College, Stage } from '../types/student';
 import { User } from '../types/user';
+import { Lock, Phone, BookOpen, Landmark, ChevronLeft } from 'lucide-react';
 
 interface StageSelectorProps {
   user: User;
@@ -33,7 +34,9 @@ export const StageSelector: React.FC<StageSelectorProps> = ({
   if ((user.role === 'teacher' || user.role === 'college_admin') && user.active === false) {
     return (
       <div className="glass-card p-12 text-center">
-        <div className="text-6xl mb-4">🔒</div>
+        <div className="mx-auto w-16 h-16 rounded-full bg-slate-500/10 border border-slate-500/20 flex items-center justify-center mb-4">
+          <Lock className="w-8 h-8 text-slate-400" />
+        </div>
         <h2 className="text-2xl font-bold text-white mb-2">
           حسابك معطّل حالياً
         </h2>
@@ -42,7 +45,9 @@ export const StageSelector: React.FC<StageSelectorProps> = ({
             تم تعطيل حسابك بعد تصفير السنة الأكاديمية الماضية.
           </p>
           <div className="glass-card-sm p-4 text-sm text-amber-300 border border-amber-500/30">
-            <p className="font-bold mb-2">📞 للمتابعة:</p>
+            <p className="font-bold mb-2 flex items-center gap-1.5">
+              <Phone className="w-4 h-4" /> للمتابعة:
+            </p>
             <p>يرجى التواصل مع الأدمن لإعادة تفعيل حسابك وتحديد المراحل المسموح لك بالوصول إليها للسنة الأكاديمية الجديدة.</p>
           </div>
           {user.deactivatedAt && (
@@ -58,7 +63,9 @@ export const StageSelector: React.FC<StageSelectorProps> = ({
   if (allowedColleges.length === 0) {
     return (
       <div className="glass-card p-12 text-center">
-        <div className="text-6xl mb-4">🔒</div>
+        <div className="mx-auto w-16 h-16 rounded-full bg-slate-500/10 border border-slate-500/20 flex items-center justify-center mb-4">
+          <Lock className="w-8 h-8 text-slate-400" />
+        </div>
         <h2 className="text-2xl font-bold text-white mb-2">لا توجد صلاحيات وصول</h2>
         <p className="text-white/60">
           {user.role === 'admin' || user.role === 'college_admin'
@@ -85,7 +92,11 @@ export const StageSelector: React.FC<StageSelectorProps> = ({
             <div key={college.id} className="college-card overflow-hidden">
               <div className={`bg-gradient-to-r ${getCollegeGradient(college.color)} p-6 text-white`}>
                 <div className="flex items-center gap-4">
-                  <span className="text-5xl">{college.icon || '🏛️'}</span>
+                  {college.icon ? (
+                    <span className="text-5xl">{college.icon}</span>
+                  ) : (
+                    <Landmark className="w-10 h-10 text-white/80" />
+                  )}
                   <div>
                     <h3 className="text-2xl font-bold">{college.name}</h3>
                     <p className="opacity-90">{allowedStages.length} مراحل متاحة</p>
@@ -104,8 +115,12 @@ export const StageSelector: React.FC<StageSelectorProps> = ({
                         onClick={() => onSelect(college.id, stage.id)}
                         className="stage-card flex items-center justify-between p-4 rounded-xl transition group"
                       >
-                        <span className="font-bold text-white/80 group-hover:text-white">📖 {stage.name}</span>
-                        <span className="text-indigo-400 opacity-0 group-hover:opacity-100 transition">دخول ←</span>
+                        <span className="font-bold text-white/80 group-hover:text-white flex items-center gap-2">
+                          <BookOpen className="w-4 h-4 text-blue-400" /> {stage.name}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-blue-400 opacity-0 group-hover:opacity-100 transition">
+                          دخول <ChevronLeft className="w-4 h-4" />
+                        </span>
                       </button>
                     ))}
                   </div>

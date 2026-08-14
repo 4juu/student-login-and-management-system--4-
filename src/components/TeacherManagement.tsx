@@ -12,6 +12,7 @@ import {
 } from '../firebase/authService';
 import { User, TeacherPermissions } from '../types/user';
 import { College, Stage } from '../types/student';
+import { ArrowLeft, BookOpen, CircleCheck, Crown, GraduationCap, KeyRound, Landmark, Lightbulb, LoaderCircle, Lock, Plus, RefreshCw, Save, Settings, SquarePen, Trash2, TriangleAlert, Truck, User as UserIcon, UserCheck, Users, Wrench } from 'lucide-react';
 
 interface TeacherManagementProps {
   currentUser: User;
@@ -145,9 +146,9 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
         }
       }
       await loadTeachers();
-      alert(`✅ تم إصلاح ${fixed} تدريسي.\nالآن تقدر تضغط "⚙️ الصلاحيات" لكل واحد منهم وتحدد له المراحل.`);
+      alert(`تم إصلاح ${fixed} تدريسي.\nالآن تقدر تضغط "الصلاحيات" لكل واحد منهم وتحدد له المراحل.`);
     } catch (e: any) {
-      alert('❌ ' + e.message);
+      alert(e.message);
     } finally {
       setLoading(false);
     }
@@ -155,9 +156,9 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
   const handleReactivateTeacher = async (teacher: User) => {
     if (!window.confirm(
-      `🔓 إعادة تفعيل ${teacher.displayName}؟\n\n` +
+      `إعادة تفعيل ${teacher.displayName}؟\n\n` +
       `سيتم تفعيل حسابه بدون صلاحيات.\n` +
-      `بعد ذلك يجب تحديد المراحل المسموحة له من زر "⚙️ الصلاحيات".`
+      `بعد ذلك يجب تحديد المراحل المسموحة له من زر "الصلاحيات".`
     )) return;
     setLoading(true);
     try {
@@ -166,7 +167,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
         canViewRecords: true,
         canTakeAttendance: true,
       });
-      setSuccess(`✅ تم تفعيل ${teacher.displayName}. الآن حدد له المراحل من زر "⚙️ الصلاحيات".`);
+      setSuccess(`تم تفعيل ${teacher.displayName}. الآن حدد له المراحل من زر "الصلاحيات".`);
       await loadTeachers();
       setTimeout(() => setSuccess(''), 5000);
     } catch (e: any) {
@@ -262,7 +263,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
         currentUser.uid,
         collegeId
       );
-      setSuccess(`✅ تم إنشاء حساب ${formData.displayName} بنجاح!\n\nالآن اضغط على "⚙️ الصلاحيات" بجنب اسمه لتحديد المراحل المسموحة.`);
+      setSuccess(`تم إنشاء حساب ${formData.displayName} بنجاح!\n\nالآن اضغط على "الصلاحيات" بجنب اسمه لتحديد المراحل المسموحة.`);
       setShowAddForm(false);
       setFormData({ email: '', password: '', displayName: '', collegeId: '' });
       await loadTeachers();
@@ -290,7 +291,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
     setLoading(true);
     try {
       await updateTeacherPassword(selectedTeacher.uid, newPassword);
-      setSuccess(`✅ تم تغيير كلمة مرور ${selectedTeacher.displayName}\n\nالكلمة الجديدة: ${newPassword}`);
+      setSuccess(`تم تغيير كلمة مرور ${selectedTeacher.displayName}\n\nالكلمة الجديدة: ${newPassword}`);
       setShowPasswordModal(false);
       setNewPassword('');
       setSelectedTeacher(null);
@@ -314,7 +315,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
         bio: editProfileBio.trim(),
         lastUpdated: new Date().toISOString()
       });
-      setSuccess(`✅ تم تحديث ملف ${editProfileName.trim()}`);
+      setSuccess(`تم تحديث ملف ${editProfileName.trim()}`);
       setShowProfileModal(false);
       await loadTeachers();
       setTimeout(() => setSuccess(''), 5000);
@@ -326,7 +327,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
   };
 
   const handleDeleteTeacher = async (teacher: User) => {
-    if (!window.confirm(`⚠️ هل أنت متأكد من حذف حساب ${teacher.displayName}؟\n\nسيتم حذف جميع بياناته نهائياً!`)) return;
+    if (!window.confirm(`هل أنت متأكد من حذف حساب ${teacher.displayName}؟\n\nسيتم حذف جميع بياناته نهائياً!`)) return;
     setLoading(true);
     try {
       await deleteTeacherAccount(teacher.uid);
@@ -357,7 +358,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
           count++;
         }
       }
-      setSuccess(`✅ تم تعيين كلية لـ ${count} تدريسي`);
+      setSuccess(`تم تعيين كلية لـ ${count} تدريسي`);
       setShowMigrationModal(false);
       setMigrationMap({});
       await loadTeachers();
@@ -397,7 +398,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
-          <h2 className="text-2xl font-bold text-gray-800">👨‍🏫 اختيار الكلية لعرض التدريسيين</h2>
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><GraduationCap className="w-6 h-6" /> اختيار الكلية لعرض التدريسيين</h2>
           <div className="flex gap-2 flex-wrap">
             {!selectedCollegeId && allTeachersFull.some(t => !t.collegeId) && (
               <button
@@ -405,7 +406,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
                 disabled={loading}
                 className="bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-medium py-2 px-4 rounded-md flex items-center gap-2 shadow-md"
               >
-                🚚 ترحيل التدريسيين القدامى
+                <Truck className="w-4 h-4" /> ترحيل التدريسيين القدامى
               </button>
             )}
             <button
@@ -413,7 +414,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
               disabled={loading}
               className="bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-medium py-2 px-4 rounded-md flex items-center gap-2 shadow-md"
             >
-              🔧 إصلاح التدريسيين القدامى
+              <Wrench className="w-4 h-4" /> إصلاح التدريسيين القدامى
             </button>
           </div>
         </div>
@@ -427,10 +428,10 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
         {unassignedCount > 0 && (
           <div className="mb-4 p-3 bg-yellow-50 border border-yellow-300 rounded-lg flex items-center gap-3">
-            <span className="text-2xl">⚠️</span>
+            <TriangleAlert className="w-7 h-7 text-yellow-600" />
             <div className="flex-1">
               <p className="text-sm font-bold text-yellow-800">
-                يوجد {unassignedCount} تدريسي بدون كلية محددة — اضغط "🚚 ترحيل التدريسيين القدامى" لتعيين كلية لهم
+                يوجد {unassignedCount} تدريسي بدون كلية محددة — اضغط "ترحيل التدريسيين القدامى" لتعيين كلية لهم
               </p>
             </div>
           </div>
@@ -464,7 +465,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
                   {admin ? (
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-lg">🏛️</span>
+                        <Landmark className="w-5 h-5 text-amber-600" />
                         <div className="min-w-0">
                           <p className="text-xs text-amber-700 font-medium">أدمن الكلية</p>
                           <p className="text-sm font-bold text-amber-900 truncate">{admin.displayName}</p>
@@ -480,7 +481,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
                           }}
                           className="text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 px-2.5 py-1.5 rounded-md font-medium transition"
                         >
-                          🔄 تغيير
+                          <RefreshCw className="w-3.5 h-3.5" /> تغيير
                         </button>
                         <button
                           onClick={(e) => {
@@ -489,7 +490,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
                           }}
                           className="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-2.5 py-1.5 rounded-md font-medium transition"
                         >
-                          🗑️ إلغاء
+                          <Trash2 className="w-3.5 h-3.5" /> إلغاء
                         </button>
                       </div>
                     </div>
@@ -523,7 +524,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
             onClick={() => setSelectedCollegeId('__all__')}
             className="p-6 border-2 border-dashed border-gray-300 rounded-xl hover:border-gray-500 hover:shadow-lg transition-all duration-300 text-center bg-gray-50 hover:bg-gray-100"
           >
-            <div className="text-4xl mb-3">👥</div>
+            <Users className="w-12 h-12 text-gray-400 mx-auto mb-3" />
             <h3 className="text-xl font-bold text-gray-800">عرض الكل</h3>
             <p className="text-sm text-gray-500 mt-2">{allTeachersFull.length} تدريسي</p>
           </button>
@@ -535,7 +536,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
             <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-gray-800">🏛️ تعيين أدمن لكلية {assignAdminCollegeName}</h3>
+                  <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2"><Landmark className="w-5 h-5 text-amber-600" /> تعيين أدمن لكلية {assignAdminCollegeName}</h3>
                   <p className="text-sm text-gray-500 mt-1">اختر التدريسي من القائمة لتعيينه أدمن للكلية</p>
                 </div>
                 <button onClick={() => setShowAssignAdminModal(false)} className="text-3xl text-gray-400 hover:text-gray-600 leading-none">&times;</button>
@@ -550,7 +551,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
                 if (collegeTeachers.length === 0) {
                   return (
                     <div className="text-center py-10 text-gray-500">
-                      <div className="text-5xl mb-4">👤</div>
+                      <UserIcon className="w-14 h-14 text-gray-300 mx-auto mb-4" />
                       <p className="font-medium">لا يوجد تدريسيين في هذه الكلية</p>
                       <p className="text-sm mt-1">أضف تدريسيين أولاً من داخل الكلية</p>
                     </div>
@@ -561,7 +562,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
                   <div className="space-y-2">
                     {currentAdmin && (
                       <div className="p-3 bg-amber-50 border-2 border-amber-200 rounded-xl mb-4 flex items-center gap-3">
-                        <span className="text-2xl">👑</span>
+                        <Crown className="w-8 h-8 text-amber-500" />
                         <div>
                           <p className="text-xs text-amber-700 font-medium">الأدمن الحالي</p>
                           <p className="font-bold text-amber-900">{currentAdmin.displayName}</p>
@@ -576,11 +577,11 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
                           setLoading(true);
                           try {
                             await promoteToCollegeAdmin(t.uid, assignAdminCollegeId, assignAdminCollegeName);
-                            alert(`✅ تم تعيين ${t.displayName} أدمن لكلية ${assignAdminCollegeName}`);
+                            alert(`تم تعيين ${t.displayName} أدمن لكلية ${assignAdminCollegeName}`);
                             setShowAssignAdminModal(false);
                             await loadTeachers();
                           } catch (e: any) {
-                            alert('❌ ' + e.message);
+                            alert(e.message);
                           } finally {
                             setLoading(false);
                           }
@@ -599,7 +600,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
                           <p className="font-bold text-gray-800">{t.displayName}</p>
                           <p className="text-xs text-gray-500 truncate">{t.email}</p>
                         </div>
-                        <span className="text-2xl text-amber-500 opacity-0 group-hover:opacity-100 transition-all duration-200">←</span>
+                        <ArrowLeft className="w-6 h-6 text-amber-500 opacity-0 group-hover:opacity-100 transition-all duration-200" />
                       </button>
                     ))}
                   </div>
@@ -623,7 +624,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
             <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl">
               <div className="text-center mb-6">
-                <div className="text-5xl mb-3">⚠️</div>
+                <div className="mx-auto w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-4"><TriangleAlert className="w-7 h-7 text-red-400" /></div>
                 <h3 className="text-xl font-bold text-gray-800">إلغاء أدمن الكلية</h3>
                 <p className="text-sm text-gray-500 mt-2">
                   هل أنت متأكد من إلغاء تعيين <strong className="text-gray-700">{collegeAdminMap[showRemoveAdminConfirm]?.displayName}</strong> كأدمن لكلية {colleges.find(c => c.id === showRemoveAdminConfirm)?.name}؟
@@ -644,19 +645,19 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
                     setLoading(true);
                     try {
                       await demoteFromCollegeAdmin(admin.uid);
-                      alert(`✅ تم إلغاء أدمن الكلية عن ${admin.displayName}`);
+                      alert(`تم إلغاء أدمن الكلية عن ${admin.displayName}`);
                       setShowRemoveAdminConfirm(null);
                       await loadTeachers();
                     } catch (e: any) {
-                      alert('❌ ' + e.message);
+                      alert(e.message);
                     } finally {
                       setLoading(false);
                     }
                   }}
                   disabled={loading}
-                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium py-2.5 rounded-lg transition"
+                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium py-2.5 rounded-lg transition flex items-center justify-center gap-2"
                 >
-                  {loading ? 'جاري...' : '✅ تأكيد الإلغاء'}
+                  {loading ? 'جاري...' : <><CircleCheck className="w-4 h-4" /> تأكيد الإلغاء</>}
                 </button>
               </div>
             </div>
@@ -666,7 +667,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
         {showMigrationModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
-              <h3 className="text-xl font-bold text-gray-800 mb-4">🚚 ترحيل التدريسيين القدامى — تعيين كلية</h3>
+              <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><Truck className="w-5 h-5" /> ترحيل التدريسيين القدامى — تعيين كلية</h3>
               <p className="text-sm text-gray-500 mb-4">اختر الكلية المناسبة لكل تدريسي:</p>
               <div className="space-y-3">
                 {allTeachersFull.filter(t => !t.collegeId).map(t => (
@@ -733,8 +734,8 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
               العودة للكليات
             </button>
           )}
-          <h2 className="text-2xl font-bold text-gray-800">
-            {isMainAdmin ? `👨‍🏫 تدريسيون كلية ${collegeName}` : '🏛️ صلاحيات التدريسيين'}
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            {isMainAdmin ? <><GraduationCap className="w-6 h-6" /> تدريسيون كلية {collegeName}</> : <><Landmark className="w-6 h-6" /> صلاحيات التدريسيين</>}
           </h2>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -760,12 +761,12 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
           </div>
           <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-center">
             <div className="text-2xl font-bold text-green-700">{activeTeachers}</div>
-            <div className="text-xs text-green-600">✅ مفعّل</div>
+            <div className="text-xs text-green-600 flex items-center justify-center gap-1"><CircleCheck className="w-3.5 h-3.5" /> مفعّل</div>
           </div>
           {deactivatedTeachers > 0 && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-center">
               <div className="text-2xl font-bold text-red-700">{deactivatedTeachers}</div>
-              <div className="text-xs text-red-600">🔒 معطّل (بعد التصفير)</div>
+              <div className="text-xs text-red-600 flex items-center justify-center gap-1"><Lock className="w-3.5 h-3.5" /> معطّل (بعد التصفير)</div>
             </div>
           )}
         </div>
@@ -773,13 +774,13 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
       {deactivatedTeachers > 0 && (
         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-300 rounded-lg flex items-center gap-3">
-          <span className="text-2xl">⚠️</span>
+          <TriangleAlert className="w-7 h-7 text-yellow-600" />
           <div className="flex-1">
             <p className="text-sm font-bold text-yellow-800">
               يوجد {deactivatedTeachers} تدريسي معطّل بعد التصفير السنوي
             </p>
             <p className="text-xs text-yellow-700">
-              اضغط زر "🔓 إعادة تفعيل" بجانب اسم التدريسي لإعادة تفعيله، ثم حدد له المراحل من "⚙️ الصلاحيات".
+              اضغط زر "إعادة تفعيل" بجانب اسم التدريسي لإعادة تفعيله، ثم حدد له المراحل من "الصلاحيات".
             </p>
           </div>
         </div>
@@ -794,7 +795,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
       {showAddForm && (
         <form onSubmit={handleSubmit} className="mb-6 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">➕ إضافة تدريسي جديد</h3>
+          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Plus className="w-5 h-5" /> إضافة تدريسي جديد</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">الاسم الكامل</label>
@@ -821,15 +822,15 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
             </div>
           )}
           <div className="flex gap-2">
-            <button type="submit" disabled={loading} className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-6 rounded-md">
-              {loading ? '⏳ جارٍ الإنشاء...' : '✅ إنشاء الحساب'}
+            <button type="submit" disabled={loading} className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-6 rounded-md flex items-center justify-center gap-2">
+              {loading ? <><LoaderCircle className="w-4 h-4 animate-spin" /> جارٍ الإنشاء...</> : <><CircleCheck className="w-4 h-4" /> إنشاء الحساب</>}
             </button>
             <button type="button" onClick={() => { setShowAddForm(false); setFormData({ email: '', password: '', displayName: '', collegeId: '' }); setError(''); }} className="bg-gray-400 hover:bg-gray-500 text-white font-medium py-2 px-4 rounded-md">
               إلغاء
             </button>
           </div>
-          <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800">
-            ✅ <strong>جلسة الأدمن محفوظة:</strong> النظام يستخدم تطبيق Firebase ثانوي لإنشاء حساب التدريسي بدون التأثير على جلستك الحالية.
+          <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800 flex items-start gap-1">
+            <CircleCheck className="w-4 h-4 shrink-0 mt-0.5" /> <strong>جلسة الأدمن محفوظة:</strong> النظام يستخدم تطبيق Firebase ثانوي لإنشاء حساب التدريسي بدون التأثير على جلستك الحالية.
           </div>
         </form>
       )}
@@ -882,41 +883,41 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
                     <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-xs sm:text-sm text-gray-600" dir="ltr">{t.email}</td>
                     <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm">
                       {isDeactivated ? (
-                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-red-100 text-red-700 font-medium text-[10px] sm:text-xs">🔒 معطّل</span>
+                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-red-100 text-red-700 font-medium text-[10px] sm:text-xs gap-1"><Lock className="w-3 h-3" /> معطّل</span>
                       ) : (
-                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium text-[10px] sm:text-xs">✅ مفعّل</span>
+                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium text-[10px] sm:text-xs gap-1"><CircleCheck className="w-3 h-3" /> مفعّل</span>
                       )}
                     </td>
                     <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-xs sm:text-sm">
                       {allowedCount === 0 ? (
-                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-red-100 text-red-700 font-medium text-[10px] sm:text-xs">🔒 لا توجد صلاحيات</span>
+                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-red-100 text-red-700 font-medium text-[10px] sm:text-xs gap-1"><Lock className="w-3 h-3" /> لا توجد صلاحيات</span>
                       ) : (
-                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium text-[10px] sm:text-xs">✅ {allowedCount} مرحلة</span>
+                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium text-[10px] sm:text-xs gap-1"><CircleCheck className="w-3 h-3" /> {allowedCount} مرحلة</span>
                       )}
                     </td>
                     <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm">
                       <div className="flex flex-wrap gap-1 sm:gap-2">
                         {isDeactivated && (
-                          <button onClick={() => handleReactivateTeacher(t)} disabled={loading} className="bg-green-100 hover:bg-green-200 text-green-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs">🔓 إعادة تفعيل</button>
+                          <button onClick={() => handleReactivateTeacher(t)} disabled={loading} className="bg-green-100 hover:bg-green-200 text-green-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs inline-flex items-center gap-1"><UserCheck className="w-3 h-3" /> إعادة تفعيل</button>
                         )}
-                        <button onClick={() => { setSelectedTeacher(t); setShowPermissionModal(true); }} className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs">⚙️ الصلاحيات</button>
-                        <button onClick={() => { setSelectedTeacher(t); setEditProfileName(t.displayName); setEditProfileBio(t.bio || ''); setShowProfileModal(true); }} className="bg-sky-100 hover:bg-sky-200 text-sky-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs">📝 الملف</button>
+                        <button onClick={() => { setSelectedTeacher(t); setShowPermissionModal(true); }} className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs inline-flex items-center gap-1"><Settings className="w-3 h-3" /> الصلاحيات</button>
+                        <button onClick={() => { setSelectedTeacher(t); setEditProfileName(t.displayName); setEditProfileBio(t.bio || ''); setShowProfileModal(true); }} className="bg-sky-100 hover:bg-sky-200 text-sky-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs inline-flex items-center gap-1"><SquarePen className="w-3 h-3" /> الملف</button>
                         {isMainAdmin && (
-                          <button onClick={() => handleOpenPasswordModal(t)} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs">🔑 الرمز</button>
+                          <button onClick={() => handleOpenPasswordModal(t)} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs inline-flex items-center gap-1"><KeyRound className="w-3 h-3" /> الرمز</button>
                         )}
                           {isMainAdmin && t.role === 'college_admin' && (
-                            <button onClick={async () => { if (window.confirm(`إلغاء أدمن كلية عن ${t.displayName}؟`)) { await demoteFromCollegeAdmin(t.uid); await loadTeachers(); } }} disabled={loading} className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs">👤 إلغاء أدمن</button>
+                            <button onClick={async () => { if (window.confirm(`إلغاء أدمن كلية عن ${t.displayName}؟`)) { await demoteFromCollegeAdmin(t.uid); await loadTeachers(); } }} disabled={loading} className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs inline-flex items-center gap-1"><UserIcon className="w-3 h-3" /> إلغاء أدمن</button>
                           )}
                           {isMainAdmin && t.role !== 'college_admin' && (() => {
                             const cId = selectedCollegeId === '__all__' ? (t.collegeId || '') : (selectedCollegeId || '');
                             const cName = colleges.find(c => c.id === cId)?.name || '';
                             if (!cId) return null;
                             return (
-                              <button onClick={async () => { if (window.confirm(`تعيين ${t.displayName} أدمن لكلية ${cName}؟`)) { await promoteToCollegeAdmin(t.uid, cId, cName); await loadTeachers(); } }} disabled={loading} className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs">🏛️ تعيين أدمن</button>
+                              <button onClick={async () => { if (window.confirm(`تعيين ${t.displayName} أدمن لكلية ${cName}؟`)) { await promoteToCollegeAdmin(t.uid, cId, cName); await loadTeachers(); } }} disabled={loading} className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs inline-flex items-center gap-1"><Landmark className="w-3 h-3" /> تعيين أدمن</button>
                             );
                           })()}
                           {isMainAdmin && (
-                          <button onClick={() => handleDeleteTeacher(t)} disabled={loading} className="bg-red-100 hover:bg-red-200 text-red-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs">🗑️ حذف</button>
+                          <button onClick={() => handleDeleteTeacher(t)} disabled={loading} className="bg-red-100 hover:bg-red-200 text-red-700 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs inline-flex items-center gap-1"><Trash2 className="w-3 h-3" /> حذف</button>
                         )}
                       </div>
                     </td>
@@ -933,7 +934,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
           <div className="bg-white rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b flex justify-between items-center sticky top-0 bg-white z-10">
               <div>
-                <h3 className="text-xl font-bold">⚙️ صلاحيات: {selectedTeacher.displayName}</h3>
+                <h3 className="text-xl font-bold flex items-center gap-2"><Settings className="w-5 h-5" /> صلاحيات: {selectedTeacher.displayName}</h3>
                 <p className="text-sm text-gray-500 mt-1">حدد المراحل المسموح للتدريسي بالوصول إليها</p>
               </div>
               <button onClick={() => setShowPermissionModal(false)} className="text-3xl text-gray-400 hover:text-gray-600">×</button>
@@ -969,8 +970,8 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
                               const isAllowed = allowedInCollege.includes(stage.id);
                               return (
                                 <button key={stage.id} onClick={() => handleToggleStage(selectedTeacher, college.id, stage.id)} className={`p-3 rounded-md text-right flex justify-between items-center border-2 transition ${isAllowed ? 'bg-green-50 text-green-800 border-green-500' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-gray-400'}`}>
-                                  <span className="font-medium">📖 {stage.name}</span>
-                                  <span className="text-xl">{isAllowed ? '✅' : '⬜'}</span>
+                                  <span className="font-medium flex items-center gap-2"><BookOpen className="w-4 h-4" /> {stage.name}</span>
+                                  {isAllowed ? <CircleCheck className="w-5 h-5 text-green-600" /> : <span className="w-5 h-5 border-2 border-gray-300 rounded" />}
                                 </button>
                               );
                             })}
@@ -985,7 +986,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
             <div className="p-6 border-t bg-gray-50 sticky bottom-0">
               <div className="flex justify-between items-center">
                 <p className="text-sm text-gray-600">الإجمالي: <strong>{countAllowedStages(selectedTeacher)}</strong> مرحلة مسموحة</p>
-                <button onClick={() => setShowPermissionModal(false)} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium">✅ تم</button>
+                <button onClick={() => setShowPermissionModal(false)} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium flex items-center gap-2"><CircleCheck className="w-4 h-4" /> تم</button>
               </div>
             </div>
           </div>
@@ -995,7 +996,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
       {showProfileModal && selectedTeacher && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">📝 تعديل ملف التدريسي</h3>
+            <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><SquarePen className="w-5 h-5" /> تعديل ملف التدريسي</h3>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">الاسم الكامل</label>
               <input type="text" value={editProfileName} onChange={e => setEditProfileName(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500" dir="rtl" />
@@ -1007,7 +1008,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
             {error && <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded text-sm">{error}</div>}
             <div className="flex gap-2 justify-end">
               <button onClick={() => { setShowProfileModal(false); setError(''); }} disabled={loading} className="bg-gray-400 hover:bg-gray-500 text-white font-medium py-2 px-4 rounded">إلغاء</button>
-              <button onClick={handleEditProfile} disabled={loading} className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-2 px-4 rounded">{loading ? 'جارٍ الحفظ...' : '💾 حفظ'}</button>
+              <button onClick={handleEditProfile} disabled={loading} className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-2 px-4 rounded flex items-center gap-2">{loading ? <><LoaderCircle className="w-4 h-4 animate-spin" /> جارٍ الحفظ...</> : <><Save className="w-4 h-4" /> حفظ</>}</button>
             </div>
           </div>
         </div>
@@ -1016,13 +1017,13 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
       {showPasswordModal && selectedTeacher && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">🔑 تغيير كلمة المرور - {selectedTeacher.displayName}</h3>
+            <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><KeyRound className="w-5 h-5" /> تغيير كلمة المرور - {selectedTeacher.displayName}</h3>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">كلمة المرور الجديدة</label>
               <input type="text" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500" placeholder="6 أحرف على الأقل" dir="ltr" autoFocus />
             </div>
             {error && <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded text-sm">{error}</div>}
-            <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4 text-sm text-yellow-800">⚠️ تأكد من حفظ كلمة المرور وإبلاغها للتدريسي</div>
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4 text-sm text-yellow-800 flex items-start gap-2"><TriangleAlert className="w-4 h-4 shrink-0 mt-0.5" /> تأكد من حفظ كلمة المرور وإبلاغها للتدريسي</div>
             <div className="flex gap-2 justify-end">
               <button onClick={() => { setShowPasswordModal(false); setNewPassword(''); setError(''); }} disabled={loading} className="bg-gray-400 hover:bg-gray-500 text-white font-medium py-2 px-4 rounded">إلغاء</button>
               <button onClick={handleChangePassword} disabled={loading} className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-4 rounded">{loading ? 'جارٍ التغيير...' : 'تغيير'}</button>
@@ -1031,10 +1032,10 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
         </div>
       )}
 
-      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-        💡 <strong>كيف تعمل الصلاحيات:</strong> لما تحدد مراحل لتدريسي، راح يشوف فقط هذي المراحل وطلابها. ما يقدر يضيف أو يحذف الطلاب - فقط يسجل الحضور.
+      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800 space-y-2">
+        <p className="flex items-start gap-2"><Lightbulb className="w-4 h-4 shrink-0 mt-0.5" /> <strong>كيف تعمل الصلاحيات:</strong> لما تحدد مراحل لتدريسي، راح يشوف فقط هذي المراحل وطلابها. ما يقدر يضيف أو يحذف الطلاب - فقط يسجل الحضور.</p>
 
-        🔓 إذا تدريسي ظهر بحالة "معطّل" بعد التصفير السنوي، اضغط <strong>"إعادة تفعيل"</strong> ثم حدد له المراحل الجديدة.
+        <p className="flex items-start gap-2"><UserCheck className="w-4 h-4 shrink-0 mt-0.5" /> إذا تدريسي ظهر بحالة "معطّل" بعد التصفير السنوي، اضغط <strong>"إعادة تفعيل"</strong> ثم حدد له المراحل الجديدة.</p>
       </div>
     </div>
   );

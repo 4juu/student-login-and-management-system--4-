@@ -16,6 +16,7 @@ import {
 } from '../../services/faceRecognition';
 import { useCameraReady } from '../../hooks/useCameraReady';
 import * as faceapi from 'face-api.js';
+import { Camera, Check, CircleCheck, LoaderCircle, Smile } from 'lucide-react';
 
 interface FaceCaptureStepProps {
   student: Student;
@@ -202,7 +203,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
       if (allStudents.length > 1) {
         const tamper = await checkForTamperingAsync(normalized, allStudents, student.id || '');
         if (tamper.isTamper) {
-          setError(`⚠️ هذا الوجه مسجل مسبقاً للطالب: ${tamper.matchedStudents.map(m => m.name).join('، ')}`);
+          setError(`هذا الوجه مسجل مسبقاً للطالب: ${tamper.matchedStudents.map(m => m.name).join('، ')}`);
           setCapturing(false);
           return;
         }
@@ -279,14 +280,14 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50 flex items-center justify-center p-4" dir="rtl">
       <div className="bg-white rounded-2xl shadow-xl p-5 md:p-6 max-w-md w-full">
         <div className="text-center mb-4">
-          <div className="text-4xl mb-2">😊</div>
+          <div className="mx-auto w-16 h-16 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-2"><Smile className="w-8 h-8 text-purple-600" /></div>
           <h2 className="text-xl font-bold text-gray-800 mb-1">تسجيل بصمة الوجه</h2>
           <p className="text-xs text-gray-600">
             مرحباً <span className="font-bold text-purple-700">{student.name}</span>
           </p>
           {matchPercentage >= 90 && (
-            <div className="mt-2 inline-block bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-full">
-              ✓ تطابق الاسم: {matchPercentage}%
+            <div className="mt-2 inline-block bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
+              <Check className="w-3.5 h-3.5" /> تطابق الاسم: {matchPercentage}%
             </div>
           )}
         </div>
@@ -354,8 +355,8 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
             
             {cameraReady && !capturing && (
               <div className="mt-2 text-center">
-                <span className={`text-xs font-medium ${faceDetected ? 'text-green-600' : 'text-gray-500'}`}>
-                  {faceDetected ? '✅ تم كشف الوجه' : '⏳ ضع وجهك داخل الدائرة'}
+                <span className={`text-xs font-medium flex items-center gap-1.5 ${faceDetected ? 'text-green-600' : 'text-gray-500'}`}>
+                  {faceDetected ? <><CircleCheck className="w-3.5 h-3.5" /> تم كشف الوجه</> : <><LoaderCircle className="w-3.5 h-3.5 animate-spin" /> ضع وجهك داخل الدائرة</>}
                 </span>
               </div>
             )}
@@ -373,9 +374,9 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
             <button
               onClick={handleCapture}
               disabled={!faceDetected}
-              className="py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-40 text-white font-bold rounded-lg active:scale-95"
+              className="py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-40 text-white font-bold rounded-lg active:scale-95 flex items-center justify-center gap-1.5"
             >
-              {faceDetected ? 'التقاط ✅' : 'انتظر الكشف...'}
+              {faceDetected ? <><Camera className="w-4 h-4" /> التقاط</> : 'انتظر الكشف...'}
             </button>
           </div>
         )}

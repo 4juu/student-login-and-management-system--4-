@@ -15,6 +15,7 @@ import {
 import { User } from '../types/user';
 import { AnimatePresence, motion } from "motion/react"
 import { MorphPanel } from './MorphPanel';
+import { ArrowUp, ChevronLeft, CircleCheck, CircleX, ClipboardList, MessageCircle, Search, Sparkles } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -493,14 +494,14 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
         setMessages([{
           id: Date.now().toString(),
           type: 'bot',
-          content: '⚠️ اختر المرحلة أولاً حتى أكدر أجاوبك',
+          content: 'اختر المرحلة أولاً حتى أكدر أجاوبك',
           timestamp: new Date(),
         }]);
       } else {
         setMessages([{
           id: Date.now().toString(),
           type: 'bot',
-          content: `اهلاً دكتور ${user.displayName} ✨\n\nبشنو أكدر أساعدك اليوم؟`,
+          content: `اهلاً دكتور ${user.displayName}\n\nبشنو أكدر أساعدك اليوم؟`,
           timestamp: new Date(),
         }]);
       }
@@ -777,7 +778,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   const callGeminiAPI = useCallback(
     async (userMessage: string, conversationHistory: Message[]): Promise<string> => {
       if (!GEMINI_API_KEY && !OPENROUTER_API_KEY && !GROQ_API_KEY) {
-        return `⚠️ لازم تضيف API Key بالـ .env`;
+        return `لازم تضيف API Key بالـ .env`;
       }
 
       const dataContext = buildDataContext();
@@ -812,13 +813,13 @@ ${dataContext}`;
 
       if (selectedModelId !== 'auto') {
         const chosen = AI_MODELS.find(m => m.id === selectedModelId);
-        if (!chosen) return '❌ الموديل المختار غير موجود';
+        if (!chosen) return 'الموديل المختار غير موجود';
         try {
           if (chosen.provider === 'gemini') return await callGeminiDirect(chosen.model, geminiContents);
           if (chosen.provider === 'groq') return await callGroqDirect(chosen.model, systemInstruction, conversationHistory, enhancedMessage);
           return await callOpenRouterDirect(chosen.model, systemInstruction, conversationHistory, enhancedMessage);
         } catch (err: any) {
-          return `❌ ${chosen.name} فشل: ${err?.message || 'خطأ غير معروف'}`;
+          return `${chosen.name} فشل: ${err?.message || 'خطأ غير معروف'}`;
         }
       }
 
@@ -848,7 +849,7 @@ ${dataContext}`;
         }
       }
 
-      return `🌐 جميع الموديلات توقفت\n\nآخر خطأ: ${lastError}`;
+      return `جميع الموديلات توقفت\n\nآخر خطأ: ${lastError}`;
     },
     [buildDataContext, currentModelIndex, analyzeQuestion, failedModels, selectedModelId]
   );
@@ -858,7 +859,7 @@ ${dataContext}`;
     const now = Date.now();
     if (now - lastRequestTime.current < 500) {
       const wait = Math.ceil((500 - (now - lastRequestTime.current)) / 1000);
-      setError(`⏱️ انتظر ${wait} ثانية`);
+      setError(`انتظر ${wait} ثانية`);
       setTimeout(() => setError(null), 2000);
       return;
     }
@@ -979,7 +980,7 @@ ${dataContext}`;
                     <div className="bg-gray-50 border-b border-gray-200">
                       <div className="relative px-3 py-2">
                         <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 focus-within:border-gray-400 focus-within:ring-1 focus-within:ring-gray-300 transition shadow-sm">
-                          <span className="pr-3 text-gray-400 text-sm">🔍</span>
+                          <span className="pr-3 text-gray-400 text-sm flex items-center"><Search className="w-4 h-4" /></span>
                           <input
                             type="text"
                             value={studentSearchQuery}
@@ -1028,7 +1029,7 @@ ${dataContext}`;
                                     ✅ {sAttended} / ❌ {sTotal - sAttended} — {sPct}%
                                   </p>
                                 </div>
-                                <span className="text-gray-400 text-xs">←</span>
+                                <span className="text-gray-400 text-xs"><ChevronLeft className="w-4 h-4" /></span>
                               </button>
                               );
                             })}
@@ -1057,8 +1058,8 @@ ${dataContext}`;
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <div className={`text-xs font-bold px-2 py-1 rounded-full ${selectedStudentCard.isPresentToday ? 'bg-green-500/10 text-green-700' : 'bg-red-500/10 text-red-700'}`}>
-                              {selectedStudentCard.isPresentToday ? '✅ حاضر اليوم' : '❌ غائب اليوم'}
+                            <div className={`text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 ${selectedStudentCard.isPresentToday ? 'bg-green-500/10 text-green-700' : 'bg-red-500/10 text-red-700'}`}>
+                              {selectedStudentCard.isPresentToday ? <><CircleCheck className="w-3.5 h-3.5" /> حاضر اليوم</> : <><CircleX className="w-3.5 h-3.5" /> غائب اليوم</>}
                             </div>
                             <button
                               onClick={() => { setShowStudentCard(false); setSelectedStudentCard(null); setStudentSearchQuery(''); }}
@@ -1073,11 +1074,11 @@ ${dataContext}`;
                       <div className="grid grid-cols-3 divide-x divide-x-reverse divide-gray-200">
                         <div className="text-center py-3 px-2">
                           <p className="text-lg font-bold text-green-600">{selectedStudentCard.attendedCount}</p>
-                          <p className="text-[10px] text-gray-500">✅ حضور</p>
+                          <p className="text-[10px] text-gray-500 flex items-center justify-center gap-1"><CircleCheck className="w-3 h-3" /> حضور</p>
                         </div>
                         <div className="text-center py-3 px-2">
                           <p className="text-lg font-bold text-red-500">{selectedStudentCard.absentCount}</p>
-                          <p className="text-[10px] text-gray-500">❌ غياب</p>
+                          <p className="text-[10px] text-gray-500 flex items-center justify-center gap-1"><CircleX className="w-3 h-3" /> غياب</p>
                         </div>
                         <div className="text-center py-3 px-2">
                           <p className={`text-lg font-bold ${parseFloat(selectedStudentCard.percentage) >= 75 ? 'text-green-600' : parseFloat(selectedStudentCard.percentage) >= 50 ? 'text-yellow-600' : 'text-red-500'}`}>
@@ -1090,15 +1091,15 @@ ${dataContext}`;
                       <div className="flex gap-2 p-3 bg-gray-50 border-t border-gray-200">
                         <button
                           onClick={() => setShowSessionsModal(true)}
-                          className="flex-1 bg-gradient-to-l from-emerald-500 to-green-600 text-white text-[11px] py-2.5 rounded-lg hover:from-emerald-600 hover:to-green-700 transition font-medium shadow-sm"
+                          className="flex-1 bg-gradient-to-l from-emerald-500 to-green-600 text-white text-[11px] py-2.5 rounded-lg hover:from-emerald-600 hover:to-green-700 transition font-medium shadow-sm flex items-center justify-center gap-1.5"
                         >
-                          📋 سجلات الحضور ({selectedStudentCard.attendedSessions.length})
+                          <ClipboardList className="w-3.5 h-3.5" /> سجلات الحضور ({selectedStudentCard.attendedSessions.length})
                         </button>
                         <button
                           onClick={() => sendStudentQuestion(selectedStudentCard.student)}
-                          className="flex-1 bg-blue-500 text-white text-[11px] py-2.5 rounded-lg hover:bg-blue-600 transition font-medium shadow-sm"
+                          className="flex-1 bg-blue-500 text-white text-[11px] py-2.5 rounded-lg hover:bg-blue-600 transition font-medium shadow-sm flex items-center justify-center gap-1.5"
                         >
-                          💬 اسأل عن الطالب
+                          <MessageCircle className="w-3.5 h-3.5" /> اسأل عن الطالب
                         </button>
                       </div>
                     </div>
@@ -1111,7 +1112,7 @@ ${dataContext}`;
                   <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-[calc(100%-16px)] max-h-[calc(100%-16px)] flex flex-col overflow-hidden"
                        onMouseDown={e => e.stopPropagation()}>
                     <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50 flex-shrink-0">
-                      <span className="text-sm font-bold text-gray-900">📋 سجلات حضور {selectedStudentCard.student.name}</span>
+                      <span className="text-sm font-bold text-gray-900 flex items-center gap-1.5"><ClipboardList className="w-4 h-4" /> سجلات حضور {selectedStudentCard.student.name}</span>
                       <button
                         onClick={() => setShowSessionsModal(false)}
                         className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-red-50 text-red-400 hover:text-red-600 text-sm transition"
@@ -1130,7 +1131,7 @@ ${dataContext}`;
                                    ? 'bg-green-50 border border-green-200 text-green-800'
                                    : 'bg-red-50 border border-red-200 text-red-800'
                                }`}>
-                            <span className="text-base flex-shrink-0">{as_.present ? '✅' : '❌'}</span>
+                            <span className="flex-shrink-0">{as_.present ? <CircleCheck className="w-5 h-5 text-green-600" /> : <CircleX className="w-5 h-5 text-red-600" />}</span>
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold truncate">{as_.session.name}</p>
                               <p className={`text-[11px] mt-0.5 ${as_.present ? 'text-green-600' : 'text-red-600'}`}>
@@ -1142,8 +1143,8 @@ ${dataContext}`;
                       )}
                     </div>
                     <div className="px-4 py-2.5 border-t border-gray-200 bg-gray-50 flex-shrink-0 flex justify-between items-center">
-                      <span className="text-[11px] text-gray-500">
-                        ✅ {selectedStudentCard.attendedCount} حضور • ❌ {selectedStudentCard.absentCount} غياب
+                      <span className="text-[11px] text-gray-500 flex items-center gap-1">
+                        <CircleCheck className="w-3 h-3" /> {selectedStudentCard.attendedCount} حضور • <CircleX className="w-3 h-3" /> {selectedStudentCard.absentCount} غياب
                       </span>
                       <button
                         onClick={() => setShowSessionsModal(false)}
@@ -1173,7 +1174,7 @@ ${dataContext}`;
                     }`}>
                       {msg.type === 'bot' && (
                         <div className="flex items-center gap-1 mb-1.5 text-[10px] text-gray-500 font-semibold">
-                          <span>✨</span><span>المساعد الذكي</span>
+                          <Sparkles className="w-3.5 h-3.5 text-amber-500" /><span>المساعد الذكي</span>
                         </div>
                       )}
                       <div className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${
@@ -1213,7 +1214,7 @@ ${dataContext}`;
               {/* ⚠️ شريط الأخطاء */}
               {error && (
                 <div className="px-3 py-2 bg-red-50 border-t border-red-200">
-                  <p className="text-xs text-red-600">❌ {error}</p>
+                  <p className="text-xs text-red-600 flex items-center gap-1.5"><CircleX className="w-3.5 h-3.5 shrink-0" /> {error}</p>
                 </div>
               )}
 
@@ -1243,7 +1244,7 @@ ${dataContext}`;
                           disabled={isTyping || !input.trim() || isInputBlocked}
                           className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition flex-shrink-0 text-sm"
                         >
-                          ↑
+                          <ArrowUp className="w-4 h-4" />
                         </button>
                       </div>
                     </div>

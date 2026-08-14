@@ -9,6 +9,7 @@ import { getActiveAcademicYear } from '../../firebase/dataService';
 import { SkeletonTable } from '../Skeleton';
 import { checkForTamperingAsync, normalizeDescriptor } from '../../services/faceRecognition';
 import { ensureDecompressed } from '../../services/faceCompression';
+import { BadgeCheck, Camera, Check, CircleCheck, CircleX, ClipboardList, LoaderCircle, Mail, QrCode, Save, Smile, Trash2, TriangleAlert } from 'lucide-react';
 
 interface PendingRegistrationsProps {
   adminUid: string;
@@ -122,7 +123,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
           if (tamper.isTamper) {
             setProcessing(null);
             const names = tamper.matchedStudents.map(m => m.name).join('، ');
-            alert(`⚠️ لا يمكن الموافقة: هذه البصمة مسجلة أصلاً للطالب:\n${names}\n\nيرجى التحقق من صحة الطلب.`);
+            alert(`لا يمكن الموافقة: هذه البصمة مسجلة أصلاً للطالب:\n${names}\n\nيرجى التحقق من صحة الطلب.`);
             return;
           }
         }
@@ -149,7 +150,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       console.log('✅ تمت الموافقة');
     } catch (e: any) {
       console.error(e);
-      alert('❌ فشلت العملية: ' + (e.message || ''));
+      alert('فشلت العملية: ' + (e.message || ''));
     } finally {
       setProcessing(null);
     }
@@ -173,7 +174,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       setRejectReason('');
     } catch (e: any) {
       console.error(e);
-      alert('❌ فشلت العملية');
+      alert('فشلت العملية');
     } finally {
       setProcessing(null);
     }
@@ -216,7 +217,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         <div className="p-5 border-b border-gray-200 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              📋 طلبات التسجيل الذاتي
+              <ClipboardList className="w-6 h-6 text-indigo-600" /> طلبات التسجيل الذاتي
               {stats.pending > 0 && (
                 <span className="bg-red-500 text-white text-sm px-2.5 py-0.5 rounded-full animate-pulse">
                   {stats.pending}
@@ -290,7 +291,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="🔍 بحث بالاسم أو الكود..."
+            placeholder="بحث بالاسم أو الكود..."
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
           />
         </div>
@@ -303,7 +304,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
             </div>
           ) : filteredRequests.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
-              <div className="text-5xl mb-2">📭</div>
+              <div className="mx-auto w-14 h-14 rounded-full bg-gray-500/10 border border-gray-500/20 flex items-center justify-center mb-4"><Mail className="w-7 h-7 text-gray-400" /></div>
               <p className="font-medium">
                 {filter === 'pending' ? 'لا توجد طلبات قيد المراجعة' : 'لا توجد طلبات'}
               </p>
@@ -331,16 +332,16 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                   {/* الحالة */}
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                      <span className={`text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 ${
                         isPending ? 'bg-amber-200 text-amber-800' :
                         isAutoApproved ? 'bg-teal-200 text-teal-800' :
                         isApproved ? 'bg-emerald-200 text-emerald-800' :
                         'bg-red-200 text-red-800'
                       }`}>
-                        {isPending ? '⏳ قيد المراجعة' :
-                         isAutoApproved ? '⚡ موافقة تلقائية' :
-                         isApproved ? '✅ تمت الموافقة' :
-                         '❌ مرفوض'}
+                        {isPending ? <><LoaderCircle className="w-3 h-3 animate-spin" /> قيد المراجعة</> :
+                         isAutoApproved ? <><BadgeCheck className="w-3 h-3" /> موافقة تلقائية</> :
+                         isApproved ? <><CircleCheck className="w-3 h-3" /> تمت الموافقة</> :
+                         <><CircleX className="w-3 h-3" /> مرفوض</>}
                       </span>
                       <span className="text-xs text-gray-500">
                         {new Date(req.createdAt).toLocaleString('ar-EG')}
@@ -359,11 +360,11 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                   {/* مقارنة الأسماء */}
                   <div className="grid grid-cols-2 gap-3 mb-3">
                     <div className="bg-white rounded-lg p-3 border border-blue-200">
-                      <p className="text-xs text-blue-600 font-bold mb-1">📷 من الهوية:</p>
+                      <p className="text-xs text-blue-600 font-bold mb-1 flex items-center gap-1"><Camera className="w-3.5 h-3.5" /> من الهوية:</p>
                       <p className="font-bold text-blue-900 text-sm">{req.nameFromID}</p>
                     </div>
                     <div className="bg-white rounded-lg p-3 border border-purple-200">
-                      <p className="text-xs text-purple-600 font-bold mb-1">💾 من النظام:</p>
+                      <p className="text-xs text-purple-600 font-bold mb-1 flex items-center gap-1"><Save className="w-3.5 h-3.5" /> من النظام:</p>
                       <p className="font-bold text-purple-900 text-sm">{req.nameInSystem}</p>
                       <p className="text-[10px] text-purple-500 mt-0.5">الرمز: {req.studentCode}</p>
                     </div>
@@ -371,20 +372,20 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                   
                   {/* معلومات إضافية */}
                   <div className="flex gap-2 flex-wrap mb-3">
-                    <span className="text-[10px] bg-white border border-gray-300 rounded-full px-2 py-1">
-                      🔳 QR: <code className="font-mono">{req.qrCodeId ? `${req.qrCodeId.slice(0, 16)}...` : '—'}</code>
+                    <span className="text-[10px] bg-white border border-gray-300 rounded-full px-2 py-1 flex items-center gap-1">
+                      <QrCode className="w-3 h-3" /> QR: <code className="font-mono">{req.qrCodeId ? `${req.qrCodeId.slice(0, 16)}...` : '—'}</code>
                     </span>
-                    <span className="text-[10px] bg-white border border-gray-300 rounded-full px-2 py-1">
-                      😊 بصمة وجه مسجلة
+                    <span className="text-[10px] bg-white border border-gray-300 rounded-full px-2 py-1 flex items-center gap-1">
+                      <Smile className="w-3 h-3" /> بصمة وجه مسجلة
                     </span>
                     {req.hasExistingQr && (
-                      <span className="text-[10px] bg-amber-100 border border-amber-300 text-amber-800 rounded-full px-2 py-1">
-                        ⚠️ سيتم استبدال QR قديم
+                      <span className="text-[10px] bg-amber-100 border border-amber-300 text-amber-800 rounded-full px-2 py-1 flex items-center gap-1">
+                        <TriangleAlert className="w-3 h-3" /> سيتم استبدال QR قديم
                       </span>
                     )}
                     {req.hasExistingFace && (
-                      <span className="text-[10px] bg-amber-100 border border-amber-300 text-amber-800 rounded-full px-2 py-1">
-                        ⚠️ سيتم استبدال بصمة قديمة
+                      <span className="text-[10px] bg-amber-100 border border-amber-300 text-amber-800 rounded-full px-2 py-1 flex items-center gap-1">
+                        <TriangleAlert className="w-3 h-3" /> سيتم استبدال بصمة قديمة
                       </span>
                     )}
                   </div>
@@ -419,9 +420,9 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                         <button
                           onClick={() => handleReject(req, rejectReason)}
                           disabled={isProcessing}
-                          className="py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded"
+                          className="py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded flex items-center justify-center gap-1"
                         >
-                          {isProcessing ? '⏳' : '✓ تأكيد الرفض'}
+                          {isProcessing ? <LoaderCircle className="w-3.5 h-3.5 animate-spin" /> : <><Check className="w-3.5 h-3.5" /> تأكيد الرفض</>}
                         </button>
                       </div>
                     </div>
@@ -435,9 +436,9 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                           <button
                             onClick={() => handleApprove(req)}
                             disabled={isProcessing}
-                            className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-bold rounded-lg active:scale-95"
+                            className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-bold rounded-lg active:scale-95 flex items-center justify-center gap-1.5"
                           >
-                            {isProcessing ? '⏳ جاري...' : '✅ موافقة'}
+                            {isProcessing ? <><LoaderCircle className="w-4 h-4 animate-spin" /> جاري...</> : <><CircleCheck className="w-4 h-4" /> موافقة</>}
                           </button>
                           <button
                             onClick={() => {
@@ -445,9 +446,9 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                               setRejectReason('');
                             }}
                             disabled={isProcessing}
-                            className="flex-1 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-bold rounded-lg active:scale-95"
+                            className="flex-1 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-bold rounded-lg active:scale-95 flex items-center justify-center gap-1.5"
                           >
-                            ❌ رفض
+                            <CircleX className="w-4 h-4" /> رفض
                           </button>
                         </>
                       )}
@@ -455,9 +456,9 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                       {(isApproved || isAutoApproved || isRejected) && (
                         <button
                           onClick={() => handleDelete(req)}
-                          className="flex-1 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-bold rounded-lg"
+                          className="flex-1 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-1.5"
                         >
-                          🗑️ حذف من السجل
+                          <Trash2 className="w-4 h-4" /> حذف من السجل
                         </button>
                       )}
                     </div>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BookOpen, ChevronDown, ChevronUp, CircleCheck, FolderOpen, Landmark, Plus, Trash2, Zap } from 'lucide-react';
 import { College, Stage } from '../types/student';
 
 interface CollegeManagerProps {
@@ -113,7 +114,7 @@ export const CollegeManager: React.FC<CollegeManagerProps> = ({
   const handleDeleteCollege = (college: College) => {
     const collegeStages = stages.filter(s => s.collegeId === college.id);
     if (window.confirm(
-      `⚠️ تحذير!\n\nهل تريد حذف ${college.name}؟\n\nسيتم حذف:\n• ${collegeStages.length} مرحلة\n• جميع الطلاب\n• جميع السجلات\n\nهذا الإجراء لا يمكن التراجع عنه!`
+      `تحذير!\n\nهل تريد حذف ${college.name}؟\n\nسيتم حذف:\n• ${collegeStages.length} مرحلة\n• جميع الطلاب\n• جميع السجلات\n\nهذا الإجراء لا يمكن التراجع عنه!`
     )) {
       onDeleteCollege(college.id);
     }
@@ -121,7 +122,7 @@ export const CollegeManager: React.FC<CollegeManagerProps> = ({
 
   const handleDeleteStage = (stage: Stage) => {
     if (window.confirm(
-      `⚠️ هل تريد حذف ${stage.name}؟\n\nسيتم حذف جميع طلاب وسجلات هذه المرحلة!`
+      `هل تريد حذف ${stage.name}؟\n\nسيتم حذف جميع طلاب وسجلات هذه المرحلة!`
     )) {
       onDeleteStage(stage.id);
     }
@@ -130,7 +131,7 @@ export const CollegeManager: React.FC<CollegeManagerProps> = ({
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">🏛️ إدارة الكليات والمراحل</h2>
+        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Landmark className="w-6 h-6 text-amber-600" /> إدارة الكليات والمراحل</h2>
         <button
           onClick={() => setShowAddCollege(!showAddCollege)}
           className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-medium py-2 px-4 rounded-md transition duration-200 flex items-center gap-2 shadow-md"
@@ -145,7 +146,7 @@ export const CollegeManager: React.FC<CollegeManagerProps> = ({
       {/* نموذج إضافة كلية */}
       {showAddCollege && (
         <form onSubmit={handleAddCollege} className="mb-6 p-5 bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">➕ إضافة كلية / قسم جديد</h3>
+          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Plus className="w-5 h-5 text-green-600" /> إضافة كلية / قسم جديد</h3>
           
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -209,7 +210,7 @@ export const CollegeManager: React.FC<CollegeManagerProps> = ({
               type="submit"
               className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-6 rounded-md transition duration-200"
             >
-              ✅ إنشاء الكلية
+              <CircleCheck className="w-4 h-4" /> إنشاء الكلية
             </button>
             <button
               type="button"
@@ -228,7 +229,7 @@ export const CollegeManager: React.FC<CollegeManagerProps> = ({
       {/* قائمة الكليات */}
       {colleges.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-          <div className="text-6xl mb-4">🏛️</div>
+          <div className="mx-auto w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4"><Landmark className="w-8 h-8 text-amber-400" /></div>
           <p className="text-gray-600 font-medium mb-2">لا توجد كليات بعد</p>
           <p className="text-sm text-gray-500">انقر على "إضافة كلية / قسم جديد" للبدء</p>
         </div>
@@ -259,14 +260,14 @@ export const CollegeManager: React.FC<CollegeManagerProps> = ({
                         onClick={() => setExpandedCollege(isExpanded ? null : college.id)}
                         className="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-md font-medium transition"
                       >
-                        {isExpanded ? '🔼 إخفاء' : '🔽 عرض المراحل'}
+                        {isExpanded ? <><ChevronUp className="w-4 h-4" /> إخفاء</> : <><ChevronDown className="w-4 h-4" /> عرض المراحل</>}
                       </button>
                       <button
                         onClick={() => handleDeleteCollege(college)}
                         className="bg-red-600 hover:bg-red-700 px-3 py-2 rounded-md font-medium transition"
                         title="حذف الكلية"
                       >
-                        🗑️
+                        <Trash2 className="w-5 h-5" />
                       </button>
                     </div>
                   </div>
@@ -281,14 +282,14 @@ export const CollegeManager: React.FC<CollegeManagerProps> = ({
                         onClick={() => setShowAddStage(showAddStage === college.id ? null : college.id)}
                         className="bg-blue-600 hover:bg-blue-700 text-red font-medium py-2 px-4 rounded-md transition flex items-center gap-2"
                       >
-                        ➕ إضافة مرحلة
+                        <Plus className="w-4 h-4" /> إضافة مرحلة
                       </button>
                       {collegeStages.length === 0 && (
                         <button
                           onClick={() => handleQuickAdd5Stages(college.id)}
                           className="bg-purple-600 hover:bg-purple-700 text-red font-medium py-2 px-4 rounded-md transition flex items-center gap-2"
                         >
-                          ⚡ إضافة 5 مراحل دفعة واحدة
+                          <Zap className="w-4 h-4" /> إضافة 5 مراحل دفعة واحدة
                         </button>
                       )}
                     </div>
@@ -339,20 +340,20 @@ export const CollegeManager: React.FC<CollegeManagerProps> = ({
                             className="bg-white border-2 border-gray-200 hover:border-blue-400 rounded-lg p-4 transition group"
                           >
                             <div className="flex items-center justify-between mb-3">
-                              <h4 className="font-bold text-gray-800">📖 {stage.name}</h4>
+                              <h4 className="font-bold text-gray-800 flex items-center gap-2"><BookOpen className="w-4 h-4 text-blue-500" /> {stage.name}</h4>
                               <button
                                 onClick={() => handleDeleteStage(stage)}
                                 className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition"
                                 title="حذف المرحلة"
                               >
-                                🗑️
+                                <Trash2 className="w-5 h-5" />
                               </button>
                             </div>
                             <button
                               onClick={() => onSelectStage(college.id, stage.id)}
                               className={`w-full bg-gradient-to-r ${getColorClass(college.color)} hover:opacity-90 text-white font-medium py-2 px-4 rounded-md transition shadow-sm`}
                             >
-                              📂 فتح المرحلة
+                              <FolderOpen className="w-4 h-4" /> فتح المرحلة
                             </button>
                           </div>
                         ))}

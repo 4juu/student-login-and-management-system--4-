@@ -91,6 +91,24 @@ const setActiveAcademicYear = async (year: string): Promise<void> => {
   await set(ref(database, 'system/metadata/currentAcademicYear'), year);
 };
 
+// 🆕 عنوان النظام (يحفظه الأدمن الرئيسي من الإعدادات - يُعرض للجميع)
+const SYSTEM_TITLE_DEFAULT = 'نظام إدارة الحضور الجامعي';
+
+export const loadSystemTitle = async (): Promise<string> => {
+  try {
+    const snap = await get(ref(database, 'system/metadata/systemTitle'));
+    if (snap.exists()) {
+      const title = String(snap.val()).trim();
+      if (title) return title;
+    }
+  } catch {}
+  return SYSTEM_TITLE_DEFAULT;
+};
+
+export const saveSystemTitle = async (title: string): Promise<void> => {
+  await set(ref(database, 'system/metadata/systemTitle'), title.trim());
+};
+
 // ============================================================
 // 🔑 المسارات (الآن تحت academicYears)
 // ============================================================

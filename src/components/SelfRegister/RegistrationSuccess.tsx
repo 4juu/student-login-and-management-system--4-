@@ -1,6 +1,7 @@
 // src/components/SelfRegister/RegistrationSuccess.tsx
 import React, { useEffect, useState } from 'react';
 import { Student } from '../../types/student';
+import { Check, CircleCheck, ClipboardList, IdCard, LoaderCircle, Lock, PartyPopper, QrCode, Smile } from 'lucide-react';
 
 interface RegistrationSuccessProps {
   student: Student;
@@ -55,12 +56,12 @@ export const RegistrationSuccess: React.FC<RegistrationSuccessProps> = ({
           </div>
         </div>
         
-        <h2 className="text-3xl font-bold text-gray-800 mb-2">🎉 تم بنجاح!</h2>
+        <h2 className="text-3xl font-bold text-gray-800 mb-2 flex items-center justify-center gap-2"><PartyPopper className="w-8 h-8 text-emerald-500" /> تم بنجاح!</h2>
         <p className="text-gray-600 mb-1">مرحباً <span className="font-bold text-emerald-700">{student.name}</span></p>
         
         {autoApproved ? (
           <div className="mt-4 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-xl mb-4">
-            <div className="text-4xl mb-2">✅</div>
+            <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-4"><CircleCheck className="w-8 h-8 text-emerald-500" /></div>
             <p className="font-bold text-emerald-800 mb-1">تم تفعيل حسابك تلقائياً</p>
             <p className="text-sm text-emerald-700">
               تطابق الاسم: <strong>{matchPercentage}%</strong>
@@ -69,14 +70,14 @@ export const RegistrationSuccess: React.FC<RegistrationSuccessProps> = ({
               يمكنك الآن تسجيل حضورك في الكلية باستخدام:
             </p>
             <div className="flex justify-center gap-3 mt-2">
-              <span className="text-xs bg-white px-2 py-1 rounded-full border border-emerald-300">🪪 الهوية</span>
-              <span className="text-xs bg-white px-2 py-1 rounded-full border border-emerald-300">😊 الوجه</span>
-              <span className="text-xs bg-white px-2 py-1 rounded-full border border-emerald-300">🔢 الرمز</span>
+              <span className="text-xs bg-white px-2 py-1 rounded-full border border-emerald-300 flex items-center gap-1"><IdCard className="w-3.5 h-3.5" /> الهوية</span>
+              <span className="text-xs bg-white px-2 py-1 rounded-full border border-emerald-300 flex items-center gap-1"><Smile className="w-3.5 h-3.5" /> الوجه</span>
+              <span className="text-xs bg-white px-2 py-1 rounded-full border border-emerald-300 flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> الرمز</span>
             </div>
           </div>
         ) : (
           <div className="mt-4 p-4 bg-amber-50 border-2 border-amber-200 rounded-xl mb-4">
-            <div className="text-4xl mb-2">⏳</div>
+            <div className="mx-auto w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4"><LoaderCircle className="w-8 h-8 text-amber-500 animate-spin" /></div>
             <p className="font-bold text-amber-800 mb-1">في انتظار موافقة المشرف</p>
             <p className="text-sm text-amber-700">
               تطابق الاسم: <strong>{matchPercentage}%</strong>
@@ -89,18 +90,18 @@ export const RegistrationSuccess: React.FC<RegistrationSuccessProps> = ({
         
         {/* معلومات إضافية */}
         <div className="bg-gray-50 rounded-xl p-3 mb-4 text-right">
-          <p className="text-xs text-gray-500 mb-2 font-medium">📋 ما تم تسجيله:</p>
+          <p className="text-xs text-gray-500 mb-2 font-medium flex items-center gap-1.5"><ClipboardList className="w-4 h-4 text-gray-400" /> ما تم تسجيله:</p>
           <ul className="text-sm text-gray-700 space-y-1.5">
             <li className="flex items-center gap-2">
-              <span className="text-emerald-600">✓</span>
+              <Check className="w-4 h-4 text-emerald-600" />
               <span>التحقق من الهوية الرسمية</span>
             </li>
             <li className="flex items-center gap-2">
-              <span className="text-emerald-600">✓</span>
+              <Check className="w-4 h-4 text-emerald-600" />
               <span>ربط رمز QR للهوية</span>
             </li>
             <li className="flex items-center gap-2">
-              <span className="text-emerald-600">✓</span>
+              <Check className="w-4 h-4 text-emerald-600" />
               <span>تسجيل بصمة الوجه</span>
             </li>
           </ul>
@@ -108,16 +109,16 @@ export const RegistrationSuccess: React.FC<RegistrationSuccessProps> = ({
         
         {/* تنبيه الخصوصية */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-          <p className="text-xs text-blue-800">
-            🔒 <strong>تم حذف جميع الصور</strong> من جهازك ومن النظام. تم حفظ معلومات التعرف عليك كأرقام رياضية فقط.
+          <p className="text-xs text-blue-800 flex items-center gap-1.5">
+            <Lock className="w-3.5 h-3.5 text-blue-600 shrink-0" /><span><strong>تم حذف جميع الصور</strong> من جهازك ومن النظام. تم حفظ معلومات التعرف عليك كأرقام رياضية فقط.</span>
           </p>
         </div>
         
         <button
           onClick={onExit}
-          className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold py-3 rounded-xl active:scale-95 transition shadow-lg"
+          className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold py-3 rounded-xl active:scale-95 transition shadow-lg flex items-center justify-center gap-1.5"
         >
-          ✓ تم
+          <Check className="w-5 h-5" /> تم
         </button>
       </div>
       

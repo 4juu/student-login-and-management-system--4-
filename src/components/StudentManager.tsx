@@ -6,6 +6,7 @@ import {
   getCompressionStats,
   hasFaceDescriptor,
 } from '../services/faceCompression';
+import { Camera, CaseSensitive, ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, ClipboardList, FileArchive, FolderOpen, Hash, IdCard, Lightbulb, LoaderCircle, Pencil, Plus, QrCode, RefreshCw, Smile, SquarePen, Trash2, TriangleAlert, Unlink, Upload, Users, Zap } from 'lucide-react';
 
 // 🚀 نافذة تسجيل الوجه تُحمَّل عند فتحها فقط (مكتبة الوجوه ثقيلة)
 const LazyFaceRegister = lazy(() =>
@@ -232,7 +233,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       }
 
       if (parsed.length === 0) {
-        setError('❌ لم يتم العثور على طلاب في الملف. تأكد من تنسيق الملف.');
+        setError('لم يتم العثور على طلاب في الملف. تأكد من تنسيق الملف.');
         setImportLoading(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
@@ -240,7 +241,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
 
       if (parsed.length > 50) {
         const confirmed = window.confirm(
-          `📊 تم العثور على ${parsed.length} طالب في الملف.\n\nهل تريد المتابعة بالاستيراد؟`
+          `تم العثور على ${parsed.length} طالب في الملف.\n\nهل تريد المتابعة بالاستيراد؟`
         );
         if (!confirmed) {
           setImportLoading(false);
@@ -279,7 +280,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         }
 
         if (currentCode > 9999) {
-          setError('⚠️ تم تجاوز الحد الأقصى للأكواد (9999)');
+          setError('تم تجاوز الحد الأقصى للأكواد (9999)');
           break;
         }
 
@@ -324,13 +325,13 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       }
 
       setImportMessage(
-        `✅ تمت إضافة ${addedCount} طالب بنجاح` +
-        (qrLinkedCount > 0 ? ` (🔳 ${qrLinkedCount} مربوط برمز QR)` : '') +
-        (skippedCount > 0 ? ` (⚠️ تم تجاهل ${skippedCount} طالب مكرر)` : '')
+        `تمت إضافة ${addedCount} طالب بنجاح` +
+        (qrLinkedCount > 0 ? ` (${qrLinkedCount} مربوط برمز QR)` : '') +
+        (skippedCount > 0 ? ` (تم تجاهل ${skippedCount} طالب مكرر)` : '')
       );
     } catch (err) {
       console.error(err);
-      setError('❌ حدث خطأ أثناء قراءة الملف. تأكد من نوع الملف (xlsx, xls, csv).');
+      setError('حدث خطأ أثناء قراءة الملف. تأكد من نوع الملف (xlsx, xls, csv).');
     } finally {
       setImportLoading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -375,8 +376,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
 
     const isAll = selectedIds.size === students.length;
     const message = isAll
-      ? `⚠️ سيتم حذف جميع الطلاب (${students.length})!\nهل أنت متأكد؟`
-      : `⚠️ هل أنت متأكد من حذف ${selectedIds.size} طالب؟`;
+      ? `سيتم حذف جميع الطلاب (${students.length})!\nهل أنت متأكد؟`
+      : `هل أنت متأكد من حذف ${selectedIds.size} طالب؟`;
 
     if (!window.confirm(message)) return;
 
@@ -395,7 +396,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     const trimmedId = editUniversityId.trim();
 
     if (trimmedId && students.some(s => s.id !== editingUniIdStudent && s.universityId === trimmedId)) {
-      alert('❌ هذا الرقم الجامعي مستخدم لطالب آخر');
+      alert('هذا الرقم الجامعي مستخدم لطالب آخر');
       return;
     }
 
@@ -420,7 +421,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     const cleanQr = editQrCodeId.trim() ? extractQrCodeId(editQrCodeId) : '';
 
     if (cleanQr && students.some(s => s.id !== editingQrStudent && s.qrCodeId === cleanQr)) {
-      alert('❌ رمز QR هذا مستخدم لطالب آخر');
+      alert('رمز QR هذا مستخدم لطالب آخر');
       return;
     }
 
@@ -457,16 +458,16 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     });
 
     if (uncompressedStudents.length === 0) {
-      alert('✨ كل البصمات مضغوطة بالفعل!');
+      alert('كل البصمات مضغوطة بالفعل!');
       return;
     }
 
     const stats = getCompressionStats(students);
 
     if (!window.confirm(
-      `🗜️ سيتم ضغط ${uncompressedStudents.length} بصمة\n\n` +
-      `💾 توفير متوقع: ~${stats.potentialSavingsKB.toFixed(1)} KB\n` +
-      `📊 الدقة: لن تتأثر (أقل من 1%)\n\n` +
+      `سيتم ضغط ${uncompressedStudents.length} بصمة\n\n` +
+      `توفير متوقع: ~${stats.potentialSavingsKB.toFixed(1)} KB\n` +
+      `الدقة: لن تتأثر (أقل من 1%)\n\n` +
       `هل تريد المتابعة؟`
     )) return;
 
@@ -492,10 +493,10 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         }
       }
 
-      alert(`✅ تم ضغط ${count} بصمة بنجاح!\n💾 تم توفير ~${stats.potentialSavingsKB.toFixed(1)} KB`);
+      alert(`تم ضغط ${count} بصمة بنجاح!\nتم توفير ~${stats.potentialSavingsKB.toFixed(1)} KB`);
     } catch (e) {
       console.error(e);
-      alert('❌ حدث خطأ أثناء الضغط');
+      alert('حدث خطأ أثناء الضغط');
     } finally {
       setCompressing(false);
       setCompressionProgress({ current: 0, total: 0 });
@@ -560,7 +561,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
 
       {students.length > 0 && studentsWithoutQr > 0 && (
         <div className="mb-3 p-3 bg-emerald-50 border border-emerald-300 rounded-lg flex items-center gap-3">
-          <span className="text-2xl">🔳</span>
+          <QrCode className="w-7 h-7 text-emerald-600" />
           <div className="flex-1">
             <p className="text-sm font-bold text-emerald-800">
               {studentsWithoutQr} طالب بدون ربط رمز QR
@@ -574,7 +575,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
 
       {students.length > 0 && studentsWithoutUniId > 0 && (
         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-300 rounded-lg flex items-center gap-3">
-          <span className="text-2xl">⚠️</span>
+          <TriangleAlert className="w-7 h-7 text-yellow-600" />
           <div className="flex-1">
             <p className="text-sm font-bold text-yellow-800">
               {studentsWithoutUniId} طالب بدون رقم جامعي
@@ -636,7 +637,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-              🪪 الرقم الجامعي
+              <IdCard className="w-4 h-4" /> الرقم الجامعي
               <span className="text-xs text-blue-600">(اختياري)</span>
             </label>
             <input
@@ -653,7 +654,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
 
         <div className="mt-4 p-4 bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-lg">
           <label className="block text-sm font-bold text-emerald-800 mb-2 flex items-center gap-2">
-            <span className="text-xl">🔳</span>
+            <QrCode className="w-5 h-5 text-emerald-800" />
             <span>رمز QR الهوية</span>
             <span className="text-xs font-normal text-emerald-600 bg-white px-2 py-0.5 rounded-full">
               اختياري - للمسح السريع
@@ -668,7 +669,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             dir="ltr"
           />
           <p className="text-xs text-emerald-700 mt-2 flex items-start gap-1">
-            <span>💡</span>
+            <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" />
             <span>
               يمكنك لصق <strong>الرابط الكامل</strong> من هوية الوزارة وسيتم استخراج الرمز تلقائياً،
               أو تركه فارغاً ليتم الربط تلقائياً عند أول مسح للهوية.
@@ -679,9 +680,9 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         <div className="mt-4 flex justify-end">
           <button
             type="submit"
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-8 rounded-md transition duration-200"
+            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-8 rounded-md transition duration-200 flex items-center gap-2"
           >
-            ➕ إضافة طالب
+            <Plus className="w-4 h-4" /> إضافة طالب
           </button>
         </div>
 
@@ -694,18 +695,18 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
 
       <div className="mb-6 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg">
         <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-          📂 استيراد الطلاب من ملف Excel
+          <FolderOpen className="w-5 h-5 text-blue-600" /> استيراد الطلاب من ملف Excel
         </h3>
         <div className="mb-4 text-sm text-gray-600 space-y-1">
           <p>اختر بادئة الكود ثم ارفع الملف. سيتم اكتشاف الحقول التالية تلقائياً:</p>
           <div className="flex flex-wrap gap-2 mt-2">
-            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">📝 الاسم</span>
-            <span className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs font-medium">👥 الكروب (A1, B2, ...)</span>
-            <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-medium">🪪 الرقم الجامعي (8-15 رقم)</span>
-            <span className="px-2 py-1 bg-emerald-100 text-emerald-800 rounded text-xs font-medium">🔳 رمز QR (رابط الوزارة الكامل)</span>
+            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium inline-flex items-center gap-1"><SquarePen className="w-3 h-3" /> الاسم</span>
+            <span className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs font-medium inline-flex items-center gap-1"><Users className="w-3 h-3" /> الكروب (A1, B2, ...)</span>
+            <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-medium inline-flex items-center gap-1"><IdCard className="w-3 h-3" /> الرقم الجامعي (8-15 رقم)</span>
+            <span className="px-2 py-1 bg-emerald-100 text-emerald-800 rounded text-xs font-medium inline-flex items-center gap-1"><QrCode className="w-3 h-3" /> رمز QR (رابط الوزارة الكامل)</span>
           </div>
-          <p className="text-xs text-emerald-700 mt-2 bg-emerald-50 p-2 rounded border border-emerald-200">
-            💡 <strong>نصيحة:</strong> الصق الرابط الكامل من هوية الوزارة بأي عمود، وسيتم استخراج رمز QR تلقائياً لكل طالب.
+          <p className="text-xs text-emerald-700 mt-2 bg-emerald-50 p-2 rounded border border-emerald-200 flex items-start gap-1">
+            <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" /> <strong>نصيحة:</strong> الصق الرابط الكامل من هوية الوزارة بأي عمود، وسيتم استخراج رمز QR تلقائياً لكل طالب.
           </p>
         </div>
 
@@ -727,8 +728,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               </button>
             ))}
           </div>
-          <p className="text-xs text-gray-500 mt-2">
-            🔢 الأكواد ستبدأ من: <strong>{selectedPrefix}001</strong>
+          <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+            <Hash className="w-3.5 h-3.5" /> الأكواد ستبدأ من: <strong>{selectedPrefix}001</strong>
           </p>
         </div>
 
@@ -744,11 +745,11 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
           />
           <label
             htmlFor="excel-upload"
-            className={`flex-1 text-center cursor-pointer bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium py-3 px-6 rounded-md transition duration-200 shadow-md ${
+            className={`flex-1 cursor-pointer bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium py-3 px-6 rounded-md transition duration-200 shadow-md flex items-center justify-center gap-2 ${
               importLoading ? 'opacity-50 cursor-not-allowed' : ''
             }`}
           >
-            {importLoading ? '⏳ جاري المعالجة...' : '📤 رفع ملف Excel'}
+            {importLoading ? <><LoaderCircle className="w-4 h-4 animate-spin" /> جاري المعالجة...</> : <><Upload className="w-4 h-4" /> رفع ملف Excel</>}
           </label>
         </div>
 
@@ -763,9 +764,9 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       {students.length > 0 && onUpdateStudent && (
         <div className="mb-6 p-5 bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg">
           <h3 className="text-lg font-bold text-purple-900 mb-2 flex items-center gap-2">
-            😊 بصمات الوجه
-            <span className="text-xs font-normal bg-purple-200 text-purple-800 px-2 py-0.5 rounded-full">
-              جديد ⚡
+            <Smile className="w-5 h-5 text-purple-600" /> بصمات الوجه
+            <span className="text-xs font-normal bg-purple-200 text-purple-800 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+              جديد <Zap className="w-3 h-3" />
             </span>
           </h3>
 
@@ -801,7 +802,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             <div className="bg-white rounded-lg p-3 mb-3 border-2 border-purple-200 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="text-sm font-bold text-gray-800 flex items-center gap-1">
-                  🗜️ حالة الضغط
+                  <FileArchive className="w-4 h-4 text-purple-600" /> حالة الضغط
                 </h4>
                 {compressionStats.uncompressedCount > 0 && (
                   <button
@@ -810,8 +811,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                     className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 text-white text-xs font-bold rounded-md transition shadow-sm"
                   >
                     {compressing
-                      ? `⏳ ${compressionProgress.current}/${compressionProgress.total}`
-                      : `🗜️ ضغط ${compressionStats.uncompressedCount} بصمة`
+                      ? <><LoaderCircle className="w-4 h-4 animate-spin" /> {compressionProgress.current}/{compressionProgress.total}</>
+                      : <><FileArchive className="w-4 h-4" /> ضغط {compressionStats.uncompressedCount} بصمة</>
                     }
                   </button>
                 )}
@@ -842,7 +843,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-2 bg-amber-50 p-2 rounded border border-amber-200">
-                  <span className="text-amber-600 text-xl">⚠️</span>
+                  <TriangleAlert className="w-6 h-6 text-amber-600" />
                   <div className="flex-1">
                     <div className="font-bold text-amber-800 text-lg leading-none">
                       {compressionStats.uncompressedCount}
@@ -853,8 +854,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               </div>
 
               {compressionStats.uncompressedCount > 0 && (
-                <div className="mt-2 text-[11px] text-gray-700 bg-gradient-to-r from-amber-50 to-yellow-50 p-2 rounded border border-amber-200">
-                  💡 يمكنك توفير <strong className="text-emerald-700">~{compressionStats.potentialSavingsKB.toFixed(1)} KB</strong> بضغط البصمات غير المضغوطة. <strong>الضغط آمن</strong> ولا يؤثر على دقة التعرف (أقل من 1%).
+                <div className="mt-2 text-[11px] text-gray-700 bg-gradient-to-r from-amber-50 to-yellow-50 p-2 rounded border border-amber-200 flex items-start gap-1">
+                  <Lightbulb className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" /> يمكنك توفير <strong className="text-emerald-700">~{compressionStats.potentialSavingsKB.toFixed(1)} KB</strong> بضغط البصمات غير المضغوطة. <strong>الضغط آمن</strong> ولا يؤثر على دقة التعرف (أقل من 1%).
                 </div>
               )}
 
@@ -862,15 +863,15 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             </div>
           )}
 
-          <p className="text-xs text-purple-700 mb-3 bg-white/60 p-2 rounded">
-            💡 <strong>كيف يعمل؟</strong> سجّل بصمة وجه كل طالب مرة واحدة (يأخذ ثانيتين فقط)، ثم يستطيع الطلاب تسجيل حضورهم بمجرد المرور قبال الكاميرا تلقائياً، بدون باركود أو كود يدوي.
+          <p className="text-xs text-purple-700 mb-3 bg-white/60 p-2 rounded flex items-start gap-1">
+            <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" /> <strong>كيف يعمل؟</strong> سجّل بصمة وجه كل طالب مرة واحدة (يأخذ ثانيتين فقط)، ثم يستطيع الطلاب تسجيل حضورهم بمجرد المرور قبال الكاميرا تلقائياً، بدون باركود أو كود يدوي.
           </p>
 
           <button
             onClick={() => setShowFaceRegister(true)}
-            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-3 px-6 rounded-md shadow-md transition duration-200 transform active:scale-95"
+            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-3 px-6 rounded-md shadow-md transition duration-200 transform active:scale-95 flex items-center justify-center gap-2"
           >
-            📷 فتح أداة التسجيل الجماعي السريع
+            <Camera className="w-5 h-5" /> فتح أداة التسجيل الجماعي السريع
           </button>
         </div>
       )}
@@ -878,7 +879,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       {students.length > 1 && (onSortByName || onSortByGroup) && (
         <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg">
           <h3 className="text-sm font-bold text-purple-800 mb-3 flex items-center gap-2">
-            🔄 إعادة ترتيب الطلاب
+            <RefreshCw className="w-4 h-4 text-purple-700" /> إعادة ترتيب الطلاب
           </h3>
           <div className="flex flex-wrap gap-2">
             {onSortByName && (
@@ -888,9 +889,9 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                     onSortByName();
                   }
                 }}
-                className="flex-1 min-w-[140px] sm:min-w-[200px] px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-medium rounded-md transition duration-200 shadow-md"
+                className="flex-1 min-w-[140px] sm:min-w-[200px] px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-medium rounded-md transition duration-200 shadow-md flex items-center justify-center gap-2"
               >
-                🔤 ترتيب أبجدي حسب الاسم
+                <CaseSensitive className="w-4 h-4" /> ترتيب أبجدي حسب الاسم
               </button>
             )}
             {onSortByGroup && (
@@ -900,9 +901,9 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                     onSortByGroup();
                   }
                 }}
-                className="flex-1 min-w-[140px] sm:min-w-[200px] px-4 py-2 bg-gradient-to-r from-pink-600 to-pink-700 hover:from-pink-700 hover:to-pink-800 text-white font-medium rounded-md transition duration-200 shadow-md"
+                className="flex-1 min-w-[140px] sm:min-w-[200px] px-4 py-2 bg-gradient-to-r from-pink-600 to-pink-700 hover:from-pink-700 hover:to-pink-800 text-white font-medium rounded-md transition duration-200 shadow-md flex items-center justify-center gap-2"
               >
-                👥 ترتيب حسب الكروب + الاسم
+                <Users className="w-4 h-4" /> ترتيب حسب الكروب + الاسم
               </button>
             )}
           </div>
@@ -916,7 +917,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="🔍 بحث بالاسم أو الكود أو الكروب أو الرقم الجامعي..."
+              placeholder="بحث بالاسم أو الكود أو الكروب أو الرقم الجامعي..."
               className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               dir="rtl"
             />
@@ -948,15 +949,15 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       )}
 
       {(searchQuery || groupFilter !== 'all') && (
-        <p className="text-xs text-gray-500 mb-3">
-          📊 نتائج: <strong>{filteredStudents.length}</strong> من {students.length}
+        <p className="text-xs text-gray-500 mb-3 flex items-center gap-1">
+          <ChartColumn className="w-3.5 h-3.5 text-gray-400" /> نتائج: <strong>{filteredStudents.length}</strong> من {students.length}
         </p>
       )}
 
       {selectedIds.size > 0 && (
         <div className="mb-4 p-4 bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-300 rounded-lg flex items-center justify-between flex-wrap gap-3">
-          <div className="text-orange-800 font-medium">
-            ✅ تم تحديد <strong>{selectedIds.size}</strong> من {students.length} طالب
+          <div className="text-orange-800 font-medium flex items-center gap-1">
+            <CircleCheck className="w-4 h-4" /> تم تحديد <strong>{selectedIds.size}</strong> من {students.length} طالب
           </div>
           <div className="flex gap-2 flex-wrap">
             <button
@@ -976,9 +977,9 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             )}
             <button
               onClick={handleDeleteSelected}
-              className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-medium rounded-md transition shadow-md"
+              className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-medium rounded-md transition shadow-md flex items-center gap-2"
             >
-              🗑️ حذف المحدد ({selectedIds.size})
+              <Trash2 className="w-4 h-4" /> حذف المحدد ({selectedIds.size})
             </button>
           </div>
         </div>
@@ -1009,14 +1010,14 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
               title="الصفحة الأولى"
             >
-              ⏮
+              <ChevronsRight className="w-4 h-4" />
             </button>
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={safeCurrentPage === 1}
-              className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+              className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
             >
-              ← السابق
+              <ChevronRight className="w-4 h-4" /> السابق
             </button>
             <span className="px-3 py-1 bg-blue-600 text-white rounded text-sm font-bold">
               {safeCurrentPage} / {totalPages}
@@ -1024,9 +1025,9 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             <button
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={safeCurrentPage === totalPages}
-              className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+              className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
             >
-              التالي →
+              التالي <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={() => setCurrentPage(totalPages)}
@@ -1034,7 +1035,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
               title="الصفحة الأخيرة"
             >
-              ⏭
+              <ChevronsLeft className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -1059,9 +1060,9 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الرمز</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الاسم</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الكروب</th>
-              <th className="hidden md:table-cell px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">🪪 الرقم الجامعي</th>
-              <th className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">🔳 رمز QR</th>
-              <th className="hidden sm:table-cell px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">😊 الوجه</th>
+              <th className="hidden md:table-cell px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><IdCard className="w-3.5 h-3.5" /> الرقم الجامعي</span></th>
+              <th className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> رمز QR</span></th>
+              <th className="hidden sm:table-cell px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><Smile className="w-3.5 h-3.5" /> الوجه</span></th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">إجراءات</th>
             </tr>
           </thead>
@@ -1071,7 +1072,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                 <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
                   <div className="flex flex-col items-center gap-2">
                     <p className="font-medium">
-                      {searchQuery || groupFilter !== 'all' ? '🔍 لا توجد نتائج للبحث' : 'لا توجد طلاب مسجلين'}
+                      {searchQuery || groupFilter !== 'all' ? 'لا توجد نتائج للبحث' : 'لا توجد طلاب مسجلين'}
                     </p>
                     {!searchQuery && groupFilter === 'all' && (
                       <p className="text-sm">ابدأ بإضافة الطلاب أو ارفع ملف Excel</p>
@@ -1183,7 +1184,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                               className="text-blue-500 hover:text-blue-700 text-xs"
                               title="نقل إلى كروب آخر"
                             >
-                              🔄
+                              <RefreshCw className="w-4 h-4" />
                             </button>
                           )}
                         </div>
@@ -1234,7 +1235,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                               className="text-blue-500 hover:text-blue-700 text-xs"
                               title="تعديل الرقم الجامعي"
                             >
-                              ✏️
+                              <Pencil className="w-4 h-4" />
                             </button>
                           )}
                         </div>
@@ -1292,7 +1293,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                                 className="text-emerald-600 hover:text-emerald-800 text-xs"
                                 title="تعديل رمز QR"
                               >
-                                ✏️
+                                <Pencil className="w-4 h-4" />
                               </button>
                               {student.qrCodeId && (
                                 <button
@@ -1300,7 +1301,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                                   className="text-red-500 hover:text-red-700 text-xs"
                                   title="فك ربط QR"
                                 >
-                                  🔓
+                                  <Unlink className="w-4 h-4" />
                                 </button>
                               )}
                             </>
@@ -1323,12 +1324,12 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                                 student.faceRegisteredAt
                                   ? `سُجلت في: ${new Date(student.faceRegisteredAt).toLocaleDateString('ar-EG')}\n${
                                       faceFormat === 'multi' ? 'متعدد الزوايا (Multi)' :
-                                      isCompressed ? '🗜️ مضغوطة' : '⚠️ غير مضغوطة'
+                                      isCompressed ? 'مضغوطة' : 'غير مضغوطة'
                                     }`
                                   : 'مسجّلة'
                               }
                             >
-                              {faceFormat === 'multi' ? '✅' : isCompressed ? '✅ 🗜️' : '✅ ⚠️'}
+                              {faceFormat === 'multi' ? <CircleCheck className="w-3.5 h-3.5" /> : isCompressed ? <><CircleCheck className="w-3.5 h-3.5" /> <FileArchive className="w-3.5 h-3.5" /></> : <><CircleCheck className="w-3.5 h-3.5" /> <TriangleAlert className="w-3.5 h-3.5" /></>}
                             </span>
                             {onUpdateStudent && (
                               <button
@@ -1336,7 +1337,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                                 className="text-red-500 hover:text-red-700 text-xs"
                                 title="حذف بصمة الوجه"
                               >
-                                🗑️
+                                <Trash2 className="w-4 h-4" />
                               </button>
                             )}
                           </>
@@ -1351,10 +1352,10 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                         {onOpenProfile && (
                           <button
                             onClick={() => onOpenProfile(student)}
-                            className="text-blue-600 hover:text-blue-800 font-medium"
+                            className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
                             title="فتح ملف الطالب الكامل"
                           >
-                            الملف 📋
+                            الملف <ClipboardList className="w-4 h-4" />
                           </button>
                         )}
                         <button
@@ -1382,16 +1383,16 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
           <button
             onClick={() => setCurrentPage(1)}
             disabled={safeCurrentPage === 1}
-            className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+            className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
           >
-            ⏮ الأولى
+            <ChevronsRight className="w-4 h-4" /> الأولى
           </button>
           <button
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
             disabled={safeCurrentPage === 1}
-            className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+            className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
           >
-            ← السابق
+            <ChevronRight className="w-4 h-4" /> السابق
           </button>
 
           {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
@@ -1423,16 +1424,16 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
           <button
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={safeCurrentPage === totalPages}
-            className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+            className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
           >
-            التالي →
+            التالي <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             onClick={() => setCurrentPage(totalPages)}
             disabled={safeCurrentPage === totalPages}
-            className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+            className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
           >
-            الأخيرة ⏭
+            الأخيرة <ChevronsLeft className="w-4 h-4" />
           </button>
         </div>
       )}

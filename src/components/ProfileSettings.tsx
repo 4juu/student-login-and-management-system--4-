@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { ref as dbRef, update } from 'firebase/database';
 import { database } from '../firebase/config';
 import { User } from '../types/user';
+import { Crown, GraduationCap, Landmark, TriangleAlert } from 'lucide-react';
 
 interface ProfileSettingsProps {
   currentUser: User;
@@ -54,7 +55,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
     try {
       const base64Image = await convertToBase64(file);
       setPhotoURL(base64Image);
-      setSuccess('✅ تم تحميل الصورة! اضغط "حفظ التغييرات" للتطبيق');
+      setSuccess('تم تحميل الصورة! اضغط "حفظ التغييرات" للتطبيق');
     } catch (err: any) {
       setError(`حدث خطأ أثناء تحميل الصورة: ${err.message}`);
     } finally {
@@ -108,7 +109,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
       onUpdateProfile(updatedUser);
 
       setSuccess(
-        '✅ تم حفظ التغييرات بنجاح!\n\n✓ الصورة الشخصية محفوظة'
+        'تم حفظ التغييرات بنجاح!\n\nالصورة الشخصية محفوظة'
       );
 
       setTimeout(() => setSuccess(''), 6000);
@@ -313,15 +314,15 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
               <div>
                 {currentUser.role === 'admin' ? (
                   <span className="inline-flex items-center px-4 py-2 bg-purple-100 text-purple-800 text-sm font-medium rounded-full">
-                    👑 أدمن رئيسي
+                    <Crown className="w-4 h-4 text-purple-700 ml-1.5" /> أدمن رئيسي
                   </span>
                 ) : currentUser.role === 'college_admin' ? (
                   <span className="inline-flex items-center px-4 py-2 bg-amber-100 text-amber-800 text-sm font-medium rounded-full">
-                    🏛️ أدمن كلية
+                    <Landmark className="w-4 h-4 text-amber-700 ml-1.5" /> أدمن كلية
                   </span>
                 ) : (
                   <span className="inline-flex items-center px-4 py-2 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
-                    👨‍🏫 تدريسي
+                    <GraduationCap className="w-4 h-4 text-blue-700 ml-1.5" /> تدريسي
                   </span>
                 )}
               </div>
@@ -357,7 +358,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
         <div className="flex justify-between mt-1">
           <p className="text-xs text-gray-500">{bio.length}/500 حرف</p>
           {bio.length >= 450 && (
-            <p className="text-xs text-orange-500">⚠️ اقتربت من الحد الأقصى</p>
+            <p className="text-xs text-orange-500 flex items-center gap-1"><TriangleAlert className="w-3.5 h-3.5" /> اقتربت من الحد الأقصى</p>
           )}
         </div>
         {!canEditNameAndBio && (

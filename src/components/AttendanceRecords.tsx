@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { AttendanceRecord, AttendanceSession, Student } from '../types/student';
 import { getCurrentAcademicYear } from '../firebase/dataService';
+import { Calendar, ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, CircleX, Download, GraduationCap, MapPin, QrCode } from 'lucide-react';
 
 interface AttendanceRecordsProps {
   records: AttendanceRecord[];
@@ -215,12 +216,12 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
   // ============================================================
   const handleExportOfficialExcel = async () => {
     if (students.length === 0) {
-      alert('❌ لا يوجد طلاب مسجلين في هذه المرحلة للتصدير.');
+      alert('لا يوجد طلاب مسجلين في هذه المرحلة للتصدير.');
       return;
     }
 
     if (sessions.length === 0) {
-      alert('❌ لا توجد أيام حضور (سجلات) مسجلة للتصدير.');
+      alert('لا توجد أيام حضور (سجلات) مسجلة للتصدير.');
       return;
     }
 
@@ -254,7 +255,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
       if (!singleDate) return alert('الرجاء تحديد التاريخ');
       targetSessions = sessions.filter(s => normalizeForFilter(s.date) === singleDate);
       if (targetSessions.length === 0) {
-        return alert(`❌ لا توجد سجلات حضور مسجلة في يوم ${singleDate}`);
+        return alert(`لا توجد سجلات حضور مسجلة في يوم ${singleDate}`);
       }
     } else {
       if (!startDate || !endDate) return alert('الرجاء تحديد تاريخ البدء والانتهاء');
@@ -263,7 +264,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
         return normalized >= startDate && normalized <= endDate;
       });
       if (targetSessions.length === 0) {
-        return alert('❌ لا توجد سجلات حضور في هذه المدة الزمنية');
+        return alert('لا توجد سجلات حضور في هذه المدة الزمنية');
       }
     }
 
@@ -446,7 +447,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
   };
 
   const handleClearRecords = () => {
-    if (window.confirm('⚠️ تحذير: هل أنت متأكد من حذف جميع سجلات الحضور لهذه المرحلة؟')) {
+    if (window.confirm('تحذير: هل أنت متأكد من حذف جميع سجلات الحضور لهذه المرحلة؟')) {
       onClearRecords();
     }
   };
@@ -455,7 +456,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
     <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
       {/* 🆕 شريط السنة الأكاديمية */}
       <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center gap-2">
-        <span className="text-2xl">🎓</span>
+        <GraduationCap className="w-7 h-7 text-indigo-600" />
         <div>
           <p className="text-sm font-bold text-indigo-800">
             السنة الأكاديمية الحالية: {currentAcademicYear.replace('_', ' - ')}
@@ -471,7 +472,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
       {/* ============================================================ */}
       <div className="mb-6 sm:mb-8 p-4 sm:p-6 bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-500 rounded-xl shadow-sm">
         <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-          <span className="text-2xl sm:text-4xl">📊</span>
+          <ChartColumn className="w-9 h-9 sm:w-11 sm:h-11 text-green-600" />
           <div>
             <h3 className="text-base sm:text-xl font-bold text-gray-800">تصدير سجل الحضور والغياب الرسمي (Excel)</h3>
           </div>
@@ -489,7 +490,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                 onChange={() => setExportType('range')}
                 className="accent-green-600 w-4 h-4"
               />
-              <span>📅 مدة زمنية (من - إلى)</span>
+              <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> مدة زمنية (من - إلى)</span>
             </label>
 
             <label className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition flex-1 min-w-[140px] sm:min-w-[200px] ${exportType === 'single' ? 'border-green-600 bg-green-50 font-bold text-green-800' : 'border-gray-200 hover:bg-gray-50'}`}>
@@ -500,7 +501,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                 onChange={() => setExportType('single')}
                 className="accent-green-600 w-4 h-4"
               />
-              <span>📍 يوم واحد محدد</span>
+              <span className="flex items-center gap-1"><MapPin className="w-4 h-4" /> يوم واحد محدد</span>
             </label>
           </div>
 
@@ -546,15 +547,13 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
           onClick={handleExportOfficialExcel}
           className="w-full bg-gradient-to-r from-green-600 to-emerald-700 hover:from-green-700 hover:to-emerald-800 text-white font-bold py-2.5 sm:py-3 px-4 sm:px-6 rounded-lg transition duration-200 shadow-md flex items-center justify-center gap-2 text-sm sm:text-lg"
         >
-          <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          📥 تحميل كشف الحضور والغياب الرسمي (Excel)
+          <Download className="w-5 h-5 sm:w-6 sm:h-6" />
+          تحميل كشف الحضور والغياب الرسمي (Excel)
         </button>
 
         <div className="mt-3 text-xs text-gray-600 flex flex-wrap gap-4 justify-center font-medium">
-          <span>🟢 خلية خضراء للحاضر</span>
-          <span>🔴 خلية حمراء للغائب</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-500 inline-block" /> خلية خضراء للحاضر</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-500 inline-block" /> خلية حمراء للغائب</span>
         </div>
       </div>
 
@@ -565,8 +564,8 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
           <div>
             <h2 className="text-base sm:text-xl font-bold text-gray-800">سجل عمليات الدخول المباشر</h2>
-            <p className="text-xs text-gray-500 mt-1">
-              📊 إجمالي: {records.length} سجل
+            <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+              <ChartColumn className="w-3.5 h-3.5" /> إجمالي: {records.length} سجل
               {filteredRecords.length !== records.length && (
                 <span className="text-blue-600"> | نتائج الفلتر: {filteredRecords.length}</span>
               )}
@@ -608,7 +607,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
               type="text"
               value={searchRecord}
               onChange={e => setSearchRecord(e.target.value)}
-              placeholder="🔍 بحث بالاسم أو الرمز أو الكروب..."
+              placeholder="بحث بالاسم أو الرمز أو الكروب..."
               className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               dir="rtl"
             />
@@ -647,14 +646,14 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                 disabled={safeCurrentPage === 1}
                 className="px-1.5 sm:px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
               >
-                ⏮
+                <ChevronsRight className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={safeCurrentPage === 1}
                 className="px-2 sm:px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
               >
-                ←
+                <ChevronRight className="w-4 h-4" />
               </button>
               <span className="px-2 sm:px-3 py-1 bg-blue-600 text-white rounded text-xs sm:text-sm font-bold">
                 {safeCurrentPage} / {totalPages}
@@ -664,14 +663,14 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                 disabled={safeCurrentPage === totalPages}
                 className="px-2 sm:px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
               >
-                →
+                <ChevronLeft className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setCurrentPage(totalPages)}
                 disabled={safeCurrentPage === totalPages}
                 className="px-1.5 sm:px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
               >
-                ⏭
+                <ChevronsLeft className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -694,7 +693,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                 <tr>
                   <td colSpan={6} className="px-3 sm:px-6 py-8 text-center text-gray-500 text-sm font-medium">
                     {searchRecord || selectedSessionId !== 'all'
-                      ? '🔍 لا توجد نتائج مطابقة'
+                      ? 'لا توجد نتائج مطابقة'
                       : 'لا توجد سجلات حضور مدخلة'}
                   </td>
                 </tr>
@@ -706,9 +705,9 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                       <td className="px-3 sm:px-6 py-3 text-sm text-gray-500">{globalIndex}</td>
                       <td className="px-3 sm:px-6 py-3">
                         {record.status === 'present' ? (
-                          <span className="px-2 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">✅ حاضر</span>
+                          <span className="px-2 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 inline-flex items-center gap-1"><CircleCheck className="w-3.5 h-3.5" /> حاضر</span>
                         ) : (
-                          <span className="px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">❌ غائب</span>
+                          <span className="px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 inline-flex items-center gap-1"><CircleX className="w-3.5 h-3.5" /> غائب</span>
                         )}
                       </td>
                       <td className="px-3 sm:px-6 py-3">
@@ -721,8 +720,8 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                       <td className="px-3 sm:px-6 py-3 text-xs text-gray-500">
                         {record.date} - {record.time}
                         {record.method === 'qr' && (
-                          <span className="mr-2 inline-block px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold">
-                            🔳 QR
+                          <span className="mr-2 inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold">
+                            <QrCode className="w-3 h-3" /> QR
                           </span>
                         )}
                       </td>
@@ -741,16 +740,16 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
               disabled={safeCurrentPage === 1}
               className="px-1.5 sm:px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
             >
-              <span className="hidden sm:inline">⏮ الأولى</span>
-              <span className="sm:hidden">⏮</span>
+              <span className="hidden sm:inline-flex items-center gap-1"><ChevronsRight className="w-3.5 h-3.5" /> الأولى</span>
+              <span className="sm:hidden"><ChevronsRight className="w-3.5 h-3.5" /></span>
             </button>
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={safeCurrentPage === 1}
               className="px-2 sm:px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
             >
-              <span className="hidden sm:inline">← السابق</span>
-              <span className="sm:hidden">←</span>
+              <span className="hidden sm:inline-flex items-center gap-1"><ChevronRight className="w-3.5 h-3.5" /> السابق</span>
+              <span className="sm:hidden"><ChevronRight className="w-3.5 h-3.5" /></span>
             </button>
 
             {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -784,16 +783,16 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
               disabled={safeCurrentPage === totalPages}
               className="px-2 sm:px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
             >
-              <span className="hidden sm:inline">التالي →</span>
-              <span className="sm:hidden">→</span>
+              <span className="hidden sm:inline-flex items-center gap-1">التالي <ChevronLeft className="w-3.5 h-3.5" /></span>
+              <span className="sm:hidden"><ChevronLeft className="w-3.5 h-3.5" /></span>
             </button>
             <button
               onClick={() => setCurrentPage(totalPages)}
               disabled={safeCurrentPage === totalPages}
               className="px-1.5 sm:px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
             >
-              <span className="hidden sm:inline">الأخيرة ⏭</span>
-              <span className="sm:hidden">⏭</span>
+              <span className="hidden sm:inline-flex items-center gap-1">الأخيرة <ChevronsLeft className="w-3.5 h-3.5" /></span>
+              <span className="sm:hidden"><ChevronsLeft className="w-3.5 h-3.5" /></span>
             </button>
           </div>
         )}

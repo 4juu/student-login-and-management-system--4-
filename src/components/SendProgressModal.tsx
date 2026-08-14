@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { CircleCheck, Library, Send, Target } from 'lucide-react';
 
 const styles = `
 @keyframes draw-check {
@@ -104,12 +105,12 @@ export const SendProgressModal: React.FC<SendProgressModalProps> = ({
       <div className="relative bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden border border-slate-600">
         <div className="shrink-0 px-6 pt-6 pb-4 border-b border-slate-700">
           <div className="flex items-center justify-between mb-1">
-            <h2 className="text-lg font-bold text-white">🎯 إرسال إشعارات الغياب</h2>
-            <div className="text-xs text-slate-400">
-              {totalDone === totalGroups ? '✅ اكتمل' : `${totalDone}/${totalGroups}`}
+            <h2 className="text-lg font-bold text-white flex items-center gap-2"><Target className="w-5 h-5 text-emerald-400" /> إرسال إشعارات الغياب</h2>
+            <div className="text-xs text-slate-400 flex items-center gap-1">
+              {totalDone === totalGroups ? <><CircleCheck className="w-3.5 h-3.5" /> اكتمل</> : `${totalDone}/${totalGroups}`}
             </div>
           </div>
-          <p className="text-sm text-slate-400 mb-3">📚 {subjectName}</p>
+          <p className="text-sm text-slate-400 mb-3 flex items-center gap-1.5"><Library className="w-4 h-4" /> {subjectName}</p>
           <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full transition-all duration-500 ${
@@ -186,16 +187,16 @@ export const SendProgressModal: React.FC<SendProgressModalProps> = ({
           {totalDone === totalGroups ? (
             <button
               onClick={onHide}
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 px-4 rounded-xl transition"
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 px-4 rounded-xl transition flex items-center justify-center gap-1.5"
             >
-              ✅ تم
+              <CircleCheck className="w-4 h-4" /> تم
             </button>
           ) : (
             <button
               onClick={onHide}
-              className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium py-2.5 px-4 rounded-xl transition"
+              className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium py-2.5 px-4 rounded-xl transition flex items-center justify-center gap-1.5"
             >
-              {isSending ? '📨 الإرسال في الخلفية' : 'إخفاء'}
+              {isSending ? <><Send className="w-4 h-4" /> الإرسال في الخلفية</> : 'إخفاء'}
             </button>
           )}
         </div>

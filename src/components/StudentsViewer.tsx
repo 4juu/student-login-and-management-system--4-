@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Student } from '../types/student';
+import { ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Eye, Search, Tag, Users } from 'lucide-react';
 
 interface StudentsViewerProps {
   students: Student[];
@@ -69,9 +70,9 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
-        <h2 className="text-2xl font-bold text-gray-800">👥 قائمة الطلاب</h2>
+        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Users className="w-6 h-6 text-gray-700" /> قائمة الطلاب</h2>
         <div className="px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg text-sm font-medium flex items-center gap-2">
-          👁️ عرض فقط - الإدارة من قبل الأدمن
+          <Eye className="w-4 h-4" /> عرض فقط - الإدارة من قبل الأدمن
         </div>
       </div>
 
@@ -79,8 +80,8 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
       <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* البحث */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            🔍 البحث (الاسم أو الرمز)
+          <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+            <Search className="w-4 h-4" /> البحث (الاسم أو الرمز)
           </label>
           <div className="relative">
             <input
@@ -104,8 +105,8 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
 
         {/* فلتر الكروب */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            🏷️ تصفية حسب الكروب
+          <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+            <Tag className="w-4 h-4" /> تصفية حسب الكروب
           </label>
           <select
             value={groupFilter}
@@ -125,7 +126,7 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
       {/* إحصائيات الكروبات - أزرار سريعة */}
       {uniqueGroups.length > 0 && uniqueGroups.length <= 20 && (
         <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg">
-          <h3 className="text-sm font-bold text-blue-800 mb-3">📊 إحصائيات الكروبات</h3>
+          <h3 className="text-sm font-bold text-blue-800 mb-3 flex items-center gap-2"><ChartColumn className="w-4 h-4" /> إحصائيات الكروبات</h3>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setGroupFilter('all')}
@@ -180,14 +181,14 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
               className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
               title="الصفحة الأولى"
             >
-              ⏮
+              <ChevronsRight className="w-4 h-4" />
             </button>
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={safeCurrentPage === 1}
-              className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+              className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
             >
-              ← السابق
+              <ChevronRight className="w-4 h-4" /> السابق
             </button>
             <span className="px-3 py-1 bg-blue-600 text-white rounded text-sm font-bold">
               {safeCurrentPage} / {totalPages}
@@ -195,9 +196,9 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
             <button
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={safeCurrentPage === totalPages}
-              className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+              className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
             >
-              التالي →
+              التالي <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={() => setCurrentPage(totalPages)}
@@ -205,7 +206,7 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
               className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
               title="الصفحة الأخيرة"
             >
-              ⏭
+              <ChevronsLeft className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -302,16 +303,16 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
           <button
             onClick={() => setCurrentPage(1)}
             disabled={safeCurrentPage === 1}
-            className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+            className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
           >
-            ⏮ الأولى
+            <ChevronsRight className="w-4 h-4" /> الأولى
           </button>
           <button
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
             disabled={safeCurrentPage === 1}
-            className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+            className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
           >
-            ← السابق
+            <ChevronRight className="w-4 h-4" /> السابق
           </button>
 
           {/* أرقام الصفحات */}
@@ -344,16 +345,16 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
           <button
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={safeCurrentPage === totalPages}
-            className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+            className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
           >
-            التالي →
+            التالي <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             onClick={() => setCurrentPage(totalPages)}
             disabled={safeCurrentPage === totalPages}
-            className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+            className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
           >
-            الأخيرة ⏭
+            الأخيرة <ChevronsLeft className="w-4 h-4" />
           </button>
         </div>
       )}
@@ -361,8 +362,8 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
       {/* ملخص النتائج */}
       {students.length > 0 && (
         <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
-          <p className="text-sm text-blue-800">
-            📊 <strong>عدد الطلاب المعروضين:</strong> {filteredStudents.length}
+          <p className="text-sm text-blue-800 flex items-center gap-1">
+            <ChartColumn className="w-4 h-4 shrink-0" /> <strong>عدد الطلاب المعروضين:</strong> {filteredStudents.length}
             {filteredStudents.length !== students.length && (
               <span className="mr-2">من أصل {students.length}</span>
             )}

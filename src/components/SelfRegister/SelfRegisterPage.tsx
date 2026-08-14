@@ -15,6 +15,7 @@ import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear } from '../../firebase/dataService';
 import { SkeletonCard } from '../Skeleton';
 import type { MultiDescriptor } from '../../services/faceRecognition';
+import { AlertTriangle, XCircle, RotateCcw } from 'lucide-react';
 
 // 🚀 خطوة التقاط الوجه تُحمَّل عند الوصول إليها فقط (مكتبة الوجوه ثقيلة)
 const LazyFaceCaptureStep = lazy(() =>
@@ -241,7 +242,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   if (step === 'loading') {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] flex items-center justify-center p-4" dir="rtl">
+      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
         <div className="w-full max-w-md"><SkeletonCard /></div>
       </div>
     );
@@ -249,9 +250,11 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   if (step === 'invalid-link') {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] flex items-center justify-center p-4" dir="rtl">
+      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
         <div className="glass-card p-8 max-w-md w-full text-center">
-          <div className="text-6xl mb-4">⚠️</div>
+          <div className="mx-auto w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-4">
+            <AlertTriangle className="w-8 h-8 text-red-400" />
+          </div>
           <h2 className="text-2xl font-bold text-red-400 mb-2">رابط غير صالح</h2>
           <p className="text-white/60 mb-6">{errorMsg}</p>
           <button onClick={onExit} className="btn-base btn-primary w-full py-3">
@@ -270,9 +273,11 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   if (step === 'name-mismatch' && student && idData) {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] flex items-center justify-center p-4" dir="rtl">
+      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
         <div className="glass-card p-8 max-w-md w-full text-center">
-          <div className="text-6xl mb-4">⚠️</div>
+          <div className="mx-auto w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4">
+            <AlertTriangle className="w-8 h-8 text-amber-400" />
+          </div>
           <h2 className="text-2xl font-bold text-white mb-2">الاسم غير متطابق</h2>
           <p className="text-sm text-white/50 mb-4">نسبة التطابق: {matchPercentage}% (المطلوب {MIN_MATCH}% فأكثر)</p>
           <div className="glass-card-sm p-4 mb-4 text-right">
@@ -281,7 +286,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
           </div>
           <p className="text-sm text-white/60 mb-6">الاسم في الهوية لا يتطابق مع الاسم المسجل في النظام. حاول تصوير الهوية بشكل أوضح أو تأكد من استخدام الهوية الصحيحة.</p>
           <button onClick={handleRetryId} className="btn-base btn-secondary w-full py-3">
-            🔄 إعادة التصوير
+            <RotateCcw className="w-4 h-4" /> إعادة التصوير
           </button>
         </div>
       </div>
@@ -291,7 +296,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   if (step === 'capture-face' && student) {
     return (
       <Suspense fallback={
-        <div className="min-h-screen bg-[#0A0A0F] flex items-center justify-center p-4" dir="rtl">
+        <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
           <div className="w-full max-w-md"><SkeletonCard /></div>
         </div>
       }>
@@ -308,9 +313,9 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   if (step === 'submitting') {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] flex items-center justify-center p-4" dir="rtl">
+      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
         <div className="text-center">
-          <div className="inline-block w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4" />
+          <div className="inline-block w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
           <p className="text-white font-bold text-lg">جاري إرسال البيانات...</p>
           <p className="text-sm text-white/50 mt-2">لا تغلق الصفحة</p>
         </div>
@@ -324,9 +329,11 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   if (step === 'error') {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] flex items-center justify-center p-4" dir="rtl">
+      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
         <div className="glass-card p-8 max-w-md w-full text-center">
-          <div className="text-6xl mb-4">❌</div>
+          <div className="mx-auto w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-4">
+            <XCircle className="w-8 h-8 text-red-400" />
+          </div>
           <h2 className="text-2xl font-bold text-red-400 mb-2">حدث خطأ</h2>
           <p className="text-white/60 mb-6">{errorMsg}</p>
           <div className="grid grid-cols-2 gap-2">

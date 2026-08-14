@@ -10,6 +10,7 @@ import { flushAllPendingSaves } from '../../firebase/dataService';
 import {
   sendRegistrationLinksToTelegram,
 } from '../../services/telegramService';
+import { Check, ChevronRight, Clock, Copy, FileSpreadsheet, Landmark, Library, QrCode, Rocket, Send, Smartphone, Smile } from 'lucide-react';
 
 interface SendRegisterLinkProps {
   adminUid: string;
@@ -500,7 +501,7 @@ export const SendRegisterLink: React.FC<SendRegisterLinkProps> = ({
       .join('\n\n');
     try {
       await navigator.clipboard.writeText(text);
-      alert(`✅ تم نسخ ${generatedLinks.length} رابط`);
+      alert(`تم نسخ ${generatedLinks.length} رابط`);
     } catch { alert('فشل النسخ'); }
   };
 
@@ -548,12 +549,12 @@ const handleDownloadExcel = async () => {
         expiryDays
       );
       if (result.success) {
-        alert(`✅ تم إرسال ${result.count} رابط إلى تيليغرام`);
+        alert(`تم إرسال ${result.count} رابط إلى تيليغرام`);
       } else {
-        alert('❌ ' + (result.error || 'فشل الإرسال'));
+        alert((result.error || 'فشل الإرسال'));
       }
     } catch (e: any) {
-      alert('❌ فشل الإرسال: ' + (e.message || ''));
+      alert('فشل الإرسال: ' + (e.message || ''));
     } finally {
       setSendingTelegram(false);
     }
@@ -573,7 +574,7 @@ const handleDownloadExcel = async () => {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  📨 الروابط الجاهزة للإرسال
+                  <Send className="w-5 h-5 text-indigo-600" /> الروابط الجاهزة للإرسال
                 </h2>
                 <p className="text-sm text-gray-500 mt-1">
                   <strong className="text-indigo-600">{generatedLinks.length}</strong> رابط
@@ -597,14 +598,14 @@ const handleDownloadExcel = async () => {
                 onClick={handleCopyAll}
                 className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition-all hover:scale-105 flex items-center gap-1.5 shadow-md"
               >
-                📋 نسخ الكل
+                <Copy className="w-4 h-4" /> نسخ الكل
               </button>
 
               <button
                 onClick={handleDownloadExcel}
                 className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-all hover:scale-105 flex items-center gap-1.5 shadow-md"
               >
-                📗 تحميل Excel
+                <FileSpreadsheet className="w-4 h-4" /> تحميل Excel
               </button>
 
               {telegramConfig?.channels[selectedStageId]?.chatId && (
@@ -615,7 +616,7 @@ const handleDownloadExcel = async () => {
                 >
                   {sendingTelegram
                     ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> جاري...</>
-                    : <>📨 تيليغرام</>
+                    : <><Send className="w-4 h-4" /> تيليغرام</>
                   }
                 </button>
               )}
@@ -623,8 +624,8 @@ const handleDownloadExcel = async () => {
               <div className="flex-1" />
 
               <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-lg">
-                <span className="text-xs text-indigo-700 font-medium">
-                  ⏳ صالحة {expiryDays} يوم
+                <span className="text-xs text-indigo-700 font-medium flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5" /> صالحة {expiryDays} يوم
                 </span>
               </div>
             </div>
@@ -652,17 +653,17 @@ const handleDownloadExcel = async () => {
                       onClick={() => handleShareWhatsApp(link)}
                       className="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105"
                     >
-                      📱 واتساب
+                      <Smartphone className="w-3.5 h-3.5" /> واتساب
                     </button>
                     <button
                       onClick={() => handleCopyLink(idx)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 flex items-center gap-1 ${
                         link.copied
                           ? 'bg-emerald-500 text-white'
                           : 'bg-blue-500 hover:bg-blue-600 text-white'
                       }`}
                     >
-                      {link.copied ? '✓ تم!' : '📋 نسخ'}
+                      {link.copied ? <><Check className="w-3.5 h-3.5" /> تم!</> : <><Copy className="w-3.5 h-3.5" /> نسخ</>}
                     </button>
                   </div>
                 </div>
@@ -677,9 +678,9 @@ const handleDownloadExcel = async () => {
           <div className="p-3 border-t border-gray-200 bg-gray-50 text-center">
             <button
               onClick={() => setShowLinks(false)}
-              className="text-sm text-indigo-600 hover:text-indigo-700 font-medium hover:underline"
+              className="text-sm text-indigo-600 hover:text-indigo-700 font-medium hover:underline flex items-center gap-1"
             >
-              ← الرجوع لاختيار طلاب آخرين
+              <ChevronRight className="w-4 h-4" /> الرجوع لاختيار طلاب آخرين
             </button>
           </div>
         </div>
@@ -699,7 +700,7 @@ const handleDownloadExcel = async () => {
         <div className="p-5 border-b border-gray-200 bg-gradient-to-l from-purple-50 to-indigo-50">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold text-gray-800">📨 إرسال روابط التسجيل</h2>
+              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><Send className="w-5 h-5 text-purple-600" /> إرسال روابط التسجيل</h2>
               <p className="text-sm text-gray-500 mt-1">دع الطلاب يسجلون بصمات وجوههم وQR بأنفسهم</p>
             </div>
             <button onClick={onClose} className="bg-red-500 hover:bg-red-600 text-white w-10 h-10 rounded-full font-bold text-lg transition-all hover:scale-110">✕</button>
@@ -711,7 +712,7 @@ const handleDownloadExcel = async () => {
           {/* اختيار الكلية والمرحلة */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1">🏛️ الكلية</label>
+              <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1.5"><Landmark className="w-4 h-4" /> الكلية</label>
               <select
                 value={selectedCollegeId}
                 onChange={e => { setSelectedCollegeId(e.target.value); setSelectedStageId(''); setStudents([]); }}
@@ -722,7 +723,7 @@ const handleDownloadExcel = async () => {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1">📚 المرحلة</label>
+              <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1.5"><Library className="w-4 h-4" /> المرحلة</label>
               <select
                 value={selectedStageId}
                 onChange={e => handleStageChange(e.target.value)}
@@ -738,7 +739,7 @@ const handleDownloadExcel = async () => {
           {/* مدة الصلاحية */}
           <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
             <label className="flex items-center justify-between text-sm font-bold text-indigo-800 mb-2">
-              <span>⏳ مدة صلاحية الرابط</span>
+              <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" /> مدة صلاحية الرابط</span>
               <span className="bg-indigo-600 text-white px-3 py-1 rounded-full text-xs">{expiryDays} يوم</span>
             </label>
             <input type="range" min="1" max="90" value={expiryDays} onChange={e => setExpiryDays(Number(e.target.value))} className="w-full accent-indigo-600 h-2" />
@@ -760,7 +761,7 @@ const handleDownloadExcel = async () => {
               <div className="space-y-2">
                 <input
                   type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="🔍 بحث بالاسم أو الكود..."
+                  placeholder="بحث بالاسم أو الكود..."
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
                 />
                 <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
@@ -804,11 +805,11 @@ const handleDownloadExcel = async () => {
                     </div>
                     <div className="flex gap-1.5">
                       {s.qrCodeId
-                        ? <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded-full">🔳 QR</span>
+                        ? <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"><QrCode className="w-3 h-3" /> QR</span>
                         : <span className="bg-red-100 text-red-500 text-xs px-2 py-0.5 rounded-full">بدون QR</span>
                       }
                       {s.faceDescriptor
-                        ? <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full">😊 وجه</span>
+                        ? <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"><Smile className="w-3 h-3" /> وجه</span>
                         : <span className="bg-orange-100 text-orange-500 text-xs px-2 py-0.5 rounded-full">بدون وجه</span>
                       }
                     </div>
@@ -829,7 +830,7 @@ const handleDownloadExcel = async () => {
             >
               {generating
                 ? <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> جاري التوليد...</>
-                : <>🚀 توليد {selectedIds.size} رابط تسجيل</>
+                : <><Rocket className="w-5 h-5" /> توليد {selectedIds.size} رابط تسجيل</>
               }
             </button>
           </div>

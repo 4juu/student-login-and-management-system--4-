@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Student } from '../../types/student';
 import { IDExtractionResult } from '../../types/registration';
 import { extractIDData } from '../../services/ocrService';
+import { Camera, Check, CircleX, IdCard, Image, Lightbulb, Lock, RefreshCw } from 'lucide-react';
 
 interface IDCardUploadProps {
   student: Student;
@@ -89,7 +90,7 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50 flex items-center justify-center p-4" dir="rtl">
       <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 max-w-lg w-full">
         <div className="text-center mb-6">
-          <div className="text-5xl mb-3">🪪</div>
+          <div className="mx-auto w-16 h-16 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-3"><IdCard className="w-8 h-8 text-purple-600" /></div>
           <h2 className="text-2xl font-bold text-gray-800 mb-1">رفع صورة الهوية</h2>
           <p className="text-sm text-gray-600">
             مرحباً <span className="font-bold text-purple-700">{student.name}</span>
@@ -98,7 +99,7 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
 
         <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
           <div className="flex items-start gap-2">
-            <span className="text-xl">🔒</span>
+            <Lock className="w-5 h-5 text-emerald-700 shrink-0" />
             <div className="flex-1 text-xs text-emerald-800">
               <strong>الخصوصية محمية:</strong> صورة الهوية تُحذف فوراً بعد المعالجة.
             </div>
@@ -126,14 +127,14 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
                 onClick={() => cameraInputRef.current?.click()}
                 className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg active:scale-95 transition flex items-center justify-center gap-3"
               >
-                <span className="text-2xl">📷</span>
+                <Camera className="w-6 h-6" />
                 <span>التقاط بالكاميرا</span>
               </button>
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className="w-full bg-white hover:bg-gray-50 border-2 border-purple-300 text-purple-700 font-bold py-4 px-6 rounded-xl active:scale-95 transition flex items-center justify-center gap-3"
               >
-                <span className="text-2xl">🖼️</span>
+                <Image className="w-6 h-6" />
                 <span>اختيار من المعرض</span>
               </button>
             </div>
@@ -168,12 +169,12 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
           )}
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">❌ {error}</div>
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-1.5"><CircleX className="w-4 h-4 shrink-0" /> {error}</div>
           )}
 
           {!preview && !processing && !error && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-xs font-bold text-blue-800 mb-2">💡 نصائح:</p>
+              <p className="text-xs font-bold text-blue-800 mb-2 flex items-center gap-1.5"><Lightbulb className="w-3.5 h-3.5" /> نصائح:</p>
               <ul className="text-xs text-blue-700 space-y-1 list-disc list-inside">
                 <li>تأكد من وضوح الإضاءة</li>
                 <li>صور الهوية كاملة بدون قص</li>
@@ -184,11 +185,11 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
 
           {preview && !processing && (
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={handleReset} className="py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg">
-                🔄 صورة أخرى
+              <button onClick={handleReset} className="py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg flex items-center justify-center gap-1.5">
+                <RefreshCw className="w-4 h-4" /> صورة أخرى
               </button>
-              <button onClick={handleProcess} className="py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-lg">
-                ✓ تحليل الهوية
+              <button onClick={handleProcess} className="py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-lg flex items-center justify-center gap-1.5">
+                <Check className="w-4 h-4" /> تحليل الهوية
               </button>
             </div>
           )}

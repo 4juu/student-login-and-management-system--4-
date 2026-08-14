@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Student, AttendanceRecord, Stage, College } from '../types/student';
 import { User } from '../types/user';
 import { TelegramConfig } from '../types/telegram';
-import { 
+import {
   downloadBackup, 
   resetAcademicYear, 
   getDatabaseStats, 
@@ -11,6 +11,7 @@ import {
   saveTelegramConfig,
   loadTelegramConfig,
   flushAllPendingSaves,
+  saveSystemTitle,
 } from '../firebase/dataService';
 import {
   sendTestMessage,
@@ -18,6 +19,7 @@ import {
 } from '../services/telegramService';
 import { database } from '../firebase/config';
 import { ref, set } from 'firebase/database';
+import { Bot, ChartColumn, CircleCheck, ClipboardList, Cloud, Download, GraduationCap, Info, KeyRound, Landmark, Library, LoaderCircle, Megaphone, RefreshCw, Save, Search, Send, Settings as SettingsIcon, Smile, SquarePen, TriangleAlert, User as UserIcon } from 'lucide-react';
 
 interface SettingsProps {
   students: Student[];
@@ -27,6 +29,8 @@ interface SettingsProps {
   stages?: Stage[];
   colleges?: College[];
   onTelegramConfigChange?: (config: TelegramConfig | null) => void;
+  systemTitle?: string;
+  onSystemTitleChange?: (title: string) => void;
 }
 
 export const Settings: React.FC<SettingsProps> = ({
@@ -35,6 +39,8 @@ export const Settings: React.FC<SettingsProps> = ({
   stages = [],
   colleges = [],
   onTelegramConfigChange,
+  systemTitle = '',
+  onSystemTitleChange,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -52,6 +58,11 @@ export const Settings: React.FC<SettingsProps> = ({
   const [downloadingBackup, setDownloadingBackup] = useState(false);
   const [resetting, setResetting] = useState(false);
 
+  // 🏛️ عنوان النظام (للأدمن الرئيسي فقط)
+  const [systemTitleDraft, setSystemTitleDraft] = useState(systemTitle);
+  const [systemTitleSaving, setSystemTitleSaving] = useState(false);
+  const [systemTitleMessage, setSystemTitleMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   // 🤖 Telegram
   const [telegramConfig, setTelegramConfig] = useState<TelegramConfig | null>(null);
   const [telegramBotToken, setTelegramBotToken] = useState('');
@@ -62,6 +73,25 @@ export const Settings: React.FC<SettingsProps> = ({
 
   const currentAcademicYear = getCurrentAcademicYear();
   const isAdmin = currentUser?.role === 'admin';
+
+  const handleSystemTitleSave = async () => {
+    const title = systemTitleDraft.trim();
+    if (!title) {
+      setSystemTitleMessage({ type: 'error', text: 'الرجاء إدخال عنوان النظام' });
+      return;
+    }
+    setSystemTitleSaving(true);
+    setSystemTitleMessage(null);
+    try {
+      await saveSystemTitle(title);
+      onSystemTitleChange?.(title);
+      setSystemTitleMessage({ type: 'success', text: 'تم حفظ عنوان النظام بنجاح' });
+    } catch {
+      setSystemTitleMessage({ type: 'error', text: 'فشل حفظ العنوان، حاول مجدداً' });
+    } finally {
+      setSystemTitleSaving(false);
+    }
+  };
 
   // ✅ دالة عرض الحجم بشكل ذكي
   const formatSize = (kb: number): string => {
@@ -127,9 +157,9 @@ export const Settings: React.FC<SettingsProps> = ({
       await saveTelegramConfig(getAdminUid(), config);
       setTelegramConfig(config);
       onTelegramConfigChange?.(config);
-      setTelegramMessage({ type: 'success', text: '✅ تم حفظ الإعدادات بنجاح!' });
+      setTelegramMessage({ type: 'success', text: 'تم حفظ الإعدادات بنجاح!' });
     } catch (e: any) {
-      setTelegramMessage({ type: 'error', text: '❌ فشل الحفظ: ' + (e.message || '') });
+      setTelegramMessage({ type: 'error', text: 'فشل الحفظ: ' + (e.message || '') });
     } finally {
       setTelegramSaving(false);
     }
@@ -145,11 +175,11 @@ export const Settings: React.FC<SettingsProps> = ({
     if (result.ok) {
       setBotVerified(true);
       setBotUsername(result.username || '');
-      setTelegramMessage({ type: 'success', text: `✅ تم التحقق! البوت: @${result.username}` });
+      setTelegramMessage({ type: 'success', text: `تم التحقق! البوت: @${result.username}` });
     } else {
       setBotVerified(false);
       setBotUsername('');
-      setTelegramMessage({ type: 'error', text: '❌ ' + (result.error || 'توكن غير صحيح') });
+      setTelegramMessage({ type: 'error', text: (result.error || 'توكن غير صحيح') });
     }
   };
 
@@ -206,9 +236,9 @@ export const Settings: React.FC<SettingsProps> = ({
     setTelegramMessage(null);
     const ok = await sendTestMessage(telegramConfig, stageId);
     if (ok) {
-      setTelegramMessage({ type: 'success', text: '✅ تم إرسال رسالة اختبار للقناة!' });
+      setTelegramMessage({ type: 'success', text: 'تم إرسال رسالة اختبار للقناة!' });
     } else {
-      setTelegramMessage({ type: 'error', text: '❌ فشل الإرسال. تأكد من Chat ID والبوت مضاف كأدمن في القناة' });
+      setTelegramMessage({ type: 'error', text: 'فشل الإرسال. تأكد من Chat ID والبوت مضاف كأدمن في القناة' });
     }
   };
 
@@ -250,9 +280,9 @@ export const Settings: React.FC<SettingsProps> = ({
         ? currentUser.uid 
         : (currentUser.adminId || currentUser.uid);
       await downloadBackup(adminUid);
-      alert('✅ تم تحميل النسخة الاحتياطية من Firebase بنجاح!');
+      alert('تم تحميل النسخة الاحتياطية من Firebase بنجاح!');
     } catch (e: any) {
-      alert('❌ ' + (e.message || 'فشل تحميل النسخة الاحتياطية'));
+      alert((e.message || 'فشل تحميل النسخة الاحتياطية'));
     } finally {
       setDownloadingBackup(false);
     }
@@ -260,21 +290,21 @@ export const Settings: React.FC<SettingsProps> = ({
 
   const handleResetAcademicYear = async () => {
     if (!currentUser || currentUser.role !== 'admin') {
-      alert('⛔ هذه الميزة متاحة للأدمن فقط');
+      alert('هذه الميزة متاحة للأدمن فقط');
       return;
     }
 
     const confirm1 = window.confirm(
-      `⚠️ تحذير خطير: تصفير السنة الأكاديمية\n\n` +
+      `تحذير خطير: تصفير السنة الأكاديمية\n\n` +
       `سيتم:\n` +
-      `❌ حذف جميع الطلاب (${stats?.totalStudents || 0})\n` +
-      `❌ حذف جميع سجلات الحضور (${stats?.totalRecords || 0})\n` +
-      `❌ حذف جميع الجلسات (${stats?.totalSessions || 0})\n` +
-      `❌ حذف جميع الكليات والمراحل\n` +
-      `🔒 تعطيل جميع حسابات التدريسيين\n\n` +
-      `✅ ما سيبقى:\n` +
-      `✓ حسابك (الأدمن)\n` +
-      `✓ حسابات التدريسيين (بدون صلاحيات)\n\n` +
+      `حذف جميع الطلاب (${stats?.totalStudents || 0})\n` +
+      `حذف جميع سجلات الحضور (${stats?.totalRecords || 0})\n` +
+      `حذف جميع الجلسات (${stats?.totalSessions || 0})\n` +
+      `حذف جميع الكليات والمراحل\n` +
+      `تعطيل جميع حسابات التدريسيين\n\n` +
+      `ما سيبقى:\n` +
+      `حسابك (الأدمن)\n` +
+      `حسابات التدريسيين (بدون صلاحيات)\n\n` +
       `هل أنت متأكد 100%؟`
     );
 
@@ -285,7 +315,7 @@ export const Settings: React.FC<SettingsProps> = ({
     );
 
     if (confirmText !== 'تصفير') {
-      alert('❌ تم إلغاء العملية');
+      alert('تم إلغاء العملية');
       return;
     }
 
@@ -297,18 +327,18 @@ export const Settings: React.FC<SettingsProps> = ({
       });
 
       alert(
-        `✅ تم التصفير بنجاح!\n\n` +
-        `📅 السنة السابقة: ${result.oldYear}\n` +
-        `📅 السنة الجديدة: ${result.newYear}\n\n` +
-        `💾 تم تحميل نسخة احتياطية تلقائياً\n` +
-        `🔒 تم تعطيل ${stats?.totalStudents ? 'جميع' : '0'} حسابات التدريسيين\n\n` +
+        `تم التصفير بنجاح!\n\n` +
+        `السنة السابقة: ${result.oldYear}\n` +
+        `السنة الجديدة: ${result.newYear}\n\n` +
+        `تم تحميل نسخة احتياطية تلقائياً\n` +
+        `تم تعطيل ${stats?.totalStudents ? 'جميع' : '0'} حسابات التدريسيين\n\n` +
         `سيتم إعادة تحميل الصفحة الآن...`
       );
 
       onResetComplete?.();
       setTimeout(() => window.location.reload(), 1500);
     } catch (e: any) {
-      alert('❌ فشل التصفير: ' + (e.message || 'خطأ غير معروف'));
+      alert('فشل التصفير: ' + (e.message || 'خطأ غير معروف'));
     } finally {
       setResetting(false);
     }
@@ -356,15 +386,15 @@ export const Settings: React.FC<SettingsProps> = ({
             });
 
             await set(ref(database, `academicYears/${backup.academicYear}/userData/${backup.adminUid}`), backup.data);
-            alert('✅ تم استعادة النسخة الاحتياطية بنجاح! سيتم تحديث الصفحة...');
+            alert('تم استعادة النسخة الاحتياطية بنجاح! سيتم تحديث الصفحة...');
             window.location.reload();
           } else if (backup.students || backup.attendanceRecords) {
-            alert('⚠️ هذا التنسيق قديم (نسخة محلية). استخدم نسخة Firebase الكاملة للاستعادة.');
+            alert('هذا التنسيق قديم (نسخة محلية). استخدم نسخة Firebase الكاملة للاستعادة.');
           } else {
-            alert('❌ تنسيق ملف غير معروف');
+            alert('تنسيق ملف غير معروف');
           }
         } catch {
-          alert('❌ فشل استعادة النسخة الاحتياطية. تأكد من صحة الملف.');
+          alert('فشل استعادة النسخة الاحتياطية. تأكد من صحة الملف.');
         }
       }
     };
@@ -379,13 +409,13 @@ export const Settings: React.FC<SettingsProps> = ({
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">⚙️ الإعدادات والنسخ الاحتياطي</h2>
+      <h2 className="text-2xl font-bold mb-6 text-gray-800 flex items-center gap-2"><SettingsIcon className="w-6 h-6" /> الإعدادات والنسخ الاحتياطي</h2>
 
       {/* شريط السنة الأكاديمية */}
       <div className="mb-6 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-xl">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
-            <span className="text-3xl">🎓</span>
+            <GraduationCap className="w-9 h-9 text-indigo-600 shrink-0" />
             <div>
               <h3 className="font-bold text-indigo-900">السنة الأكاديمية الحالية</h3>
               <p className="text-2xl font-bold text-indigo-700">
@@ -394,24 +424,59 @@ export const Settings: React.FC<SettingsProps> = ({
             </div>
           </div>
           {academicYears.length > 0 && (
-            <div className="text-sm text-indigo-700 bg-white px-3 py-2 rounded-lg border border-indigo-200">
-              📚 {academicYears.length} سنة في النظام
+            <div className="text-sm text-indigo-700 bg-white px-3 py-2 rounded-lg border border-indigo-200 flex items-center gap-1.5">
+              <Library className="w-4 h-4" /> {academicYears.length} سنة في النظام
             </div>
           )}
         </div>
       </div>
 
+      {/* 🏛️ هوية النظام - للأدمن الرئيسي فقط */}
+      {isAdmin && (
+        <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-300 rounded-xl">
+          <div className="flex items-center gap-3 mb-3">
+            <Landmark className="w-9 h-9 text-blue-700 shrink-0" />
+            <div>
+              <h3 className="font-bold text-blue-900">هوية النظام</h3>
+              <p className="text-sm text-blue-700">العنوان الظاهر في الترويسة الرسمية أعلى الموقع</p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              value={systemTitleDraft}
+              onChange={(e) => setSystemTitleDraft(e.target.value)}
+              placeholder="نظام إدارة الحضور الجامعي"
+              className="glass-input flex-1"
+              maxLength={60}
+            />
+            <button
+              onClick={handleSystemTitleSave}
+              disabled={systemTitleSaving}
+              className="btn-base btn-primary shrink-0 flex items-center justify-center gap-2"
+            >
+              {systemTitleSaving ? <><LoaderCircle className="w-4 h-4 animate-spin" /> جاري الحفظ...</> : <><Save className="w-4 h-4" /> حفظ العنوان</>}
+            </button>
+          </div>
+          {systemTitleMessage && (
+            <p className={`mt-2 text-sm ${systemTitleMessage.type === 'success' ? 'text-green-700' : 'text-red-600'}`}>
+              {systemTitleMessage.text}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* إحصائيات Firebase (للأدمن) */}
       {isAdmin && (
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold text-gray-700">📊 استخدام Firebase</h3>
+            <h3 className="text-lg font-semibold text-gray-700 flex items-center gap-2"><ChartColumn className="w-5 h-5" /> استخدام Firebase</h3>
             <button
               onClick={loadStats}
               disabled={loadingStats}
-              className="text-sm text-blue-600 hover:text-blue-800"
+              className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1.5"
             >
-              {loadingStats ? '⏳ ...' : '🔄 تحديث'}
+              {loadingStats ? <><LoaderCircle className="w-4 h-4 animate-spin" /> ...</> : <><RefreshCw className="w-4 h-4" /> تحديث</>}
             </button>
           </div>
 
@@ -445,31 +510,31 @@ export const Settings: React.FC<SettingsProps> = ({
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center shadow-sm">
                   <div className="text-2xl font-bold text-blue-700 dark:text-blue-400">{stats.totalStudents}</div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">👤 طالب</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1"><UserIcon className="w-3.5 h-3.5" /> طالب</div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center shadow-sm">
                   <div className="text-2xl font-bold text-purple-700 dark:text-purple-400">{stats.totalRecords}</div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">📝 سجل حضور</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1"><SquarePen className="w-3.5 h-3.5" /> سجل حضور</div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center shadow-sm">
                   <div className="text-2xl font-bold text-pink-700 dark:text-pink-400">{stats.totalSessions}</div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">📋 جلسة</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1"><ClipboardList className="w-3.5 h-3.5" /> جلسة</div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center shadow-sm">
                   <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{stats.totalTeachers}</div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">👨‍🏫 مدرس</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1"><GraduationCap className="w-3.5 h-3.5" /> مدرس</div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center shadow-sm">
                   <div className="text-2xl font-bold text-amber-700 dark:text-amber-400">{stats.totalFaceDescriptors}</div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">😊 بصمة وجه</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1"><Smile className="w-3.5 h-3.5" /> بصمة وجه</div>
                 </div>
               </div>
 
 
             </div>
           ) : (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center text-gray-500">
-              {loadingStats ? '⏳ جاري تحميل الإحصائيات...' : 'اضغط "تحديث" لعرض الإحصائيات'}
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center text-gray-500 flex items-center justify-center gap-2">
+              {loadingStats ? <><LoaderCircle className="w-4 h-4 animate-spin" /> جاري تحميل الإحصائيات...</> : 'اضغط "تحديث" لعرض الإحصائيات'}
             </div>
           )}
         </div>
@@ -479,7 +544,7 @@ export const Settings: React.FC<SettingsProps> = ({
 
       {/* Backup Section */}
       <div className="mb-8">
-        <h3 className="text-lg font-semibold mb-3 text-gray-700">💾 النسخ الاحتياطي</h3>
+        <h3 className="text-lg font-semibold mb-3 text-gray-700 flex items-center gap-2"><Save className="w-5 h-5" /> النسخ الاحتياطي</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {isAdmin && (
             <button
@@ -488,9 +553,9 @@ export const Settings: React.FC<SettingsProps> = ({
               className="bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 disabled:opacity-50 text-white font-medium py-3 px-4 rounded-md transition duration-200 flex items-center justify-center gap-2 shadow-md"
             >
               {downloadingBackup ? (
-                <>⏳ جاري...</>
+                <><LoaderCircle className="w-5 h-5 animate-spin" /> جاري...</>
               ) : (
-                <>☁️ نسخة Firebase الكاملة</>
+                <><Cloud className="w-5 h-5" /> نسخة Firebase الكاملة</>
               )}
             </button>
           )}
@@ -504,7 +569,7 @@ export const Settings: React.FC<SettingsProps> = ({
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             </svg>
-            📥 استعادة نسخة
+            <Download className="w-5 h-5" /> استعادة نسخة
           </button>
         </div>
 
@@ -521,11 +586,11 @@ export const Settings: React.FC<SettingsProps> = ({
       {isAdmin && (
         <div className="mb-8">
           <h3 className="text-lg font-semibold mb-3 text-red-700 flex items-center gap-2">
-            ⚠️ منطقة الخطر
+            <TriangleAlert className="w-5 h-5" /> منطقة الخطر
           </h3>
           <div className="bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-300 rounded-xl p-5">
             <div className="flex items-start gap-3 mb-4">
-              <span className="text-4xl">🔄</span>
+              <RefreshCw className="w-10 h-10 text-red-600 shrink-0" />
               <div className="flex-1">
                 <h4 className="font-bold text-red-900 text-lg mb-2">تصفير السنة الأكاديمية</h4>
                 <p className="text-sm text-red-800 mb-3">
@@ -549,14 +614,14 @@ export const Settings: React.FC<SettingsProps> = ({
               className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-lg shadow-md transition flex items-center justify-center gap-2"
             >
               {resetting ? (
-                <>⏳ جاري التصفير... لا تغلق الصفحة!</>
+                <><LoaderCircle className="w-5 h-5 animate-spin" /> جاري التصفير... لا تغلق الصفحة!</>
               ) : (
-                <>🔄 بدء سنة أكاديمية جديدة (تصفير)</>
+                <><RefreshCw className="w-5 h-5" /> بدء سنة أكاديمية جديدة (تصفير)</>
               )}
             </button>
 
-            <p className="text-xs text-red-600 mt-2 text-center font-medium">
-              ⚠️ هذه العملية لا يمكن التراجع عنها
+            <p className="text-xs text-red-600 mt-2 text-center font-medium flex items-center justify-center gap-1.5">
+              <TriangleAlert className="w-3.5 h-3.5" /> هذه العملية لا يمكن التراجع عنها
             </p>
           </div>
         </div>
@@ -565,7 +630,7 @@ export const Settings: React.FC<SettingsProps> = ({
       {/* قائمة السنوات الأكاديمية */}
       {isAdmin && academicYears.length > 0 && (
         <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-3 text-gray-700">📚 السنوات الأكاديمية</h3>
+          <h3 className="text-lg font-semibold mb-3 text-gray-700 flex items-center gap-2"><Library className="w-5 h-5" /> السنوات الأكاديمية</h3>
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <div className="flex flex-wrap gap-2">
               {academicYears.map(year => (
@@ -577,7 +642,7 @@ export const Settings: React.FC<SettingsProps> = ({
                       : 'bg-white text-gray-700 border-gray-300'
                   }`}
                 >
-                  {year === currentAcademicYear && '✅ '}
+                  {year === currentAcademicYear && <CircleCheck className="w-4 h-4 text-green-600 inline-block align-middle ml-1" />}
                   {year.replace('_', ' - ')}
                 </span>
               ))}
@@ -589,12 +654,12 @@ export const Settings: React.FC<SettingsProps> = ({
       {/* 🤖 قسم التلغرام */}
       <div className="mb-8">
         <h3 className="text-base sm:text-lg font-semibold mb-3 text-gray-700 flex items-center gap-2">
-          🤖 بوت التلغرام (إشعارات الحضور)
+          <Bot className="w-5 h-5" /> بوت التلغرام (إشعارات الحضور)
         </h3>
 
         <div className="bg-gradient-to-br from-sky-50 to-blue-50 border-2 border-sky-300 rounded-xl p-4 sm:p-5 mb-4">
           <div className="flex items-start gap-2 sm:gap-3 mb-4">
-            <span className="text-2xl sm:text-4xl">📢</span>
+            <Megaphone className="w-8 h-8 sm:w-10 sm:h-10 text-sky-600 shrink-0" />
             <div className="flex-1 min-w-0">
               <h4 className="font-bold text-sky-900 text-base sm:text-lg mb-1">إعدادات البوت</h4>
               <p className="text-xs sm:text-sm text-sky-700">
@@ -604,7 +669,7 @@ export const Settings: React.FC<SettingsProps> = ({
           </div>
 
           <div className="bg-white border border-sky-200 rounded-lg p-3 sm:p-4 mb-4">
-            <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-2">🔑 توكن البوت (Bot Token)</label>
+            <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5"><KeyRound className="w-4 h-4" /> توكن البوت (Bot Token)</label>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="text"
@@ -616,16 +681,16 @@ export const Settings: React.FC<SettingsProps> = ({
               />
               <button
                 onClick={handleVerifyBot}
-                className="bg-sky-600 hover:bg-sky-700 text-white font-medium py-2 px-4 rounded-md transition text-sm sm:text-base"
+                className="bg-sky-600 hover:bg-sky-700 text-white font-medium py-2 px-4 rounded-md transition text-sm sm:text-base flex items-center justify-center gap-2"
               >
-                🔍 تحقق
+                <Search className="w-4 h-4" /> تحقق
               </button>
             </div>
             {botVerified && (
-              <p className="text-xs sm:text-sm text-green-700 mt-2 font-medium">✅ البوت موثوق: @{botUsername}</p>
+              <p className="text-xs sm:text-sm text-green-700 mt-2 font-medium flex items-center gap-1.5"><CircleCheck className="w-4 h-4" /> البوت موثوق: @{botUsername}</p>
             )}
             <div className="mt-2 bg-gray-50 border border-gray-200 rounded-lg p-2 sm:p-3 text-[10px] sm:text-xs text-gray-600">
-              <p className="font-bold mb-1">📌 كيفية الحصول على التوكن:</p>
+              <p className="font-bold mb-1 flex items-center gap-1.5"><Info className="w-4 h-4" /> كيفية الحصول على التوكن:</p>
               <ol className="list-decimal list-inside space-y-1 mr-2">
                 <li>افتح <a href="https://t.me/BotFather" target="_blank" className="text-blue-600 underline">@BotFather</a> في تلغرام</li>
                 <li>أرسل <code className="bg-gray-200 px-1 rounded">/newbot</code> واتبع التعليمات</li>
@@ -636,14 +701,14 @@ export const Settings: React.FC<SettingsProps> = ({
 
           {/* ربط القنوات */}
           <div className="bg-white border border-sky-200 rounded-lg p-3 sm:p-4">
-            <h4 className="font-bold text-gray-700 mb-3 text-sm sm:text-base">📡 ربط القنوات حسب المادة</h4>
+            <h4 className="font-bold text-gray-700 mb-3 text-sm sm:text-base flex items-center gap-2"><Megaphone className="w-4 h-4 text-sky-600" /> ربط القنوات حسب المادة</h4>
             <p className="text-[10px] sm:text-xs text-gray-500 mb-3">
               لكل مادة (مرحلة)، أدخل Chat ID القناة الخاصة بها
             </p>
 
             {stages.length === 0 ? (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs sm:text-sm text-yellow-700 text-center">
-                ⚠️ لا توجد مراحل مضافة. أضف المراحل أولاً من صفحة إدارة الكليات.
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs sm:text-sm text-yellow-700 text-center flex items-center justify-center gap-2">
+                <TriangleAlert className="w-4 h-4 shrink-0" /> لا توجد مراحل مضافة. أضف المراحل أولاً من صفحة إدارة الكليات.
               </div>
             ) : (
               <div className="space-y-3 max-h-80 overflow-y-auto">
@@ -656,7 +721,7 @@ export const Settings: React.FC<SettingsProps> = ({
                     <div key={stage.id} className="border border-gray-200 rounded-lg p-3 hover:border-sky-300 transition">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-lg shrink-0">{college?.icon || '📚'}</span>
+                          <span className="text-lg shrink-0">{college?.icon || <Library className="w-4 h-4" />}</span>
                           <div className="min-w-0">
                             <span className="font-bold text-gray-800 text-sm sm:text-base truncate block">{stage.name}</span>
                             {college && (
@@ -686,9 +751,9 @@ export const Settings: React.FC<SettingsProps> = ({
                         <button
                           onClick={() => handleTestChannel(stage.id)}
                           disabled={!chatId || !telegramConfig?.botToken}
-                          className="bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white text-xs font-medium px-3 py-1.5 rounded-md transition"
+                          className="bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white text-xs font-medium px-3 py-1.5 rounded-md transition flex items-center gap-1.5"
                         >
-                          📨 اختبار
+                          <Send className="w-3.5 h-3.5" /> اختبار
                         </button>
                       </div>
                       {chatId && (
@@ -709,7 +774,7 @@ export const Settings: React.FC<SettingsProps> = ({
 
             {stages.length > 0 && (
               <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-2 sm:p-3 text-[10px] sm:text-xs text-gray-600">
-                <p className="font-bold mb-1">📌 كيفية الحصول على Chat ID:</p>
+                <p className="font-bold mb-1 flex items-center gap-1.5"><Info className="w-4 h-4" /> كيفية الحصول على Chat ID:</p>
                 <ol className="list-decimal list-inside space-y-1 mr-2">
                   <li>أضف البوت كأدمن في القناة</li>
                   <li>أرسل رسالة في القناة</li>
@@ -736,9 +801,9 @@ export const Settings: React.FC<SettingsProps> = ({
             className="mt-4 w-full bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-700 hover:to-blue-800 disabled:opacity-50 text-white font-bold py-2.5 sm:py-3 px-4 sm:px-6 rounded-lg shadow-md transition flex items-center justify-center gap-2 text-sm sm:text-base"
           >
             {telegramSaving ? (
-              <>⏳ جاري الحفظ...</>
+              <><LoaderCircle className="w-5 h-5 animate-spin" /> جاري الحفظ...</>
             ) : (
-              <>💾 حفظ إعدادات التلغرام</>
+              <><Save className="w-5 h-5" /> حفظ إعدادات التلغرام</>
             )}
           </button>
         </div>

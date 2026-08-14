@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref as dbRef, onValue, off } from 'firebase/database';
 import { Student, AttendanceRecord, AttendanceSession, College, Stage } from './types/student';
@@ -16,9 +16,10 @@ import { Settings } from './components/Settings';
 import { CollegeManager } from './components/CollegeManager';
 import { StageSelector } from './components/StageSelector';
 import { SmartChatBot } from './components/SmartChatBot';
-import { MorphingSquare } from './components/MorphingSquare';
-import Aurora from './components/Aurora';
+import { Masthead } from './components/Masthead';
+import { TextScramble } from './components/TextScramble';
 import { SendProgressModal } from './components/SendProgressModal';
+import { Crown, Landmark, LogOut, Home, ChevronLeft, GraduationCap } from 'lucide-react';
 
 // 🆕 نظام التسجيل الذاتي
 import { SelfRegisterPage } from './components/SelfRegister/SelfRegisterPage';
@@ -49,6 +50,7 @@ import {
   flushAllPendingSaves,
   cancelAllPendingSaves,
   getCurrentAcademicYear,
+  loadSystemTitle,
 } from './firebase/dataService';
 import { getCachedStageData, setCachedStageData } from './lib/stageCache';
 
@@ -78,108 +80,6 @@ interface AllStagesData {
     records: AttendanceRecord[];
     sessions: AttendanceSession[];
   };
-}
-
-// ✨ TextScramble Component
-const CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*";
-
-function TextScramble({ text }: { text: string }) {
-  const [displayText, setDisplayText] = useState(text);
-  const [isHovering, setIsHovering] = useState(false);
-  const [isScrambling, setIsScrambling] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const frameRef = useRef(0);
-
-  const scramble = useCallback(() => {
-    setIsScrambling(true);
-    frameRef.current = 0;
-    const duration = text.length * 3;
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(() => {
-      frameRef.current++;
-      const progress = frameRef.current / duration;
-      const revealedLength = Math.floor(progress * text.length);
-      const newText = text
-        .split("")
-        .map((char, i) => {
-          if (char === " ") return " ";
-          if (i < revealedLength) return text[i];
-          return CHARS[Math.floor(Math.random() * CHARS.length)];
-        })
-        .join("");
-      setDisplayText(newText);
-      if (frameRef.current >= duration) {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        setDisplayText(text);
-        setIsScrambling(false);
-      }
-    }, 30);
-  }, [text]);
-
-  const handleMouseEnter = () => {
-    setIsHovering(true);
-    scramble();
-  };
-
-  const handleMouseLeave = () => {
-    setIsHovering(false);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, []);
-
-  return (
-    <div
-      className="group relative inline-flex flex-col cursor-pointer select-none"
-      dir="ltr"
-      style={{ unicodeBidi: 'embed' }}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      <span className="relative font-mono tracking-widest" style={{ fontSize: '0.7rem' }}>
-        {displayText.split("").map((char, i) => (
-          <span
-            key={i}
-            className="inline-block transition-all duration-150"
-            style={{
-              transitionDelay: `${i * 10}ms`,
-              color: isScrambling && char !== text[i] ? '#60a5fa' : '#94a3b8',
-              transform: isScrambling && char !== text[i] ? 'scale(1.15)' : 'scale(1)',
-              fontWeight: isScrambling && char !== text[i] ? 700 : 500,
-            }}
-          >
-            {char}
-          </span>
-        ))}
-      </span>
-
-      {/* Animated underline */}
-      <span className="relative h-px w-full mt-1 overflow-hidden">
-        <span
-          className="absolute inset-0 transition-transform duration-500 ease-out origin-left"
-          style={{
-            background: '#94a3b8',
-            transform: isHovering ? 'scaleX(1)' : 'scaleX(0)',
-          }}
-        />
-        <span className="absolute inset-0" style={{ background: '#1e293b' }} />
-      </span>
-
-      {/* Subtle glow on hover */}
-      <span
-        className="absolute rounded-lg transition-opacity duration-300"
-        style={{
-          inset: '-12px',
-          background: 'rgba(96, 165, 250, 0.05)',
-          opacity: isHovering ? 1 : 0,
-          zIndex: -1,
-        }}
-      />
-    </div>
-  );
 }
 
 function App() {
@@ -238,6 +138,15 @@ function App() {
 
   // 🆕 السنة الأكاديمية الحالية
   const currentAcademicYear = getCurrentAcademicYear();
+
+  // 🆕 عنوان النظام القابل للتعديل (يحفظه الأدمن الرئيسي من الإعدادات)
+  const [systemTitle, setSystemTitle] = useState('نظام إدارة الحضور الجامعي');
+
+  useEffect(() => {
+    loadSystemTitle().then(title => {
+      if (title) setSystemTitle(title);
+    });
+  }, []);
 
   const intentionalDeleteRef = useRef({
     students: false,
@@ -956,33 +865,6 @@ function App() {
     window.history.replaceState({}, '', url.toString());
   };
 
-  useEffect(() => {
-    // ⚡ ميزة التوهج تعمل فقط بأجهزة الماوس، ومقيدة بـ rAF لتقليل العمل
-    if (window.matchMedia?.('(hover: none)').matches) return;
-
-    let ticking = false;
-    let lastX = 0;
-    let lastY = 0;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      lastX = e.clientX;
-      lastY = e.clientY;
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        ticking = false;
-        const target = (document.elementFromPoint(lastX, lastY)?.closest('button')) as HTMLElement | null;
-        if (!target) return;
-        const rect = target.getBoundingClientRect();
-        target.style.setProperty('--glow-x', `${lastX - rect.left}px`);
-        target.style.setProperty('--glow-y', `${lastY - rect.top}px`);
-      });
-    };
-
-    document.addEventListener('mousemove', handleMouseMove, { passive: true });
-    return () => document.removeEventListener('mousemove', handleMouseMove);
-  }, []);
-
   const isAdmin = currentUser?.role === 'admin';
   const isCollegeAdmin = currentUser?.role === 'college_admin';
   const canEditStudents = isAdmin || isCollegeAdmin;
@@ -994,15 +876,10 @@ function App() {
 
   if (loading || !tokenChecked) {
     return (
-      <div className="min-h-screen relative">
-        <Aurora
-          colorStops={['#0A0A0F', '#4F46E5', '#7C3AED']}
-          blend={0.5}
-          amplitude={1.0}
-          speed={0.3}
-        />
-        <div className="relative z-10 flex items-center justify-center min-h-screen">
-          <MorphingSquare className="w-16 h-16 bg-blue-500" />
+      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-5">
+          <div className="w-10 h-10 border-[3px] border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+          <p className="text-sm text-slate-400 font-medium">جاري تحميل النظام…</p>
         </div>
       </div>
     );
@@ -1010,16 +887,8 @@ function App() {
 
   if (!currentUser) {
     return (
-      <div className="relative min-h-screen">
-        <Aurora
-          colorStops={['#0A0A0F', '#4F46E5', '#7C3AED']}
-          blend={0.5}
-          amplitude={1.0}
-          speed={0.3}
-        />
-        <div className="relative z-10">
-          <Login onLogin={handleLogin} />
-        </div>
+      <div className="min-h-screen bg-[#0B1220]">
+        <Login onLogin={handleLogin} />
       </div>
     );
   }
@@ -1028,20 +897,13 @@ function App() {
   const selectedCollege = colleges.find(c => c.id === selectedCollegeId);
 
   return (
-    <div className="relative min-h-screen" dir="rtl">
-      <Aurora
-        colorStops={['#0A0A0F', '#4F46E5', '#7C3AED']}
-        blend={0.5}
-        amplitude={1.0}
-        speed={0.3}
-      />
-      <div className="relative z-10">
+    <div className="min-h-screen bg-[#0B1220]" dir="rtl">
       <div className="container mx-auto px-3 md:px-4 py-3 md:py-6">
         <div className="mb-8">
-          <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between gap-3 mb-6">
+            <div className="flex items-center gap-3 min-w-0">
               <div
-                className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center overflow-hidden border-2 border-white shadow-lg cursor-pointer"
+                className="w-11 h-11 shrink-0 bg-blue-600 rounded-full flex items-center justify-center overflow-hidden border-2 border-blue-500/40 cursor-pointer"
                 onClick={() => setActiveTab('profile')}
               >
                 {currentUser.photoURL ? (
@@ -1050,62 +912,52 @@ function App() {
                   <span className="text-white font-bold text-lg">{currentUser.displayName.charAt(0)}</span>
                 )}
               </div>
-              <div className="text-right">
-                <p className="text-sm text-gray-600">مرحباً،</p>
-                <p className="font-bold text-gray-800">{currentUser.displayName}</p>
+              <div className="text-right min-w-0">
+                <p className="text-xs text-slate-400">مرحباً،</p>
+                <p className="font-bold text-slate-100 truncate max-w-[120px] sm:max-w-none">{currentUser.displayName}</p>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
                 {isMainAdmin && (
-                  <span className="inline-block mt-1 px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">
-                    👑 أدمن رئيسي
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-500/10 text-blue-300 text-xs font-medium rounded-full border border-blue-500/20">
+                    <Crown className="w-3.5 h-3.5" /> أدمن رئيسي
                   </span>
                 )}
                 {isCollegeAdmin && (
-                  <span className="inline-block mt-1 px-2 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-full">
-                    🏛️ أدمن كلية
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-500/10 text-amber-300 text-xs font-medium rounded-full border border-amber-500/20">
+                    <Landmark className="w-3.5 h-3.5" /> أدمن كلية
                   </span>
                 )}
                 {currentUser?.role === 'teacher' && (
-                  <span className="inline-block mt-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
-                    👨‍🏫 تدريسي
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-500/10 text-emerald-300 text-xs font-medium rounded-full border border-emerald-500/20">
+                    <GraduationCap className="w-3.5 h-3.5" /> تدريسي
                   </span>
                 )}
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-indigo-100 text-indigo-800 rounded-lg text-sm font-medium">
-                🎓 {currentAcademicYear.replace('_', ' - ')}
-              </div>
-              <button
-                onClick={handleLogout}
-                className="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md flex items-center gap-2"
-              >
-                تسجيل الخروج
-              </button>
-            </div>
+            <button
+              onClick={handleLogout}
+              className="shrink-0 bg-red-500/90 hover:bg-red-600 text-white text-sm font-medium py-2 px-3.5 rounded-lg inline-flex items-center gap-2"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">تسجيل الخروج</span>
+            </button>
           </div>
 
-          <h1 className="text-xl sm:text-3xl md:text-4xl font-bold text-gray-800 mb-1 sm:mb-2 text-center">
-            نظام إدارة الحضور
-          </h1>
-
-          <div className="md:hidden text-center mb-2">
-            <span className="inline-block px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-xs font-medium">
-              🎓 السنة الأكاديمية: {currentAcademicYear.replace('_', ' - ')}
-            </span>
-          </div>
+          <Masthead title={systemTitle} yearLabel={currentAcademicYear.replace('_', ' - ')} />
 
           {selectedStage && (
-            <div className="bg-white rounded-lg shadow-sm p-3 flex items-center gap-2 text-sm flex-wrap mt-4">
-              <button onClick={handleBackToStages} className="text-blue-600 hover:underline font-medium">
-                🏠 جميع المراحل
+            <div className="glass-card-sm p-3 flex items-center gap-2 text-sm flex-wrap mt-5">
+              <button onClick={handleBackToStages} className="text-blue-400 hover:underline font-medium inline-flex items-center gap-1">
+                <Home className="w-4 h-4" /> جميع المراحل
               </button>
-              <span className="text-gray-400">›</span>
-              <span className="font-bold text-gray-700">{selectedCollege?.icon} {selectedCollege?.name}</span>
-              <span className="text-gray-400">›</span>
-              <span className="font-bold text-blue-700">📖 {selectedStage.name}</span>
+              <ChevronLeft className="w-4 h-4 text-slate-500" />
+              <span className="font-bold text-slate-200">{selectedCollege?.name}</span>
+              <ChevronLeft className="w-4 h-4 text-slate-500" />
+              <span className="font-bold text-blue-400">{selectedStage.name}</span>
               {stageSyncing && (
-                <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-blue-50 text-blue-600 text-xs font-medium rounded-full border border-blue-100">
-                  <span className="w-3 h-3 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+                <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-blue-500/10 text-blue-300 text-xs font-medium rounded-full border border-blue-500/20">
+                  <span className="w-3 h-3 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
                   مزامنة خلفية…
                 </span>
               )}
@@ -1243,6 +1095,7 @@ function App() {
                   students={students} attendanceRecords={attendanceRecords} currentUser={currentUser}
                   onResetComplete={handleResetComplete}
                   stages={stages} colleges={colleges} onTelegramConfigChange={handleTelegramConfigChange}
+                  systemTitle={systemTitle} onSystemTitleChange={setSystemTitle}
                 />
               )}
               {activeTab === 'profile' && (
@@ -1362,8 +1215,8 @@ function App() {
         )}
 
         {/* ✨ Footer */}
-        <div className="mt-12 text-center text-white/40">
-          <p className="text-sm">نظام تسجيل الحضور الإلكتروني - {new Date().getFullYear()}</p>
+        <div className="mt-12 pt-6 border-t border-white/10 text-center text-slate-500">
+          <p className="text-sm">{systemTitle} - {new Date().getFullYear()}</p>
           <div className="mt-2 flex justify-center">
             <TextScramble text="BY - PH. Mujtaba Haitham" />
           </div>
@@ -1430,7 +1283,6 @@ function App() {
           />
         </Suspense>
       )}
-      </div>
     </div>
   );
 }

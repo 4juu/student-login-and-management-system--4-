@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Student, AttendanceRecord, AttendanceSession } from '../../types/student';
+import { BookOpen, Check, ClipboardList, Copy, Ticket } from 'lucide-react';
 
 interface StudentProfileModalProps {
   student: Student;
@@ -138,7 +139,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
         {/* ── الهيدر ── */}
         <div className="shrink-0 px-5 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-slate-100">
           <div className="flex items-center justify-between gap-3 mb-3">
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900">📋 ملف الطالب</h2>
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2"><ClipboardList className="w-5 h-5 text-indigo-600" /> ملف الطالب</h2>
             <button
               onClick={onClose}
               className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 text-xl leading-none transition"
@@ -157,7 +158,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                 <p className="font-bold text-gray-900 text-base sm:text-lg truncate">{student.name}</p>
                 {stageName && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-full border border-indigo-100">
-                    📖 {stageName}
+                    <BookOpen className="w-3.5 h-3.5" /> {stageName}
                   </span>
                 )}
               </div>
@@ -167,7 +168,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                   className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 font-mono text-xs font-bold rounded-md border border-blue-100 hover:bg-blue-100 transition"
                   title="نسخ الكود"
                 >
-                  {student.code} 📋
+                  {student.code} <Copy className="w-3.5 h-3.5" />
                 </button>
                 {student.universityId && (
                   <span className="px-2 py-0.5 bg-gray-100 text-gray-600 font-mono text-xs rounded-md">
@@ -176,7 +177,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                 )}
                 {student.group && (
                   <span className="px-2 py-0.5 bg-amber-50 text-amber-700 text-xs font-medium rounded-md border border-amber-100">
-                    🏷️ {student.group}
+                    <Ticket className="w-3.5 h-3.5" /> {student.group}
                   </span>
                 )}
               </div>
@@ -189,7 +190,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                 key={b.label}
                 className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full border ${b.cls}`}
               >
-                ✔ {b.label}
+                <Check className="w-3.5 h-3.5" /> {b.label}
               </span>
             ))}
             {badges.every(b => !b.show) && (
@@ -280,9 +281,12 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
               </div>
               <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50">
                 <span className="text-gray-500 text-xs">تسجيل ذاتي</span>
-                <span className="text-gray-800 font-medium text-xs">
+                <span className="text-gray-800 font-medium text-xs flex items-center gap-1">
                   {student.selfRegisteredAt
-                    ? `${formatDate(student.selfRegisteredAt)}${student.selfRegistrationApproved ? ' ✔' : ' (بانتظار الموافقة)'}`
+                    ? <>
+                        {formatDate(student.selfRegisteredAt)}
+                        {student.selfRegistrationApproved ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : '(بانتظار الموافقة)'}
+                      </>
                     : 'غير مسجّل ذاتياً'}
                 </span>
               </div>
@@ -354,9 +358,9 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
         <div className="shrink-0 px-5 sm:px-6 py-3 border-t border-slate-100 flex justify-end gap-2">
           <button
             onClick={copyCode}
-            className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 transition"
+            className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 transition flex items-center gap-1.5"
           >
-            📋 نسخ الكود
+            <Copy className="w-4 h-4" /> نسخ الكود
           </button>
           <button
             onClick={onClose}
