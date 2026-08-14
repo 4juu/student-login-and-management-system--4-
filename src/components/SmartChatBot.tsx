@@ -269,6 +269,8 @@ interface StudentQuickCard {
   percentage: string;
   isPresentToday: boolean;
   attendedSessions: { session: AttendanceSession & { _normalizedDate: string }; present: boolean }[];
+  attendedDays: { date: string; label: string; count: number }[];
+  absentDays: { date: string; label: string; count: number }[];
 }
 
 export const SmartChatBot: React.FC<SmartChatBotProps> = ({
@@ -305,6 +307,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   const [showStudentCard, setShowStudentCard] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showSessionsModal, setShowSessionsModal] = useState(false);
+  const [showDayDetails, setShowDayDetails] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -375,6 +378,17 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     };
   }, [isAdmin, colleges, stages, user.permissions, students, records, sessions, allStagesData]);
 
+  const scope = useMemo(() => {
+    if (isAdmin && !currentStageId && accessibleData.allStudents.length > 0) {
+      return {
+        students: accessibleData.allStudents,
+        records: accessibleData.allRecords,
+        sessions: accessibleData.allSessions,
+      };
+    }
+    return { students, records, sessions };
+  }, [isAdmin, currentStageId, accessibleData, students, records, sessions]);
+
   const fixDate = useCallback((rawDate: any): string => {
     if (!rawDate) return '';
     if (rawDate instanceof Date) {
@@ -409,8 +423,10 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
 
   const computeStudentCard = useCallback((student: Student): StudentQuickCard => {
     const todayKey = fixDate(new Date());
+    const scRecords = scope.records;
+    const scSessions = scope.sessions;
 
-    const fixedSessions = sessions.map(s => ({
+    const fixedSessions = scSessions.map(s => ({
       ...s,
       _normalizedDate: fixDate((s as any).date),
     }));
@@ -420,12 +436,12 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       return String(a.name || '').localeCompare(String(b.name || ''), 'ar');
     });
 
-    const studentRecords = records.filter(r => r.studentId === student.id);
+    const studentRecords = scRecords.filter(r => r.studentId === student.id);
     const attendedSessionIds = new Set(studentRecords.map(r => r.sessionId));
 
     const todaySessionIds = new Set<string>();
     fixedSessions.forEach(s => { if (s._normalizedDate === todayKey) todaySessionIds.add(s.id); });
-    records.forEach(r => {
+    scRecords.forEach(r => {
       const sess = fixedSessions.find(s => s.id === r.sessionId);
       if (sess && sess._normalizedDate === todayKey) todaySessionIds.add(r.sessionId);
     });
@@ -442,8 +458,31 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       present: attendedSessionIds.has(s.id),
     }));
 
-    return { student, attendedCount, absentCount, percentage, isPresentToday, attendedSessions };
-  }, [sessions, records, fixDate]);
+    const sessionByDate = new Map<string, number>();
+    fixedSessions.forEach(s => {
+      if (!s._normalizedDate) return;
+      sessionByDate.set(s._normalizedDate, (sessionByDate.get(s._normalizedDate) || 0) + 1);
+    });
+    const attendedDateSet = new Set<string>();
+    studentRecords.forEach(r => {
+      const sess = fixedSessions.find(s => s.id === r.sessionId);
+      if (sess && sess._normalizedDate) attendedDateSet.add(sess._normalizedDate);
+    });
+    const attendedDays = [...attendedDateSet].sort().reverse().map(date => ({
+      date,
+      label: formatDateWithDay(date),
+      count: studentRecords.filter(r => {
+        const sess = fixedSessions.find(s => s.id === r.sessionId);
+        return sess?._normalizedDate === date;
+      }).length,
+    }));
+    const absentDays = [...sessionByDate.keys()]
+      .filter(d => !attendedDateSet.has(d))
+      .sort().reverse()
+      .map(date => ({ date, label: formatDateWithDay(date), count: sessionByDate.get(date) || 0 }));
+
+    return { student, attendedCount, absentCount, percentage, isPresentToday, attendedSessions, attendedDays, absentDays };
+  }, [scope, fixDate]);
 
   const handleStudentSearch = useCallback((query: string) => {
     setStudentSearchQuery(query);
@@ -457,7 +496,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     }
 
     const q = query.trim().toLowerCase();
-    const matches = students.filter(s =>
+    const matches = scope.students.filter(s =>
       s.name.toLowerCase().includes(q) ||
       s.code?.toLowerCase().includes(q) ||
       s.group?.toLowerCase().includes(q)
@@ -465,7 +504,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
 
     setStudentSuggestions(matches);
     setShowSuggestions(matches.length > 0);
-  }, [students]);
+  }, [scope]);
 
   const handleSelectStudent = useCallback((student: Student) => {
     const card = computeStudentCard(student);
@@ -501,7 +540,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
         setMessages([{
           id: Date.now().toString(),
           type: 'bot',
-          content: `اهلاً دكتور ${user.displayName}\n\nبشنو أكدر أساعدك اليوم؟`,
+          content: `اهلاً دكتور ${user.displayName}\n\nاقدر أساعدك مباشرة بدون API:\n• اكتب اسم الطالب أو رقمه (الكود) → أرجّع لك أيام حضوره وغيابه\n• اسأل "منو حضر اليوم؟" أو "منو غاب اليوم؟"\n• اسأل "إحصائيات اليوم"\n\nبشنو أخدمك؟`,
           timestamp: new Date(),
         }]);
       }
@@ -775,10 +814,136 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     return hint;
   }, [students, records, sessions, fixDate, isAdmin, universityDataLoaded, currentStageId]);
 
+  // 🚀 محرك الرد المحلي — يعمل 100% بدون API (يقرأ من قاعدة البيانات مباشرة)
+  const buildLocalReply = useCallback((question: string): { handled: boolean; text: string } => {
+    const q = question.trim();
+    const todayKey = fixDate(new Date());
+    const scStudents = scope.students;
+    const scRecords = scope.records;
+    const scSessions = scope.sessions;
+
+    const fixedSessions = scSessions.map(s => ({ ...s, _normalizedDate: fixDate((s as any).date) }));
+    const sessionById = new Map(fixedSessions.map(s => [s.id, s]));
+
+    const dayReportFor = (student: Student): { attendedDays: string[]; absentDays: string[] } => {
+      const sRecs = scRecords.filter(r => r.studentId === student.id);
+      const sessionByDate = new Map<string, number>();
+      fixedSessions.forEach(s => {
+        if (!s._normalizedDate) return;
+        sessionByDate.set(s._normalizedDate, (sessionByDate.get(s._normalizedDate) || 0) + 1);
+      });
+      const attendedDates = new Set<string>();
+      sRecs.forEach(r => {
+        const sess = sessionById.get(r.sessionId);
+        if (sess?._normalizedDate) attendedDates.add(sess._normalizedDate);
+      });
+      return {
+        attendedDays: [...attendedDates].sort().reverse(),
+        absentDays: [...sessionByDate.keys()].filter(d => !attendedDates.has(d)).sort().reverse(),
+      };
+    };
+
+    // 1) من سوى الموقع / الأدمن
+    if (/مدير|مسؤول|من سوى|من صمم|من برمج|صاحب الموقع|owner|admin|developer/i.test(q)) {
+      return { handled: true, text: '👨‍⚕️ مدير الموقع/النظام هو "الدكتور الصيدلاني مجتبى هيثم محمد"' };
+    }
+
+    // 2) بحث عن طالب بالاسم أو الكود (رقم الطالب)
+    for (const student of scStudents) {
+      const firstName = student.name.split(' ')[0];
+      const nameMatch = q.includes(student.name) || (firstName.length > 2 && q.includes(firstName));
+      const codeMatch = !!student.code && q.includes(student.code);
+      if (!nameMatch && !codeMatch) continue;
+
+      const sRecs = scRecords.filter(r => r.studentId === student.id);
+      const attendedIds = new Set(sRecs.map(r => r.sessionId));
+      const attendedCount = fixedSessions.filter(s => attendedIds.has(s.id)).length;
+      const absentCount = fixedSessions.length - attendedCount;
+      const pct = fixedSessions.length > 0 ? ((attendedCount / fixedSessions.length) * 100).toFixed(1) : '0';
+      const { attendedDays, absentDays } = dayReportFor(student);
+
+      const todaySessions = fixedSessions.filter(s => s._normalizedDate === todayKey);
+      const todayPresent = todaySessions.length > 0 && sRecs.some(r => todaySessions.some(s => s.id === r.sessionId));
+
+      let text = `📋 الطالب: **${student.name}**\n`;
+      text += `🆔 الكود: ${student.code || '-'} | كروب: ${student.group || '-'}\n`;
+      text += `📅 اليوم: ${todaySessions.length === 0 ? 'لا توجد محاضرات اليوم' : todayPresent ? '✅ حاضر' : '❌ غائب'}\n\n`;
+      text += `✅ أيام الحضور (${attendedDays.length}):\n`;
+      if (attendedDays.length === 0) text += `  لا يوجد\n`;
+      attendedDays.forEach(d => { text += `  • ${formatDateWithDay(d)}\n`; });
+      text += `\n❌ أيام الغياب (${absentDays.length}):\n`;
+      if (absentDays.length === 0) text += `  لا يوجد\n`;
+      absentDays.forEach(d => { text += `  • ${formatDateWithDay(d)}\n`; });
+      text += `\n📊 النسبة: **${pct}%** (حضور ${attendedCount} / غياب ${absentCount} من ${fixedSessions.length} محاضرة)`;
+      return { handled: true, text };
+    }
+
+    const todaySessions = fixedSessions.filter(s => s._normalizedDate === todayKey);
+
+    // 3) منو حضر اليوم — حضور اليوم فقط
+    if (/منو حضر|اللي حضر|من حضر|الموجودين|الحاضرين اليوم|حضور اليوم|شو حاضر/i.test(q)) {
+      if (todaySessions.length === 0) {
+        return { handled: true, text: `📅 لا توجد بيانات حضور لليوم (${formatDateWithDay(todayKey)})` };
+      }
+      const todayIds = new Set(scRecords.filter(r => todaySessions.some(s => s.id === r.sessionId)).map(r => r.studentId));
+      const present = scStudents.filter(s => todayIds.has(s.id));
+      if (present.length === 0) return { handled: true, text: '🚨 لا يوجد حاضرين اليوم' };
+      let text = `✅ حضور اليوم فقط (${present.length}):\n`;
+      present.forEach(s => { text += `  • ${s.name} (${s.code || '-'}${s.group ? `, ${s.group}` : ''})\n`; });
+      return { handled: true, text };
+    }
+
+    // 4) منو غاب اليوم
+    if (/منو غاب|الغايبين اليوم|اللي ما حضر|من ما حضر|غياب اليوم|الناقصين|مو موجودين/i.test(q)) {
+      if (todaySessions.length === 0) {
+        return { handled: true, text: `📅 لا توجد بيانات حضور لليوم (${formatDateWithDay(todayKey)})` };
+      }
+      const todayIds = new Set(scRecords.filter(r => todaySessions.some(s => s.id === r.sessionId)).map(r => r.studentId));
+      const absent = scStudents.filter(s => !todayIds.has(s.id));
+      if (absent.length === 0) return { handled: true, text: '✅ الكل حاضر اليوم — لا يوجد غائبين' };
+      let text = `❌ غياب اليوم (${absent.length}):\n`;
+      absent.forEach(s => { text += `  • ${s.name} (${s.code || '-'}${s.group ? `, ${s.group}` : ''})\n`; });
+      return { handled: true, text };
+    }
+
+    // 5) إحصائيات اليوم
+    if (/اليوم|إحصائيات|نسبة الحضور|عدد الحاضر|عدد الغايب|الحضور والغياب/i.test(q)) {
+      if (todaySessions.length === 0) {
+        return { handled: true, text: `📅 لا توجد محاضرات اليوم (${formatDateWithDay(todayKey)})` };
+      }
+      const todayIds = new Set(scRecords.filter(r => todaySessions.some(s => s.id === r.sessionId)).map(r => r.studentId));
+      const presentCount = scStudents.filter(s => todayIds.has(s.id)).length;
+      const absentCount = scStudents.length - presentCount;
+      const pct = scStudents.length > 0 ? ((presentCount / scStudents.length) * 100).toFixed(1) : '0';
+      let text = `📊 إحصائيات اليوم (${formatDateWithDay(todayKey)}):\n`;
+      text += `  ✅ الحاضرون: **${presentCount}**\n`;
+      text += `  ❌ الغائبون: **${absentCount}**\n`;
+      text += `  📈 النسبة: **${pct}%**`;
+      return { handled: true, text };
+    }
+
+    // 6) لم يتم التعرف — دليل الاستخدام (يشتغل بدون API)
+    const exampleStudent = scStudents[0];
+    const example = exampleStudent ? `(مثال: ${exampleStudent.name} أو ${exampleStudent.code || 'الكود'})` : '(مثال: اسم الطالب أو الكود)';
+    return {
+      handled: false,
+      text: `🤖 أعمل حالياً بدون API وأقدر أساعدك بـ:\n` +
+        `  • اكتب اسم الطالب أو رقمه (الكود) → أيام حضوره وغيابه ${example}\n` +
+        `  • اسأل "منو حضر اليوم؟" → حضور اليوم فقط\n` +
+        `  • اسأل "منو غاب اليوم؟" → غياب اليوم فقط\n` +
+        `  • اسأل "إحصائيات اليوم"`,
+    };
+  }, [scope, fixDate]);
+
   const callGeminiAPI = useCallback(
     async (userMessage: string, conversationHistory: Message[]): Promise<string> => {
+      // 🚀 أولاً: الرد المحلي بدون API — فوري ومجاني
+      const localReply = buildLocalReply(userMessage);
+      if (localReply.handled) return localReply.text;
+
+      // إذا ما هناك API Keys → نرجّع دليل الاستخدام المحلي
       if (!GEMINI_API_KEY && !OPENROUTER_API_KEY && !GROQ_API_KEY) {
-        return `لازم تضيف API Key بالـ .env`;
+        return localReply.text;
       }
 
       const dataContext = buildDataContext();
@@ -851,7 +1016,7 @@ ${dataContext}`;
 
       return `جميع الموديلات توقفت\n\nآخر خطأ: ${lastError}`;
     },
-    [buildDataContext, currentModelIndex, analyzeQuestion, failedModels, selectedModelId]
+    [buildDataContext, currentModelIndex, analyzeQuestion, failedModels, selectedModelId, buildLocalReply]
   );
 
   const sendMessage = useCallback(async (text: string) => {
@@ -1000,7 +1165,7 @@ ${dataContext}`;
                             </button>
                           )}
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-1 text-right">اكتب اسم الطالب لعرض سجل الحضور فوراً</p>
+                        <p className="text-[10px] text-gray-400 mt-1 text-right">اكتب الاسم أو الكود لعرض أيام الحضور والغياب فوراً</p>
 
                         {showSuggestions && studentSuggestions.length > 0 && (
                           <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-200 z-[70] overflow-hidden max-h-[320px] overflow-y-auto">
@@ -1086,6 +1251,46 @@ ${dataContext}`;
                           </p>
                           <p className="text-[10px] text-gray-500">النسبة</p>
                         </div>
+                      </div>
+
+                      <div className="border-t border-gray-200">
+                        <button
+                          onClick={() => setShowDayDetails(v => !v)}
+                          className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-50 transition"
+                        >
+                          <span className="flex items-center gap-1.5"><ClipboardList className="w-3.5 h-3.5 text-blue-600" /> أيام الحضور والغياب</span>
+                          <span className="text-gray-400">{showDayDetails ? '▲' : '▼'}</span>
+                        </button>
+                        {showDayDetails && (
+                          <div className="px-3 pb-3 space-y-2.5 max-h-48 overflow-y-auto">
+                            <div>
+                              <p className="text-[11px] font-bold text-green-700 mb-1">✅ أيام الحضور ({selectedStudentCard.attendedDays.length})</p>
+                              <div className="space-y-1">
+                                {selectedStudentCard.attendedDays.length === 0 ? (
+                                  <p className="text-[11px] text-gray-400 px-1">لا يوجد</p>
+                                ) : selectedStudentCard.attendedDays.map(d => (
+                                  <div key={d.date} className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-2.5 py-1.5 text-xs text-green-800">
+                                    <span>{d.label}</span>
+                                    <span className="text-[10px] text-green-600">{d.count} محاضرة</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-bold text-red-700 mb-1">❌ أيام الغياب ({selectedStudentCard.absentDays.length})</p>
+                              <div className="space-y-1">
+                                {selectedStudentCard.absentDays.length === 0 ? (
+                                  <p className="text-[11px] text-gray-400 px-1">لا يوجد</p>
+                                ) : selectedStudentCard.absentDays.map(d => (
+                                  <div key={d.date} className="flex items-center justify-between bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5 text-xs text-red-800">
+                                    <span>{d.label}</span>
+                                    <span className="text-[10px] text-red-600">{d.count} محاضرة</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex gap-2 p-3 bg-gray-50 border-t border-gray-200">
@@ -1223,6 +1428,28 @@ ${dataContext}`;
                 const isInputBlocked = !isAdmin && !currentStageId;
                 return (
                   <div className="border-t border-gray-200" style={{ backgroundColor: '#ffffff' }}>
+                    {!isTyping && !isInputBlocked && messages.length > 0 && (
+                      <div className="px-3 pt-2 pb-0 flex flex-wrap gap-1.5">
+                        <button
+                          onClick={() => sendMessage('منو حضر اليوم؟')}
+                          className="text-[11px] font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full px-3 py-1.5 transition"
+                        >
+                          ✅ منو حضر اليوم؟
+                        </button>
+                        <button
+                          onClick={() => sendMessage('منو غاب اليوم؟')}
+                          className="text-[11px] font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full px-3 py-1.5 transition"
+                        >
+                          ❌ منو غاب اليوم؟
+                        </button>
+                        <button
+                          onClick={() => sendMessage('إحصائيات اليوم')}
+                          className="text-[11px] font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full px-3 py-1.5 transition"
+                        >
+                          📊 إحصائيات اليوم
+                        </button>
+                      </div>
+                    )}
                     <div className="px-3 py-2">
                       <div className={`flex items-end gap-2 rounded-xl border-2 bg-white px-3 py-2 transition ${
                         isInputBlocked ? 'border-gray-200 opacity-50' : 'border-gray-900 focus-within:border-gray-700'
