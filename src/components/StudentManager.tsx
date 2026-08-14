@@ -1,13 +1,16 @@
-import React, { useState, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { Student } from '../types/student';
-import * as XLSX from 'xlsx';
-import { FaceRegister } from './FaceRegister';
 import {
   compressFaceDescriptor,
   detectDescriptorFormat,
   getCompressionStats,
   hasFaceDescriptor,
 } from '../services/faceCompression';
+
+// 🚀 نافذة تسجيل الوجه تُحمَّل عند فتحها فقط (مكتبة الوجوه ثقيلة)
+const LazyFaceRegister = lazy(() =>
+  import('./FaceRegister').then(m => ({ default: m.FaceRegister }))
+);
 
 interface StudentManagerProps {
   students: Student[];
@@ -18,6 +21,7 @@ interface StudentManagerProps {
   onDeleteSelectedStudents: (ids: string[]) => void;
   onSortByName?: () => void;
   onSortByGroup?: () => void;
+  onOpenProfile?: (student: Student) => void;
 }
 
 const extractQrCodeId = (raw: string): string => {
@@ -47,6 +51,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   onDeleteSelectedStudents,
   onSortByName,
   onSortByGroup,
+  onOpenProfile,
 }) => {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -153,6 +158,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
 
     try {
       const data = await file.arrayBuffer();
+      const XLSX = await import('xlsx');
       const workbook = XLSX.read(data);
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
@@ -1341,16 +1347,27 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                     </td>
 
                     <td className="px-4 py-4 whitespace-nowrap text-right">
-                      <button
-                        onClick={() => {
-                          if (window.confirm(`هل أنت متأكد من حذف الطالب ${student.name}؟`)) {
-                            onDeleteStudent(student.id);
-                          }
-                        }}
-                        className="text-red-600 hover:text-red-900 font-medium"
-                      >
-                        حذف
-                      </button>
+                      <div className="flex items-center justify-end gap-3">
+                        {onOpenProfile && (
+                          <button
+                            onClick={() => onOpenProfile(student)}
+                            className="text-blue-600 hover:text-blue-800 font-medium"
+                            title="فتح ملف الطالب الكامل"
+                          >
+                            الملف 📋
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`هل أنت متأكد من حذف الطالب ${student.name}؟`)) {
+                              onDeleteStudent(student.id);
+                            }
+                          }}
+                          className="text-red-600 hover:text-red-900 font-medium"
+                        >
+                          حذف
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -1421,11 +1438,13 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       )}
 
       {showFaceRegister && onUpdateStudent && (
-        <FaceRegister
-          students={students}
-          onUpdateStudent={onUpdateStudent}
-          onClose={() => setShowFaceRegister(false)}
-        />
+        <Suspense fallback={null}>
+          <LazyFaceRegister
+            students={students}
+            onUpdateStudent={onUpdateStudent}
+            onClose={() => setShowFaceRegister(false)}
+          />
+        </Suspense>
       )}
     </div>
   );

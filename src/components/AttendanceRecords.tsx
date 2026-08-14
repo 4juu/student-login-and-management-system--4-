@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { AttendanceRecord, AttendanceSession, Student } from '../types/student';
-import * as XLSX from 'xlsx-js-style';
 import { getCurrentAcademicYear } from '../firebase/dataService';
 
 interface AttendanceRecordsProps {
@@ -214,7 +213,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
   // ============================================================
   // 📊 إنشاء وتصدير ملف الإكسل المنسق
   // ============================================================
-  const handleExportOfficialExcel = () => {
+  const handleExportOfficialExcel = async () => {
     if (students.length === 0) {
       alert('❌ لا يوجد طلاب مسجلين في هذه المرحلة للتصدير.');
       return;
@@ -268,6 +267,9 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
       }
     }
 
+    // 🚀 تحميل مكتبة Excel عند التصدير فقط (خارج حزمة البداية)
+    const XLSX = await import('xlsx-js-style');
+
     targetSessions.sort((a, b) => normalizeForFilter(a.date).localeCompare(normalizeForFilter(b.date)));
 
     const normalizeDate = (dateStr: string): string => {
@@ -315,7 +317,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
       }
     });
 
-    const generateStyledSheet = (orderedStudents: Student[]): XLSX.WorkSheet => {
+    const generateStyledSheet = (orderedStudents: Student[]): any => {
       const headerRow = ['ت', 'اسم الطالب', 'الرمز', 'الكروب', ...dateHeaders, 'إجمالي الغياب'];
       const rows: any[][] = [headerRow];
 

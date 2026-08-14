@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback, lazy, Suspense } from 'react';
 import { Student, AttendanceSession } from '../types/student';
 import { User } from '../types/user';
-import { FaceRegistration } from './FaceRegistration';
 import { suspendAurora, resumeAurora } from '../lib/auraControl';
 import { useCameraReady } from '../hooks/useCameraReady';
+
+// 🚀 نافذة تسجيل الوجه تُحمَّل عند فتحها فقط (مكتبة الوجوه ثقيلة)
+const LazyFaceRegistration = lazy(() =>
+  import('./FaceRegistration').then(m => ({ default: m.FaceRegistration }))
+);
 import {
   extractAllFaceDescriptors, normalizeDescriptor,
   areModelsLoaded, isDetectorReady, detectAllFacesOnly,
@@ -991,11 +995,13 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       </div>
 
       {showReg && onUpdateStudent && (
-        <FaceRegistration
-          students={students}
-          onUpdateStudent={onUpdateStudent}
-          onClose={handleRegClose}
-        />
+        <Suspense fallback={null}>
+          <LazyFaceRegistration
+            students={students}
+            onUpdateStudent={onUpdateStudent}
+            onClose={handleRegClose}
+          />
+        </Suspense>
       )}
     </div>
   );

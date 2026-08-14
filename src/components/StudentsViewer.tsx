@@ -3,13 +3,14 @@ import { Student } from '../types/student';
 
 interface StudentsViewerProps {
   students: Student[];
+  onOpenProfile?: (student: Student) => void;
 }
 
 // 🆕 عدد الطلاب بكل صفحة
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const DEFAULT_PAGE_SIZE = 50;
 
-export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ students }) => {
+export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ students, onOpenProfile }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [groupFilter, setGroupFilter] = useState<string>('all');
 
@@ -260,7 +261,11 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
               paginatedStudents.map((student, index) => {
                 const globalIndex = (safeCurrentPage - 1) * pageSize + index + 1;
                 return (
-                  <tr key={student.id} className="hover:bg-blue-50 transition">
+                  <tr
+                    key={student.id}
+                    className={`hover:bg-blue-50 transition ${onOpenProfile ? 'cursor-pointer' : ''}`}
+                    onClick={onOpenProfile ? () => onOpenProfile(student) : undefined}
+                  >
                     <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {globalIndex}
                     </td>
@@ -270,7 +275,9 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
                       </span>
                     </td>
                     <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right font-medium text-gray-900 text-sm">
-                      {student.name}
+                      <span className={onOpenProfile ? 'text-blue-700 hover:underline' : ''}>
+                        {student.name}
+                      </span>
                     </td>
                     <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right">
                       {student.group ? (

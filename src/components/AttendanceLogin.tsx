@@ -1,8 +1,12 @@
-import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useLayoutEffect, lazy, Suspense } from 'react';
 import { Student, AttendanceRecord, AttendanceSession } from '../types/student';
 import { User } from '../types/user';
 import { QRAttendance } from './QRAttendance';
-import { FaceAttendance } from './FaceAttendance';
+
+// 🚀 شاشة الحضور بالبصمة تُحمَّل عند فتحها فقط (مكتبة الوجوه ثقيلة)
+const LazyFaceAttendance = lazy(() =>
+  import('./FaceAttendance').then(m => ({ default: m.FaceAttendance }))
+);
 
 interface AttendanceLoginProps {
   students: Student[];
@@ -329,7 +333,8 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
       </div>
 
       {showFaceAttendance && (
-<FaceAttendance
+<Suspense fallback={null}>
+<LazyFaceAttendance
   students={students}
   activeSession={activeSession || null}
   onMarkAttendance={handleQRMarkAttendance}
@@ -338,6 +343,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
   currentUser={currentUser}
   onClose={() => setShowFaceAttendance(false)}
 />
+</Suspense>
       )}
 
       {showQRScanner && (

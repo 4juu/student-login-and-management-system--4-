@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref as dbRef, onValue, off } from 'firebase/database';
 import { Student, AttendanceRecord, AttendanceSession, College, Stage } from './types/student';
@@ -23,7 +23,11 @@ import { SendProgressModal } from './components/SendProgressModal';
 // 🆕 نظام التسجيل الذاتي
 import { SelfRegisterPage } from './components/SelfRegister/SelfRegisterPage';
 import { SendRegisterLink } from './components/Admin/SendRegisterLink';
-import { PendingRegistrations } from './components/Admin/PendingRegistrations';
+
+// 🚀 طلبات التسجيل تُحمَّل عند فتحها فقط (تحتوي مكتبة الوجوه)
+const LazyPendingRegistrations = lazy(() =>
+  import('./components/Admin/PendingRegistrations').then(m => ({ default: m.PendingRegistrations }))
+);
 
 import { auth, database } from './firebase/config';
 import { signIn, signOut } from './firebase/authService';
@@ -46,7 +50,25 @@ import {
   cancelAllPendingSaves,
   getCurrentAcademicYear,
 } from './firebase/dataService';
-import { startDetectorPreload, startBackgroundPreload } from './services/faceRecognition';
+import { getCachedStageData, setCachedStageData } from './lib/stageCache';
+
+// 📋 ملف الطالب - يُحمَّل عند الطلب فقط
+const StudentProfileModal = lazy(() =>
+  import('./components/StudentProfile/StudentProfileModal').then(m => ({ default: m.StudentProfileModal }))
+);
+
+// 🚀 تحميل مكتبة الوجوه ديناميكياً (خارج حزمة البداية)
+const preloadDetector = (): void => {
+  import('./services/faceRecognition')
+    .then(m => m.startDetectorPreload())
+    .catch(() => {});
+};
+
+const preloadBackground = (): void => {
+  import('./services/faceRecognition')
+    .then(m => m.startBackgroundPreload())
+    .catch(() => {});
+};
 
 type Tab = 'stage-selector' | 'colleges' | 'login' | 'manage' | 'records' | 'settings' | 'sessions' | 'teachers' | 'profile' | 'system-settings';
 
@@ -180,6 +202,10 @@ function App() {
   const [sessions, setSessions] = useState<AttendanceSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
+  // 📋 ملف الطالب المفتوح حالياً + مؤشر المزامنة الخلفية
+  const [profileStudent, setProfileStudent] = useState<Student | null>(null);
+  const [stageSyncing, setStageSyncing] = useState(false);
+
   const [allTeachers, setAllTeachers] = useState<User[]>([]);
   const [allStagesData, setAllStagesData] = useState<AllStagesData>({});
 
@@ -273,7 +299,7 @@ function App() {
 
   useEffect(() => {
     // 🚀 تحميل موديل الكشف الخفيف بالخلفية من أول لحظة فتح الموقع (بدون تثبيت)
-    startDetectorPreload();
+    preloadDetector();
   }, []);
 
   useEffect(() => {
@@ -289,7 +315,7 @@ function App() {
     if (registerToken) {
       setLoading(false);
       // 🚀 تحميل موديل الكشف الخفيف فوراً
-      setTimeout(() => startDetectorPreload(), 500);
+      setTimeout(() => preloadDetector(), 500);
       return;
     }
 
@@ -319,7 +345,7 @@ function App() {
           setCurrentUser(userData);
           await loadInitialData(userData);
           // 🚀 تحميل موديل الكشف الخفيف فور تحميل الواجهة
-          setTimeout(() => startDetectorPreload(), 500);
+          setTimeout(() => preloadDetector(), 500);
         } catch (error) {
           console.error('❌ Error loading user:', error);
           setCurrentUser(null);
@@ -447,15 +473,33 @@ function App() {
   };
 
   const handleSelectStage = async (collegeId: string, stageId: string) => {
-    startBackgroundPreload();
+    preloadBackground();
     setSelectedCollegeId(collegeId);
     setSelectedStageId(stageId);
     setDataLoaded(false);
+    setStageSyncing(true);
+    setProfileStudent(null);
     userModifiedStudentsRef.current = false;
 
+    const adminUid = getAdminUid();
+    const teacherId = getTeacherId();
+
+    // 🚀 فتح فوري من الكاش المحلي (IndexedDB أولاً ثم localStorage)
     try {
-      const adminUid = getAdminUid();
-      const teacherId = getTeacherId();
+      const cached = await getCachedStageData(adminUid, currentAcademicYear, stageId, teacherId);
+      if (cached) {
+        if (!userModifiedStudentsRef.current) setStudents(cached.students);
+        setAttendanceRecords(cached.records);
+        setSessions(cached.sessions);
+        setActiveSessionId(cached.activeSessionId);
+        setActiveTab('sessions');
+        setDataLoaded(true);
+      }
+    } catch {
+      // تجاهل - نعرض شاشة التحميل العادية
+    }
+
+    try {
       const data = await loadStageData(adminUid, stageId, teacherId);
 
       if (!userModifiedStudentsRef.current) setStudents(data.students);
@@ -463,6 +507,10 @@ function App() {
       setSessions(data.sessions);
       setActiveSessionId(data.activeSessionId);
       setActiveTab('sessions');
+      setDataLoaded(true);
+
+      // 💾 تحديث الكاش المحلي للفتح الفوري القادم
+      void setCachedStageData(adminUid, currentAcademicYear, stageId, teacherId, data);
 
       const { loadTelegramConfig } = await import('./firebase/dataService');
       const config = await loadTelegramConfig(adminUid);
@@ -470,6 +518,7 @@ function App() {
     } catch (e) {
       console.error('Error loading stage:', e);
     } finally {
+      setStageSyncing(false);
       setTimeout(() => setDataLoaded(true), 300);
     }
   };
@@ -478,6 +527,7 @@ function App() {
     flushAllPendingSaves();
     setSelectedCollegeId(null);
     setSelectedStageId(null);
+    setProfileStudent(null);
     setStudents([]);
     setAttendanceRecords([]);
     setSessions([]);
@@ -1053,6 +1103,12 @@ function App() {
               <span className="font-bold text-gray-700">{selectedCollege?.icon} {selectedCollege?.name}</span>
               <span className="text-gray-400">›</span>
               <span className="font-bold text-blue-700">📖 {selectedStage.name}</span>
+              {stageSyncing && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-blue-50 text-blue-600 text-xs font-medium rounded-full border border-blue-100">
+                  <span className="w-3 h-3 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+                  مزامنة خلفية…
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -1289,9 +1345,10 @@ function App() {
                     onAddMultipleStudents={handleAddMultipleStudents} onUpdateStudent={handleUpdateStudent}
                     onDeleteStudent={handleDeleteStudent} onDeleteSelectedStudents={handleDeleteSelectedStudents}
                     onSortByName={handleSortByName} onSortByGroup={handleSortByGroup}
+                    onOpenProfile={setProfileStudent}
                   />
                 ) : (
-                  <StudentsViewer students={students} />
+                  <StudentsViewer students={students} onOpenProfile={setProfileStudent} />
                 )
               )}
               {activeTab === 'records' && (
@@ -1341,11 +1398,13 @@ function App() {
       )}
 
       {showPendingRegistrations && currentUser && (isMainAdmin || isCollegeAdmin) && (
-        <PendingRegistrations
-          adminUid={currentUser.uid}
-          dataAdminUid={isCollegeAdmin ? getAdminUid() : undefined}
-          onClose={() => setShowPendingRegistrations(false)}
-        />
+        <Suspense fallback={null}>
+          <LazyPendingRegistrations
+            adminUid={currentUser.uid}
+            dataAdminUid={isCollegeAdmin ? getAdminUid() : undefined}
+            onClose={() => setShowPendingRegistrations(false)}
+          />
+        </Suspense>
       )}
 
       {/* 🚀 نافذة إرسال الغيابات */}
@@ -1358,6 +1417,19 @@ function App() {
         totalDone={sendDoneCount}
         totalGroups={sendTotalGroups}
       />
+
+      {/* 📋 ملف الطالب (يُحمَّل عند الطلب) */}
+      {profileStudent && (
+        <Suspense fallback={null}>
+          <StudentProfileModal
+            student={profileStudent}
+            records={attendanceRecords}
+            sessions={sessions}
+            stageName={selectedStage?.name}
+            onClose={() => setProfileStudent(null)}
+          />
+        </Suspense>
+      )}
       </div>
     </div>
   );

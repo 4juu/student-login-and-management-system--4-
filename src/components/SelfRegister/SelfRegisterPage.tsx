@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { ref, set } from 'firebase/database';
 import { database, dbURL } from '../../firebase/config';
 import { Student } from '../../types/student';
@@ -11,11 +11,15 @@ import {
   matchArabicNames,
 } from '../../services/nameMatching';
 import { IDCardUpload } from './IDCardUpload';
-import { FaceCaptureStep } from './FaceCaptureStep';
 import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear } from '../../firebase/dataService';
 import { SkeletonCard } from '../Skeleton';
 import type { MultiDescriptor } from '../../services/faceRecognition';
+
+// 🚀 خطوة التقاط الوجه تُحمَّل عند الوصول إليها فقط (مكتبة الوجوه ثقيلة)
+const LazyFaceCaptureStep = lazy(() =>
+  import('./FaceCaptureStep').then(m => ({ default: m.FaceCaptureStep }))
+);
 
 const MIN_MATCH = 90;
 
@@ -286,13 +290,19 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   if (step === 'capture-face' && student) {
     return (
-      <FaceCaptureStep
-        student={student}
-        matchPercentage={matchPercentage}
-        allStudents={allStudents}
-        onCaptured={handleFaceCaptured}
-        onCancel={() => goTo('upload-id')}
-      />
+      <Suspense fallback={
+        <div className="min-h-screen bg-[#0A0A0F] flex items-center justify-center p-4" dir="rtl">
+          <div className="w-full max-w-md"><SkeletonCard /></div>
+        </div>
+      }>
+        <LazyFaceCaptureStep
+          student={student}
+          matchPercentage={matchPercentage}
+          allStudents={allStudents}
+          onCaptured={handleFaceCaptured}
+          onCancel={() => goTo('upload-id')}
+        />
+      </Suspense>
     );
   }
 

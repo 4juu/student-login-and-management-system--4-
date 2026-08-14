@@ -49,8 +49,6 @@ const getFormattedDate = () => {
   };
 };
 
-import * as XLSX from 'xlsx-js-style';
-
 // ============================================================
 // 📁 توليد اسم الملف
 // ============================================================
@@ -64,10 +62,13 @@ const getFileName = (collegeName: string, stageName: string): string => {
 // ============================================================
 // 📊 توليد Excel XLSX حقيقي مع تنسيقات كاملة
 // ============================================================
-const generateExcel = (
+const generateExcel = async (
   links: GeneratedLink[],
   expiryDays: number
-): Blob => {
+): Promise<Blob> => {
+  // 🚀 تحميل مكتبة Excel عند التوليد فقط (خارج حزمة البداية)
+  const XLSX = await import('xlsx-js-style');
+
   // ── بناء البيانات ──
   const data: any[][] = [];
 
@@ -504,12 +505,12 @@ export const SendRegisterLink: React.FC<SendRegisterLinkProps> = ({
   };
 
   // ── 📥 تحميل Excel ──
-const handleDownloadExcel = () => {
+const handleDownloadExcel = async () => {
     const collegeName = selectedCollege?.name || 'غير_محدد';
     const stageName = selectedStage?.name || 'غير_محدد';
 
     // ✅ نمرر الروابط ومدة الصلاحية فقط
-    const blob = generateExcel(generatedLinks, expiryDays);
+    const blob = await generateExcel(generatedLinks, expiryDays);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
