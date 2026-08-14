@@ -541,7 +541,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
         setMessages([{
           id: Date.now().toString(),
           type: 'bot',
-          content: `اهلاً دكتور ${user.displayName}\n\nاقدر أساعدك مباشرة بدون API:\n• اكتب اسم الطالب أو رقمه (الكود) → أرجّع لك أيام حضوره وغيابه\n• اسأل "منو حضر اليوم؟" أو "منو غاب اليوم؟"\n• اسأل "إحصائيات اليوم"\n\nبشنو أخدمك؟`,
+          content: `اهلاً دكتور ${user.displayName}\n\nبشنو أكدر أساعدك اليوم؟`,
           timestamp: new Date(),
         }]);
       }
