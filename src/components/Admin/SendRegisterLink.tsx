@@ -1,5 +1,6 @@
 // src/components/Admin/SendRegisterLink.tsx
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Student, Stage, College } from '../../types/student';
 import { TelegramConfig } from '../../types/telegram';
 import {
@@ -367,6 +368,14 @@ export const SendRegisterLink: React.FC<SendRegisterLinkProps> = ({
   const [showLinks, setShowLinks] = useState(false);
   const [expiryDays, setExpiryDays] = useState(30);
 
+  // 📋 نافذة تأكيد داخلية (بدل window.confirm التي تتجمد على الجوال)
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+  } | null>(null);
+
   const selectedCollege = colleges.find(c => c.id === selectedCollegeId);
   const selectedStage = stages.find(s => s.id === selectedStageId);
 
@@ -422,11 +431,21 @@ export const SendRegisterLink: React.FC<SendRegisterLinkProps> = ({
     });
   };
 
-  const handleGenerateLinks = async () => {
+  const handleGenerateLinks = () => {
     if (selectedIds.size === 0) { alert('الرجاء اختيار طلاب'); return; }
     if (!selectedStageId) return;
-    if (!window.confirm(`سيتم توليد ${selectedIds.size} رابط تسجيل. متابعة؟`)) return;
+    setConfirmState({
+      title: 'تأكيد توليد الروابط',
+      message: `سيتم توليد ${selectedIds.size} رابط تسجيل لطلاب المرحلة المختارة. متابعة؟`,
+      confirmLabel: 'نعم، توليد',
+      onConfirm: () => {
+        setConfirmState(null);
+        doGenerateLinks();
+      },
+    });
+  };
 
+  const doGenerateLinks = async () => {
     setGenerating(true);
     try {
       // 💾 نضمن حفظ كل بيانات الطلاب قبل إنشاء الروابط
@@ -815,6 +834,32 @@ const handleDownloadExcel = () => {
           </div>
         )}
       </div>
+
+      {/* 📋 نافذة تأكيد داخلية */}
+      {confirmState &&
+        createPortal(
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4" onClick={() => setConfirmState(null)}>
+            <div className="modal-panel bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center" onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-gray-800 mb-2">{confirmState.title}</h3>
+              <p className="text-sm text-gray-600 mb-6 whitespace-pre-line">{confirmState.message}</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={confirmState.onConfirm}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition"
+                >
+                  {confirmState.confirmLabel || 'موافق'}
+                </button>
+                <button
+                  onClick={() => setConfirmState(null)}
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-3 px-4 rounded-lg transition"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };
