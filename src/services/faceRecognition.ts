@@ -238,6 +238,19 @@ const meanDescriptor = (descs: Float32Array[]): Float32Array => {
 };
 
 // ── Face landmarks drawing ──
+
+// إحداثيات الوجوه تعود بأبعاد إطار المعالجة (بعد preprocessFrame) وليس بأبعاد الفيديو الأصلية.
+// هذه الدالة تحسب أبعاد إطار الكشف الفعلي لضبط الرسم فوق الفيديو المعروض.
+export const getDetectionFrameDims = (
+  videoWidth: number,
+  videoHeight: number,
+  targetWidth = 320
+): { width: number; height: number } => {
+  if (!videoWidth || !videoHeight) return { width: targetWidth, height: Math.round((targetWidth * 3) / 4) };
+  const height = Math.max(1, Math.round((targetWidth * videoHeight) / videoWidth));
+  return { width: targetWidth, height };
+};
+
 export const drawFaceLandmarks = (
   ctx: CanvasRenderingContext2D,
   landmarks: faceapi.FaceLandmarks68,

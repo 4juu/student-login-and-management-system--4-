@@ -11,6 +11,7 @@ import {
   checkForTamperingAsync,
   buildMultiDescriptor,
   drawFaceLandmarks,
+  getDetectionFrameDims,
   MultiDescriptor,
 } from '../../services/faceRecognition';
 import * as faceapi from 'face-api.js';
@@ -169,10 +170,12 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    const frameW = videoRef.current?.videoWidth || 640;
-    const frameH = videoRef.current?.videoHeight || 480;
-    
-    drawFaceLandmarks(ctx, detLandmarks, detBox, canvas.width, canvas.height, frameW, frameH, true);
+    const v = videoRef.current;
+    const vw = v ? v.videoWidth : 640;
+    const vh = v ? v.videoHeight : 480;
+    const det = getDetectionFrameDims(vw, vh, 320);
+
+    drawFaceLandmarks(ctx, detLandmarks, detBox, canvas.width, canvas.height, det.width, det.height, true);
   }, [detLandmarks, detBox]);
 
   const handleCapture = async () => {

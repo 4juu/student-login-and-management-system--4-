@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { AttendanceSession, Student, AttendanceRecord } from '../types/student';
 import { getCurrentAcademicYear } from '../firebase/dataService';
 import { AbsenceSendLogEntry, GroupSendProgress } from '../types/telegram';
@@ -45,6 +46,13 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editSessionName, setEditSessionName] = useState('');
   const [sendLogSessionId, setSendLogSessionId] = useState<string | null>(null);
+
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   const currentAcademicYear = useMemo(() => getCurrentAcademicYear(), []);
 
@@ -114,9 +122,14 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
   };
 
   const handleDelete = (sessionId: string) => {
-    if (window.confirm('هل أنت متأكد من حذف هذا السجل؟ سيتم حذف جميع سجلات الحضور المرتبطة به.')) {
-      onDeleteSession(sessionId);
-    }
+    setConfirmState({
+      title: 'حذف السجل',
+      message: 'هل أنت متأكد من حذف هذا السجل؟ سيتم حذف جميع سجلات الحضور المرتبطة به.',
+      onConfirm: () => {
+        onDeleteSession(sessionId);
+        setConfirmState(null);
+      },
+    });
   };
 
   const handleOpenAbsent = (sessionId: string) => {
@@ -135,11 +148,20 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
 
   const handleConfirmAbsent = () => {
     if (!absentSessionId || getAbsentCandidates.length === 0) return;
-    if (window.confirm(`تأكيد تسجيل غياب (${getAbsentCandidates.length}) طالب من الكروبات المحددة؟`)) {
-      onMarkAbsent?.(absentSessionId, getAbsentCandidates.map(s => s.id));
-      setAbsentSessionId(null);
-      setSelectedGroups(new Set());
-    }
+    const sessionId = absentSessionId;
+    const studentIds = getAbsentCandidates.map(s => s.id);
+    const count = studentIds.length;
+    setConfirmState({
+      title: 'تسجيل الغياب',
+      message: `هل تريد تسجيل غياب (${count}) طالب من الكروبات المحددة؟`,
+      confirmLabel: '✅ تسجيل الغياب',
+      onConfirm: () => {
+        onMarkAbsent?.(sessionId, studentIds);
+        setConfirmState(null);
+        setAbsentSessionId(null);
+        setSelectedGroups(new Set());
+      },
+    });
   };
 
   const presentCountBySession = useMemo(() => {
@@ -157,9 +179,9 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
     const groupData = isThisSending ? sendGroups : (log ? completedGroupData[sendLogSessionId!] : []);
     const hasData = isThisSending || (log && groupData.length > 0);
 
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden border border-slate-600" dir="rtl">
+    return createPortal(
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setSendLogSessionId(null)}>
+        <div className="modal-height bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden border border-slate-600" dir="rtl" onClick={e => e.stopPropagation()}>
           <div className="shrink-0 px-6 pt-6 pb-4 border-b border-slate-700">
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-lg font-bold text-white">📋 سجل إرسال الغيابات</h2>
@@ -239,7 +261,8 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
             </button>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     );
   };
 
@@ -412,9 +435,10 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
       )}
 
       {/* نافذة اختيار الكروبات للغياب */}
-      {absentSessionId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6">
+      {absentSessionId &&
+        createPortal(
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setAbsentSessionId(null)}>
+          <div className="modal-panel bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-gray-800">🔴 تسجيل غياب الكروبات</h3>
               <button onClick={() => setAbsentSessionId(null)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
@@ -488,8 +512,35 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
+
+      {/* 📋 نافذة تأكيد داخلية (بدل window.confirm التي تتجمد على الجوال) */}
+      {confirmState &&
+        createPortal(
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4" onClick={() => setConfirmState(null)}>
+            <div className="modal-panel bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center" onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-gray-800 mb-2">{confirmState.title}</h3>
+              <p className="text-sm text-gray-600 mb-6 whitespace-pre-line">{confirmState.message}</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={confirmState.onConfirm}
+                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-4 rounded-lg transition"
+                >
+                  {confirmState.confirmLabel || 'موافق'}
+                </button>
+                <button
+                  onClick={() => setConfirmState(null)}
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-3 px-4 rounded-lg transition"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
 
       {/* 📋 نافذة سجل إرسال الغيابات */}
       {sendLogSessionId && renderSendLogModal()}

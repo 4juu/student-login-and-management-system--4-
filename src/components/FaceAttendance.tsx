@@ -645,9 +645,13 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     const vw = video.videoWidth, vh = video.videoHeight;
     if (!vw || !vh) return;
 
-    const scale = Math.max(canvas.width / vw, canvas.height / vh);
-    const dispW = vw * scale;
-    const dispH = vh * scale;
+    // إحداثيات الكشف تعود بأبعاد إطار المعالجة (320 عرضاً) وليس بأبعاد الفيديو الأصلية
+    const detW = 320;
+    const detH = Math.max(1, Math.round((detW * vh) / vw));
+
+    const scale = Math.max(canvas.width / detW, canvas.height / detH);
+    const dispW = detW * scale;
+    const dispH = detH * scale;
     const offX = (canvas.width - dispW) / 2;
     const offY = (canvas.height - dispH) / 2;
     const mirrorX = camFacing === 'user';

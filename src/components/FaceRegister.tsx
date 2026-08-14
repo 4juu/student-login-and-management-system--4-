@@ -7,6 +7,7 @@ import {
   checkForTamperingAsync,
   normalizeDescriptor,
   drawFaceLandmarks,
+  getDetectionFrameDims,
 } from '../services/faceRecognition';
 import * as faceapi from 'face-api.js';
 
@@ -185,9 +186,10 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({ students, onUpdateSt
     if (!ctx) return;
 
     const v = videoRef.current;
-    const fw = v ? v.videoWidth : detFrameW;
-    const fh = v ? v.videoHeight : detFrameH;
-    drawFaceLandmarks(ctx, detLandmarks, detBox, canvas.width, canvas.height, fw, fh, facing === 'user');
+    const vw = v ? v.videoWidth : detFrameW;
+    const vh = v ? v.videoHeight : detFrameH;
+    const det = getDetectionFrameDims(vw, vh, 320);
+    drawFaceLandmarks(ctx, detLandmarks, detBox, canvas.width, canvas.height, det.width, det.height, facing === 'user');
   }, [detLandmarks, detBox, facing]);
 
   // ── الالتقاط ──
