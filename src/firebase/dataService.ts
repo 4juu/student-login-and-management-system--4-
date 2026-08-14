@@ -673,94 +673,80 @@ export const syncPendingChanges = async (_uid: string): Promise<void> => {
 };
 
 // ============================================================
-// 🆕 BACKUP & RESET (للتصفير السنوي)
+// 🆕 RESET (بدء سنة أكاديمية جديدة)
 // ============================================================
 
 /**
- * 💾 تحميل نسخة احتياطية كاملة للسنة الحالية كملف JSON
- * يُنصح بتشغيلها قبل أي تصفير!
+ * 🔢 حساب السنة الأكاديمية القادمة
+ * مثال: "2024_2025" → "2025_2026"
  */
-export const downloadBackup = async (adminUid: string): Promise<void> => {
-  try {
-    console.log('📦 جاري إنشاء نسخة احتياطية...');
-    
-    const year = await getActiveAcademicYear();
-    const snap = await get(ref(database, getYearBasePath(year, adminUid)));
-    
-    if (!snap.exists()) {
-      alert('⚠️ لا توجد بيانات للنسخ الاحتياطي');
-      return;
-    }
-    
-    const backupData = {
-      academicYear: year,
-      backupDate: new Date().toISOString(),
-      adminUid,
-      data: snap.val()
-    };
-    
-    const blob = new Blob([JSON.stringify(backupData, null, 2)], {
-      type: 'application/json'
-    });
-    
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `backup_${year}_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    console.log('✅ تم تحميل النسخة الاحتياطية');
-  } catch (e) {
-    console.error('❌ فشل إنشاء النسخة الاحتياطية:', e);
-    throw new Error('فشل إنشاء النسخة الاحتياطية');
-  }
+export const getNextAcademicYear = (currentYear: string): string => {
+  const [start, end] = currentYear.split('_').map(Number);
+  return `${start + 1}_${end + 1}`;
 };
 
 /**
- * 🔄 تصفير السنة الأكاديمية
- * - يحذف كل البيانات الأكاديمية (طلاب، حضور، جلسات، كليات، مراحل)
- * - يحتفظ بحسابات التدريسيين لكن يعطّل صلاحياتهم
- * - يبدأ سنة أكاديمية جديدة
+ * ✅ التحقق من صيغة السنة الأكاديمية اليدوية
+ * مثال صحيح: "2025_2026"
+ */
+export const isValidAcademicYearFormat = (year: string): boolean => {
+  const match = /^(\d{4})_(\d{4})$/.exec(year.trim());
+  if (!match) return false;
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  return end === start + 1;
+};
+
+/**
+ * 🔄 بدء سنة أكاديمية جديدة
+ * - يحذف جميع الطلاب وسجلات الحضور والجلسات فقط
+ * - يُبقي الكليات والمراحل وحسابات التدريسيين
+ * - يعطّل صلاحيات جميع التدريسيين (الحسابات تبقى)
+ * - ينتقل إلى سنة أكاديمية جديدة (قابلة للتعديل يدوياً عبر newYear)
  * 
- * ⚠️ تحذير: هذه العملية لا يمكن التراجع عنها!
+ * ⚠️ تحذير: حذف الطلاب والسجلات لا يمكن التراجع عنه!
  */
 export const resetAcademicYear = async (
   adminUid: string,
-  options: {
-    downloadBackupFirst?: boolean;
-    deactivateTeachers?: boolean;
-  } = {}
+  options: { newYear?: string } = {}
 ): Promise<{ oldYear: string; newYear: string }> => {
-  const { downloadBackupFirst = true, deactivateTeachers = true } = options;
-  
   try {
-    console.log('🔄 بدء عملية التصفير السنوي...');
+    console.log('🔄 بدء سنة أكاديمية جديدة...');
     
-    // 1️⃣ احفظ نسخة احتياطية أولاً
-    if (downloadBackupFirst) {
-      await downloadBackup(adminUid);
-    }
-    
-    // 2️⃣ احفظ كل التعديلات المعلقة
+    // 1️⃣ احفظ كل التعديلات المعلقة
     await flushAllPendingSaves();
     
-    // 3️⃣ احصل على السنة الحالية والقادمة
+    // 2️⃣ السنة الحالية والقادمة
     const oldYear = await getActiveAcademicYear();
-    const newYear = getNextAcademicYear(oldYear);
+    const newYear = options.newYear && isValidAcademicYearFormat(options.newYear)
+      ? options.newYear.trim()
+      : getNextAcademicYear(oldYear);
     
-    console.log(`🗓️ التصفير من ${oldYear} إلى ${newYear}`);
+    if (newYear === oldYear) {
+      throw new Error('يجب أن تختلف السنة الجديدة عن السنة الحالية');
+    }
     
-    // 4️⃣ احذف كل بيانات السنة القديمة من Firebase
-    await remove(ref(database, `academicYears/${oldYear}`));
-    console.log('✅ تم حذف بيانات السنة القديمة');
+    console.log(`🗓️ الانتقال من ${oldYear} إلى ${newYear}`);
+    
+    // 3️⃣ انقل الكليات والمراحل وإعدادات التلغرام إلى السنة الجديدة
+    const yearSnap = await get(ref(database, getYearBasePath(oldYear, adminUid)));
+    const oldData = yearSnap.exists() ? yearSnap.val() : {};
+    const preserved: { [key: string]: unknown } = {};
+    if (oldData.colleges) preserved.colleges = oldData.colleges;
+    if (oldData.stages) preserved.stages = oldData.stages;
+    if (oldData.telegramConfig) preserved.telegramConfig = oldData.telegramConfig;
+    
+    if (Object.keys(preserved).length > 0) {
+      await update(ref(database, getYearBasePath(newYear, adminUid)), preserved);
+      console.log('✅ تم نقل الكليات والمراحل إلى السنة الجديدة');
+    }
+    
+    // 4️⃣ احذف الطلاب وسجلات الحضور والجلسات فقط من السنة القديمة
+    await remove(ref(database, `${getYearBasePath(oldYear, adminUid)}/stageData`));
+    console.log('✅ تم حذف الطلاب وسجلات الحضور');
     
     // 5️⃣ تعطيل صلاحيات كل التدريسيين (الحسابات تبقى)
-    if (deactivateTeachers) {
-      await deactivateAllTeachers(adminUid);
-    }
+    await deactivateAllTeachers(adminUid);
     
     // 6️⃣ امسح LocalStorage بالكامل (إلا الإعدادات الشخصية)
     clearAllLocalData(adminUid);
@@ -776,22 +762,13 @@ export const resetAcademicYear = async (
       resetBy: adminUid
     });
     
-    console.log('✅ تم التصفير بنجاح!');
+    console.log('✅ تم بدء السنة الجديدة بنجاح!');
     
     return { oldYear, newYear };
   } catch (e) {
-    console.error('❌ فشل التصفير:', e);
-    throw new Error('فشل التصفير السنوي. تأكد من اتصالك بالإنترنت.');
+    console.error('❌ فشل بدء السنة الجديدة:', e);
+    throw new Error('فشل بدء السنة الجديدة. تأكد من اتصالك بالإنترنت.');
   }
-};
-
-/**
- * 🔢 حساب السنة الأكاديمية القادمة
- * مثال: "2024_2025" → "2025_2026"
- */
-const getNextAcademicYear = (currentYear: string): string => {
-  const [start, end] = currentYear.split('_').map(Number);
-  return `${start + 1}_${end + 1}`;
 };
 
 /**

@@ -1088,6 +1088,27 @@ button:not(:disabled):active {
   display: none;
 }
 
+/* 🎲 محمّل المربع المتحول - يُعرض فقط عند دخول الموقع */
+.morph-loader {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 6%;
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+  box-shadow: 0 0 44px rgba(37, 99, 235, 0.35);
+  animation: morphSquare 2s ease-in-out infinite;
+}
+
+@keyframes morphSquare {
+  0%, 100% {
+    border-radius: 6%;
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    border-radius: 50%;
+    transform: rotate(180deg) scale(0.92);
+  }
+}
+
 /* ⚡ احترام تفضيل تقليل الحركة (إمكانية وصول + توفير بطارية/حرارة) */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

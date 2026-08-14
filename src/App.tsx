@@ -17,6 +17,7 @@ import { CollegeManager } from './components/CollegeManager';
 import { StageSelector } from './components/StageSelector';
 import { SmartChatBot } from './components/SmartChatBot';
 import { Masthead } from './components/Masthead';
+import { MorphingSquare } from './components/MorphingSquare';
 import { TextScramble } from './components/TextScramble';
 import { SendProgressModal } from './components/SendProgressModal';
 import { Crown, Landmark, LogOut, Home, ChevronLeft, GraduationCap } from 'lucide-react';
@@ -878,7 +879,7 @@ function App() {
     return (
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4">
         <div className="flex flex-col items-center gap-5">
-          <div className="w-10 h-10 border-[3px] border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+          <MorphingSquare />
           <p className="text-sm text-slate-400 font-medium">جاري تحميل النظام…</p>
         </div>
       </div>

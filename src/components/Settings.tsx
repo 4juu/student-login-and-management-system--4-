@@ -1,25 +1,23 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Student, AttendanceRecord, Stage, College } from '../types/student';
 import { User } from '../types/user';
 import { TelegramConfig } from '../types/telegram';
 import {
-  downloadBackup, 
   resetAcademicYear, 
   getDatabaseStats, 
   listAllAcademicYears,
   getCurrentAcademicYear,
+  getNextAcademicYear,
+  isValidAcademicYearFormat,
   saveTelegramConfig,
   loadTelegramConfig,
-  flushAllPendingSaves,
   saveSystemTitle,
 } from '../firebase/dataService';
 import {
   sendTestMessage,
   verifyBotToken,
 } from '../services/telegramService';
-import { database } from '../firebase/config';
-import { ref, set } from 'firebase/database';
-import { Bot, ChartColumn, CircleCheck, ClipboardList, Cloud, Download, GraduationCap, Info, KeyRound, Landmark, Library, LoaderCircle, Megaphone, RefreshCw, Save, Search, Send, Settings as SettingsIcon, Smile, SquarePen, TriangleAlert, User as UserIcon } from 'lucide-react';
+import { Bot, CalendarDays, ChartColumn, CircleCheck, ClipboardList, GraduationCap, Info, KeyRound, Landmark, Library, LoaderCircle, Megaphone, RefreshCw, Save, Search, Send, Settings as SettingsIcon, Smile, SquarePen, TriangleAlert, User as UserIcon } from 'lucide-react';
 
 interface SettingsProps {
   students: Student[];
@@ -42,8 +40,6 @@ export const Settings: React.FC<SettingsProps> = ({
   systemTitle = '',
   onSystemTitleChange,
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
   const [stats, setStats] = useState<{
     academicYear: string;
     totalSizeKB: number;
@@ -55,8 +51,8 @@ export const Settings: React.FC<SettingsProps> = ({
   } | null>(null);
   const [academicYears, setAcademicYears] = useState<string[]>([]);
   const [loadingStats, setLoadingStats] = useState(false);
-  const [downloadingBackup, setDownloadingBackup] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [newYearDraft, setNewYearDraft] = useState(getNextAcademicYear(getCurrentAcademicYear()));
 
   // 🏛️ عنوان النظام (للأدمن الرئيسي فقط)
   const [systemTitleDraft, setSystemTitleDraft] = useState(systemTitle);
@@ -272,39 +268,33 @@ export const Settings: React.FC<SettingsProps> = ({
     }
   };
 
-  const handleDownloadFirebaseBackup = async () => {
-    if (!currentUser) return;
-    setDownloadingBackup(true);
-    try {
-      const adminUid = currentUser.role === 'admin' 
-        ? currentUser.uid 
-        : (currentUser.adminId || currentUser.uid);
-      await downloadBackup(adminUid);
-      alert('تم تحميل النسخة الاحتياطية من Firebase بنجاح!');
-    } catch (e: any) {
-      alert((e.message || 'فشل تحميل النسخة الاحتياطية'));
-    } finally {
-      setDownloadingBackup(false);
-    }
-  };
-
   const handleResetAcademicYear = async () => {
     if (!currentUser || currentUser.role !== 'admin') {
       alert('هذه الميزة متاحة للأدمن فقط');
       return;
     }
 
+    const targetYear = newYearDraft.trim();
+
+    if (!isValidAcademicYearFormat(targetYear)) {
+      alert('صيغة السنة غير صحيحة. مثال صحيح: 2025_2026');
+      return;
+    }
+
+    if (targetYear === currentAcademicYear) {
+      alert('يجب أن تختلف السنة الجديدة عن السنة الحالية');
+      return;
+    }
+
     const confirm1 = window.confirm(
-      `تحذير خطير: تصفير السنة الأكاديمية\n\n` +
-      `سيتم:\n` +
-      `حذف جميع الطلاب (${stats?.totalStudents || 0})\n` +
-      `حذف جميع سجلات الحضور (${stats?.totalRecords || 0})\n` +
-      `حذف جميع الجلسات (${stats?.totalSessions || 0})\n` +
-      `حذف جميع الكليات والمراحل\n` +
-      `تعطيل جميع حسابات التدريسيين\n\n` +
+      `تحذير خطير: بدء سنة أكاديمية جديدة\n\n` +
+      `السنة الجديدة: ${targetYear}\n\n` +
+      `سيتم حذف جميع الطلاب (${stats?.totalStudents || 0})\n` +
+      `سيتم حذف جميع سجلات الحضور والجلسات\n` +
+      `سيتم تعطيل صلاحيات جميع التدريسيين (الحسابات تبقى)\n\n` +
       `ما سيبقى:\n` +
-      `حسابك (الأدمن)\n` +
-      `حسابات التدريسيين (بدون صلاحيات)\n\n` +
+      `الكليات والمراحل كما هي\n` +
+      `حسابك (الأدمن) وحسابات التدريسيين\n\n` +
       `هل أنت متأكد 100%؟`
     );
 
@@ -322,94 +312,31 @@ export const Settings: React.FC<SettingsProps> = ({
     setResetting(true);
     try {
       const result = await resetAcademicYear(currentUser.uid, {
-        downloadBackupFirst: true,
-        deactivateTeachers: true,
+        newYear: targetYear,
       });
 
       alert(
-        `تم التصفير بنجاح!\n\n` +
+        `تم بدء السنة الجديدة بنجاح!\n\n` +
         `السنة السابقة: ${result.oldYear}\n` +
         `السنة الجديدة: ${result.newYear}\n\n` +
-        `تم تحميل نسخة احتياطية تلقائياً\n` +
-        `تم تعطيل ${stats?.totalStudents ? 'جميع' : '0'} حسابات التدريسيين\n\n` +
+        `تم حذف الطلاب وسجلات الحضور\n` +
+        `تم تعطيل صلاحيات التدريسيين\n\n` +
         `سيتم إعادة تحميل الصفحة الآن...`
       );
 
       onResetComplete?.();
       setTimeout(() => window.location.reload(), 1500);
     } catch (e: any) {
-      alert('فشل التصفير: ' + (e.message || 'خطأ غير معروف'));
+      alert('فشل بدء السنة الجديدة: ' + (e.message || 'خطأ غير معروف'));
     } finally {
       setResetting(false);
     }
   };
 
-  const handleRestoreBackup = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const content = e.target?.result as string;
-      if (content) {
-        try {
-          const backup = JSON.parse(content);
-          
-          if (backup.data && backup.academicYear && backup.adminUid) {
-            // ✅ تنسيق نسخة Firebase الكاملة
-            const confirmed = window.confirm(
-              `هل أنت متأكد من استعادة النسخة الاحتياطية (${backup.academicYear})؟\n` +
-              `سيتم استبدال جميع البيانات في Firebase بهذه النسخة.`
-            );
-            if (!confirmed) return;
-
-            // 🔄 تصريف أي عمليات حفظ معلقة قد تكتب بيانات قديمة بعد الاستعادة
-            await flushAllPendingSaves();
-
-            // 🗑️ مسح الكاش المحلي لمنع إرجاع بيانات قديمة
-            const uid = backup.adminUid;
-            Object.keys(localStorage).forEach(key => {
-              if (
-                key.startsWith(`colleges_${uid}`) ||
-                key.startsWith(`stages_${uid}`) ||
-                key.startsWith(`students_${uid}_`) ||
-                key.startsWith(`records_${uid}_`) ||
-                key.startsWith(`sessions_${uid}_`) ||
-                key.startsWith(`activeSession_${uid}_`)
-              ) {
-                localStorage.removeItem(key);
-              }
-            });
-
-            await set(ref(database, `academicYears/${backup.academicYear}/userData/${backup.adminUid}`), backup.data);
-            alert('تم استعادة النسخة الاحتياطية بنجاح! سيتم تحديث الصفحة...');
-            window.location.reload();
-          } else if (backup.students || backup.attendanceRecords) {
-            alert('هذا التنسيق قديم (نسخة محلية). استخدم نسخة Firebase الكاملة للاستعادة.');
-          } else {
-            alert('تنسيق ملف غير معروف');
-          }
-        } catch {
-          alert('فشل استعادة النسخة الاحتياطية. تأكد من صحة الملف.');
-        }
-      }
-    };
-    reader.readAsText(file);
-    
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800 flex items-center gap-2"><SettingsIcon className="w-6 h-6" /> الإعدادات والنسخ الاحتياطي</h2>
+      <h2 className="text-2xl font-bold mb-6 text-gray-800 flex items-center gap-2"><SettingsIcon className="w-6 h-6" /> الإعدادات</h2>
 
       {/* شريط السنة الأكاديمية */}
       <div className="mb-6 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-xl">
@@ -542,46 +469,6 @@ export const Settings: React.FC<SettingsProps> = ({
 
 
 
-      {/* Backup Section */}
-      <div className="mb-8">
-        <h3 className="text-lg font-semibold mb-3 text-gray-700 flex items-center gap-2"><Save className="w-5 h-5" /> النسخ الاحتياطي</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {isAdmin && (
-            <button
-              onClick={handleDownloadFirebaseBackup}
-              disabled={downloadingBackup}
-              className="bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 disabled:opacity-50 text-white font-medium py-3 px-4 rounded-md transition duration-200 flex items-center justify-center gap-2 shadow-md"
-            >
-              {downloadingBackup ? (
-                <><LoaderCircle className="w-5 h-5 animate-spin" /> جاري...</>
-              ) : (
-                <><Cloud className="w-5 h-5" /> نسخة Firebase الكاملة</>
-              )}
-            </button>
-          )}
-
-
-
-          <button
-            onClick={handleRestoreBackup}
-            className="bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-md transition duration-200 flex items-center justify-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-            <Download className="w-5 h-5" /> استعادة نسخة
-          </button>
-        </div>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".json"
-          onChange={handleFileChange}
-          className="hidden"
-        />
-      </div>
-
       {/* منطقة الخطر */}
       {isAdmin && (
         <div className="mb-8">
@@ -592,20 +479,29 @@ export const Settings: React.FC<SettingsProps> = ({
             <div className="flex items-start gap-3 mb-4">
               <RefreshCw className="w-10 h-10 text-red-600 shrink-0" />
               <div className="flex-1">
-                <h4 className="font-bold text-red-900 text-lg mb-2">تصفير السنة الأكاديمية</h4>
-                <p className="text-sm text-red-800 mb-3">
-                  استخدم هذا الزر <strong>مرة واحدة فقط في السنة</strong> (مثلاً بداية سبتمبر) لبدء سنة أكاديمية جديدة.
-                </p>
-                <div className="bg-white border border-red-200 rounded-lg p-3 mb-3 text-sm">
-                  <p className="font-bold text-red-700 mb-1">سيحدث التالي:</p>
-                  <ul className="text-red-700 space-y-1 list-disc list-inside mr-2">
-                    <li>تحميل نسخة احتياطية تلقائياً قبل المسح</li>
-                    <li>حذف جميع الكليات، المراحل، الطلاب، الحضور</li>
-                    <li>تعطيل صلاحيات جميع التدريسيين (الحسابات تبقى)</li>
-                    <li>الانتقال إلى السنة الأكاديمية الجديدة</li>
-                  </ul>
+                <h4 className="font-bold text-red-900 text-lg mb-2">بدء سنة أكاديمية جديدة</h4>
+                <div className="bg-white border border-red-200 rounded-lg p-3 text-sm">
+                  <p className="text-red-700 flex items-start gap-2">
+                    <TriangleAlert className="w-4 h-4 shrink-0 mt-0.5" />
+                    ملاحظة: سيتم حذف جميع الطلاب وسجلات الحضور فقط، وتبقى الكليات والمراحل والتدريسيون.
+                  </p>
                 </div>
               </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-bold text-red-800 mb-2 flex items-center gap-1.5">
+                <CalendarDays className="w-4 h-4" /> السنة الجديدة (قابلة للتعديل)
+              </label>
+              <input
+                type="text"
+                value={newYearDraft}
+                onChange={(e) => setNewYearDraft(e.target.value)}
+                placeholder={getNextAcademicYear(currentAcademicYear)}
+                dir="ltr"
+                className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 font-mono text-sm text-center"
+              />
+              <p className="text-xs text-red-600 mt-1.5">الصيغة: 2025_2026</p>
             </div>
 
             <button
@@ -614,9 +510,9 @@ export const Settings: React.FC<SettingsProps> = ({
               className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-lg shadow-md transition flex items-center justify-center gap-2"
             >
               {resetting ? (
-                <><LoaderCircle className="w-5 h-5 animate-spin" /> جاري التصفير... لا تغلق الصفحة!</>
+                <><LoaderCircle className="w-5 h-5 animate-spin" /> جاري البدء... لا تغلق الصفحة!</>
               ) : (
-                <><RefreshCw className="w-5 h-5" /> بدء سنة أكاديمية جديدة (تصفير)</>
+                <><RefreshCw className="w-5 h-5" /> بدء سنة أكاديمية جديدة</>
               )}
             </button>
 
