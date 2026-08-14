@@ -9,7 +9,7 @@ interface StudentsViewerProps {
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const DEFAULT_PAGE_SIZE = 50;
 
-export const StudentsViewer: React.FC<StudentsViewerProps> = ({ students }) => {
+export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ students }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [groupFilter, setGroupFilter] = useState<string>('all');
 
@@ -370,4 +370,4 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = ({ students }) => {
       )}
     </div>
   );
-};
+});

@@ -11,6 +11,7 @@ import {
   checkForTamperingAsync,
   buildMultiDescriptor,
   drawFaceLandmarks,
+  getDetectionFrameDims,
   MultiDescriptor,
 } from '../../services/faceRecognition';
 import * as faceapi from 'face-api.js';
@@ -84,7 +85,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
     (async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+          video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } },
           audio: false,
         });
         
@@ -126,7 +127,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
       if (!videoRef.current || !mountedRef.current) return;
       
       try {
-        const det = await detectSingleFace(videoRef.current, 320);
+        const det = await detectSingleFace(videoRef.current, 320, 224);
         if (!mountedRef.current) return;
         
         if (det) {
@@ -144,7 +145,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
           setDetBox(null);
         }
       } catch {}
-    }, 150);
+    }, 250);
     
     return () => clearInterval(iv);
   }, [cameraReady, capturing]);
@@ -169,10 +170,12 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    const frameW = videoRef.current?.videoWidth || 640;
-    const frameH = videoRef.current?.videoHeight || 480;
-    
-    drawFaceLandmarks(ctx, detLandmarks, detBox, canvas.width, canvas.height, frameW, frameH, true);
+    const v = videoRef.current;
+    const vw = v ? v.videoWidth : 640;
+    const vh = v ? v.videoHeight : 480;
+    const det = getDetectionFrameDims(vw, vh, 320);
+
+    drawFaceLandmarks(ctx, detLandmarks, detBox, canvas.width, canvas.height, det.width, det.height, true);
   }, [detLandmarks, detBox]);
 
   const handleCapture = async () => {
@@ -245,7 +248,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
     (async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+          video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } },
           audio: false,
         });
         

@@ -3,7 +3,7 @@ import { Student } from '../types/student';
 import {
   extractFaceDescriptor, detectSingleFace,
   buildMultiDescriptor, checkForTamperingAsync,
-  normalizeDescriptor, drawFaceLandmarks,
+  normalizeDescriptor, drawFaceLandmarks, getDetectionFrameDims,
 } from '../services/faceRecognition';
 import * as faceapi from 'face-api.js';
 
@@ -22,6 +22,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   const [error, setError] = useState('');
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
   const [cameraReady, setCameraReady] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [faceDetected, setFaceDetected] = useState(false);
 
@@ -48,10 +49,10 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   useEffect(() => { mountedRef.current = true; if (step === 'search') setTimeout(() => searchRef.current?.focus(), 300);   }, [step]);
 
   const openCamera = useCallback(async (f: 'user' | 'environment') => {
-    setError(''); setCameraReady(false);
+    setError(''); setCameraReady(false); setVideoReady(false);
     try {
       if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
-      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: f, width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: f, width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } }, audio: false });
       if (!mountedRef.current) { s.getTracks().forEach(t => t.stop()); return; }
       streamRef.current = s;
       if (videoRef.current) { videoRef.current.srcObject = s; await videoRef.current.play(); }
@@ -83,7 +84,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
     detectIntervalRef.current = window.setInterval(async () => {
       if (!videoRef.current || !mountedRef.current) return;
       try {
-        const det = await detectSingleFace(videoRef.current, 320);
+        const det = await detectSingleFace(videoRef.current, 320, 224);
         if (!mountedRef.current) return;
         if (det) {
           setFaceDetected(true);
@@ -95,7 +96,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
           setFaceDetected(false);
         }
       } catch {}
-    }, 150);
+    }, 250);
     return () => { if (detectIntervalRef.current) { clearInterval(detectIntervalRef.current); detectIntervalRef.current = null; } };
   }, [cameraReady, capturing]);
 
@@ -114,9 +115,10 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
     if (!ctx) return;
 
     const v = videoRef.current;
-    const fw = v ? v.videoWidth : detFrameW;
-    const fh = v ? v.videoHeight : detFrameH;
-    drawFaceLandmarks(ctx, detLandmarks, detBox, canvas.width, canvas.height, fw, fh, facing === 'user');
+    const vw = v ? v.videoWidth : detFrameW;
+    const vh = v ? v.videoHeight : detFrameH;
+    const det = getDetectionFrameDims(vw, vh, 320);
+    drawFaceLandmarks(ctx, detLandmarks, detBox, canvas.width, canvas.height, det.width, det.height, facing === 'user');
   }, [detLandmarks, detBox, facing]);
 
   const handleCapture = async () => {
@@ -241,11 +243,12 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
             <div className="relative mb-3">
               <div className="relative rounded-2xl overflow-hidden bg-gray-900 w-full" style={{ aspectRatio: '4 / 3' }}>
                 <video ref={videoRef} autoPlay playsInline muted
+                  onLoadedMetadata={() => setVideoReady(true)}
                   className="w-full h-full object-cover"
                   style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }} />
                 <canvas ref={landmarkCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
-                {!cameraReady && !error && (
+                {(!cameraReady || !videoReady) && !error && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
                     <div className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
                   </div>

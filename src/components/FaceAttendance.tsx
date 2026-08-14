@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Student, AttendanceSession } from '../types/student';
 import { User } from '../types/user';
 import { FaceRegistration } from './FaceRegistration';
+import { suspendAurora, resumeAurora } from '../lib/auraControl';
 import {
   extractAllFaceDescriptors, normalizeDescriptor,
   areModelsLoaded, isDetectorReady, detectAllFacesOnly,
@@ -56,6 +57,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [facing, setFacing] = useState<CameraFacing>('user');
   const [cameraReady, setCameraReady] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [hasTorch, setHasTorch] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
@@ -77,6 +79,13 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const faceLoopStartedRef = useRef(false);
   const lastFrameTime = useRef(0);
   const frameCount = useRef(0);
+  // ⚡ أداء/حرارة: منع تداخل الاستدلالات + ضبط تردد الكشف
+  const processingRef = useRef(false);
+  const lastProcessedRef = useRef(0);
+  const currentIntervalRef = useRef(250);
+  const lastFaceTimeRef = useRef(0);
+  const hiddenRef = useRef(false);
+  const facingRef = useRef<CameraFacing>('user');
 
   const studentsWithFace = useMemo(() =>
     students.filter(s => s.faceDescriptor && (
@@ -113,6 +122,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
   useEffect(() => {
     mountedRef.current = true;
+    suspendAurora();
     setTimeout(() => {
       if (studentsWithFace.length > 0) {
         buildDescriptorCache(studentsWithFace as any, 0.5);
@@ -125,7 +135,32 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       if (isDetectorReady() && !faceLoopStartedRef.current) startFaceLoop();
     }, 200);
     setTimeout(() => clearInterval(interval), 60000);
-    return () => { mountedRef.current = false; cleanup(); clearDescriptorCache(); };
+    return () => { mountedRef.current = false; cleanup(); clearDescriptorCache(); resumeAurora(); };
+  }, []);
+
+  // ⚡ إيقاف الحلقة والكاميرا عند إخفاء التبويب (توفير حرارة/بطارية)
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden) {
+        hiddenRef.current = true;
+        if (faceRunningRef.current) stopFaceLoop();
+        if (trackRef.current && torchOn) {
+          try { trackRef.current.applyConstraints({ advanced: [{ torch: false } as any] }); } catch {}
+        }
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(t => t.stop());
+          streamRef.current = null;
+        }
+        trackRef.current = null;
+        setCameraReady(false);
+      } else {
+        hiddenRef.current = false;
+        if (mountedRef.current) initCamera();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -151,7 +186,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const cleanup = () => {
     faceRunningRef.current = false;
     faceLoopStartedRef.current = false;
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (rafRef.current) window.clearTimeout(rafRef.current);
+    rafRef.current = 0;
     if (trackRef.current && torchOn) {
       try { trackRef.current.applyConstraints({ advanced: [{ torch: false } as any] }); } catch {}
     }
@@ -166,11 +202,12 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const initCamera = async () => {
     if (!mountedRef.current) return;
     setCameraReady(false);
+    setVideoReady(false);
     try {
       await cleanup();
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facing, width: { ideal: 640 }, height: { ideal: 480 } },
+        video: { facingMode: facingRef.current, width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } },
         audio: false,
       });
       if (!mountedRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
@@ -198,11 +235,13 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   };
 
   const toggleCamera = async () => {
-    const newFacing: CameraFacing = facing === 'user' ? 'environment' : 'user';
-    stopFaceLoop();
+      const newFacing: CameraFacing = facing === 'user' ? 'environment' : 'user';
+      stopFaceLoop();
+      facingRef.current = newFacing;
+      setVideoReady(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: newFacing, width: { ideal: 640 }, height: { ideal: 480 } },
+        video: { facingMode: newFacing, width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } },
         audio: false,
       });
       if (!mountedRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
@@ -259,7 +298,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const stopFaceLoop = useCallback(() => {
     faceRunningRef.current = false;
     faceLoopStartedRef.current = false;
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (rafRef.current) window.clearTimeout(rafRef.current);
+    rafRef.current = 0;
     if (trackerRef.current) trackerRef.current.reset();
   }, []);
 
@@ -294,37 +334,52 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     const detectedFaces = new Map<string, DetectedFaceBox>();
     const trackDescriptors = new Map<number, Float32Array[]>();
 
-    let frameSkipCount = 0;
     const processFrame = async () => {
-      if (!faceRunningRef.current || !mountedRef.current) return;
+      if (!faceRunningRef.current || !mountedRef.current || hiddenRef.current) return;
+
+      // ⚡ منع تداخل الاستدلالات — استدلال واحد بالوقت
+      if (processingRef.current) {
+        rafRef.current = window.setTimeout(processFrame, 60);
+        return;
+      }
+
+      const nowMs = performance.now();
+      const elapsed = nowMs - lastProcessedRef.current;
+      if (elapsed < currentIntervalRef.current) {
+        rafRef.current = window.setTimeout(processFrame, Math.max(1, currentIntervalRef.current - elapsed));
+        return;
+      }
 
       const video = videoRef.current;
       const canvas = canvasRef.current;
       if (!video || !canvas || video.readyState < 2 || video.paused || video.ended) {
-        rafRef.current = requestAnimationFrame(processFrame);
+        rafRef.current = window.setTimeout(processFrame, 100);
         return;
       }
 
-      frameSkipCount++;
-      if (frameSkipCount % 2 !== 0) {
-        rafRef.current = requestAnimationFrame(processFrame);
-        return;
-      }
+      processingRef.current = true;
+      lastProcessedRef.current = performance.now();
       frameCount.current++;
 
       const cache = getDescriptorCache();
       const hasCache = cache && cache.length > 0;
       const recognitionReady = areModelsLoaded();
 
+      let detections: any[] = [];
       try {
-        let detections: any[] = [];
         if (recognitionReady) {
-          detections = await extractAllFaceDescriptors(video, 320);
+          // المرحلة 1: بحث رخيص عن الوجه بدقة منخفضة
+          const facesOnly = await detectAllFacesOnly(video, 320, 160);
+          if (!faceRunningRef.current || !mountedRef.current) return;
+          if (facesOnly.length > 0) {
+            // المرحلة 2: فقط عند وجود وجوه — استخراج البصمات الكاملة
+            detections = await extractAllFaceDescriptors(video, 320, 160);
+          }
         } else if (isDetectorReady()) {
-          detections = await detectAllFacesOnly(video, 320);
+          detections = await detectAllFacesOnly(video, 320, 160);
         } else {
           if (faceRunningRef.current && mountedRef.current) {
-            rafRef.current = requestAnimationFrame(processFrame);
+            rafRef.current = window.setTimeout(processFrame, 300);
           }
           return;
         }
@@ -545,14 +600,30 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
         drawBoxes(video, canvas, detectedFaces, facing, recognitionReady);
       } catch {}
+      finally {
+        processingRef.current = false;
+      }
 
-      if (faceRunningRef.current && mountedRef.current) {
-        rafRef.current = requestAnimationFrame(processFrame);
+      // ⚡ تردد تكيفي: تسريع عند وجود وجوه، إبطاء عند الخلو الطويل
+      if (detections.length > 0) {
+        currentIntervalRef.current = 120;
+        lastFaceTimeRef.current = performance.now();
+      } else if (performance.now() - lastFaceTimeRef.current > 4000) {
+        currentIntervalRef.current = 500;
+      } else {
+        currentIntervalRef.current = 250;
+      }
+
+      if (faceRunningRef.current && mountedRef.current && !hiddenRef.current) {
+        rafRef.current = window.setTimeout(processFrame, currentIntervalRef.current);
       }
     };
 
-    rafRef.current = requestAnimationFrame(processFrame);
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+    lastProcessedRef.current = 0;
+    currentIntervalRef.current = 250;
+    lastFaceTimeRef.current = performance.now();
+    rafRef.current = window.setTimeout(processFrame, 0);
+    return () => { if (rafRef.current) window.clearTimeout(rafRef.current); };
   }, [studentsWithFace, alreadyPresentIds, onMarkAttendance, onUpdateStudent]);
 
   const drawBoxes = (
@@ -574,9 +645,13 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     const vw = video.videoWidth, vh = video.videoHeight;
     if (!vw || !vh) return;
 
-    const scale = Math.max(canvas.width / vw, canvas.height / vh);
-    const dispW = vw * scale;
-    const dispH = vh * scale;
+    // إحداثيات الكشف تعود بأبعاد إطار المعالجة (320 عرضاً) وليس بأبعاد الفيديو الأصلية
+    const detW = 320;
+    const detH = Math.max(1, Math.round((detW * vh) / vw));
+
+    const scale = Math.max(canvas.width / detW, canvas.height / detH);
+    const dispW = detW * scale;
+    const dispH = detH * scale;
     const offX = (canvas.width - dispW) / 2;
     const offY = (canvas.height - dispH) / 2;
     const mirrorX = camFacing === 'user';
@@ -782,6 +857,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
               style={{ aspectRatio: '3 / 4' }}>
               <video ref={videoRef}
                 autoPlay playsInline muted
+                onLoadedMetadata={() => setVideoReady(true)}
                 className="absolute inset-0 w-full h-full object-cover"
                 style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }}
               />
@@ -809,7 +885,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
                 </button>
               )}
 
-              {mode === 'loading' && (
+              {(mode === 'loading' || !videoReady) && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black">
                   <div className="text-center">
                     <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />

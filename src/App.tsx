@@ -256,7 +256,6 @@ function App() {
 
         if (token) {
           sessionStorage.setItem('pendingRegToken', token);
-          console.log('✅ token:', token);
           setRegisterToken(token);
         }
 
@@ -288,7 +287,6 @@ function App() {
 
   useEffect(() => {
     if (registerToken) {
-      console.log('🎯 registerToken موجود، نعرض صفحة التسجيل');
       setLoading(false);
       // 🚀 تحميل موديل الكشف الخفيف فوراً
       setTimeout(() => startDetectorPreload(), 500);
@@ -672,6 +670,7 @@ function App() {
   };
 
   const processedAttendanceRef = useRef(new Set<string>());
+  const markAbsentInFlightRef = useRef(new Set<string>());
 
   const handleAttendanceRecord = (record: AttendanceRecord) => {
     if (record.status === 'present') {
@@ -692,6 +691,7 @@ function App() {
   const handleClearRecords = () => {
     cancelAllPendingSaves();
     intentionalDeleteRef.current.records = true;
+    markAbsentInFlightRef.current.clear();
     setAttendanceRecords([]);
   };
 
@@ -712,6 +712,7 @@ function App() {
   const handleDeleteSession = (sessionId: string) => {
     intentionalDeleteRef.current.sessions = true;
     intentionalDeleteRef.current.records = true;
+    markAbsentInFlightRef.current.clear();
     setSessions(prev => prev.filter(s => s.id !== sessionId));
     setAttendanceRecords(prev => prev.filter(r => r.sessionId !== sessionId));
     if (activeSessionId === sessionId) setActiveSessionId(null);
@@ -727,9 +728,23 @@ function App() {
     const subjectName = currentUser?.bio || currentUser?.displayName || stageName || '';
     const teacherName = currentUser?.displayName || '';
 
+    const studentMap = new Map(students.map(s => [s.id, s] as const));
+
+    const markedForSession = new Set(
+      attendanceRecords
+        .filter(r => r.sessionId === sessionId && (r.status === 'absent' || r.status === 'present'))
+        .map(r => r.studentId)
+    );
+
+    const absentCountMap = new Map<string, number>();
+    for (const r of attendanceRecords) {
+      if (r.status !== 'absent') continue;
+      absentCountMap.set(r.studentId, (absentCountMap.get(r.studentId) || 0) + 1);
+    }
+
     const studentsByGroup = new Map<string, typeof studentIds>();
     for (const studentId of studentIds) {
-      const student = students.find(s => s.id === studentId);
+      const student = studentMap.get(studentId);
       if (!student) continue;
       const group = student.group || 'بدون كروب';
       if (!studentsByGroup.has(group)) studentsByGroup.set(group, []);
@@ -747,21 +762,16 @@ function App() {
       const groupRecords: AttendanceRecord[] = [];
 
       for (const studentId of groupStudentIds) {
-        const student = students.find(s => s.id === studentId);
+        const student = studentMap.get(studentId);
         if (!student) continue;
 
-        const alreadyMarked = attendanceRecords.some(
-          r => r.studentId === studentId &&
-               r.sessionId === sessionId &&
-               (r.status === 'absent' || r.status === 'present')
-        );
-        if (alreadyMarked) continue;
+        if (markedForSession.has(studentId)) continue;
 
-        const existingCount = attendanceRecords.filter(
-          r => r.studentId === studentId && r.status === 'absent'
-        ).length;
+        const dedupeKey = `${sessionId}_${studentId}`;
+        if (markAbsentInFlightRef.current.has(dedupeKey)) continue;
+        markAbsentInFlightRef.current.add(dedupeKey);
 
-        const absenceCount = existingCount + 1;
+        const absenceCount = (absentCountMap.get(studentId) || 0) + 1;
 
         const record: AttendanceRecord = {
           id: `absent_${Date.now()}_${studentId}`,
@@ -796,7 +806,21 @@ function App() {
     }
 
     // 🚀 إرسال عبر التلغرام (خلفية)
-    if (telegramConfig && selectedStageId && groupDataList.length > 0) {
+    if (groupDataList.length > 0) {
+      const channel = telegramConfig && selectedStageId ? telegramConfig.channels[selectedStageId] : undefined;
+
+      if (!telegramConfig || !selectedStageId || !channel?.chatId) {
+        alert(
+          telegramConfig
+            ? '⚠️ إشعارات الغياب لم تُرسل: لا يوجد Chat ID مرتبط بهذه المرحلة.\nاذهب إلى الإعدادات ← بوت التلغرام وأدخل Chat ID لقناة هذه المادة.'
+            : '⚠️ إشعارات الغياب لم تُرسل: لم يتم إعداد بوت التلغرام.\nاذهب إلى الإعدادات ← بوت التلغرام لربط البوت والقناة أولاً.'
+        );
+        return;
+      }
+
+      const queue = buildQueueFromGroups(telegramConfig, selectedStageId, subjectName, dateKey, groupDataList);
+      if (queue.length === 0) return;
+
       const progressGroups: GroupSendProgress[] = groupDataList.map(g => ({
         groupName: g.groupName,
         channels: [{
@@ -816,8 +840,6 @@ function App() {
 
       const controller = new AbortController();
       sendAbortRef.current = controller;
-
-      const queue = buildQueueFromGroups(telegramConfig, selectedStageId, subjectName, dateKey, groupDataList);
 
       sendQueuedMessages(queue, telegramConfig.botToken, (updatedItems) => {
         const done = updatedItems.filter(i => i.status === 'sent' || i.status === 'failed').length;
@@ -885,22 +907,28 @@ function App() {
   };
 
   useEffect(() => {
-    let lastButton: HTMLElement | null = null;
+    // ⚡ ميزة التوهج تعمل فقط بأجهزة الماوس، ومقيدة بـ rAF لتقليل العمل
+    if (window.matchMedia?.('(hover: none)').matches) return;
+
+    let ticking = false;
+    let lastX = 0;
+    let lastY = 0;
+
     const handleMouseMove = (e: MouseEvent) => {
-      const target = (e.target as HTMLElement).closest('button') as HTMLElement | null;
-      if (target && target !== lastButton) {
-        if (lastButton) {
-          lastButton.style.setProperty('--glow-x', `${e.clientX - lastButton.getBoundingClientRect().left}px`);
-          lastButton.style.setProperty('--glow-y', `${e.clientY - lastButton.getBoundingClientRect().top}px`);
-        }
-        lastButton = target;
-      }
-      if (target) {
+      lastX = e.clientX;
+      lastY = e.clientY;
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        const target = (document.elementFromPoint(lastX, lastY)?.closest('button')) as HTMLElement | null;
+        if (!target) return;
         const rect = target.getBoundingClientRect();
-        target.style.setProperty('--glow-x', `${e.clientX - rect.left}px`);
-        target.style.setProperty('--glow-y', `${e.clientY - rect.top}px`);
-      }
+        target.style.setProperty('--glow-x', `${lastX - rect.left}px`);
+        target.style.setProperty('--glow-y', `${lastY - rect.top}px`);
+      });
     };
+
     document.addEventListener('mousemove', handleMouseMove, { passive: true });
     return () => document.removeEventListener('mousemove', handleMouseMove);
   }, []);

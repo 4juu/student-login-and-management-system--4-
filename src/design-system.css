@@ -8,6 +8,21 @@
 }
 
 /* ============================================ */
+/* 🪟 Modal Panel (آمن للجوال: dvh + overscroll) */
+/* ============================================ */
+.modal-panel {
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-height {
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+}
+
+/* ============================================ */
 /* 🪟 Glass Card                                */
 /* ============================================ */
 .glass-card {
