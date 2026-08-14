@@ -840,7 +840,7 @@ const handleDownloadExcel = async () => {
       {/* 📋 نافذة تأكيد داخلية */}
       {confirmState &&
         createPortal(
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4" onClick={() => setConfirmState(null)}>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] p-4" onClick={() => setConfirmState(null)}>
             <div className="modal-panel bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center" onClick={e => e.stopPropagation()}>
               <h3 className="text-lg font-bold text-gray-800 mb-2">{confirmState.title}</h3>
               <p className="text-sm text-gray-600 mb-6 whitespace-pre-line">{confirmState.message}</p>
