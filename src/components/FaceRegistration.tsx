@@ -51,7 +51,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
     setError(''); setCameraReady(false);
     try {
       if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
-      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: f, width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: f, width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } }, audio: false });
       if (!mountedRef.current) { s.getTracks().forEach(t => t.stop()); return; }
       streamRef.current = s;
       if (videoRef.current) { videoRef.current.srcObject = s; await videoRef.current.play(); }
@@ -83,7 +83,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
     detectIntervalRef.current = window.setInterval(async () => {
       if (!videoRef.current || !mountedRef.current) return;
       try {
-        const det = await detectSingleFace(videoRef.current, 320);
+        const det = await detectSingleFace(videoRef.current, 320, 224);
         if (!mountedRef.current) return;
         if (det) {
           setFaceDetected(true);
@@ -95,7 +95,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
           setFaceDetected(false);
         }
       } catch {}
-    }, 150);
+    }, 250);
     return () => { if (detectIntervalRef.current) { clearInterval(detectIntervalRef.current); detectIntervalRef.current = null; } };
   }, [cameraReady, capturing]);
 

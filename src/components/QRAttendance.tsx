@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { Student, AttendanceSession } from '../types/student';
+import { suspendAurora, resumeAurora } from '../lib/auraControl';
 
 interface QRAttendanceProps {
   students: Student[];
@@ -201,16 +202,16 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
       const attempts = [
         {
-          constraints: { facingMode: cf, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 20, min: 12 } },
-          fps: 20, box: qrBox,
+          constraints: { facingMode: cf, width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 12, max: 15 } },
+          fps: 12, box: qrBox,
         },
         {
-          constraints: { facingMode: cf, width: { ideal: 480 }, height: { ideal: 360 } },
-          fps: 15, box: qrBox,
+          constraints: { facingMode: cf, width: { ideal: 400 }, height: { ideal: 300 } },
+          fps: 10, box: qrBox,
         },
         {
           constraints: { facingMode: cf },
-          fps: 8, box: { width: 200, height: 200 },
+          fps: 6, box: { width: 200, height: 200 },
         },
       ];
 
@@ -338,12 +339,32 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
   useEffect(() => {
     mountedRef.current = true;
+    suspendAurora();
     const t = setTimeout(() => { if (mountedRef.current) startCamera('environment'); }, 250);
     return () => {
       mountedRef.current = false;
       clearTimeout(t);
+      resumeAurora();
       (async () => { await hardStop(); })();
     };
+  }, []);
+
+  // ⚡ إيقاف الماسح عند إخفاء التبويب لتقليل الحرارة، والعودة تلقائياً
+  useEffect(() => {
+    const onVisibility = () => {
+      const sc = scannerRef.current;
+      if (!sc) return;
+      if (document.hidden) {
+        try { sc.pause(); } catch {}
+      } else {
+        try {
+          const st = sc.getState();
+          if (st === Html5QrcodeScannerState.PAUSED) sc.resume();
+        } catch {}
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);
 
   const handleQrLinkByCode = useCallback(async (code: string) => {

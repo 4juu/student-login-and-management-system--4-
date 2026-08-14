@@ -190,9 +190,10 @@ export const resetModels = () => { modelsLoaded = false; loadingPromise = null; 
 export const areModelsLoaded = () => modelsLoaded;
 
 // ── Detector options ──
-const getDetectorOptions = () =>
+// inputSize قابل للتمرير: 160/224 للكشف المباشر الخفيف، و320 فقط للالتقاط النهائي
+const getDetectorOptions = (inputSize = 320) =>
   new faceapi.TinyFaceDetectorOptions({
-    inputSize: 320,
+    inputSize,
     scoreThreshold: 0.3,
   });
 
@@ -554,32 +555,35 @@ export const extractFaceDescriptor = async (
 
 export const extractAllFaceDescriptors = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
-  targetWidth = 480
+  targetWidth = 480,
+  inputSize = 320
 ) => {
   if (!modelsLoaded) await loadFaceModels();
   const processed = preprocessFrame(input, targetWidth);
   return faceapi
-    .detectAllFaces(processed, getDetectorOptions())
+    .detectAllFaces(processed, getDetectorOptions(inputSize))
     .withFaceLandmarks(true)
     .withFaceDescriptors();
 };
 
 export const detectAllFacesOnly = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
-  targetWidth = 320
+  targetWidth = 320,
+  inputSize = 320
 ) => {
   const processed = preprocessFrame(input, targetWidth);
-  return faceapi.detectAllFaces(processed, getDetectorOptions());
+  return faceapi.detectAllFaces(processed, getDetectorOptions(inputSize));
 };
 
 export const detectSingleFace = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
-  targetWidth = 640
+  targetWidth = 640,
+  inputSize = 320
 ) => {
   if (!modelsLoaded) await loadFaceModels();
   const processed = preprocessFrame(input, targetWidth);
   return faceapi
-    .detectSingleFace(processed, getDetectorOptions())
+    .detectSingleFace(processed, getDetectorOptions(inputSize))
     .withFaceLandmarks(true);
 };
 

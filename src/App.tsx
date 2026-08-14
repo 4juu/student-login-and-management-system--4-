@@ -256,7 +256,6 @@ function App() {
 
         if (token) {
           sessionStorage.setItem('pendingRegToken', token);
-          console.log('✅ token:', token);
           setRegisterToken(token);
         }
 
@@ -288,7 +287,6 @@ function App() {
 
   useEffect(() => {
     if (registerToken) {
-      console.log('🎯 registerToken موجود، نعرض صفحة التسجيل');
       setLoading(false);
       // 🚀 تحميل موديل الكشف الخفيف فوراً
       setTimeout(() => startDetectorPreload(), 500);
@@ -885,22 +883,28 @@ function App() {
   };
 
   useEffect(() => {
-    let lastButton: HTMLElement | null = null;
+    // ⚡ ميزة التوهج تعمل فقط بأجهزة الماوس، ومقيدة بـ rAF لتقليل العمل
+    if (window.matchMedia?.('(hover: none)').matches) return;
+
+    let ticking = false;
+    let lastX = 0;
+    let lastY = 0;
+
     const handleMouseMove = (e: MouseEvent) => {
-      const target = (e.target as HTMLElement).closest('button') as HTMLElement | null;
-      if (target && target !== lastButton) {
-        if (lastButton) {
-          lastButton.style.setProperty('--glow-x', `${e.clientX - lastButton.getBoundingClientRect().left}px`);
-          lastButton.style.setProperty('--glow-y', `${e.clientY - lastButton.getBoundingClientRect().top}px`);
-        }
-        lastButton = target;
-      }
-      if (target) {
+      lastX = e.clientX;
+      lastY = e.clientY;
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        const target = (document.elementFromPoint(lastX, lastY)?.closest('button')) as HTMLElement | null;
+        if (!target) return;
         const rect = target.getBoundingClientRect();
-        target.style.setProperty('--glow-x', `${e.clientX - rect.left}px`);
-        target.style.setProperty('--glow-y', `${e.clientY - rect.top}px`);
-      }
+        target.style.setProperty('--glow-x', `${lastX - rect.left}px`);
+        target.style.setProperty('--glow-y', `${lastY - rect.top}px`);
+      });
     };
+
     document.addEventListener('mousemove', handleMouseMove, { passive: true });
     return () => document.removeEventListener('mousemove', handleMouseMove);
   }, []);

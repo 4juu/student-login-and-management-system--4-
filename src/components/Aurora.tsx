@@ -128,7 +128,9 @@ export default function Aurora(props: {
     const renderer = new Renderer({
       alpha: true,
       premultipliedAlpha: true,
-      antialias: true
+      antialias: false,
+      powerPreference: 'low-power',
+      dpr: Math.min(window.devicePixelRatio || 1, 1.5),
     });
     const gl = renderer.gl;
     gl.clearColor(0, 0, 0, 0);
@@ -177,6 +179,8 @@ export default function Aurora(props: {
     let animateId = 0;
     const update = (t: number) => {
       animateId = requestAnimationFrame(update);
+      // ⚡ إيقاف الرسم عند: إخفاء التبويب أو فتح شاشة كاميرا (توفير حرارة/بطارية)
+      if (document.hidden || document.documentElement.dataset.suspendAurora === '1') return;
       program.uniforms.uTime.value = t * 0.01 * (propsRef.current.speed ?? 1) * 0.1;
       program.uniforms.uAmplitude.value = propsRef.current.amplitude ?? 1.0;
       program.uniforms.uBlend.value = propsRef.current.blend ?? blend;

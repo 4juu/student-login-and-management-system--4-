@@ -78,7 +78,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   const [matchPercentage, setMatchPercentage] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const goTo = (s: Step) => { console.log('🔄 goTo:', s, 'current step:', step, 'willSet:', step !== s); if (step !== s) setStep(s); };
+  const goTo = (s: Step) => { if (step !== s) setStep(s); };
 
   const loadStudent = async (adminUid: string, stageId: string, studentId: string, signal: AbortSignal, linkYear?: string): Promise<Student | null> => {
     let year = linkYear || '';
@@ -88,7 +88,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     if (!year) { setErrorMsg('تعذر تحميل السنة الدراسية'); goTo('invalid-link'); return null; }
 
     const studentPath = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}/students`;
-    console.log('📡 dbFetch loading students from:', `${dbURL}/${studentPath}.json`);
     const data = await dbFetch<Record<string, Student> | Student[]>(studentPath, signal);
     if (!data) { setErrorMsg('لم نجد بيانات الطلاب'); goTo('invalid-link'); return null; }
 
@@ -159,25 +158,20 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   }, [token]);
 
   const handleIdExtracted = async (result: IDExtractionResult) => {
-    console.log('📌 handleIdExtracted called', { hasStudent: !!student, hasLink: !!link, name: result.name });
     try {
       setIdData(result);
-      if (!student || !link) { console.log('⛔ student/link null'); return; }
+      if (!student || !link) return;
       const pct = matchArabicNames(student.name, result.name || result.fullName || '');
-      console.log('📊 matchPercentage:', pct, 'MIN_MATCH:', MIN_MATCH);
       setMatchPercentage(pct);
 
       if (pct < MIN_MATCH) {
-        console.log('🔀 going to name-mismatch');
         goTo('name-mismatch');
         return;
       }
 
-      console.log('✅ match success, proceeding to capture-face');
       saveQRAsync(result).catch(e => console.warn('⚠️ فشل حفظ QR:', e));
 
       goTo('capture-face');
-      console.log('✅ goTo capture-face called');
     } catch (e) {
       console.error('❌ خطأ في معالجة الهوية:', e);
       goTo('capture-face');
