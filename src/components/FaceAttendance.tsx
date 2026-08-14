@@ -3,6 +3,7 @@ import { Student, AttendanceSession } from '../types/student';
 import { User } from '../types/user';
 import { FaceRegistration } from './FaceRegistration';
 import { suspendAurora, resumeAurora } from '../lib/auraControl';
+import { useCameraReady } from '../hooks/useCameraReady';
 import {
   extractAllFaceDescriptors, normalizeDescriptor,
   areModelsLoaded, isDetectorReady, detectAllFacesOnly,
@@ -57,7 +58,6 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [facing, setFacing] = useState<CameraFacing>('user');
   const [cameraReady, setCameraReady] = useState(false);
-  const [videoReady, setVideoReady] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [hasTorch, setHasTorch] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
@@ -65,6 +65,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const [presentIds, setPresentIds] = useState<Set<string>>(new Set(alreadyPresentIds));
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const { videoReady, handleVideoReady, resetVideoReady, armForceReady } = useCameraReady(videoRef);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const trackRef = useRef<MediaStreamTrack | null>(null);
@@ -202,7 +203,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const initCamera = async () => {
     if (!mountedRef.current) return;
     setCameraReady(false);
-    setVideoReady(false);
+    resetVideoReady();
     try {
       await cleanup();
 
@@ -221,6 +222,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        armForceReady();
         await videoRef.current.play();
         setCameraReady(true);
         setMode('active');
@@ -238,7 +240,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       const newFacing: CameraFacing = facing === 'user' ? 'environment' : 'user';
       stopFaceLoop();
       facingRef.current = newFacing;
-      setVideoReady(false);
+      resetVideoReady();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: newFacing, width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } },
@@ -259,6 +261,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       setTorchOn(false);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        armForceReady();
         await videoRef.current.play();
         setCameraReady(true);
         setMode('active');
@@ -857,8 +860,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
               style={{ aspectRatio: '3 / 4' }}>
               <video ref={videoRef}
                 autoPlay playsInline muted
-                onLoadedMetadata={() => setVideoReady(true)}
-                className="absolute inset-0 w-full h-full object-cover"
+                onLoadedMetadata={handleVideoReady}
+                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${videoReady ? 'opacity-100' : 'invisible'}`}
                 style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }}
               />
 

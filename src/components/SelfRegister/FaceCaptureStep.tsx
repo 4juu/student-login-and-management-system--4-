@@ -14,6 +14,7 @@ import {
   getDetectionFrameDims,
   MultiDescriptor,
 } from '../../services/faceRecognition';
+import { useCameraReady } from '../../hooks/useCameraReady';
 import * as faceapi from 'face-api.js';
 
 interface FaceCaptureStepProps {
@@ -32,6 +33,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
   onCancel,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const { videoReady, handleVideoReady, resetVideoReady, armForceReady } = useCameraReady(videoRef);
   const streamRef = useRef<MediaStream | null>(null);
   const mountedRef = useRef(true);
   const landmarkCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -99,6 +101,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
         
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          armForceReady();
           await videoRef.current.play();
         }
         
@@ -121,7 +124,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
 
   // كشف الوجه المستمر
   useEffect(() => {
-    if (!cameraReady || capturing || !videoRef.current) return;
+    if (!cameraReady || !videoReady || capturing || !videoRef.current) return;
     
     const iv = window.setInterval(async () => {
       if (!videoRef.current || !mountedRef.current) return;
@@ -148,7 +151,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
     }, 250);
     
     return () => clearInterval(iv);
-  }, [cameraReady, capturing]);
+  }, [cameraReady, videoReady, capturing]);
 
   // رسم معالم الوجه
   useEffect(() => {
@@ -235,6 +238,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
     }
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraReady(false);
+    resetVideoReady();
 
     // إذا كانت النماذج لم تزل غير محملة، أعد تشغيل التحميل
     if (!areModelsLoaded()) {
@@ -260,6 +264,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          armForceReady();
           await videoRef.current.play();
         }
         
@@ -307,16 +312,23 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
 
         {modelsReady && !modelsLoading && (
           <div className="relative mb-4">
-            <div className="relative rounded-2xl overflow-hidden bg-gray-900 aspect-square mx-auto" style={{ maxWidth: 320 }}>
+            <div className="relative rounded-2xl overflow-hidden bg-gray-900 w-full" style={{ aspectRatio: '4 / 3', maxWidth: 320 }}>
               <video
                 ref={videoRef}
                 autoPlay
                 playsInline
                 muted
-                className="w-full h-full object-cover"
+                onLoadedMetadata={handleVideoReady}
+                className={`w-full h-full object-cover transition-opacity duration-300 ${videoReady ? 'opacity-100' : 'invisible'}`}
                 style={{ transform: 'scaleX(-1)' }}
               />
               <canvas ref={landmarkCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+
+              {(!cameraReady || !videoReady) && !error && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+                  <div className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
 
               {cameraReady && !capturing && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

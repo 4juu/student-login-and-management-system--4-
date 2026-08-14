@@ -54,7 +54,12 @@
         ".read": true,
         "$token": {
           ".read": true,
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')"
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')",
+          // ✅ يسمح للطالب بتعليم الرابط كمستخدم بعد إتمام التسجيل الذاتي
+          // (الكتابة على قيمة "used" فقط بقيمة true — لا يمكن حذفها أو تغييرها للطالب)
+          "used": {
+            ".write": "newData.val() === true || auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')"
+          }
         }
       },
 

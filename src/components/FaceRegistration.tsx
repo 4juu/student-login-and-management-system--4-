@@ -5,6 +5,7 @@ import {
   buildMultiDescriptor, checkForTamperingAsync,
   normalizeDescriptor, drawFaceLandmarks, getDetectionFrameDims,
 } from '../services/faceRecognition';
+import { useCameraReady } from '../hooks/useCameraReady';
 import * as faceapi from 'face-api.js';
 
 interface FaceRegistrationProps {
@@ -22,7 +23,6 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   const [error, setError] = useState('');
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
   const [cameraReady, setCameraReady] = useState(false);
-  const [videoReady, setVideoReady] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [faceDetected, setFaceDetected] = useState(false);
 
@@ -34,6 +34,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
 
   const searchRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const { videoReady, handleVideoReady, resetVideoReady, armForceReady } = useCameraReady(videoRef);
   const streamRef = useRef<MediaStream | null>(null);
   const mountedRef = useRef(true);
   const landmarkCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -49,13 +50,13 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   useEffect(() => { mountedRef.current = true; if (step === 'search') setTimeout(() => searchRef.current?.focus(), 300);   }, [step]);
 
   const openCamera = useCallback(async (f: 'user' | 'environment') => {
-    setError(''); setCameraReady(false); setVideoReady(false);
+    setError(''); setCameraReady(false); resetVideoReady();
     try {
       if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
       const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: f, width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } }, audio: false });
       if (!mountedRef.current) { s.getTracks().forEach(t => t.stop()); return; }
       streamRef.current = s;
-      if (videoRef.current) { videoRef.current.srcObject = s; await videoRef.current.play(); }
+      if (videoRef.current) { videoRef.current.srcObject = s; armForceReady(); await videoRef.current.play(); }
       if (mountedRef.current) setCameraReady(true);
     } catch (e: any) {
       if (!mountedRef.current) return;
@@ -63,7 +64,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
       else if (e.name === 'NotFoundError') setError('لا توجد كاميرا');
       else setError(e.message || 'فشل فتح الكاميرا');
     }
-  }, []);
+  }, [armForceReady, resetVideoReady]);
 
   const hasFaceDesc = (s: Student) => s.faceDescriptor && (Array.isArray(s.faceDescriptor) ? s.faceDescriptor.length > 0 : true);
 
@@ -80,7 +81,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
 
   // continuous detection loop — article pattern
   useEffect(() => {
-    if (!cameraReady || capturing || !videoRef.current) return;
+    if (!cameraReady || !videoReady || capturing || !videoRef.current) return;
     detectIntervalRef.current = window.setInterval(async () => {
       if (!videoRef.current || !mountedRef.current) return;
       try {
@@ -98,7 +99,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
       } catch {}
     }, 250);
     return () => { if (detectIntervalRef.current) { clearInterval(detectIntervalRef.current); detectIntervalRef.current = null; } };
-  }, [cameraReady, capturing]);
+  }, [cameraReady, videoReady, capturing]);
 
   // draw landmarks — article pattern
   useEffect(() => {
@@ -151,6 +152,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraReady(false);
+    resetVideoReady();
     if (detectIntervalRef.current) { clearInterval(detectIntervalRef.current); detectIntervalRef.current = null; }
   };
 
@@ -243,8 +245,8 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
             <div className="relative mb-3">
               <div className="relative rounded-2xl overflow-hidden bg-gray-900 w-full" style={{ aspectRatio: '4 / 3' }}>
                 <video ref={videoRef} autoPlay playsInline muted
-                  onLoadedMetadata={() => setVideoReady(true)}
-                  className="w-full h-full object-cover"
+                  onLoadedMetadata={handleVideoReady}
+                  className={`w-full h-full object-cover transition-opacity duration-300 ${videoReady ? 'opacity-100' : 'invisible'}`}
                   style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }} />
                 <canvas ref={landmarkCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 

@@ -221,7 +221,10 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
         hasExistingQr: !!student.qrCodeId,
         hasExistingFace: !!student.faceDescriptor,
       });
-      await set(ref(database, `registrationSystem/links/${token}/used`), true);
+      // تعليم الرابط كمستخدم — كتابة ثانوية لا يجب أن تحجب نجاح التسجيل
+      set(ref(database, `registrationSystem/links/${token}/used`), true).catch((e) =>
+        console.warn('⚠️ فشل تعليم الرابط كمستخدم:', e)
+      );
       goTo('success');
     } catch (e: any) {
       console.error('❌ فشل حفظ:', e);
