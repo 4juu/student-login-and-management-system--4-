@@ -670,6 +670,7 @@ function App() {
   };
 
   const processedAttendanceRef = useRef(new Set<string>());
+  const markAbsentInFlightRef = useRef(new Set<string>());
 
   const handleAttendanceRecord = (record: AttendanceRecord) => {
     if (record.status === 'present') {
@@ -690,6 +691,7 @@ function App() {
   const handleClearRecords = () => {
     cancelAllPendingSaves();
     intentionalDeleteRef.current.records = true;
+    markAbsentInFlightRef.current.clear();
     setAttendanceRecords([]);
   };
 
@@ -710,6 +712,7 @@ function App() {
   const handleDeleteSession = (sessionId: string) => {
     intentionalDeleteRef.current.sessions = true;
     intentionalDeleteRef.current.records = true;
+    markAbsentInFlightRef.current.clear();
     setSessions(prev => prev.filter(s => s.id !== sessionId));
     setAttendanceRecords(prev => prev.filter(r => r.sessionId !== sessionId));
     if (activeSessionId === sessionId) setActiveSessionId(null);
@@ -755,6 +758,10 @@ function App() {
         );
         if (alreadyMarked) continue;
 
+        const dedupeKey = `${sessionId}_${studentId}`;
+        if (markAbsentInFlightRef.current.has(dedupeKey)) continue;
+        markAbsentInFlightRef.current.add(dedupeKey);
+
         const existingCount = attendanceRecords.filter(
           r => r.studentId === studentId && r.status === 'absent'
         ).length;
@@ -794,7 +801,21 @@ function App() {
     }
 
     // 🚀 إرسال عبر التلغرام (خلفية)
-    if (telegramConfig && selectedStageId && groupDataList.length > 0) {
+    if (groupDataList.length > 0) {
+      const channel = telegramConfig && selectedStageId ? telegramConfig.channels[selectedStageId] : undefined;
+
+      if (!telegramConfig || !selectedStageId || !channel?.chatId) {
+        alert(
+          telegramConfig
+            ? '⚠️ إشعارات الغياب لم تُرسل: لا يوجد Chat ID مرتبط بهذه المرحلة.\nاذهب إلى الإعدادات ← بوت التلغرام وأدخل Chat ID لقناة هذه المادة.'
+            : '⚠️ إشعارات الغياب لم تُرسل: لم يتم إعداد بوت التلغرام.\nاذهب إلى الإعدادات ← بوت التلغرام لربط البوت والقناة أولاً.'
+        );
+        return;
+      }
+
+      const queue = buildQueueFromGroups(telegramConfig, selectedStageId, subjectName, dateKey, groupDataList);
+      if (queue.length === 0) return;
+
       const progressGroups: GroupSendProgress[] = groupDataList.map(g => ({
         groupName: g.groupName,
         channels: [{
@@ -814,8 +835,6 @@ function App() {
 
       const controller = new AbortController();
       sendAbortRef.current = controller;
-
-      const queue = buildQueueFromGroups(telegramConfig, selectedStageId, subjectName, dateKey, groupDataList);
 
       sendQueuedMessages(queue, telegramConfig.botToken, (updatedItems) => {
         const done = updatedItems.filter(i => i.status === 'sent' || i.status === 'failed').length;

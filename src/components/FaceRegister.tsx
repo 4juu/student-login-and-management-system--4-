@@ -1,11 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Student } from '../types/student';
 import {
   extractFaceDescriptor,
+  detectSingleFace,
   buildMultiDescriptor,
   checkForTamperingAsync,
   normalizeDescriptor,
+  drawFaceLandmarks,
 } from '../services/faceRecognition';
+import * as faceapi from 'face-api.js';
 
 interface FaceRegisterProps {
   students: Student[];
@@ -13,25 +16,43 @@ interface FaceRegisterProps {
   onClose: () => void;
 }
 
-export const FaceRegister: React.FC<FaceRegisterProps> = ({
-  students,
-  onUpdateStudent,
-  onClose,
-}) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const autoQueued = useRef(false);
+type Step = 'setup' | 'confirm' | 'camera' | 'capture' | 'success';
 
-  const [loading, setLoading] = useState(true);
-  const [currentIndex, setCurrentIndex] = useState(0);
+export const FaceRegister: React.FC<FaceRegisterProps> = ({ students, onUpdateStudent, onClose }) => {
+  const [step, setStep] = useState<Step>('setup');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'without'>('without');
-  const [capturing, setCapturing] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [bulkList, setBulkList] = useState<Student[]>([]);
+  const [bulkTotal, setBulkTotal] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [doneCount, setDoneCount] = useState(0);
   const [autoMode, setAutoMode] = useState(false);
+  const [facing, setFacing] = useState<'user' | 'environment'>('user');
+  const [cameraReady, setCameraReady] = useState(false);
+  const [capturing, setCapturing] = useState(false);
+  const [faceDetected, setFaceDetected] = useState(false);
+  const [error, setError] = useState('');
+  const [lastCapturedName, setLastCapturedName] = useState('');
+
+  const [detLandmarks, setDetLandmarks] = useState<faceapi.FaceLandmarks68 | null>(null);
+  const [detBox, setDetBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [detFrameW, setDetFrameW] = useState(0);
+  const [detFrameH, setDetFrameH] = useState(0);
+
+  const searchRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const mountedRef = useRef(true);
+  const landmarkCanvasRef = useRef<HTMLCanvasElement>(null);
+  const detectIntervalRef = useRef<number | null>(null);
+  const autoFiredRef = useRef(false);
+  const capturingRef = useRef(false);
+  capturingRef.current = capturing;
+
+  const hasFaceDesc = (s: Student) => s.faceDescriptor && (Array.isArray(s.faceDescriptor) ? s.faceDescriptor.length > 0 : true);
 
   const filteredStudents = students.filter(s => {
-    if (filterMode === 'without' && s.faceDescriptor) return false;
+    if (filterMode === 'without' && hasFaceDesc(s)) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return (
@@ -43,230 +64,380 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({
     return true;
   });
 
-  const currentStudent = filteredStudents[currentIndex];
+  const withFaceCount = students.filter(hasFaceDesc).length;
+  const currentStudent = bulkList[currentIndex];
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-          audio: false,
-        });
-        if (!mounted) { stream.getTracks().forEach(t => t.stop()); return; }
-        streamRef.current = stream;
-        if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
-        if (mounted) setLoading(false);
-      } catch {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
+  const filteredCount = (mode: 'all' | 'without') =>
+    students.filter(s => (mode === 'without' ? !hasFaceDesc(s) : true)).length;
+
+  // ── الكاميرا ──
+  const openCamera = useCallback(async (f: 'user' | 'environment') => {
+    setError(''); setCameraReady(false);
+    try {
+      if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: f, width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } }, audio: false });
+      if (!mountedRef.current) { s.getTracks().forEach(t => t.stop()); return; }
+      streamRef.current = s;
+      if (videoRef.current) { videoRef.current.srcObject = s; await videoRef.current.play(); }
+      if (mountedRef.current) setCameraReady(true);
+    } catch (e: any) {
+      if (!mountedRef.current) return;
+      if (e.name === 'NotAllowedError') setError('الرجاء السماح باستخدام الكاميرا');
+      else if (e.name === 'NotFoundError') setError('لا توجد كاميرا');
+      else setError(e.message || 'فشل فتح الكاميرا');
+    }
   }, []);
 
+  const cleanupCamera = () => {
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraReady(false);
+    if (detectIntervalRef.current) { clearInterval(detectIntervalRef.current); detectIntervalRef.current = null; }
+  };
+
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; cleanupCamera(); }; }, []);
+
+  // ── التنقل داخل قائمة التسجيل ──
+  const startBulk = () => {
+    const list = [...filteredStudents];
+    setBulkList(list);
+    setBulkTotal(list.length);
+    setCurrentIndex(0);
+    setDoneCount(0);
+    setStep('camera');
+  };
+
+  const handleSelectStudent = (s: Student, idx: number) => {
+    const list = [...filteredStudents];
+    setBulkList(list);
+    setBulkTotal(list.length);
+    setCurrentIndex(idx);
+    setDoneCount(0);
+    if (hasFaceDesc(s)) setStep('confirm');
+    else setStep('camera');
+  };
+
+  const goToStudent = (idx: number) => {
+    setCurrentIndex(idx);
+    setFaceDetected(false); setDetLandmarks(null); setDetBox(null); setError('');
+    autoFiredRef.current = false;
+  };
+
+  const handleCameraChoice = (f: 'user' | 'environment') => {
+    setFacing(f); setFaceDetected(false); setDetLandmarks(null); setDetBox(null); setError('');
+    setStep('capture'); openCamera(f);
+  };
+
+  const goNext = () => {
+    const nextList = bulkList.slice();
+    nextList.splice(currentIndex, 1);
+    setBulkList(nextList);
+    if (currentIndex < nextList.length) {
+      setFaceDetected(false); setDetLandmarks(null); setDetBox(null); setError('');
+      autoFiredRef.current = false;
+      setStep('capture');
+    } else {
+      cleanupCamera();
+      setStep('setup');
+    }
+  };
+
+  const handleFinish = () => {
+    cleanupCamera();
+    setStep('setup');
+  };
+
+  // ── حلقة الكشف المستمرة ──
+  useEffect(() => {
+    if (step !== 'capture' || !cameraReady || capturing || !videoRef.current) return;
+    detectIntervalRef.current = window.setInterval(async () => {
+      if (!videoRef.current || !mountedRef.current) return;
+      try {
+        const det = await detectSingleFace(videoRef.current, 320, 224);
+        if (!mountedRef.current) return;
+        if (det) {
+          setFaceDetected(true);
+          setDetLandmarks(det.landmarks);
+          setDetBox({ x: det.detection.box.x, y: det.detection.box.y, width: det.detection.box.width, height: det.detection.box.height });
+          setDetFrameW(det.detection.box.width > 0 ? (() => { const v = videoRef.current; return v ? v.videoWidth : 640; })() : 640);
+          setDetFrameH(det.detection.box.height > 0 ? (() => { const v = videoRef.current; return v ? v.videoHeight : 480; })() : 480);
+        } else {
+          setFaceDetected(false);
+        }
+      } catch {}
+    }, 250);
+    return () => { if (detectIntervalRef.current) { clearInterval(detectIntervalRef.current); detectIntervalRef.current = null; } };
+  }, [cameraReady, capturing, step, currentIndex]);
+
+  // ── رسم معالم الوجه ──
+  useEffect(() => {
+    const canvas = landmarkCanvasRef.current;
+    const container = canvas?.parentElement;
+    if (!canvas || !container || !detLandmarks || !detBox) {
+      if (canvas) { const ctx = canvas.getContext('2d'); if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height); }
+      return;
+    }
+    const rect = container.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const v = videoRef.current;
+    const fw = v ? v.videoWidth : detFrameW;
+    const fh = v ? v.videoHeight : detFrameH;
+    drawFaceLandmarks(ctx, detLandmarks, detBox, canvas.width, canvas.height, fw, fh, facing === 'user');
+  }, [detLandmarks, detBox, facing]);
+
+  // ── الالتقاط ──
   const handleCapture = async () => {
     if (!videoRef.current || !currentStudent || capturing) return;
-    setMessage(null);
     setCapturing(true);
+    setError('');
     try {
-      const descriptor = await extractFaceDescriptor(videoRef.current);
-      if (!descriptor) {
-        setMessage({ type: 'error', text: 'لم يتم التعرف على الوجه. تأكد من الإضاءة' });
-        setCapturing(false);
-        return;
+      const desc = await extractFaceDescriptor(videoRef.current);
+      if (!desc) { setError('لم يتم التعرف على الوجه'); setCapturing(false); return; }
+      const normalized = normalizeDescriptor(desc);
+
+      if (students.length > 1 && currentStudent) {
+        const tamper = await checkForTamperingAsync(normalized, students, currentStudent.id, 0.35);
+        if (tamper.isTamper) {
+          setError(`⚠️ هذا الوجه مسجل للطالب: ${tamper.matchedStudents.map(m => m.name).join('، ')}`);
+          setCapturing(false); return;
+        }
       }
-      const normalized = normalizeDescriptor(new Float32Array(descriptor));
-      const tamper = await checkForTamperingAsync(normalized, students, currentStudent.id, 0.35);
-      if (tamper.isTamper) {
-        setMessage({
-          type: 'error',
-          text: `هذه البصمة مسجلة أصلاً للطالب: ${tamper.matchedStudents.map(m => m.name).join('، ')}`,
-        });
-        setCapturing(false);
-        return;
-      }
+
       const angleDescs = new Map<string, Float32Array[]>();
       angleDescs.set('center', [normalized]);
       const multiDesc = buildMultiDescriptor(normalized, angleDescs, 1, new Set(['center']));
-      onUpdateStudent(currentStudent.id, {
-        faceDescriptor: multiDesc as any,
-        faceRegisteredAt: new Date().toISOString(),
-      });
-      setMessage({ type: 'success', text: currentStudent.name });
+      onUpdateStudent(currentStudent.id, { faceDescriptor: multiDesc as any, faceRegisteredAt: new Date().toISOString() });
+      setLastCapturedName(currentStudent.name);
+      setDoneCount(d => d + 1);
       setCapturing(false);
-      setTimeout(() => {
-        setMessage(null);
-        if (currentIndex < filteredStudents.length - 1) {
-          setCurrentIndex(i => i + 1);
-          if (autoMode) autoQueued.current = true;
-        } else {
-          setMessage({ type: 'success', text: 'انتهى التسجيل!' });
-          setAutoMode(false);
-        }
-      }, 600);
-    } catch (e) {
-      setMessage({ type: 'error', text: 'خطأ في التقاط البصمة' });
+      setStep('success');
+    } catch (e: any) {
+      setError(e.message || 'فشل التقاط الوجه');
       setCapturing(false);
     }
   };
 
+  // ── الالتقاط التلقائي ──
   useEffect(() => {
-    if (autoMode && !capturing && currentStudent && !autoQueued.current) {
-      autoQueued.current = true;
+    if (step === 'capture' && autoMode && faceDetected && !capturing && !autoFiredRef.current) {
+      autoFiredRef.current = true;
       const t = setTimeout(() => {
-        autoQueued.current = false;
+        autoFiredRef.current = false;
         handleCapture();
-      }, 400);
+      }, 450);
       return () => clearTimeout(t);
     }
-    if (!autoMode) autoQueued.current = false;
-  }, [autoMode, capturing, currentIndex]);
+  }, [step, autoMode, faceDetected, capturing, currentIndex]);
 
-  const capturingRef = useRef(capturing);
-  capturingRef.current = capturing;
+  // ── التقدم التلقائي بعد النجاح ──
+  useEffect(() => {
+    if (step === 'success' && autoMode) {
+      const t = setTimeout(() => goNext(), 900);
+      return () => clearTimeout(t);
+    }
+  }, [step, autoMode, currentIndex]);
 
+  // ── اختصارات لوحة المفاتيح ──
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        if (!capturingRef.current) handleCapture();
+        if (step === 'capture' && !capturingRef.current) { e.preventDefault(); handleCapture(); }
+        else if (step === 'success') goNext();
       } else if (e.key === 'ArrowRight') {
-        setCurrentIndex(i => Math.min(i + 1, filteredStudents.length - 1));
+        if (bulkList.length > 1) goToStudent(Math.min(currentIndex + 1, bulkList.length - 1));
       } else if (e.key === 'ArrowLeft') {
-        setCurrentIndex(i => Math.max(i - 1, 0));
+        if (bulkList.length > 1) goToStudent(Math.max(currentIndex - 1, 0));
       } else if (e.key === 'Escape') {
         onClose();
       }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [filteredStudents.length, onClose]);
+  }, [step, currentIndex, bulkList.length, onClose]);
 
-  const withFaceCount = students.filter(s => s.faceDescriptor).length;
+  const progressPct = withFaceCount > 0 ? Math.round((withFaceCount / students.length) * 100) : 0;
+  const bulkPct = bulkTotal > 0 ? Math.round((Math.min(doneCount + 1, bulkTotal) / bulkTotal) * 100) : 0;
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-gray-900 text-white flex flex-col" dir="rtl">
-      <header className="bg-gray-800 px-4 py-3 flex items-center justify-between border-b border-gray-700">
-        <div>
-          <h2 className="text-lg font-bold">تسجيل بصمات الوجه</h2>
-          <p className="text-xs text-gray-400">{withFaceCount} / {students.length} مسجّلين</p>
-        </div>
-        <button onClick={onClose} className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-sm font-bold">✕ إغلاق</button>
-      </header>
+    <div className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-3" dir="rtl"
+      onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[96vh] overflow-y-auto">
 
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        <div className="flex-1 bg-black relative min-h-[300px] overflow-hidden">
-          {loading && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center">
-                <div className="inline-block w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-3" />
-                <p>جاري التحميل...</p>
+        {step === 'setup' && (
+          <div className="p-5">
+            <div className="text-center mb-4">
+              <div className="text-4xl mb-2">📸</div>
+              <h3 className="text-lg font-bold text-gray-800">تسجيل بصمات الوجه الجماعي</h3>
+              <p className="text-xs text-gray-500 mt-1">{withFaceCount} / {students.length} مسجّلين</p>
+              <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-3">
+                <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500" style={{ width: `${progressPct}%` }} />
               </div>
             </div>
-          )}
 
-          <video ref={videoRef} autoPlay playsInline muted
-            className={`absolute inset-0 w-full h-full object-cover ${loading ? 'hidden' : ''}`}
-            style={{ transform: 'scaleX(-1)' }}
-          />
+            <input ref={searchRef} value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              placeholder="ابحث بالاسم أو الكود أو الكروب..." autoFocus
+              className="w-full p-3 border-2 border-purple-300 rounded-xl text-sm focus:border-purple-500 outline-none" />
 
-          {!loading && currentStudent && !capturing && (
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-              <div className="w-56 sm:w-64 h-72 sm:h-80 lg:w-72 lg:h-96 border-4 border-purple-400/60 rounded-3xl shadow-[0_0_30px_rgba(168,85,247,0.3)]" />
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => { setFilterMode('without'); setSearchQuery(''); }}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${filterMode === 'without' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                غير مسجّلين ({filteredCount('without')})
+              </button>
+              <button onClick={() => { setFilterMode('all'); setSearchQuery(''); }}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${filterMode === 'all' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                الكل ({filteredCount('all')})
+              </button>
             </div>
-          )}
 
-          {capturing && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10">
-              <div className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-          )}
-
-          {message && (
-            <div className={`absolute top-4 left-1/2 -translate-x-1/2 px-6 py-3 rounded-xl font-bold shadow-2xl z-30 ${
-              message.type === 'success' ? 'bg-green-600' : 'bg-red-600'
-            }`}>
-              {message.text}
-            </div>
-          )}
-        </div>
-
-        <div className="lg:w-96 bg-gray-800 flex flex-col p-4 overflow-y-auto max-h-[50vh] lg:max-h-full">
-          {currentStudent ? (
-            <div className="bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl p-4 mb-4 text-center">
-              <div className="text-3xl mb-2">👤</div>
-              <h3 className="text-xl font-bold">{currentStudent.name}</h3>
-              <p className="text-sm opacity-90">{currentStudent.code} • {currentStudent.group || '-'}</p>
-              <p className="text-xs mt-2 opacity-75">{currentIndex + 1} من {filteredStudents.length}</p>
-              {currentStudent.faceDescriptor && (
-                <div className="mt-2 inline-block bg-white/20 px-3 py-1 rounded-full text-xs">مسجّل سابقًا</div>
+            <div className="mt-3 space-y-1 max-h-60 overflow-y-auto">
+              {filteredStudents.map((s, idx) => (
+                <button key={s.id} onClick={() => handleSelectStudent(s, idx)}
+                  className="w-full text-right p-3 rounded-xl border border-gray-200 hover:border-purple-300 hover:bg-purple-50 flex items-center justify-between gap-2 transition">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-bold text-gray-800 truncate">{s.name}</div>
+                    <div className="text-[10px] text-gray-500">#{s.code}{s.group ? ` • ${s.group}` : ''}</div>
+                  </div>
+                  {hasFaceDesc(s) && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full shrink-0">لديه بصمة</span>}
+                </button>
+              ))}
+              {filteredStudents.length === 0 && (
+                <p className="text-center text-sm text-gray-500 py-6">🎉 لا يوجد طلاب غير مسجلين</p>
               )}
             </div>
-          ) : (
-            <div className="bg-gray-700 rounded-xl p-4 mb-4 text-center text-gray-400">لا يوجد طلاب</div>
-          )}
 
-          <button onClick={handleCapture}
-            disabled={!currentStudent || capturing || loading}
-            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-40 py-4 rounded-xl font-bold text-lg mb-2 active:scale-95 transition-all">
-            {capturing ? 'جاري...' : 'التقاط البصمة'}
-          </button>
-
-          <p className="text-xs text-center text-gray-400 mb-3">(أو اضغط Enter / مسطرة)</p>
-
-          <label className="flex items-center gap-2 bg-gray-700 p-3 rounded-lg mb-4 cursor-pointer hover:bg-gray-600">
-            <input type="checkbox" checked={autoMode} onChange={e => setAutoMode(e.target.checked)}
-              className="w-5 h-5 accent-purple-500" />
-            <div>
-              <div className="font-bold text-sm">الوضع التلقائي</div>
-              <div className="text-xs text-gray-400">يلتقط تلقائياً لكل طالب</div>
-            </div>
-          </label>
-
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            <button onClick={() => setCurrentIndex(i => Math.max(0, i - 1))}
-              disabled={currentIndex === 0}
-              className="bg-gray-700 hover:bg-gray-600 disabled:opacity-30 py-2 rounded-lg text-sm font-bold">
-              → السابق
-            </button>
-            <button onClick={() => setCurrentIndex(i => Math.min(filteredStudents.length - 1, i + 1))}
-              disabled={currentIndex >= filteredStudents.length - 1}
-              className="bg-gray-700 hover:bg-gray-600 disabled:opacity-30 py-2 rounded-lg text-sm font-bold">
-              التالي ←
-            </button>
-          </div>
-
-          <div className="mb-3">
-            <div className="flex gap-2 mb-2">
-              <button onClick={() => { setFilterMode('without'); setCurrentIndex(0); }}
-                className={`flex-1 py-2 rounded text-xs font-bold ${filterMode === 'without' ? 'bg-purple-600' : 'bg-gray-700'}`}>
-                غير مسجّلين
+            {filteredStudents.length > 0 && (
+              <button onClick={startBulk}
+                className="w-full mt-4 py-3.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl active:scale-95 transition shadow-md">
+                🚀 ابدأ التسجيل الجماعي ({filteredStudents.length} طالب)
               </button>
-              <button onClick={() => { setFilterMode('all'); setCurrentIndex(0); }}
-                className={`flex-1 py-2 rounded text-xs font-bold ${filterMode === 'all' ? 'bg-purple-600' : 'bg-gray-700'}`}>
-                الكل
+            )}
+            <button onClick={onClose} className="w-full mt-2 py-3 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95 text-sm">إغلاق</button>
+          </div>
+        )}
+
+        {step === 'confirm' && currentStudent && (
+          <div className="p-5 text-center">
+            <div className="text-5xl mb-3">🔄</div>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">بصمة موجودة</h3>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+              <p className="text-sm font-bold text-amber-800 mb-1">{currentStudent.name}</p>
+              <p className="text-xs text-amber-600">هذا الطالب لديه بصمة مسجلة بالفعل. هل تريد تحديثها؟</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setStep('setup')} className="py-3.5 bg-gray-200 text-gray-700 font-bold rounded-xl active:scale-95 text-sm">إلغاء</button>
+              <button onClick={() => setStep('camera')} className="py-3.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold rounded-xl active:scale-95 text-sm">✅ تحديث</button>
+            </div>
+          </div>
+        )}
+
+        {step === 'camera' && currentStudent && (
+          <div className="p-5 text-center">
+            <div className="text-4xl mb-2">📷</div>
+            <h3 className="text-lg font-bold text-gray-800 mb-1">{currentStudent.name}</h3>
+            <p className="text-xs text-gray-500 mb-4">اختر الكاميرا</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => handleCameraChoice('user')}
+                className="py-6 bg-gradient-to-br from-purple-500 to-pink-600 text-white font-bold rounded-2xl active:scale-95">
+                <div className="text-3xl mb-2">🤳</div>
+                <div className="text-sm">أمامية</div>
+              </button>
+              <button onClick={() => handleCameraChoice('environment')}
+                className="py-6 bg-gradient-to-br from-blue-500 to-cyan-600 text-white font-bold rounded-2xl active:scale-95">
+                <div className="text-3xl mb-2">📷</div>
+                <div className="text-sm">خلفية</div>
               </button>
             </div>
-            <input type="text" value={searchQuery}
-              onChange={e => { setSearchQuery(e.target.value); setCurrentIndex(0); }}
-              placeholder="بحث..." className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm" />
+            <button onClick={() => setStep('setup')} className="w-full mt-4 py-3 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95 text-sm">🔙 رجوع</button>
           </div>
+        )}
 
-          <div className="flex-1 overflow-y-auto bg-gray-900 rounded-lg p-2 space-y-1 min-h-[150px]">
-            {filteredStudents.map((s, idx) => (
-              <button key={s.id} onClick={() => setCurrentIndex(idx)}
-                className={`w-full text-right p-2 rounded text-xs transition ${
-                  idx === currentIndex ? 'bg-purple-600' : 'bg-gray-800 hover:bg-gray-700'
-                }`}>
-                <div className="flex items-center justify-between">
-                  <span className="truncate">{s.name}</span>
-                  {s.faceDescriptor && <span>✅</span>}
+        {step === 'capture' && currentStudent && (
+          <div className="p-4">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <h3 className="text-sm font-bold text-gray-800 truncate">{currentStudent.name}</h3>
+              <span className="text-[10px] text-gray-500 shrink-0">الطالب {Math.min(doneCount + 1, bulkTotal)} من {bulkTotal}</span>
+            </div>
+            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mb-3">
+              <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500" style={{ width: `${bulkPct}%` }} />
+            </div>
+
+            {error && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs">{error}</div>}
+
+            <div className="relative rounded-2xl overflow-hidden bg-gray-900 w-full" style={{ aspectRatio: '4 / 3' }}>
+              <video ref={videoRef} autoPlay playsInline muted
+                className="w-full h-full object-cover"
+                style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }} />
+              <canvas ref={landmarkCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+
+              {!cameraReady && !error && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+                  <div className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
                 </div>
-                <div className="text-[10px] opacity-60">{s.code} • {s.group || '-'}</div>
-              </button>
-            ))}
+              )}
+
+              {cameraReady && !capturing && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className={`w-52 h-52 border-4 rounded-full ${faceDetected ? 'border-green-400/70' : 'border-purple-400/70'}`}
+                    style={{ boxShadow: faceDetected ? '0 0 40px rgba(34,197,94,0.4)' : '0 0 40px rgba(168,85,247,0.4)' }} />
+                </div>
+              )}
+
+              {capturing && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                  <div className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+            </div>
+
+            {cameraReady && !capturing && (
+              <>
+                <div className="grid grid-cols-2 gap-2 mt-3">
+                  <button onClick={() => setStep('camera')} className="py-3 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95 text-sm">🔙 رجوع</button>
+                  <button onClick={handleCapture} className="py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg active:scale-95 text-sm">
+                    {faceDetected ? '📸 التقاط' : '⏳ انتظر الكشف'}
+                  </button>
+                </div>
+                {bulkList.length > 1 && (
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <button onClick={() => goToStudent(Math.max(0, currentIndex - 1))}
+                      disabled={currentIndex === 0}
+                      className="py-2 bg-gray-100 text-gray-600 font-bold rounded-lg active:scale-95 text-xs disabled:opacity-40">→ السابق</button>
+                    <button onClick={() => goToStudent(Math.min(bulkList.length - 1, currentIndex + 1))}
+                      disabled={currentIndex >= bulkList.length - 1}
+                      className="py-2 bg-gray-100 text-gray-600 font-bold rounded-lg active:scale-95 text-xs disabled:opacity-40">التالي ←</button>
+                  </div>
+                )}
+                <label className="flex items-center gap-2 mt-3 p-3 bg-purple-50 border border-purple-200 rounded-lg cursor-pointer">
+                  <input type="checkbox" checked={autoMode} onChange={e => setAutoMode(e.target.checked)} className="w-5 h-5 accent-purple-500" />
+                  <div>
+                    <div className="font-bold text-sm text-purple-800">الوضع التلقائي</div>
+                    <div className="text-xs text-purple-500">يلتقط تلقائياً ويمر للطالب التالي</div>
+                  </div>
+                </label>
+              </>
+            )}
           </div>
-        </div>
+        )}
+
+        {step === 'success' && currentStudent && (
+          <div className="p-5 text-center">
+            <div className="text-5xl mb-3 animate-bounce">🎉</div>
+            <h3 className="text-lg font-bold text-green-700 mb-1">تم تسجيل البصمة!</h3>
+            <p className="text-gray-800 font-bold">{lastCapturedName}</p>
+            <p className="text-xs text-gray-500 mt-2">اكتمل {doneCount} من {bulkTotal}</p>
+            <div className="grid grid-cols-2 gap-3 mt-4">
+              <button onClick={handleFinish} className="py-3 bg-gray-200 text-gray-700 font-bold rounded-xl active:scale-95 text-sm">🔚 إنهاء</button>
+              <button onClick={goNext} className="py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-xl active:scale-95 text-sm">
+                ▶️ الطالب التالي
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

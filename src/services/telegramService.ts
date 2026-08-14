@@ -31,28 +31,35 @@ export async function sendTelegramMessage(
   text: string,
   parseMode: 'HTML' | 'MarkdownV2' = 'HTML'
 ): Promise<boolean> {
-  try {
-    const url = `${TELEGRAM_API}${botToken}/sendMessage`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: parseMode,
-        disable_web_page_preview: true,
-      }),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      console.warn('⚠️ Telegram error:', data.description);
+  const trySend = async (): Promise<boolean> => {
+    try {
+      const url = `${TELEGRAM_API}${botToken}/sendMessage`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          parse_mode: parseMode,
+          disable_web_page_preview: true,
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        console.warn('⚠️ Telegram error:', data.description);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.warn('⚠️ Telegram send failed:', e);
       return false;
     }
-    return true;
-  } catch (e) {
-    console.warn('⚠️ Telegram send failed:', e);
-    return false;
-  }
+  };
+
+  const ok = await trySend();
+  if (ok) return true;
+  await sleep(1500);
+  return trySend();
 }
 
 export function buildAttendanceMessage(
@@ -341,8 +348,12 @@ export function buildQueueFromGroups(
     absentStudents: Array<{ name: string; count: number }>;
   }>
 ): SendQueueItem[] {
-  const stageChannels = config.channels[stageId];
-  if (!stageChannels || !stageChannels.enabled || !stageChannels.notifyOnAbsence) return [];
+  const stageChannels = config?.channels?.[stageId];
+  if (!stageChannels || !stageChannels.chatId) return [];
+  // التهيئة القديمة قد لا تحتوي على enabled/notifyOnAbsence → اعتماد القيم الافتراضية
+  const enabled = stageChannels.enabled !== false;
+  const notifyOnAbsence = stageChannels.notifyOnAbsence !== false;
+  if (!enabled || !notifyOnAbsence) return [];
 
   const queue: SendQueueItem[] = [];
   for (const group of groups) {
