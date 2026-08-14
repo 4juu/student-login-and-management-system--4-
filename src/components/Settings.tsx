@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Student, AttendanceRecord, Stage, College } from '../types/student';
 import { User } from '../types/user';
 import { TelegramConfig } from '../types/telegram';
@@ -53,6 +54,13 @@ export const Settings: React.FC<SettingsProps> = ({
   const [loadingStats, setLoadingStats] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [newYearDraft, setNewYearDraft] = useState(getNextAcademicYear(getCurrentAcademicYear()));
+  const [resetDialog, setResetDialog] = useState<
+    | { type: 'confirm' }
+    | { type: 'success'; oldYear: string; newYear: string }
+    | { type: 'error'; message: string }
+    | null
+  >(null);
+  const [resetTypedConfirm, setResetTypedConfirm] = useState('');
 
   // 🏛️ عنوان النظام (للأدمن الرئيسي فقط)
   const [systemTitleDraft, setSystemTitleDraft] = useState(systemTitle);
@@ -268,69 +276,49 @@ export const Settings: React.FC<SettingsProps> = ({
     }
   };
 
-  const handleResetAcademicYear = async () => {
-    if (!currentUser || currentUser.role !== 'admin') {
-      alert('هذه الميزة متاحة للأدمن فقط');
-      return;
-    }
+  const handleResetAcademicYear = () => {
+    if (!currentUser || currentUser.role !== 'admin') return;
 
     const targetYear = newYearDraft.trim();
 
     if (!isValidAcademicYearFormat(targetYear)) {
-      alert('صيغة السنة غير صحيحة. مثال صحيح: 2025_2026');
+      setResetDialog({ type: 'error', message: 'صيغة السنة غير صحيحة. مثال صحيح: 2025_2026' });
       return;
     }
 
     if (targetYear === currentAcademicYear) {
-      alert('يجب أن تختلف السنة الجديدة عن السنة الحالية');
+      setResetDialog({ type: 'error', message: 'يجب أن تختلف السنة الجديدة عن السنة الحالية' });
       return;
     }
 
-    const confirm1 = window.confirm(
-      `تحذير خطير: بدء سنة أكاديمية جديدة\n\n` +
-      `السنة الجديدة: ${targetYear}\n\n` +
-      `سيتم حذف جميع الطلاب (${stats?.totalStudents || 0})\n` +
-      `سيتم حذف جميع سجلات الحضور والجلسات\n` +
-      `سيتم تعطيل صلاحيات جميع التدريسيين (الحسابات تبقى)\n\n` +
-      `ما سيبقى:\n` +
-      `الكليات والمراحل كما هي\n` +
-      `حسابك (الأدمن) وحسابات التدريسيين\n\n` +
-      `هل أنت متأكد 100%؟`
-    );
+    setResetTypedConfirm('');
+    setResetDialog({ type: 'confirm' });
+  };
 
-    if (!confirm1) return;
-
-    const confirmText = window.prompt(
-      `للتأكيد النهائي، اكتب: "تصفير"\n\n(بدون علامات الاقتباس)`
-    );
-
-    if (confirmText !== 'تصفير') {
-      alert('تم إلغاء العملية');
-      return;
-    }
-
+  const confirmReset = async () => {
+    if (!currentUser) return;
+    setResetDialog(null);
     setResetting(true);
     try {
       const result = await resetAcademicYear(currentUser.uid, {
-        newYear: targetYear,
+        newYear: newYearDraft.trim(),
       });
 
-      alert(
-        `تم بدء السنة الجديدة بنجاح!\n\n` +
-        `السنة السابقة: ${result.oldYear}\n` +
-        `السنة الجديدة: ${result.newYear}\n\n` +
-        `تم حذف الطلاب وسجلات الحضور\n` +
-        `تم تعطيل صلاحيات التدريسيين\n\n` +
-        `سيتم إعادة تحميل الصفحة الآن...`
-      );
-
+      setResetDialog({ type: 'success', oldYear: result.oldYear, newYear: result.newYear });
       onResetComplete?.();
-      setTimeout(() => window.location.reload(), 1500);
     } catch (e: any) {
-      alert('فشل بدء السنة الجديدة: ' + (e.message || 'خطأ غير معروف'));
+      setResetDialog({ type: 'error', message: (e.message || 'خطأ غير معروف') });
     } finally {
       setResetting(false);
     }
+  };
+
+  const closeResetDialog = () => {
+    if (resetDialog?.type === 'success') {
+      window.location.reload();
+      return;
+    }
+    setResetDialog(null);
   };
 
 
@@ -704,6 +692,91 @@ export const Settings: React.FC<SettingsProps> = ({
           </button>
         </div>
       </div>
+
+      {/* 📋 نافذة تأكيد داخلية (بدل window.confirm/prompt التي تتجمد على الجوال) */}
+      {resetDialog && createPortal(
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4"
+          onClick={() => resetDialog.type !== 'success' && setResetDialog(null)}
+        >
+          <div
+            className="modal-panel bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center"
+            onClick={e => e.stopPropagation()}
+            dir="rtl"
+          >
+            {resetDialog.type === 'confirm' && (
+              <>
+                <h3 className="text-lg font-bold text-gray-800 mb-2">تحذير خطير</h3>
+                <p className="text-sm text-gray-600 mb-4 whitespace-pre-line text-right">
+                  {`السنة الجديدة: ${newYearDraft}\n\n` +
+                   `سيتم حذف جميع الطلاب وسجلات الحضور والجلسات\n` +
+                   `سيتم تعطيل صلاحيات جميع التدريسيين (الحسابات تبقى)\n\n` +
+                   `ما سيبقى:\n` +
+                   `الكليات والمراحل كما هي\n` +
+                   `حسابك (الأدمن) وحسابات التدريسيين`}
+                </p>
+                <label className="block text-xs font-bold text-gray-700 mb-2 text-right">
+                  للتأكيد النهائي، اكتب: "تصفير"
+                </label>
+                <input
+                  type="text"
+                  value={resetTypedConfirm}
+                  onChange={e => setResetTypedConfirm(e.target.value)}
+                  placeholder="تصفير"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 text-sm text-center mb-4"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={confirmReset}
+                    disabled={resetTypedConfirm !== 'تصفير' || resetting}
+                    className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-3 px-4 rounded-lg transition"
+                  >
+                    {resetting ? 'جاري التنفيذ...' : 'تأكيد التنفيذ'}
+                  </button>
+                  <button
+                    onClick={() => setResetDialog(null)}
+                    className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-3 px-4 rounded-lg transition"
+                  >
+                    إلغاء
+                  </button>
+                </div>
+              </>
+            )}
+
+            {resetDialog.type === 'success' && (
+              <>
+                <h3 className="text-lg font-bold text-green-700 mb-2">تم بدء السنة الجديدة بنجاح!</h3>
+                <p className="text-sm text-gray-600 mb-6 whitespace-pre-line text-right">
+                  {`السنة السابقة: ${resetDialog.oldYear}\n` +
+                   `السنة الجديدة: ${resetDialog.newYear}\n\n` +
+                   `تم حذف الطلاب وسجلات الحضور\n` +
+                   `تم تعطيل صلاحيات التدريسيين`}
+                </p>
+                <button
+                  onClick={closeResetDialog}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition"
+                >
+                  إعادة تحميل الصفحة
+                </button>
+              </>
+            )}
+
+            {resetDialog.type === 'error' && (
+              <>
+                <h3 className="text-lg font-bold text-red-700 mb-2">فشل العملية</h3>
+                <p className="text-sm text-gray-600 mb-6 whitespace-pre-line">{resetDialog.message}</p>
+                <button
+                  onClick={() => setResetDialog(null)}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition"
+                >
+                  إغلاق
+                </button>
+              </>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
 
     </div>
   );

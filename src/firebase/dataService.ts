@@ -729,12 +729,17 @@ export const resetAcademicYear = async (
     console.log(`🗓️ الانتقال من ${oldYear} إلى ${newYear}`);
     
     // 3️⃣ انقل الكليات والمراحل وإعدادات التلغرام إلى السنة الجديدة
-    const yearSnap = await get(ref(database, getYearBasePath(oldYear, adminUid)));
-    const oldData = yearSnap.exists() ? yearSnap.val() : {};
+    // (قراءات صغيرة فقط حتى لا يتم تحميل بيانات الطلاب الضخمة وتجميد الواجهة)
     const preserved: { [key: string]: unknown } = {};
-    if (oldData.colleges) preserved.colleges = oldData.colleges;
-    if (oldData.stages) preserved.stages = oldData.stages;
-    if (oldData.telegramConfig) preserved.telegramConfig = oldData.telegramConfig;
+    
+    const collegesSnap = await get(ref(database, getCollegesPath(oldYear, adminUid)));
+    if (collegesSnap.exists()) preserved.colleges = collegesSnap.val();
+    
+    const stagesSnap = await get(ref(database, getStagesPath(oldYear, adminUid)));
+    if (stagesSnap.exists()) preserved.stages = stagesSnap.val();
+    
+    const telegramSnap = await get(ref(database, `${getYearBasePath(oldYear, adminUid)}/telegramConfig`));
+    if (telegramSnap.exists()) preserved.telegramConfig = telegramSnap.val();
     
     if (Object.keys(preserved).length > 0) {
       await update(ref(database, getYearBasePath(newYear, adminUid)), preserved);
