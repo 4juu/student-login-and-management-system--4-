@@ -1,27 +1,20 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { AttendanceRecord, AttendanceSession, Student } from '../types/student';
 import { getCurrentAcademicYear } from '../firebase/dataService';
-import { Calendar, ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, CircleX, Download, GraduationCap, MapPin, Printer, QrCode, Tv } from 'lucide-react';
+import { Calendar, ChartColumn, Download, GraduationCap, MapPin } from 'lucide-react';
 
 interface AttendanceRecordsProps {
   records: AttendanceRecord[];
   sessions: AttendanceSession[];
   students?: Student[];
-  activeSessionId: string | null;
   onClearRecords: () => void;
-  onOpenLiveWall?: () => void;
 }
-
-const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
-const DEFAULT_PAGE_SIZE = 100;
 
 export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
   records,
   sessions,
   students = [],
-  activeSessionId,
   onClearRecords,
-  onOpenLiveWall,
 }) => {
   // 🆕 السنة الأكاديمية الحالية (للعرض)
   const currentAcademicYear = useMemo(() => getCurrentAcademicYear(), []);
@@ -57,14 +50,6 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
     return { today: t, firstDate: f, lastDate: l };
   }, [sortedSessions, normalizeAnyDate]);
 
-  const sessionRecordCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const record of records) {
-      counts.set(record.sessionId, (counts.get(record.sessionId) || 0) + 1);
-    }
-    return counts;
-  }, [records]);
-
   const normalizedDateOptions = useMemo(() =>
     [...sessions].map(s => ({
       id: s.id,
@@ -77,41 +62,6 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
   const [startDate, setStartDate] = useState<string>(firstDate);
   const [endDate, setEndDate] = useState<string>(lastDate);
   const [singleDate, setSingleDate] = useState<string>(lastDate);
-
-  const [selectedSessionId, setSelectedSessionId] = useState<string | 'all'>(activeSessionId || 'all');
-
-  const [searchRecord, setSearchRecord] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-
-  const filteredRecords = useMemo(() => {
-    let result = selectedSessionId === 'all'
-      ? records
-      : records.filter(r => r.sessionId === selectedSessionId);
-
-    if (searchRecord.trim()) {
-      const q = searchRecord.toLowerCase();
-      result = result.filter(r =>
-        r.studentName.toLowerCase().includes(q) ||
-        r.studentCode.toLowerCase().includes(q) ||
-        (r.studentGroup && r.studentGroup.toLowerCase().includes(q))
-      );
-    }
-
-    return [...result].reverse();
-  }, [records, selectedSessionId, searchRecord]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
-  const safeCurrentPage = Math.min(currentPage, totalPages);
-
-  const paginatedRecords = useMemo(() => {
-    const start = (safeCurrentPage - 1) * pageSize;
-    return filteredRecords.slice(start, start + pageSize);
-  }, [filteredRecords, safeCurrentPage, pageSize]);
-
-  React.useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedSessionId, searchRecord, pageSize]);
 
   // ============================================================
   // 🎨 الأنماط (Styles) للخلايا
@@ -454,95 +404,6 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
     }
   };
 
-  const handlePrint = () => {
-    const sessionName = (id: string) => sessions.find(s => s.id === id)?.name || id;
-    const presentTotal = filteredRecords.filter(r => r.status !== 'absent').length;
-    const absentTotal = filteredRecords.length - presentTotal;
-
-    const periodLabel =
-      exportType === 'single'
-        ? `اليوم: ${singleDate}`
-        : `من ${startDate} إلى ${endDate}`;
-
-    const rowsHtml = filteredRecords.map((r, i) => `
-        <tr>
-          <td class="c">${i + 1}</td>
-          <td class="name">${r.studentName}</td>
-          <td class="c">${r.studentCode || ''}</td>
-          <td class="c">${r.studentGroup || ''}</td>
-          <td>${sessionName(r.sessionId)}</td>
-          <td>${r.date || ''}</td>
-          <td class="c">${r.time || ''}</td>
-          <td class="c ${r.status === 'absent' ? 'absent' : 'present'}">${r.status === 'absent' ? 'غائب' : 'حاضر'}</td>
-        </tr>
-      `).join('');
-
-    const win = window.open('', '_blank', 'width=1100,height=750');
-    if (!win) {
-      window.alert('اسمح بالنوافذ المنبثقة في المتصفح لطباعة التقرير');
-      return;
-    }
-
-    win.document.write(`<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="UTF-8" />
-<title>كشف الحضور والغياب</title>
-<style>
-  * { box-sizing: border-box; }
-  body { font-family: 'Segoe UI', Tahoma, 'Arial', sans-serif; color: #111827; margin: 24px; font-size: 13px; }
-  .head { text-align: center; border-bottom: 3px solid #1e40af; padding-bottom: 12px; margin-bottom: 16px; }
-  .head h1 { margin: 0; font-size: 22px; color: #1e40af; }
-  .head p { margin: 4px 0 0; color: #374151; font-size: 13px; }
-  .meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; font-weight: 600; color: #374151; }
-  table { width: 100%; border-collapse: collapse; }
-  th { background: #1e40af; color: #fff; padding: 8px; font-size: 12px; }
-  td { border: 1px solid #cbd5e1; padding: 6px 8px; }
-  tr:nth-child(even) td { background: #f8fafc; }
-  .c { text-align: center; }
-  .present { color: #047857; font-weight: 700; }
-  .absent { color: #b91c1c; font-weight: 700; }
-  .foot { margin-top: 16px; display: flex; gap: 24px; font-weight: 700; font-size: 14px; }
-  .foot .p { color: #047857; } .foot .a { color: #b91c1c; }
-  .sig { margin-top: 40px; display: flex; justify-content: space-between; }
-  .sig span { border-top: 1px solid #111827; padding-top: 4px; min-width: 200px; text-align: center; font-size: 12px; }
-  @media print { body { margin: 12px; } }
-</style>
-</head>
-<body>
-  <div class="head">
-    <h1>كشف الحضور والغياب</h1>
-    <p>نظام إدارة الحضور — السنة الأكاديمية: ${currentAcademicYear.replace('_', ' - ')}</p>
-  </div>
-  <div class="meta">
-    <span>الفترة: ${periodLabel}</span>
-    <span>الجلسة: ${selectedSessionId === 'all' ? 'جميع الجلسات' : sessionName(selectedSessionId)}</span>
-    <span>إجمالي السجلات: ${filteredRecords.length}</span>
-  </div>
-  <table>
-    <thead>
-      <tr><th>ت</th><th>اسم الطالب</th><th>الرمز</th><th>الكروب</th><th>الجلسة</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th></tr>
-    </thead>
-    <tbody>${rowsHtml}</tbody>
-  </table>
-  <div class="foot">
-    <span>الحاضرون: <span class="p">${presentTotal}</span></span>
-    <span>الغائبون: <span class="a">${absentTotal}</span></span>
-  </div>
-  <div class="sig">
-    <span>توقيع التدريسي</span>
-    <span>توقيع الإدارة</span>
-  </div>
-</body>
-</html>`);
-
-    win.document.close();
-    win.onload = () => {
-      win.focus();
-      win.print();
-    };
-  };
-
   return (
     <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
       {/* 🆕 شريط السنة الأكاديمية */}
@@ -649,54 +510,9 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
       </div>
 
       {/* ============================================================ */}
-      {/* 📋 جدول العرض المباشر مع Pagination */}
+      {/* ⚙️ أدوات السجلات */}
       {/* ============================================================ */}
-      <div className="border-t pt-4 sm:pt-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
-          <div>
-            <h2 className="text-base sm:text-xl font-bold text-gray-800">سجل عمليات الدخول المباشر</h2>
-            <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-              <ChartColumn className="w-3.5 h-3.5" /> إجمالي: {records.length} سجل
-              {filteredRecords.length !== records.length && (
-                <span className="text-blue-600"> | نتائج الفلتر: {filteredRecords.length}</span>
-              )}
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-wrap">
-            {sessions.length > 0 && (
-              <select
-                value={selectedSessionId}
-                onChange={(e) => setSelectedSessionId(e.target.value)}
-                className="px-2 sm:px-3 py-1.5 border border-gray-300 rounded-md text-xs sm:text-sm font-medium"
-              >
-                <option value="all">جميع الأيام ({records.length})</option>
-                {sessions.map((session) => (
-                  <option key={session.id} value={session.id}>
-                    {session.name} ({sessionRecordCounts.get(session.id) || 0})
-                  </option>
-                ))}
-              </select>
-            )}
-
-            {onOpenLiveWall && (
-              <button
-                onClick={onOpenLiveWall}
-                className="btn-base bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white shadow-md"
-              >
-                <Tv className="w-4 h-4" />
-                <span>شاشة العرض</span>
-              </button>
-            )}
-
-            <button
-              onClick={handlePrint}
-              disabled={records.length === 0}
-              className="btn-base bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-700 hover:to-slate-900 text-white disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <Printer className="w-4 h-4" />
-              <span>طباعة / PDF</span>
-            </button>
+      <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 border-t pt-4 sm:pt-6">
 
             <button
               onClick={handleClearRecords}
@@ -708,204 +524,6 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
               </svg>
               <span>مسح السجلات</span>
             </button>
-          </div>
-        </div>
-
-        {records.length > 10 && (
-          <div className="mb-3 relative">
-            <input
-              type="text"
-              value={searchRecord}
-              onChange={e => setSearchRecord(e.target.value)}
-              placeholder="بحث بالاسم أو الرمز أو الكروب..."
-              className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              dir="rtl"
-            />
-            {searchRecord && (
-              <button
-                onClick={() => setSearchRecord('')}
-                className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xl"
-              >
-                ×
-              </button>
-            )}
-          </div>
-        )}
-
-        {filteredRecords.length > pageSize && (
-          <div className="mb-3 p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded-lg flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-            <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
-              <span className="text-gray-600">عرض:</span>
-              <select
-                value={pageSize}
-                onChange={e => setPageSize(Number(e.target.value))}
-                className="px-2 sm:px-3 py-1 border border-gray-300 rounded-md text-xs sm:text-sm bg-white"
-              >
-                {PAGE_SIZE_OPTIONS.map(size => (
-                  <option key={size} value={size}>{size} سجل</option>
-                ))}
-              </select>
-              <span className="text-gray-600 hidden xs:inline">
-                ({((safeCurrentPage - 1) * pageSize) + 1} - {Math.min(safeCurrentPage * pageSize, filteredRecords.length)} من {filteredRecords.length})
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1 justify-center sm:justify-end">
-              <button
-                onClick={() => setCurrentPage(1)}
-                disabled={safeCurrentPage === 1}
-                className="px-1.5 sm:px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
-              >
-                <ChevronsRight className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={safeCurrentPage === 1}
-                className="px-2 sm:px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-              <span className="px-2 sm:px-3 py-1 bg-blue-600 text-white rounded text-xs sm:text-sm font-bold">
-                {safeCurrentPage} / {totalPages}
-              </span>
-              <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={safeCurrentPage === totalPages}
-                className="px-2 sm:px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setCurrentPage(totalPages)}
-                disabled={safeCurrentPage === totalPages}
-                className="px-1.5 sm:px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
-              >
-                <ChevronsLeft className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
-
-          <div className="overflow-x-auto max-h-[400px] sm:max-h-[500px] overflow-y-auto border rounded-lg">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50 sticky top-0">
-              <tr>
-                <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">#</th>
-                <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
-                <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الرمز</th>
-                <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الاسم</th>
-                <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الكروب</th>
-                <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">التاريخ والوقت</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {paginatedRecords.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-3 sm:px-6 py-8 text-center text-gray-500 text-sm font-medium">
-                    {searchRecord || selectedSessionId !== 'all'
-                      ? 'لا توجد نتائج مطابقة'
-                      : 'لا توجد سجلات حضور مدخلة'}
-                  </td>
-                </tr>
-              ) : (
-                paginatedRecords.map((record, index) => {
-                  const globalIndex = filteredRecords.length - ((safeCurrentPage - 1) * pageSize + index);
-                  return (
-                    <tr key={record.id} className="hover:bg-gray-50">
-                      <td className="px-3 sm:px-6 py-3 text-sm text-gray-500">{globalIndex}</td>
-                      <td className="px-3 sm:px-6 py-3">
-                        {record.status === 'present' ? (
-                          <span className="px-2 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 inline-flex items-center gap-1"><CircleCheck className="w-3.5 h-3.5" /> حاضر</span>
-                        ) : (
-                          <span className="px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 inline-flex items-center gap-1"><CircleX className="w-3.5 h-3.5" /> غائب</span>
-                        )}
-                      </td>
-                      <td className="px-3 sm:px-6 py-3">
-                        <span className="px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
-                          {record.studentCode}
-                        </span>
-                      </td>
-                      <td className="px-3 sm:px-6 py-3 font-medium text-gray-900 text-sm">{record.studentName}</td>
-                      <td className="px-3 sm:px-6 py-3 text-sm text-gray-600">{record.studentGroup || '-'}</td>
-                      <td className="px-3 sm:px-6 py-3 text-xs text-gray-500">
-                        {record.date} - {record.time}
-                        {record.method === 'qr' && (
-                          <span className="mr-2 inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold">
-                            <QrCode className="w-3 h-3" /> QR
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {filteredRecords.length > pageSize && (
-          <div className="mt-3 p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center gap-1 flex-wrap">
-            <button
-              onClick={() => setCurrentPage(1)}
-              disabled={safeCurrentPage === 1}
-              className="px-1.5 sm:px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
-            >
-              <span className="hidden sm:inline-flex items-center gap-1"><ChevronsRight className="w-3.5 h-3.5" /> الأولى</span>
-              <span className="sm:hidden"><ChevronsRight className="w-3.5 h-3.5" /></span>
-            </button>
-            <button
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={safeCurrentPage === 1}
-              className="px-2 sm:px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
-            >
-              <span className="hidden sm:inline-flex items-center gap-1"><ChevronRight className="w-3.5 h-3.5" /> السابق</span>
-              <span className="sm:hidden"><ChevronRight className="w-3.5 h-3.5" /></span>
-            </button>
-
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              let pageNum: number;
-              if (totalPages <= 5) {
-                pageNum = i + 1;
-              } else if (safeCurrentPage <= 3) {
-                pageNum = i + 1;
-              } else if (safeCurrentPage >= totalPages - 2) {
-                pageNum = totalPages - 4 + i;
-              } else {
-                pageNum = safeCurrentPage - 2 + i;
-              }
-              return (
-                <button
-                  key={pageNum}
-                  onClick={() => setCurrentPage(pageNum)}
-                  className={`px-2 sm:px-3 py-1 rounded text-xs sm:text-sm font-medium ${
-                    pageNum === safeCurrentPage
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white border border-gray-300 hover:bg-gray-100'
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              );
-            })}
-
-            <button
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={safeCurrentPage === totalPages}
-              className="px-2 sm:px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
-            >
-              <span className="hidden sm:inline-flex items-center gap-1">التالي <ChevronLeft className="w-3.5 h-3.5" /></span>
-              <span className="sm:hidden"><ChevronLeft className="w-3.5 h-3.5" /></span>
-            </button>
-            <button
-              onClick={() => setCurrentPage(totalPages)}
-              disabled={safeCurrentPage === totalPages}
-              className="px-1.5 sm:px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-xs sm:text-sm"
-            >
-              <span className="hidden sm:inline-flex items-center gap-1">الأخيرة <ChevronsLeft className="w-3.5 h-3.5" /></span>
-              <span className="sm:hidden"><ChevronsLeft className="w-3.5 h-3.5" /></span>
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
