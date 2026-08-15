@@ -13,6 +13,7 @@ import {
 import { IDCardUpload } from './IDCardUpload';
 import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear } from '../../firebase/dataService';
+import { decompressRecord } from '../../firebase/dataServiceCompressed';
 import { SkeletonCard } from '../Skeleton';
 import type { MultiDescriptor } from '../../services/faceRecognition';
 import { AlertTriangle, XCircle, RotateCcw, CalendarDays, CheckCircle, XCircle as XCircleIcon, Users, BookOpen, ArrowLeft } from 'lucide-react';
@@ -100,6 +101,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   const [errorMsg, setErrorMsg] = useState('');
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [matchedStudent, setMatchedStudent] = useState<Student | null>(null);
+  const [sessionNameMap, setSessionNameMap] = useState<Record<string, string>>({});
 
   const goTo = useCallback((s: Step) => setStep(prev => prev === s ? prev : s), []);
 
@@ -118,19 +120,68 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     return studentsArr;
   };
 
-  const loadAttendanceRecords = async (adminUid: string, stageId: string, studentId: string, linkYear?: string): Promise<AttendanceRecord[]> => {
+  const loadStageRecordsForStudent = async (
+    adminUid: string,
+    stageId: string,
+    studentId: string,
+    signal?: AbortSignal,
+    linkYear?: string,
+  ): Promise<{ records: AttendanceRecord[]; sessionNameMap: Record<string, string> }> => {
     let year = linkYear || '';
     if (!year) {
       try { year = await getActiveAcademicYear(); } catch { year = ''; }
     }
-    if (!year) return [];
+    if (!year) return { records: [], sessionNameMap: {} };
 
-    const recordsPath = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}/attendanceRecords`;
-    const data = await dbFetch<Record<string, AttendanceRecord> | AttendanceRecord[]>(recordsPath);
-    if (!data) return [];
+    const base = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}`;
+    const sessionNameMap: Record<string, string> = {};
+    const allRecords: AttendanceRecord[] = [];
 
-    const recordsArr: AttendanceRecord[] = Array.isArray(data) ? data : Object.values(data);
-    return recordsArr.filter(r => r.studentId === studentId);
+    const teachersData = await dbFetch<any>(`${base}/teacherRecords`, signal);
+    if (teachersData) {
+      const teachers: any[] = Array.isArray(teachersData) ? teachersData : Object.values(teachersData);
+      for (const t of teachers) {
+        if (!t || typeof t !== 'object') continue;
+
+        if (t.recordsCompressed) {
+          const arr: any[] = Array.isArray(t.recordsCompressed) ? t.recordsCompressed : Object.values(t.recordsCompressed);
+          for (const c of arr) {
+            try {
+              const rec = decompressRecord(c);
+              if (rec && rec.id) allRecords.push(rec);
+            } catch { /* تجاهل سجل تالف */ }
+          }
+        }
+
+        if (t.records) {
+          const arr: any[] = Array.isArray(t.records) ? t.records : Object.values(t.records);
+          allRecords.push(...arr.filter(r => r && typeof r === 'object' && r.id));
+        }
+
+        if (t.sessions) {
+          const arr: any[] = Array.isArray(t.sessions) ? t.sessions : Object.values(t.sessions);
+          for (const s of arr) {
+            if (s && s.id && s.name) sessionNameMap[s.id] = s.name;
+          }
+        }
+      }
+    }
+
+    const legacyRecords = await dbFetch<any>(`${base}/attendanceRecords`, signal);
+    if (legacyRecords) {
+      const arr: any[] = Array.isArray(legacyRecords) ? legacyRecords : Object.values(legacyRecords);
+      allRecords.push(...arr.filter(r => r && typeof r === 'object' && r.id));
+    }
+
+    const legacySessions = await dbFetch<any>(`${base}/sessions`, signal);
+    if (legacySessions) {
+      const arr: any[] = Array.isArray(legacySessions) ? legacySessions : Object.values(legacySessions);
+      for (const s of arr) {
+        if (s && s.id && s.name) sessionNameMap[s.id] = s.name;
+      }
+    }
+
+    return { records: allRecords.filter(r => r.studentId === studentId), sessionNameMap };
   };
 
   const findMatchingStudent = (extractedName: string, students: Student[]): { student: Student; percentage: number } | null => {
@@ -246,8 +297,9 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
         setMatchPercentage(match.percentage);
         setMatchedStudent(match.student);
 
-        const records = await loadAttendanceRecords(link.adminUid, link.stageId, match.student.id, link.academicYear);
+        const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link.adminUid, link.stageId, match.student.id, undefined, link.academicYear);
         setAttendanceRecords(records);
+        setSessionNameMap(namesMap);
         goTo('attendance-report');
         return;
       }
@@ -560,7 +612,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
                           )}
                         </div>
                         <div className="text-right">
-                          <p className="font-medium text-white">{record.sessionName || 'جلسة'}</p>
+                          <p className="font-medium text-white">{record.sessionName || sessionNameMap[record.sessionId] || 'جلسة'}</p>
                           <p className="text-xs text-white/50 font-mono">
                             {normalizeDate(record.date)} {record.time && `• ${record.time}`}
                           </p>
