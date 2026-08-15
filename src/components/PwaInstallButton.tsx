@@ -93,16 +93,15 @@ export const PwaInstallButton: React.FC = () => {
 
   if (installed) return null;
 
-  const label = device === 'ios' ? 'تثبيت على آيفون' : device === 'android' ? 'تثبيت على أندرويد' : 'تثبيت';
-
   return (
     <>
       <button
         onClick={handleClick}
-        className="shrink-0 bg-emerald-500/90 hover:bg-emerald-600 text-white text-sm font-medium py-2 px-3.5 rounded-lg inline-flex items-center gap-2"
+        title="تثبيت التطبيق"
+        aria-label="تثبيت التطبيق"
+        className="shrink-0 bg-emerald-500/90 hover:bg-emerald-600 text-white p-2.5 rounded-lg inline-flex items-center justify-center"
       >
         <Download className="w-4 h-4" />
-        <span>{label}</span>
       </button>
 
       {showGuide && (
