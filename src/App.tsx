@@ -1200,6 +1200,12 @@ function App() {
                     onDeleteStudent={handleDeleteStudent} onDeleteSelectedStudents={handleDeleteSelectedStudents}
                     onSortByName={handleSortByName} onSortByGroup={handleSortByGroup}
                     onOpenProfile={setProfileStudent}
+                    currentUser={currentUser}
+                    adminUid={getAdminUid()}
+                    colleges={colleges}
+                    stages={stages}
+                    selectedStageId={selectedStageId}
+                    telegramConfig={telegramConfig}
                   />
                 ) : (
                   <StudentsViewer students={students} onOpenProfile={setProfileStudent} />
