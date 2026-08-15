@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref as dbRef, onValue, off } from 'firebase/database';
 import { Student, AttendanceRecord, AttendanceSession, College, Stage } from './types/student';
@@ -874,6 +874,36 @@ function App() {
   const isMainAdmin = isAdmin;
   const canSendAttendanceLink = isAdmin || isCollegeAdmin || currentUser?.role === 'teacher';
 
+  // 🎯 نطاق رابط الحضور: الأدمن الرئيسي يرى كل الكليات والمراحل،
+  // أما أدمن الكلية/التدريسي فيرى كليته فقط والمراحل المسموح لها بصلاحياته
+  const attendanceLinkScope = useMemo(() => {
+    if (!currentUser || isMainAdmin) {
+      return { colleges, stages };
+    }
+    if (isCollegeAdmin) {
+      const collegeId = currentUser.collegeId;
+      return {
+        colleges: collegeId ? colleges.filter(c => c.id === collegeId) : [],
+        stages: collegeId ? stages.filter(s => s.collegeId === collegeId) : [],
+      };
+    }
+    const teacherCollegeId = currentUser.collegeId;
+    const allowed = currentUser.permissions?.allowedStages || {};
+    if (teacherCollegeId) {
+      const allowedIds = allowed[teacherCollegeId] || [];
+      return {
+        colleges: allowedIds.length > 0 ? colleges.filter(c => c.id === teacherCollegeId) : [],
+        stages: allowedIds.length > 0 ? stages.filter(s => s.collegeId === teacherCollegeId && allowedIds.includes(s.id)) : [],
+      };
+    }
+    const grantedCollegeIds = Object.keys(allowed).filter(id => (allowed[id] || []).length > 0);
+    const grantedStageIds = new Set(Object.values(allowed).flat());
+    return {
+      colleges: colleges.filter(c => grantedCollegeIds.includes(c.id)),
+      stages: stages.filter(s => grantedStageIds.has(s.id)),
+    };
+  }, [currentUser, isMainAdmin, isCollegeAdmin, colleges, stages]);
+
   if (registerToken) {
     return <SelfRegisterPage token={registerToken} onExit={handleExitSelfRegister} />;
   }
@@ -1266,8 +1296,8 @@ function App() {
       {showAttendanceLink && currentUser && (
         <SendAttendanceLink
           adminUid={getAdminUid()}
-          colleges={colleges}
-          stages={stages}
+          colleges={attendanceLinkScope.colleges}
+          stages={attendanceLinkScope.stages}
           loadStudents={async (stageId: string) => loadStudentsForStage(getAdminUid(), stageId)}
           telegramConfig={telegramConfig}
           subjectName={currentUser?.bio || currentUser?.displayName || 'المادة'}
