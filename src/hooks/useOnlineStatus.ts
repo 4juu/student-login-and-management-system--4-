@@ -7,9 +7,15 @@
 // - syncDone: صحيح فقط بعد رفع كل البيانات المعلقة (outbox + retries)
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { ref as dbRef, onValue } from 'firebase/database';
+import { ref as dbRef, onValue, goOnline } from 'firebase/database';
 import { database } from '../firebase/config';
 import { applyOutbox, flushAllPendingSaves, hasPendingWrites } from '../firebase/dataService';
+
+// مدة سماح: لا نعتبر الاتصال بالسيرفر مقطوعاً إلا بعد بقاء
+// .info/connected = false لمدة كافية (يمنع التذبذب عند إعادة الاتصال)
+const FIREBASE_GRACE_MS = 6000;
+// المدة بين محاولات التأكد من اكتمال المزامنة
+const POLL_MS = 600;
 
 export function useOnlineStatus(): { isOffline: boolean; syncDone: boolean } {
   const [navigatorOnline, setNavigatorOnline] = useState<boolean>(
@@ -21,6 +27,7 @@ export function useOnlineStatus(): { isOffline: boolean; syncDone: boolean } {
 
   const isOffline = !navigatorOnline || !firebaseOnline;
 
+  // أحداث المتصفح (online/offline)
   useEffect(() => {
     const on = () => setNavigatorOnline(true);
     const off = () => setNavigatorOnline(false);
@@ -32,20 +39,46 @@ export function useOnlineStatus(): { isOffline: boolean; syncDone: boolean } {
     };
   }, []);
 
+  // حالة الاتصال الفعلية بالسيرفر (مع مهلة سماح)
   useEffect(() => {
     const connectedRef = dbRef(database, '.info/connected');
+    let graceTimer: number | undefined;
+
     const unsub = onValue(connectedRef, (snap) => {
-      setFirebaseOnline(!!snap.val());
+      const connected = !!snap.val();
+      if (connected) {
+        if (graceTimer) {
+          window.clearTimeout(graceTimer);
+          graceTimer = undefined;
+        }
+        setFirebaseOnline(true);
+      } else if (!graceTimer) {
+        graceTimer = window.setTimeout(() => {
+          setFirebaseOnline(false);
+          graceTimer = undefined;
+        }, FIREBASE_GRACE_MS);
+      }
     });
-    return () => unsub();
+
+    return () => {
+      unsub();
+      if (graceTimer) window.clearTimeout(graceTimer);
+    };
   }, []);
 
   const syncNow = useCallback(async () => {
     try {
+      goOnline(database);
+    } catch {}
+    try {
       await applyOutbox();
+    } catch (e) {
+      console.error('❌ فشل تطبيق صندوق الأوفلاين:', e);
+    }
+    try {
       await flushAllPendingSaves();
     } catch (e) {
-      console.error('❌ فشل المزامنة بعد عودة الاتصال:', e);
+      console.error('❌ فشل تصفير الكتابات المعلقة:', e);
     }
   }, []);
 
@@ -58,25 +91,30 @@ export function useOnlineStatus(): { isOffline: boolean; syncDone: boolean } {
       return;
     }
 
+    // عند رجوع الاتصال: ابدأ المزامنة فوراً
     if (wasOffline) {
       setSyncDone(false);
       void syncNow();
     }
 
+    // متابعة دورية حتى اكتمال كل الكتابات (مع إعادة محاولة مستمرة)
     const id = window.setInterval(async () => {
+      if (!navigatorOnline) return;
       try {
         const pending = await hasPendingWrites();
         if (!pending) {
           setSyncDone(true);
           window.clearInterval(id);
+        } else {
+          void syncNow();
         }
       } catch {
         window.clearInterval(id);
       }
-    }, 500);
+    }, POLL_MS);
 
     return () => window.clearInterval(id);
-  }, [isOffline, syncNow]);
+  }, [isOffline, navigatorOnline, syncNow]);
 
   return { isOffline, syncDone };
 }
