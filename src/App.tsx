@@ -872,6 +872,7 @@ function App() {
   const isCollegeAdmin = currentUser?.role === 'college_admin';
   const canEditStudents = isAdmin || isCollegeAdmin;
   const isMainAdmin = isAdmin;
+  const canSendAttendanceLink = isAdmin || isCollegeAdmin || currentUser?.role === 'teacher';
 
   if (registerToken) {
     return <SelfRegisterPage token={registerToken} onExit={handleExitSelfRegister} />;
@@ -1135,7 +1136,7 @@ function App() {
               >
                 📊 سجل الحضور ({attendanceRecords.length})
               </button>
-              {canEditStudents && (
+              {canSendAttendanceLink && (
                 <button
                   onClick={() => setShowAttendanceLink(true)}
                   className="btn-base btn-primary shrink-0 text-xs py-1.5 px-2"
