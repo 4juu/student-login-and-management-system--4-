@@ -93,6 +93,40 @@ export const createBulkRegistrationLinks = async (
 };
 
 /**
+ * 🆕 توليد رابط حضور واحد للمرحلة (مشترك لكل الطلاب)
+ */
+export const createAttendanceLink = async (
+  adminUid: string,
+  stageId: string,
+  subjectName: string,
+  expiryDays: number = DEFAULT_EXPIRY_DAYS
+): Promise<{ token: string; url: string }> => {
+  const token = nanoid(20);
+  const now = Date.now();
+  let academicYear = '';
+  try { academicYear = await getActiveAcademicYear(); } catch {}
+  
+  const linkData: RegistrationLink = {
+    token,
+    adminUid,
+    stageId,
+    studentId: null,  // لا طالب محدد - مشترك
+    type: 'attendance',
+    createdBy: adminUid,
+    createdAt: new Date().toISOString(),
+    expiresAt: now + expiryDays * 24 * 60 * 60 * 1000,
+    used: false,
+    academicYear: academicYear || undefined,
+    subjectName,
+  };
+  
+  await set(ref(database, `${LINKS_PATH}/${token}`), linkData);
+  
+  const url = `${window.location.origin}${window.location.pathname}?reg=${token}`;
+  return { token, url };
+};
+
+/**
  * 🔍 جلب بيانات الرابط بواسطة التوكن
  */
 export const getRegistrationLink = async (token: string): Promise<RegistrationLink | null> => {

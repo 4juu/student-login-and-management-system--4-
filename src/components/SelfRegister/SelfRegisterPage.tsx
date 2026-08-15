@@ -1,7 +1,7 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, lazy, Suspense, useCallback } from 'react';
 import { ref, set } from 'firebase/database';
 import { database, dbURL } from '../../firebase/config';
-import { Student } from '../../types/student';
+import { Student, AttendanceRecord } from '../../types/student';
 import { RegistrationLink, IDExtractionResult } from '../../types/registration';
 import {
   getRegistrationLink,
@@ -15,9 +15,8 @@ import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear } from '../../firebase/dataService';
 import { SkeletonCard } from '../Skeleton';
 import type { MultiDescriptor } from '../../services/faceRecognition';
-import { AlertTriangle, XCircle, RotateCcw } from 'lucide-react';
+import { AlertTriangle, XCircle, RotateCcw, CalendarDays, CheckCircle, XCircle as XCircleIcon, Users, BookOpen, ArrowLeft } from 'lucide-react';
 
-// 🚀 خطوة التقاط الوجه تُحمَّل عند الوصول إليها فقط (مكتبة الوجوه ثقيلة)
 const LazyFaceCaptureStep = lazy(() =>
   import('./FaceCaptureStep').then(m => ({ default: m.FaceCaptureStep }))
 );
@@ -32,7 +31,8 @@ type Step =
   | 'capture-face'
   | 'submitting'
   | 'success'
-  | 'error';
+  | 'error'
+  | 'attendance-report';
 
 interface SelfRegisterPageProps {
   token: string;
@@ -62,8 +62,6 @@ const deepSanitize = (obj: any): any => {
   return obj;
 };
 
-
-
 const dbFetch = async <T,>(path: string, signal?: AbortSignal): Promise<T | null> => {
   const url = `${dbURL}/${path}.json`;
   const res = await fetch(url, { signal });
@@ -74,6 +72,24 @@ const dbFetch = async <T,>(path: string, signal?: AbortSignal): Promise<T | null
   return res.json() as Promise<T | null>;
 };
 
+const normalizeDate = (dateStr: string): string => {
+  if (!dateStr) return '';
+  const arabicNumbers = '٠١٢٣٤٥٦٧٨٩';
+  const englishNumbers = '0123456789';
+  let normalized = dateStr.replace(/[٠-٩]/g, (d) => englishNumbers[arabicNumbers.indexOf(d)]);
+  normalized = normalized.replace(/[‏‎\u200E\u200F]/g, '').trim();
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
+
+  const slashMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slashMatch) {
+    const [, day, month, year] = slashMatch;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+
+  return normalized;
+};
+
 export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExit }) => {
   const [step, setStep] = useState<Step>('loading');
   const [link, setLink] = useState<RegistrationLink | null>(null);
@@ -82,10 +98,12 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   const [idData, setIdData] = useState<IDExtractionResult | null>(null);
   const [matchPercentage, setMatchPercentage] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [matchedStudent, setMatchedStudent] = useState<Student | null>(null);
 
-  const goTo = (s: Step) => { if (step !== s) setStep(s); };
+  const goTo = useCallback((s: Step) => { if (step !== s) setStep(s); }, [step]);
 
-  const loadStudent = async (adminUid: string, stageId: string, studentId: string, signal: AbortSignal, linkYear?: string): Promise<Student | null> => {
+  const loadAllStudentsForStage = async (adminUid: string, stageId: string, signal: AbortSignal, linkYear?: string): Promise<Student[] | null> => {
     let year = linkYear || '';
     if (!year) {
       try { year = await getActiveAcademicYear(); } catch { year = ''; }
@@ -97,11 +115,33 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     if (!data) { setErrorMsg('لم نجد بيانات الطلاب'); goTo('invalid-link'); return null; }
 
     const studentsArr: Student[] = Array.isArray(data) ? data : Object.values(data);
-    setAllStudents(studentsArr);
-    const found = studentsArr.find((s) => s.id === studentId);
-    if (!found) { setErrorMsg('لم نجد بياناتك في النظام'); goTo('invalid-link'); return null; }
-    setStudent(found);
-    return found;
+    return studentsArr;
+  };
+
+  const loadAttendanceRecords = async (adminUid: string, stageId: string, studentId: string, linkYear?: string): Promise<AttendanceRecord[]> => {
+    let year = linkYear || '';
+    if (!year) {
+      try { year = await getActiveAcademicYear(); } catch { year = ''; }
+    }
+    if (!year) return [];
+
+    const recordsPath = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}/attendanceRecords`;
+    const data = await dbFetch<Record<string, AttendanceRecord> | AttendanceRecord[]>(recordsPath);
+    if (!data) return [];
+
+    const recordsArr: AttendanceRecord[] = Array.isArray(data) ? data : Object.values(data);
+    return recordsArr.filter(r => r.studentId === studentId);
+  };
+
+  const findMatchingStudent = (extractedName: string, students: Student[]): { student: Student; percentage: number } | null => {
+    let bestMatch: { student: Student; percentage: number } | null = null;
+    for (const s of students) {
+      const pct = matchArabicNames(s.name, extractedName);
+      if (pct >= MIN_MATCH && (!bestMatch || pct > bestMatch.percentage)) {
+        bestMatch = { student: s, percentage: pct };
+      }
+    }
+    return bestMatch;
   };
 
   useEffect(() => {
@@ -126,15 +166,42 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
           goTo('invalid-link');
           return;
         }
+        if (!linkData) {
+          setErrorMsg('الرابط غير موجود');
+          goTo('invalid-link');
+          return;
+        }
 
         setLink(linkData);
 
-        if (linkData!.studentId) {
+        if (linkData.type === 'attendance') {
           const ac = new AbortController();
           const studentTimeout = setTimeout(() => ac.abort(), TIMEOUT);
           try {
-            const s = await loadStudent(linkData!.adminUid, linkData!.stageId, linkData!.studentId, ac.signal, linkData!.academicYear);
-            if (mounted && s) goTo('upload-id');
+            const students = await loadAllStudentsForStage(linkData.adminUid, linkData.stageId, ac.signal, linkData.academicYear);
+            if (mounted && students) {
+              setAllStudents(students);
+              goTo('upload-id');
+            }
+          } finally {
+            clearTimeout(studentTimeout);
+          }
+        } else if (linkData.studentId) {
+          const ac = new AbortController();
+          const studentTimeout = setTimeout(() => ac.abort(), TIMEOUT);
+          try {
+            const s = await loadAllStudentsForStage(linkData.adminUid, linkData.stageId, ac.signal, linkData.academicYear);
+            if (mounted && s) {
+              const found = s.find((stu) => stu.id === linkData.studentId);
+              if (found) {
+                setStudent(found);
+                setAllStudents(s);
+                goTo('upload-id');
+              } else {
+                setErrorMsg('لم نجد بياناتك في النظام');
+                goTo('invalid-link');
+              }
+            }
           } finally {
             clearTimeout(studentTimeout);
           }
@@ -160,13 +227,33 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       mounted = false;
       clearTimeout(globalTimeout);
     };
-  }, [token]);
+  }, [token, goTo]);
 
   const handleIdExtracted = async (result: IDExtractionResult) => {
     try {
       setIdData(result);
-      if (!student || !link) return;
-      const pct = matchArabicNames(student.name, result.name || result.fullName || '');
+      if (!link) return;
+
+      const extractedName = result.name || result.fullName || '';
+
+      if (link.type === 'attendance') {
+        const match = findMatchingStudent(extractedName, allStudents);
+        if (!match) {
+          setMatchPercentage(0);
+          goTo('name-mismatch');
+          return;
+        }
+        setMatchPercentage(match.percentage);
+        setMatchedStudent(match.student);
+
+        const records = await loadAttendanceRecords(link.adminUid, link.stageId, match.student.id, link.academicYear);
+        setAttendanceRecords(records);
+        goTo('attendance-report');
+        return;
+      }
+
+      if (!student) return;
+      const pct = matchArabicNames(student.name, extractedName);
       setMatchPercentage(pct);
 
       if (pct < MIN_MATCH) {
@@ -175,11 +262,14 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       }
 
       saveQRAsync(result).catch(e => console.warn('⚠️ فشل حفظ QR:', e));
-
       goTo('capture-face');
     } catch (e) {
       console.error('❌ خطأ في معالجة الهوية:', e);
-      goTo('capture-face');
+      if (link?.type === 'attendance') {
+        goTo('name-mismatch');
+      } else {
+        goTo('capture-face');
+      }
     }
   };
 
@@ -226,7 +316,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
         hasExistingQr: !!student.qrCodeId,
         hasExistingFace: !!student.faceDescriptor,
       });
-      // تعليم الرابط كمستخدم — كتابة ثانوية لا يجب أن تحجب نجاح التسجيل
       set(ref(database, `registrationSystem/links/${token}/used`), true).catch((e) =>
         console.warn('⚠️ فشل تعليم الرابط كمستخدم:', e)
       );
@@ -239,6 +328,21 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   };
 
   const handleRetryId = () => goTo('upload-id');
+
+  const getAttendanceStats = () => {
+    if (!matchedStudent) return { present: 0, absent: 0, total: 0, records: [] as any[] };
+
+    const present = attendanceRecords.filter(r => r.status === 'present').length;
+    const absent = attendanceRecords.filter(r => r.status === 'absent').length;
+
+    const sortedRecords = [...attendanceRecords].sort((a, b) =>
+      normalizeDate(b.date).localeCompare(normalizeDate(a.date))
+    );
+
+    return { present, absent, total: present + absent, records: sortedRecords };
+  };
+
+  const subjectName = link?.subjectName || link?.adminUid || 'المادة';
 
   if (step === 'loading') {
     return (
@@ -265,13 +369,33 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     );
   }
 
-
-
-  if (step === 'upload-id' && student) {
-    return <IDCardUpload student={student} onExtracted={handleIdExtracted} onCancel={onExit} />;
+  if (step === 'upload-id') {
+    return (
+      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
+        <div className="w-full max-w-md">
+          <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
+            {link?.type === 'attendance' && (
+              <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="bg-emerald-500/20 p-3 rounded-xl">
+                    <BookOpen className="w-6 h-6 text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-emerald-300">المادة</p>
+                    <p className="text-lg font-bold text-emerald-300">{subjectName}</p>
+                  </div>
+                </div>
+                <p className="text-sm text-emerald-300/80">ارفع هويتك الجامعية لعرض تقرير الحضور والغياب</p>
+              </div>
+            )}
+            <IDCardUpload student={student || { id: '', name: '', code: '' } as Student} onExtracted={handleIdExtracted} onCancel={onExit} />
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  if (step === 'name-mismatch' && student && idData) {
+  if (step === 'name-mismatch' && idData) {
     return (
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
         <div className="glass-card p-8 max-w-md w-full text-center">
@@ -281,10 +405,15 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
           <h2 className="text-2xl font-bold text-white mb-2">الاسم غير متطابق</h2>
           <p className="text-sm text-white/50 mb-4">نسبة التطابق: {matchPercentage}% (المطلوب {MIN_MATCH}% فأكثر)</p>
           <div className="glass-card-sm p-4 mb-4 text-right">
-            <p className="text-sm text-white/50">المسجل بالنظام: <span className="text-white font-bold">{student.name}</span></p>
-            <p className="text-sm text-white/50">المستخرج من الهوية: <span className="text-white font-bold">{idData.name || idData.fullName}</span></p>
+            {matchedStudent ? (
+              <p className="text-sm text-white/50">أقرب تطابق: <span className="text-white font-bold">{matchedStudent.name}</span></p>
+            ) : (
+              <>
+                <p className="text-sm text-white/50">المستخرج من الهوية: <span className="text-white font-bold">{idData.name || idData.fullName}</span></p>
+              </>
+            )}
           </div>
-          <p className="text-sm text-white/60 mb-6">الاسم في الهوية لا يتطابق مع الاسم المسجل في النظام. حاول تصوير الهوية بشكل أوضح أو تأكد من استخدام الهوية الصحيحة.</p>
+          <p className="text-sm text-white/60 mb-6">الاسم في الهوية لا يتطابق مع أي طالب في هذه المرحلة. حاول تصوير الهوية بشكل أوضح أو تأكد من استخدام الهوية الصحيحة.</p>
           <button onClick={handleRetryId} className="btn-base btn-secondary w-full py-3">
             <RotateCcw className="w-4 h-4" /> إعادة التصوير
           </button>
@@ -339,6 +468,132 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
           <div className="grid grid-cols-2 gap-2">
             <button onClick={onExit} className="btn-base btn-secondary py-3">خروج</button>
             <button onClick={() => goTo('upload-id')} className="btn-base btn-primary py-3">إعادة</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === 'attendance-report' && matchedStudent) {
+    const { present, absent, total, records } = getAttendanceStats();
+
+    return (
+      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
+        <div className="w-full max-w-2xl">
+          <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 overflow-hidden">
+            {/* Header with Subject Name */}
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="bg-white/20 p-3 rounded-xl">
+                  <BookOpen className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm text-emerald-100">مادة</p>
+                  <h1 className="text-2xl font-bold text-white">{subjectName}</h1>
+                </div>
+              </div>
+              <p className="text-emerald-100/80">تقرير الحضور والغياب للطالب</p>
+            </div>
+
+            {/* Student Name Card */}
+            <div className="p-6 border-b border-white/10">
+              <div className="flex items-center gap-4 bg-white/5 rounded-xl p-4">
+                <div className="bg-emerald-500/20 p-4 rounded-xl">
+                  <Users className="w-8 h-8 text-emerald-400" />
+                </div>
+                <div>
+                  <p className="text-sm text-white/50">اسم الطالب</p>
+                  <h2 className="text-2xl font-bold text-white">{matchedStudent.name}</h2>
+                  <p className="text-sm text-white/40 font-mono">كود: {matchedStudent.code}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Stats Cards */}
+            <div className="p-6 grid grid-cols-3 gap-3">
+              <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-center">
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <CheckCircle className="w-5 h-5 text-green-400" />
+                  <span className="text-sm font-medium text-green-300">حضور</span>
+                </div>
+                <div className="text-3xl font-bold text-green-300">{present}</div>
+                <div className="text-xs text-green-500/70">يوم</div>
+              </div>
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center">
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <XCircleIcon className="w-5 h-5 text-red-400" />
+                  <span className="text-sm font-medium text-red-300">غياب</span>
+                </div>
+                <div className="text-3xl font-bold text-red-300">{absent}</div>
+                <div className="text-xs text-red-500/70">يوم</div>
+              </div>
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-center">
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <CalendarDays className="w-5 h-5 text-blue-400" />
+                  <span className="text-sm font-medium text-blue-300">المجموع</span>
+                </div>
+                <div className="text-3xl font-bold text-blue-300">{total}</div>
+                <div className="text-xs text-blue-500/70">جلسة</div>
+              </div>
+            </div>
+
+            {/* Records List */}
+            {records.length > 0 && (
+              <div className="px-6 pb-6">
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <CalendarDays className="w-5 h-5 text-emerald-400" /> تفاصيل الجلسات
+                </h3>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {records.map((record) => (
+                    <div
+                      key={record.id}
+                      className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          record.status === 'present' ? 'bg-green-500/20' : 'bg-red-500/20'
+                        }`}>
+                          {record.status === 'present' ? (
+                            <CheckCircle className="w-5 h-5 text-green-400" />
+                          ) : (
+                            <XCircleIcon className="w-5 h-5 text-red-400" />
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium text-white">{record.sessionName || 'جلسة'}</p>
+                          <p className="text-xs text-white/50 font-mono">
+                            {normalizeDate(record.date)} {record.time && `• ${record.time}`}
+                          </p>
+                        </div>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        record.status === 'present'
+                          ? 'bg-green-500/20 text-green-300'
+                          : 'bg-red-500/20 text-red-300'
+                      }`}>
+                        {record.status === 'present' ? 'حاضر' : 'غائب'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {records.length === 0 && (
+              <div className="px-6 pb-6 text-center">
+                <div className="bg-white/5 border border-white/10 rounded-xl p-8">
+                  <CalendarDays className="w-12 h-12 text-white/20 mx-auto mb-3" />
+                  <p className="text-white/60">لا توجد سجلات حضور لهذا الطالب</p>
+                </div>
+              </div>
+            )}
+
+            {/* Exit Button */}
+            <div className="px-6 pb-6">
+              <button onClick={onExit} className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
+                <ArrowLeft className="w-5 h-5" /> العودة للرئيسية
+              </button>
+            </div>
           </div>
         </div>
       </div>

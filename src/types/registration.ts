@@ -2,12 +2,14 @@
 // 🔑 أنواع البيانات لنظام التسجيل الذاتي
 // ============================================================
 
+export type RegistrationLinkType = 'single' | 'bulk' | 'attendance';
+
 export interface RegistrationLink {
   token: string;
   adminUid: string;
   stageId: string;
-  studentId?: string | null;  // null = رابط جماعي للمرحلة
-  type: 'single' | 'bulk';
+  studentId?: string | null;  // null = رابط جماعي للمرحلة / رابط الحضور
+  type: RegistrationLinkType;
   createdBy: string;
   createdAt: string;
   expiresAt: number;          // timestamp بالـ ms
@@ -15,6 +17,7 @@ export interface RegistrationLink {
   usedAt?: string;
   usedByStudentId?: string;
   academicYear?: string;      // السنة الدراسية عند إنشاء الرابط
+  subjectName?: string;       // اسم المادة (من بايو التدريسي) - لروابط الحضور
 }
 
 export interface PendingRegistration {
