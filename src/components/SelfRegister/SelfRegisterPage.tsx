@@ -101,7 +101,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [matchedStudent, setMatchedStudent] = useState<Student | null>(null);
 
-  const goTo = useCallback((s: Step) => { if (step !== s) setStep(s); }, [step]);
+  const goTo = useCallback((s: Step) => setStep(prev => prev === s ? prev : s), []);
 
   const loadAllStudentsForStage = async (adminUid: string, stageId: string, signal: AbortSignal, linkYear?: string): Promise<Student[] | null> => {
     let year = linkYear || '';

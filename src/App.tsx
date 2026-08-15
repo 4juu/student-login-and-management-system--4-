@@ -25,6 +25,7 @@ import { Crown, Landmark, LogOut, Home, ChevronLeft, GraduationCap } from 'lucid
 // 🆕 نظام التسجيل الذاتي
 import { SelfRegisterPage } from './components/SelfRegister/SelfRegisterPage';
 import { SendRegisterLink } from './components/Admin/SendRegisterLink';
+import { SendAttendanceLink } from './components/Admin/SendAttendanceLink';
 
 // 🚀 طلبات التسجيل تُحمَّل عند فتحها فقط (تحتوي مكتبة الوجوه)
 const LazyPendingRegistrations = lazy(() =>
@@ -117,6 +118,7 @@ function App() {
 
   // 🆕 نظام التسجيل الذاتي - حالات الأدمن
   const [showSendLink, setShowSendLink] = useState(false);
+  const [showAttendanceLink, setShowAttendanceLink] = useState(false);
   const [showPendingRegistrations, setShowPendingRegistrations] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
 
@@ -998,7 +1000,7 @@ function App() {
                     </button>
                   </>
                 )}
-                {(isMainAdmin || isCollegeAdmin) && (
+                {isMainAdmin && (
                   <>
                     <button
                       onClick={() => setShowSendLink(true)}
@@ -1133,6 +1135,15 @@ function App() {
               >
                 📊 سجل الحضور ({attendanceRecords.length})
               </button>
+              {canEditStudents && (
+                <button
+                  onClick={() => setShowAttendanceLink(true)}
+                  className="btn-base btn-primary shrink-0 text-xs py-1.5 px-2"
+                  title="إنشاء رابط تقرير الحضور والغياب للطلاب"
+                >
+                  📅 رابط الحضور والغياب
+                </button>
+              )}
               {(isMainAdmin || isCollegeAdmin) && (
                 <div className="shrink-0 relative" style={{ overflow: 'visible' }}>
                   <button
@@ -1200,12 +1211,6 @@ function App() {
                     onDeleteStudent={handleDeleteStudent} onDeleteSelectedStudents={handleDeleteSelectedStudents}
                     onSortByName={handleSortByName} onSortByGroup={handleSortByGroup}
                     onOpenProfile={setProfileStudent}
-                    currentUser={currentUser}
-                    adminUid={getAdminUid()}
-                    colleges={colleges}
-                    stages={stages}
-                    selectedStageId={selectedStageId}
-                    telegramConfig={telegramConfig}
                   />
                 ) : (
                   <StudentsViewer students={students} onOpenProfile={setProfileStudent} />
@@ -1243,7 +1248,7 @@ function App() {
         universityDataLoading={universityDataLoading}
       />
 
-      {showSendLink && currentUser && (isMainAdmin || isCollegeAdmin) && (
+      {showSendLink && currentUser && isMainAdmin && (
         <SendRegisterLink
           adminUid={currentUser.uid}
           colleges={isCollegeAdmin ? colleges.filter(c => c.id === currentUser.collegeId) : colleges}
@@ -1254,6 +1259,18 @@ function App() {
           }}
           telegramConfig={telegramConfig}
           onClose={() => setShowSendLink(false)}
+        />
+      )}
+
+      {showAttendanceLink && currentUser && (
+        <SendAttendanceLink
+          adminUid={getAdminUid()}
+          colleges={colleges}
+          stages={stages}
+          loadStudents={async (stageId: string) => loadStudentsForStage(getAdminUid(), stageId)}
+          telegramConfig={telegramConfig}
+          subjectName={currentUser?.bio || currentUser?.displayName || 'المادة'}
+          onClose={() => setShowAttendanceLink(false)}
         />
       )}
 

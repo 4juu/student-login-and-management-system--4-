@@ -6,12 +6,7 @@ import {
   getCompressionStats,
   hasFaceDescriptor,
 } from '../services/faceCompression';
-import { Camera, CaseSensitive, ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, ClipboardList, FileArchive, FolderOpen, Hash, IdCard, Lightbulb, LoaderCircle, Pencil, Plus, QrCode, RefreshCw, Smile, SquarePen, Trash2, TriangleAlert, Unlink, Upload, Users, Zap, CalendarDays, BookOpen } from 'lucide-react';
-
-import { SendAttendanceLink } from './Admin/SendAttendanceLink';
-import { College, Stage } from '../types/student';
-import { TelegramConfig } from '../types/telegram';
-import { loadStudents } from '../firebase/dataService';
+import { Camera, CaseSensitive, ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, ClipboardList, FileArchive, FolderOpen, Hash, IdCard, Lightbulb, LoaderCircle, Pencil, Plus, QrCode, RefreshCw, Smile, SquarePen, Trash2, TriangleAlert, Unlink, Upload, Users, Zap } from 'lucide-react';
 
 // 🚀 نافذة تسجيل الوجه تُحمَّل عند فتحها فقط (مكتبة الوجوه ثقيلة)
 const LazyFaceRegister = lazy(() =>
@@ -28,13 +23,6 @@ interface StudentManagerProps {
   onSortByName?: () => void;
   onSortByGroup?: () => void;
   onOpenProfile?: (student: Student) => void;
-  // 🆕 للربط مع ميزة رابط الحضور
-  currentUser?: { uid: string; bio?: string; displayName: string } | null;
-  adminUid?: string;
-  colleges?: College[];
-  stages?: Stage[];
-  selectedStageId?: string | null;
-  telegramConfig?: TelegramConfig | null;
 }
 
 const extractQrCodeId = (raw: string): string => {
@@ -65,12 +53,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   onSortByName,
   onSortByGroup,
   onOpenProfile,
-  currentUser,
-  adminUid,
-  colleges = [],
-  stages = [],
-  selectedStageId,
-  telegramConfig = null,
 }) => {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -102,15 +84,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-
-  const [showAttendanceLink, setShowAttendanceLink] = useState(false);
-
-  const subjectName = currentUser?.bio || currentUser?.displayName || 'المادة';
-
-  const loadStudentsForStage = useCallback((stageId: string) => {
-    if (!adminUid) return Promise.resolve([]);
-    return loadStudents(adminUid, stageId);
-  }, [adminUid]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -586,17 +559,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold text-gray-800">إدارة الطلاب</h2>
-        {students.length > 0 && adminUid && selectedStageId && colleges.length > 0 && stages.length > 0 && (
-          <button
-            onClick={() => setShowAttendanceLink(true)}
-            className="bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-bold py-2.5 px-5 rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center gap-2 text-sm active:scale-95"
-            title="إنشاء رابط تقرير الحضور والغياب للطلاب"
-          >
-            <CalendarDays className="w-5 h-5" />
-            <BookOpen className="w-5 h-5" />
-            <span>رابط الحضور والغياب</span>
-          </button>
-        )}
       </div>
 
       {students.length > 0 && studentsWithoutQr > 0 && (
@@ -1486,18 +1448,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             onClose={() => setShowFaceRegister(false)}
           />
         </Suspense>
-      )}
-
-      {showAttendanceLink && adminUid && selectedStageId && (
-        <SendAttendanceLink
-          adminUid={adminUid}
-          colleges={colleges}
-          stages={stages}
-          loadStudents={loadStudentsForStage}
-          telegramConfig={telegramConfig}
-          subjectName={subjectName}
-          onClose={() => setShowAttendanceLink(false)}
-        />
       )}
     </div>
   );

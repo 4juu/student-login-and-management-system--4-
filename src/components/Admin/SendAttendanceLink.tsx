@@ -291,7 +291,7 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
   };
 
   if (generatedLink) {
-    return (
+    return createPortal(
       <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
         <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
 
@@ -368,11 +368,12 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
             </button>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     );
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden">
 
@@ -479,7 +480,8 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
             document.body
           )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
