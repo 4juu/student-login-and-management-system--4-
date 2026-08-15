@@ -4,7 +4,7 @@
     // 👥 المستخدمون
     // ══════════════════════════════════════════════════════════
     "users": {
-      ".read": true,
+      ".read": "auth != null",
       "$uid": {
         ".write": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin' || (root.child('users').child(auth.uid).child('role').val() == 'college_admin' && root.child('users').child($uid).child('role').val() == 'teacher'))"
       }
@@ -121,7 +121,7 @@
 
                 "teacherRecords": {
                   "$teacherId": {
-                    ".read": "auth != null && (auth.uid == $teacherId || auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
+                    ".read": true,
                     ".write": "auth != null && (auth.uid == $teacherId || auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)"
                   }
                 }
