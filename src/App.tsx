@@ -8,6 +8,8 @@ import { StudentManager } from './components/StudentManager';
 import { StudentsViewer } from './components/StudentsViewer';
 import { AttendanceLogin } from './components/AttendanceLogin';
 import { AttendanceRecords } from './components/AttendanceRecords';
+import { LiveAttendanceWall } from './components/LiveAttendanceWall';
+import { PwaInstallButton } from './components/PwaInstallButton';
 import { SessionManager } from './components/SessionManager';
 import { Login } from './components/Login';
 import { TeacherManagement } from './components/TeacherManagement';
@@ -101,6 +103,7 @@ function App() {
 
   const [students, setStudents] = useState<Student[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [liveWallOpen, setLiveWallOpen] = useState(false);
   const [sessions, setSessions] = useState<AttendanceSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
@@ -969,6 +972,8 @@ function App() {
               </div>
             </div>
 
+            <PwaInstallButton />
+
             <button
               onClick={handleLogout}
               className="shrink-0 bg-red-500/90 hover:bg-red-600 text-white text-sm font-medium py-2 px-3.5 rounded-lg inline-flex items-center gap-2"
@@ -1251,6 +1256,7 @@ function App() {
                 <AttendanceRecords
                   records={attendanceRecords} sessions={sessions} students={students}
                   activeSessionId={activeSessionId} onClearRecords={handleClearRecords}
+                  onOpenLiveWall={() => setLiveWallOpen(true)}
                 />
               )}
             </div>
@@ -1265,6 +1271,18 @@ function App() {
           </div>
         </div>
       </div>
+
+      {liveWallOpen && currentUser && selectedStageId && (
+        <LiveAttendanceWall
+          adminUid={getAdminUid()}
+          teacherId={getTeacherId()}
+          stageId={selectedStageId}
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          subjectName={currentUser?.bio || currentUser?.displayName || 'الحضور'}
+          onClose={() => setLiveWallOpen(false)}
+        />
+      )}
 
       {/* ✨ الشات بوت الذكي */}
       <SmartChatBot

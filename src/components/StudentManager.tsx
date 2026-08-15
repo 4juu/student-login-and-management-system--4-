@@ -6,7 +6,7 @@ import {
   getCompressionStats,
   hasFaceDescriptor,
 } from '../services/faceCompression';
-import { Camera, CaseSensitive, ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, ClipboardList, FileArchive, FolderOpen, Hash, IdCard, Lightbulb, LoaderCircle, Pencil, Plus, QrCode, RefreshCw, Smile, SquarePen, Trash2, TriangleAlert, Unlink, Upload, Users, Zap } from 'lucide-react';
+import { Camera, CaseSensitive, ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, ClipboardList, FileArchive, FolderOpen, Hash, IdCard, Lightbulb, LoaderCircle, Pencil, Plus, QrCode, RefreshCw, ScanFace, Smile, SquarePen, Trash2, TriangleAlert, Unlink, Upload, Users, Zap } from 'lucide-react';
 
 // 🚀 نافذة تسجيل الوجه تُحمَّل عند فتحها فقط (مكتبة الوجوه ثقيلة)
 const LazyFaceRegister = lazy(() =>
@@ -541,12 +541,6 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     setCurrentPage(1);
   }, [searchQuery, groupFilter, pageSize]);
 
-  const studentsWithUniId = students.filter(s => s.universityId).length;
-  const studentsWithoutUniId = students.length - studentsWithUniId;
-  const studentsWithQr = students.filter(s => s.qrCodeId).length;
-  const studentsWithoutQr = students.length - studentsWithQr;
-
-  // ✅ التعديل المهم: استخدام hasFaceDescriptor
   const studentsWithFace = students.filter(s => hasFaceDescriptor(s.faceDescriptor)).length;
   const studentsWithoutFace = students.length - studentsWithFace;
 
@@ -561,29 +555,15 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         <h2 className="text-2xl font-bold text-gray-800">إدارة الطلاب</h2>
       </div>
 
-      {students.length > 0 && studentsWithoutQr > 0 && (
-        <div className="mb-3 p-3 bg-emerald-50 border border-emerald-300 rounded-lg flex items-center gap-3">
-          <QrCode className="w-7 h-7 text-emerald-600" />
+      {students.length > 0 && studentsWithoutFace > 0 && (
+        <div className="mb-4 p-3 bg-emerald-50 border border-emerald-300 rounded-lg flex items-center gap-3">
+          <ScanFace className="w-7 h-7 text-emerald-600" />
           <div className="flex-1">
             <p className="text-sm font-bold text-emerald-800">
-              {studentsWithoutQr} طالب بدون ربط رمز QR
+              {studentsWithoutFace} طالب بدون بصمة وجه
             </p>
             <p className="text-xs text-emerald-700">
-              سيتم الربط تلقائياً عند أول مسح هوية. أو يمكنك إضافته يدوياً من الجدول أدناه.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {students.length > 0 && studentsWithoutUniId > 0 && (
-        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-300 rounded-lg flex items-center gap-3">
-          <TriangleAlert className="w-7 h-7 text-yellow-600" />
-          <div className="flex-1">
-            <p className="text-sm font-bold text-yellow-800">
-              {studentsWithoutUniId} طالب بدون رقم جامعي
-            </p>
-            <p className="text-xs text-yellow-700">
-              الرقم الجامعي اختياري ولا يؤثر على ميزة QR.
+              سيتم تسجيل بصمة الوجه تلقائياً عند أول عملية تسجيل. أو يمكنك إضافتها من الملف الشخصي للطالب.
             </p>
           </div>
         </div>

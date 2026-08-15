@@ -11,8 +11,9 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    // ❌ لا يوجد viteSingleFile هنا!
+    // �?O U,O USU^O�O_ viteSingleFile U�U+O!
   ],
+  publicDir: 'src/public',
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),

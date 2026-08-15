@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { AttendanceRecord, AttendanceSession, Student } from '../types/student';
 import { getCurrentAcademicYear } from '../firebase/dataService';
-import { Calendar, ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, CircleX, Download, GraduationCap, MapPin, QrCode } from 'lucide-react';
+import { Calendar, ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, CircleX, Download, GraduationCap, MapPin, Printer, QrCode, Tv } from 'lucide-react';
 
 interface AttendanceRecordsProps {
   records: AttendanceRecord[];
@@ -9,6 +9,7 @@ interface AttendanceRecordsProps {
   students?: Student[];
   activeSessionId: string | null;
   onClearRecords: () => void;
+  onOpenLiveWall?: () => void;
 }
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
@@ -20,6 +21,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
   students = [],
   activeSessionId,
   onClearRecords,
+  onOpenLiveWall,
 }) => {
   // 🆕 السنة الأكاديمية الحالية (للعرض)
   const currentAcademicYear = useMemo(() => getCurrentAcademicYear(), []);
@@ -452,6 +454,95 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
     }
   };
 
+  const handlePrint = () => {
+    const sessionName = (id: string) => sessions.find(s => s.id === id)?.name || id;
+    const presentTotal = filteredRecords.filter(r => r.status !== 'absent').length;
+    const absentTotal = filteredRecords.length - presentTotal;
+
+    const periodLabel =
+      exportType === 'single'
+        ? `اليوم: ${singleDate}`
+        : `من ${startDate} إلى ${endDate}`;
+
+    const rowsHtml = filteredRecords.map((r, i) => `
+        <tr>
+          <td class="c">${i + 1}</td>
+          <td class="name">${r.studentName}</td>
+          <td class="c">${r.studentCode || ''}</td>
+          <td class="c">${r.studentGroup || ''}</td>
+          <td>${sessionName(r.sessionId)}</td>
+          <td>${r.date || ''}</td>
+          <td class="c">${r.time || ''}</td>
+          <td class="c ${r.status === 'absent' ? 'absent' : 'present'}">${r.status === 'absent' ? 'غائب' : 'حاضر'}</td>
+        </tr>
+      `).join('');
+
+    const win = window.open('', '_blank', 'width=1100,height=750');
+    if (!win) {
+      window.alert('اسمح بالنوافذ المنبثقة في المتصفح لطباعة التقرير');
+      return;
+    }
+
+    win.document.write(`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<title>كشف الحضور والغياب</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Tahoma, 'Arial', sans-serif; color: #111827; margin: 24px; font-size: 13px; }
+  .head { text-align: center; border-bottom: 3px solid #1e40af; padding-bottom: 12px; margin-bottom: 16px; }
+  .head h1 { margin: 0; font-size: 22px; color: #1e40af; }
+  .head p { margin: 4px 0 0; color: #374151; font-size: 13px; }
+  .meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; font-weight: 600; color: #374151; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #1e40af; color: #fff; padding: 8px; font-size: 12px; }
+  td { border: 1px solid #cbd5e1; padding: 6px 8px; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  .c { text-align: center; }
+  .present { color: #047857; font-weight: 700; }
+  .absent { color: #b91c1c; font-weight: 700; }
+  .foot { margin-top: 16px; display: flex; gap: 24px; font-weight: 700; font-size: 14px; }
+  .foot .p { color: #047857; } .foot .a { color: #b91c1c; }
+  .sig { margin-top: 40px; display: flex; justify-content: space-between; }
+  .sig span { border-top: 1px solid #111827; padding-top: 4px; min-width: 200px; text-align: center; font-size: 12px; }
+  @media print { body { margin: 12px; } }
+</style>
+</head>
+<body>
+  <div class="head">
+    <h1>كشف الحضور والغياب</h1>
+    <p>نظام إدارة الحضور — السنة الأكاديمية: ${currentAcademicYear.replace('_', ' - ')}</p>
+  </div>
+  <div class="meta">
+    <span>الفترة: ${periodLabel}</span>
+    <span>الجلسة: ${selectedSessionId === 'all' ? 'جميع الجلسات' : sessionName(selectedSessionId)}</span>
+    <span>إجمالي السجلات: ${filteredRecords.length}</span>
+  </div>
+  <table>
+    <thead>
+      <tr><th>ت</th><th>اسم الطالب</th><th>الرمز</th><th>الكروب</th><th>الجلسة</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th></tr>
+    </thead>
+    <tbody>${rowsHtml}</tbody>
+  </table>
+  <div class="foot">
+    <span>الحاضرون: <span class="p">${presentTotal}</span></span>
+    <span>الغائبون: <span class="a">${absentTotal}</span></span>
+  </div>
+  <div class="sig">
+    <span>توقيع التدريسي</span>
+    <span>توقيع الإدارة</span>
+  </div>
+</body>
+</html>`);
+
+    win.document.close();
+    win.onload = () => {
+      win.focus();
+      win.print();
+    };
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
       {/* 🆕 شريط السنة الأكاديمية */}
@@ -587,6 +678,25 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                 ))}
               </select>
             )}
+
+            {onOpenLiveWall && (
+              <button
+                onClick={onOpenLiveWall}
+                className="btn-base bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white shadow-md"
+              >
+                <Tv className="w-4 h-4" />
+                <span>شاشة العرض</span>
+              </button>
+            )}
+
+            <button
+              onClick={handlePrint}
+              disabled={records.length === 0}
+              className="btn-base bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-700 hover:to-slate-900 text-white disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <Printer className="w-4 h-4" />
+              <span>طباعة / PDF</span>
+            </button>
 
             <button
               onClick={handleClearRecords}
