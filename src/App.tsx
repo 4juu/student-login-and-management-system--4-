@@ -9,6 +9,9 @@ import { StudentsViewer } from './components/StudentsViewer';
 import { AttendanceLogin } from './components/AttendanceLogin';
 import { AttendanceRecords } from './components/AttendanceRecords';
 import { PwaInstallButton } from './components/PwaInstallButton';
+import { OfflineModal } from './components/OfflineModal';
+import { OfflineWarningIcon } from './components/OfflineWarningIcon';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { SessionManager } from './components/SessionManager';
 import { Login } from './components/Login';
 import { TeacherManagement } from './components/TeacherManagement';
@@ -108,6 +111,16 @@ function App() {
   // 📋 ملف الطالب المفتوح حالياً + مؤشر المزامنة الخلفية
   const [profileStudent, setProfileStudent] = useState<Student | null>(null);
   const [stageSyncing, setStageSyncing] = useState(false);
+
+  // 🌐 مراقبة فقدان الاتصال + نافذة التنبيه
+  const { isOffline, syncDone } = useOnlineStatus();
+  const [offlineModalDismissed, setOfflineModalDismissed] = useState(false);
+
+  useEffect(() => {
+    if (isOffline) {
+      setOfflineModalDismissed(false);
+    }
+  }, [isOffline]);
 
   const [allTeachers, setAllTeachers] = useState<User[]>([]);
   const [allStagesData, setAllStagesData] = useState<AllStagesData>({});
@@ -972,6 +985,8 @@ function App() {
 
             <PwaInstallButton />
 
+            {(isOffline || !syncDone) && <OfflineWarningIcon />}
+
             <button
               onClick={handleLogout}
               className="shrink-0 bg-red-500/90 hover:bg-red-600 text-white text-sm font-medium py-2 px-3.5 rounded-lg inline-flex items-center gap-2"
@@ -1342,6 +1357,12 @@ function App() {
           />
         </Suspense>
       )}
+
+      {/* 🌐 نافذة فقدان الاتصال بالإنترنت */}
+      <OfflineModal
+        open={isOffline && !offlineModalDismissed}
+        onDismiss={() => setOfflineModalDismissed(true)}
+      />
     </div>
   );
 }
