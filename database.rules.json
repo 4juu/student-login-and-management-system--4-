@@ -115,9 +115,16 @@
               "$stageId": {
                 "students": {
                   ".read": true,
-                  // ⚠️ مفتوح للكتابة لأن auto-approve يحتاجها بدون auth
-                  // مستقبلاً: استخدم Cloud Function لتحسين الأمان
-                  ".write": true
+                  // ✅ الأدمن/أدمن الكلية يكتبون قائمة الطلاب بحرية
+                  // ✅ العموم (الطلاب بلا تسجيل دخول) لا يكتبون إلا حقل qrCodeId لطالب موجود
+                  //    (تعليم QR الهوية أثناء التسجيل الذاتي فقط — لا إنشاء ولا حذف ولا تعديل)
+                  ".write": "(auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin'))",
+                  "$index": {
+                    ".validate": "newData.hasChild('code')",
+                    "qrCodeId": {
+                      ".write": "(auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')) || (!data.exists() && newData.isString() && newData.val().length > 0)"
+                    }
+                  }
                 },
 
                 "teacherRecords": {
