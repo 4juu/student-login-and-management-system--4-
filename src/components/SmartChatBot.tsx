@@ -15,7 +15,7 @@ import {
 import { User } from '../types/user';
 import { AnimatePresence, motion } from "motion/react"
 import { MorphPanel } from './MorphPanel';
-import { ArrowUp, ChevronLeft, CircleCheck, CircleX, ClipboardList, MessageCircle, Search, Sparkles } from 'lucide-react';
+import { ArrowUp, ChevronLeft, CircleCheck, CircleX, ClipboardList, MessageCircle, Mic, Search, Sparkles, Square } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -315,6 +315,16 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
   const lastRequestTime = useRef<number>(0);
   const studentSearchRef = useRef<HTMLDivElement>(null);
   const contextCacheRef = useRef<{ key: string; value: string }>({ key: '', value: '' });
+
+  const [isListening, setIsListening] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voiceSupported] = useState(() =>
+    typeof window !== 'undefined' && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition),
+  );
+  const recognitionRef = useRef<any>(null);
+  const recognitionLangIndex = useRef(0);
+  const lastTranscriptRef = useRef('');
+  const manualStopRef = useRef(false);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -1049,11 +1059,96 @@ ${dataContext}`;
     }
   }, [messages, isTyping, callGeminiAPI]);
 
+  const sendMessageRef = useRef(sendMessage);
+  sendMessageRef.current = sendMessage;
+
   const handleSend = useCallback(() => sendMessage(input), [input, sendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
+
+  const stopRecognition = useCallback((manual = false) => {
+    manualStopRef.current = manual;
+    try { recognitionRef.current?.stop(); } catch { /* ignore */ }
+  }, []);
+
+  const getRecognition = useCallback(() => {
+    if (recognitionRef.current) return recognitionRef.current;
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return null;
+    const rec = new SR();
+    const voiceLangs = ['ar-IQ', 'ar-SA', 'ar'];
+    rec.lang = voiceLangs[0];
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+    rec.onresult = (event: any) => {
+      let final = '';
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) final += event.results[i][0].transcript;
+        else interim += event.results[i][0].transcript;
+      }
+      const combined = (final + interim).trim();
+      lastTranscriptRef.current = combined;
+      setInput(combined);
+    };
+    rec.onerror = (event: any) => {
+      if (event.error === 'language-not-supported' && recognitionLangIndex.current < 2) {
+        recognitionLangIndex.current++;
+        const voiceLangs = ['ar-IQ', 'ar-SA', 'ar'];
+        rec.lang = voiceLangs[recognitionLangIndex.current];
+        try { rec.start(); setIsListening(true); } catch { /* ignore */ }
+        return;
+      }
+      setIsListening(false);
+      const messagesMap: Record<string, string> = {
+        'not-allowed': 'رفض إذن المايك. سمح للمتصفح باستخدام المايك ثم حاول مرة ثانية.',
+        'service-not-allowed': 'رفض إذن المايك. سمح للمتصفح باستخدام المايك ثم حاول مرة ثانية.',
+        'audio-capture': 'ما أكدر أوصل للمايك. تأكد إنه متصل.',
+        'no-speech': 'ما سمعت كلام. حاول مرة ثانية.',
+        'network': 'مشكلة اتصال بالشبكة. حاول مرة ثانية.',
+      };
+      const msg = messagesMap[event.error];
+      if (msg) {
+        setVoiceError(msg);
+        setTimeout(() => setVoiceError(null), 3500);
+      }
+    };
+    rec.onend = () => {
+      setIsListening(false);
+      const text = lastTranscriptRef.current.trim();
+      lastTranscriptRef.current = '';
+      if (text && !manualStopRef.current) sendMessageRef.current(text);
+    };
+    recognitionRef.current = rec;
+    return rec;
+  }, []);
+
+  const toggleListening = useCallback(() => {
+    if (isListening) { stopRecognition(true); return; }
+    const rec = getRecognition();
+    if (!rec) return;
+    setVoiceError(null);
+    manualStopRef.current = false;
+    lastTranscriptRef.current = '';
+    setInput('');
+    recognitionLangIndex.current = 0;
+    try { rec.start(); setIsListening(true); } catch { setIsListening(false); }
+  }, [isListening, getRecognition, stopRecognition]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsListening(false);
+      try { recognitionRef.current?.abort(); } catch { /* ignore */ }
+    }
+  }, [isOpen]);
+
+  useEffect(() => () => {
+    try { recognitionRef.current?.abort(); } catch { /* ignore */ }
+    recognitionRef.current = null;
+  }, []);
 
   const formatMessage = (content: string): React.ReactNode => {
     const lines = content.split('\n');
@@ -1468,6 +1563,21 @@ ${dataContext}`;
                       </div>
                     )}
                     <div className="px-3 py-2">
+                      {(isListening || voiceError) && (
+                        <div className="mb-2 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium bg-red-50 text-red-600 border border-red-200">
+                          {voiceError ? (
+                            <>
+                              <CircleX className="w-3.5 h-3.5 shrink-0" />
+                              {voiceError}
+                            </>
+                          ) : (
+                            <>
+                              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                              جاري الاستماع... تكلّم الآن
+                            </>
+                          )}
+                        </div>
+                      )}
                       <div className={`flex items-end gap-2 rounded-xl border-2 bg-white px-3 py-2 transition ${
                         isInputBlocked ? 'border-gray-200 opacity-50' : 'border-gray-900 focus-within:border-gray-700'
                       }`}>
@@ -1483,6 +1593,20 @@ ${dataContext}`;
                           disabled={isTyping || isInputBlocked}
                           spellCheck={false}
                         />
+                        {voiceSupported && (
+                          <button
+                            onClick={toggleListening}
+                            disabled={isTyping || isInputBlocked}
+                            title={isListening ? 'إيقاف التسجيل' : 'بحث صوتي'}
+                            className={`w-7 h-7 flex items-center justify-center rounded-lg transition flex-shrink-0 text-sm disabled:opacity-30 disabled:cursor-not-allowed ${
+                              isListening
+                                ? 'bg-red-500 text-white animate-pulse'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {isListening ? <Square className="w-3.5 h-3.5" /> : <Mic className="w-4 h-4" />}
+                          </button>
+                        )}
                         <button
                           onClick={handleSend}
                           disabled={isTyping || !input.trim() || isInputBlocked}
