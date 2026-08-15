@@ -12,7 +12,7 @@ import {
 } from '../../services/nameMatching';
 import { IDCardUpload } from './IDCardUpload';
 import { RegistrationSuccess } from './RegistrationSuccess';
-import { getActiveAcademicYear } from '../../firebase/dataService';
+import { getActiveAcademicYear, loadAttendanceRecords, loadSessions } from '../../firebase/dataService';
 import { decompressRecord } from '../../firebase/dataServiceCompressed';
 import { SkeletonCard } from '../Skeleton';
 import type { MultiDescriptor } from '../../services/faceRecognition';
@@ -121,67 +121,67 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   };
 
   const loadStageRecordsForStudent = async (
-    adminUid: string,
-    stageId: string,
+    link: RegistrationLink,
     studentId: string,
     signal?: AbortSignal,
-    linkYear?: string,
   ): Promise<{ records: AttendanceRecord[]; sessionNameMap: Record<string, string> }> => {
-    let year = linkYear || '';
+    let year = link.academicYear || '';
     if (!year) {
       try { year = await getActiveAcademicYear(); } catch { year = ''; }
     }
     if (!year) return { records: [], sessionNameMap: {} };
 
-    const base = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}`;
+    const adminUid = link.adminUid;
+    const stageId = link.stageId;
+    const teacherId = link.teacherId || link.adminUid;
+
+    // ✅ النطاق الأساسي: سجلات التدريسي المُرسِل فقط (SDK — يدعم المضغوط والقديم)
+    const [teacherRecords, teacherSessions] = await Promise.all([
+      loadAttendanceRecords(adminUid, stageId, teacherId),
+      loadSessions(adminUid, stageId, teacherId),
+    ]);
+
     const sessionNameMap: Record<string, string> = {};
-    const allRecords: AttendanceRecord[] = [];
+    for (const s of teacherSessions) {
+      if (s && s.id && s.name) sessionNameMap[s.id] = s.name;
+    }
 
-    const teachersData = await dbFetch<any>(`${base}/teacherRecords`, signal);
-    if (teachersData) {
-      const teachers: any[] = Array.isArray(teachersData) ? teachersData : Object.values(teachersData);
-      for (const t of teachers) {
-        if (!t || typeof t !== 'object') continue;
+    let records = teacherRecords.filter(r => r && r.studentId === studentId);
 
-        if (t.recordsCompressed) {
-          const arr: any[] = Array.isArray(t.recordsCompressed) ? t.recordsCompressed : Object.values(t.recordsCompressed);
+    // 🛡️ شبكة الأمان: لو السجلات فارغة، امسح كل التدريسيين وفلتر بالمادة (subjectName)
+    if (records.length === 0 && link.subjectName) {
+      const base = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}`;
+      const teachersData = await dbFetch<any>(`${base}/teacherRecords`, signal);
+      if (teachersData) {
+        const teachers: any[] = Array.isArray(teachersData) ? teachersData : Object.values(teachersData);
+        const all: AttendanceRecord[] = [];
+        for (const t of teachers) {
+          if (!t || typeof t !== 'object') continue;
+
+          const arr: any[] = t.recordsCompressed
+            ? (Array.isArray(t.recordsCompressed) ? t.recordsCompressed : Object.values(t.recordsCompressed))
+            : [];
           for (const c of arr) {
+            if (!c || typeof c !== 'object') continue;
+            // صيغة خام (يحمل id مباشرة)
+            if (c.id) { all.push(c as AttendanceRecord); continue; }
+            // صيغة مضغوطة
             try {
               const rec = decompressRecord(c);
-              if (rec && rec.id) allRecords.push(rec);
+              if (rec && rec.id) all.push(rec);
             } catch { /* تجاهل سجل تالف */ }
           }
-        }
 
-        if (t.records) {
-          const arr: any[] = Array.isArray(t.records) ? t.records : Object.values(t.records);
-          allRecords.push(...arr.filter(r => r && typeof r === 'object' && r.id));
-        }
-
-        if (t.sessions) {
-          const arr: any[] = Array.isArray(t.sessions) ? t.sessions : Object.values(t.sessions);
-          for (const s of arr) {
-            if (s && s.id && s.name) sessionNameMap[s.id] = s.name;
+          if (t.records) {
+            const raw: any[] = Array.isArray(t.records) ? t.records : Object.values(t.records);
+            all.push(...raw.filter(r => r && typeof r === 'object' && r.id));
           }
         }
+        records = all.filter(r => r.studentId === studentId && r.subjectName === link.subjectName);
       }
     }
 
-    const legacyRecords = await dbFetch<any>(`${base}/attendanceRecords`, signal);
-    if (legacyRecords) {
-      const arr: any[] = Array.isArray(legacyRecords) ? legacyRecords : Object.values(legacyRecords);
-      allRecords.push(...arr.filter(r => r && typeof r === 'object' && r.id));
-    }
-
-    const legacySessions = await dbFetch<any>(`${base}/sessions`, signal);
-    if (legacySessions) {
-      const arr: any[] = Array.isArray(legacySessions) ? legacySessions : Object.values(legacySessions);
-      for (const s of arr) {
-        if (s && s.id && s.name) sessionNameMap[s.id] = s.name;
-      }
-    }
-
-    return { records: allRecords.filter(r => r.studentId === studentId), sessionNameMap };
+    return { records, sessionNameMap };
   };
 
   const findMatchingStudent = (extractedName: string, students: Student[]): { student: Student; percentage: number } | null => {
@@ -297,7 +297,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
         setMatchPercentage(match.percentage);
         setMatchedStudent(match.student);
 
-        const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link.adminUid, link.stageId, match.student.id, undefined, link.academicYear);
+        const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link, match.student.id);
         setAttendanceRecords(records);
         setSessionNameMap(namesMap);
         goTo('attendance-report');
