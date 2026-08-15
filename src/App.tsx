@@ -482,7 +482,7 @@ function App() {
   }, [stages, currentUser, dataLoaded]);
 
   useEffect(() => {
-    if (currentUser && dataLoaded && selectedStageId) {
+    if (currentUser && dataLoaded && selectedStageId && (currentUser.role === 'admin' || currentUser.role === 'college_admin')) {
       const force = intentionalDeleteRef.current.students;
       saveStudents(getAdminUid(), selectedStageId, students, force);
       if (force) intentionalDeleteRef.current.students = false;

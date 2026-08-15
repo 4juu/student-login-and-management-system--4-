@@ -938,7 +938,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     const example = exampleStudent ? `(مثال: ${exampleStudent.name} أو ${exampleStudent.code || 'الكود'})` : '(مثال: اسم الطالب أو الكود)';
     return {
       handled: false,
-      text: `🤖 أعمل حالياً بدون API وأقدر أساعدك بـ:\n` +
+      text: `🤖 أعمل حالياً بدون مفاتيح AI وأقدر أساعدك بـ:\n` +
         `  • اكتب اسم الطالب أو رقمه (الكود) → أيام حضوره وغيابه ${example}\n` +
         `  • اسأل "منو حضر اليوم؟" → حضور اليوم فقط\n` +
         `  • اسأل "منو غاب اليوم؟" → غياب اليوم فقط\n` +

@@ -332,11 +332,11 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       const path = `academicYears/${year}/userData/${link.adminUid}/stageData/${link.stageId}/students`;
       const data = await dbFetch<Record<string, Student> | Student[]>(path);
       if (data) {
-        const arr: Student[] = Array.isArray(data) ? data : Object.values(data);
-        const idx = arr.findIndex((s) => s.id === student.id);
-        if (idx !== -1) {
-          arr[idx] = { ...arr[idx], qrCodeId: result.qrId };
-          await set(ref(database, path), arr);
+        const entries = Object.entries(data as Record<string, Student>);
+        const found = entries.find(([, s]) => s.id === student.id);
+        if (found) {
+          // ✅ كتابة موجهة لحقل qrCodeId فقط (متوافقة مع قواعد الأمان الجديدة)
+          await set(ref(database, `${path}/${found[0]}/qrCodeId`), result.qrId);
         }
       }
     } catch (e) {
