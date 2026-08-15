@@ -16,6 +16,7 @@ interface SendAttendanceLinkProps {
   loadStudents: (stageId: string) => Promise<Student[]>;
   telegramConfig?: TelegramConfig | null;
   subjectName: string;
+  teacherId?: string;
   onClose: () => void;
 }
 
@@ -180,6 +181,7 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
   colleges,
   stages,
   subjectName,
+  teacherId,
   onClose,
 }) => {
   const [selectedCollegeId, setSelectedCollegeId] = useState('');
@@ -225,7 +227,7 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
     setGenerating(true);
     try {
       await flushAllPendingSaves();
-      const { token, url } = await createAttendanceLink(adminUid, selectedStageId, subjectName, expiryDays);
+      const { token, url } = await createAttendanceLink(adminUid, selectedStageId, subjectName, expiryDays, teacherId);
 
       const { date } = getFormattedDate();
       const generated: GeneratedAttendanceLink = {

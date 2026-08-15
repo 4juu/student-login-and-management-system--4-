@@ -1270,6 +1270,7 @@ function App() {
           loadStudents={async (stageId: string) => loadStudentsForStage(getAdminUid(), stageId)}
           telegramConfig={telegramConfig}
           subjectName={currentUser?.bio || currentUser?.displayName || 'المادة'}
+          teacherId={getTeacherId()}
           onClose={() => setShowAttendanceLink(false)}
         />
       )}

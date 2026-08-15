@@ -18,6 +18,7 @@ export interface RegistrationLink {
   usedByStudentId?: string;
   academicYear?: string;      // السنة الدراسية عند إنشاء الرابط
   subjectName?: string;       // اسم المادة (من بايو التدريسي) - لروابط الحضور
+  teacherId?: string;         // هوية التدريسي المُرسِل - لتحديد سجلاته في تقرير الحضور
 }
 
 export interface PendingRegistration {

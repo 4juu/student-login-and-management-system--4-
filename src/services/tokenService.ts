@@ -99,7 +99,8 @@ export const createAttendanceLink = async (
   adminUid: string,
   stageId: string,
   subjectName: string,
-  expiryDays: number = DEFAULT_EXPIRY_DAYS
+  expiryDays: number = DEFAULT_EXPIRY_DAYS,
+  teacherId?: string
 ): Promise<{ token: string; url: string }> => {
   const token = nanoid(20);
   const now = Date.now();
@@ -118,6 +119,7 @@ export const createAttendanceLink = async (
     used: false,
     academicYear: academicYear || undefined,
     subjectName,
+    teacherId: teacherId || undefined,
   };
   
   await set(ref(database, `${LINKS_PATH}/${token}`), linkData);
