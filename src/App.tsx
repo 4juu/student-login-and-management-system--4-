@@ -9,6 +9,7 @@ import { StudentsViewer } from './components/StudentsViewer';
 import { AttendanceLogin } from './components/AttendanceLogin';
 import { AttendanceRecords } from './components/AttendanceRecords';
 import { LiveAttendanceWall } from './components/LiveAttendanceWall';
+import { PwaInstallButton } from './components/PwaInstallButton';
 import { SessionManager } from './components/SessionManager';
 import { Login } from './components/Login';
 import { TeacherManagement } from './components/TeacherManagement';
@@ -970,6 +971,8 @@ function App() {
                 )}
               </div>
             </div>
+
+            <PwaInstallButton />
 
             <button
               onClick={handleLogout}
