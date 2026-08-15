@@ -54,7 +54,8 @@
         ".read": true,
         "$token": {
           ".read": true,
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')",
+          // ✅ الأدمن/أدمن الكلية ينشئون أي رابط، والتدريسي العادي ينشئ روابط الحضور فقط
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin' || (root.child('users').child(auth.uid).child('role').val() == 'teacher' && newData.child('type').val() == 'attendance'))",
           // ✅ يسمح للطالب بتعليم الرابط كمستخدم بعد إتمام التسجيل الذاتي
           // (الكتابة على قيمة "used" فقط بقيمة true — لا يمكن حذفها أو تغييرها للطالب)
           "used": {
