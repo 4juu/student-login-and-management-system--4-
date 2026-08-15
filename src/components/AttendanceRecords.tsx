@@ -1,19 +1,24 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { AttendanceRecord, AttendanceSession, Student } from '../types/student';
 import { getCurrentAcademicYear } from '../firebase/dataService';
-import { Calendar, ChartColumn, Download, GraduationCap, MapPin } from 'lucide-react';
+import { Calendar, ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, CircleX, Download, GraduationCap, MapPin, QrCode } from 'lucide-react';
 
 interface AttendanceRecordsProps {
   records: AttendanceRecord[];
   sessions: AttendanceSession[];
   students?: Student[];
+  activeSessionId: string | null;
   onClearRecords: () => void;
 }
+
+const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
+const DEFAULT_PAGE_SIZE = 100;
 
 export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
   records,
   sessions,
   students = [],
+  activeSessionId,
   onClearRecords,
 }) => {
   // 🆕 السنة الأكاديمية الحالية (للعرض)
@@ -57,6 +62,56 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
       isoDate: normalizeAnyDate(s.date),
     })).sort((a, b) => a.isoDate.localeCompare(b.isoDate)).reverse(),
   [sessions, normalizeAnyDate]);
+
+  // ============================================================
+  // 📋 جدول سجل عمليات الدخول المباشر
+  // ============================================================
+
+  const studentMap = useMemo(() => new Map(students.map(s => [s.id, s])), [students]);
+  const sessionNameMap = useMemo(() => new Map(sessions.map(s => [s.id, s.name])), [sessions]);
+
+  const sessionRecordCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const record of records) {
+      counts.set(record.sessionId, (counts.get(record.sessionId) || 0) + 1);
+    }
+    return counts;
+  }, [records]);
+
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(activeSessionId);
+  const [searchRecord, setSearchRecord] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+
+  const filteredRecords = useMemo(() => {
+    let filtered = selectedSessionId ? records.filter(r => r.sessionId === selectedSessionId) : records;
+    if (searchRecord.trim()) {
+      const q = searchRecord.trim().toLowerCase();
+      filtered = filtered.filter(rec => {
+        const stu = studentMap.get(rec.studentId);
+        const nameMatch = stu ? stu.name.toLowerCase().includes(q) : false;
+        const idMatch = rec.studentId.toLowerCase().includes(q);
+        const timeMatch = (rec.time || '').toLowerCase().includes(q);
+        return nameMatch || idMatch || timeMatch;
+      });
+    }
+    return filtered;
+  }, [records, selectedSessionId, searchRecord, studentMap]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedRecords = useMemo(() => {
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredRecords.slice(start, start + pageSize);
+  }, [filteredRecords, safeCurrentPage, pageSize]);
+
+  React.useEffect(() => {
+    if (activeSessionId) setSelectedSessionId(activeSessionId);
+  }, [activeSessionId]);
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedSessionId, searchRecord, filteredRecords.length]);
 
   const [exportType, setExportType] = useState<'single' | 'range'>('range');
   const [startDate, setStartDate] = useState<string>(firstDate);
@@ -510,9 +565,36 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
       </div>
 
       {/* ============================================================ */}
-      {/* ⚙️ أدوات السجلات */}
+      {/* 📋 سجل عمليات الدخول المباشر */}
       {/* ============================================================ */}
-      <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 border-t pt-4 sm:pt-6">
+      <div className="bg-white/70 dark:bg-slate-800/40 backdrop-blur rounded-xl shadow-sm border border-slate-200/60 dark:border-slate-700/50 p-4 sm:p-6 mt-8">
+        {/* 🧰 شريط الأدوات */}
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 border-b border-slate-200/70 dark:border-slate-700/60 pb-4 sm:pb-5 mb-4">
+          <div className="flex items-center gap-2">
+            <CircleCheck className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
+            <h3 className="font-bold text-base sm:text-lg text-slate-800 dark:text-white">
+              سجل عمليات الدخول المباشر
+            </h3>
+          </div>
+
+          <div className="ms-auto flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+            <div className="relative flex-1 sm:flex-none sm:min-w-[220px]">
+              <select
+                value={selectedSessionId || ''}
+                onChange={(e) => setSelectedSessionId(e.target.value || null)}
+                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+              >
+                <option value="">كل الجلسات ({records.length})</option>
+                {sortedSessions.map(s => {
+                  const count = sessionRecordCounts.get(s.id) || 0;
+                  return (
+                    <option key={s.id} value={s.id}>
+                      {s.name} — {normalizeAnyDate(s.date)} ({count})
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
 
             <button
               onClick={handleClearRecords}
@@ -524,6 +606,147 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
               </svg>
               <span>مسح السجلات</span>
             </button>
+          </div>
+        </div>
+
+        {/* 🔍 البحث */}
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="🔍 ابحث بالاسم أو الكود أو الوقت..."
+            value={searchRecord}
+            onChange={(e) => setSearchRecord(e.target.value)}
+            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+          />
+        </div>
+
+        {/* ⏳ الترقيم العلوي */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={safeCurrentPage === 1}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronsRight className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={safeCurrentPage === 1}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <span className="px-2 py-1.5 text-xs sm:text-sm font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded-lg whitespace-nowrap">
+              صفحة {safeCurrentPage} من {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={safeCurrentPage === totalPages}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={safeCurrentPage === totalPages}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronsLeft className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+            <span className="whitespace-nowrap">عدد الصفوف:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+              className="border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white px-2 py-1.5 text-xs sm:text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+            >
+              {PAGE_SIZE_OPTIONS.map(ps => (
+                <option key={ps} value={ps}>{ps}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* 📊 الجدول */}
+        <div className="overflow-x-auto rounded-lg border border-slate-200/70 dark:border-slate-700/60">
+          <table className="w-full text-right text-sm min-w-[640px]">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-800/60">
+                <th className="px-4 py-3 text-center whitespace-nowrap">
+                  <QrCode className="w-4 h-4 inline-block text-emerald-600" />
+                </th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">الطالب</th>
+                <th className="px-4 py-3 text-center whitespace-nowrap">الجلسة</th>
+                <th className="px-4 py-3 text-center whitespace-nowrap">الوقت</th>
+                <th className="px-4 py-3 text-center whitespace-nowrap">الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedRecords.length > 0 ? paginatedRecords.map((rec) => {
+                const stu = studentMap.get(rec.studentId);
+                const isPresent = rec.status === 'present';
+                return (
+                  <tr key={rec.id} className="border-t border-slate-100 dark:border-slate-800 hover:bg-emerald-50/50 dark:hover:bg-slate-700/30 transition-colors">
+                    <td className="px-4 py-2.5 text-center">
+                      <QrCode className="w-4 h-4 text-gray-400 inline-block" />
+                    </td>
+                    <td className="px-4 py-2.5 font-semibold text-gray-800 dark:text-gray-200 whitespace-nowrap">
+                      {stu ? (
+                        <div className="flex flex-col">
+                          <span>{stu.name}</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400" dir="ltr">{rec.studentId}</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-500">غير موجود</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-center text-gray-600 dark:text-gray-400 whitespace-nowrap">{sessionNameMap.get(rec.sessionId) || '—'}</td>
+                    <td className="px-4 py-2.5 text-center text-gray-600 dark:text-gray-400 whitespace-nowrap" dir="ltr">{rec.time || '—'}</td>
+                    <td className="px-4 py-2.5 text-center">
+                      {isPresent ? (
+                        <span className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-bold px-2.5 py-1 rounded-full">
+                          <CircleCheck className="w-3.5 h-3.5" /> حاضر
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-bold px-2.5 py-1 rounded-full">
+                          <CircleX className="w-3.5 h-3.5" /> غائب
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              }) : (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                    لا توجد سجلات لعرضها
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* ⏳ الترقيم السفلي */}
+        <div className="flex items-center justify-center gap-2 mt-4">
+          <button onClick={() => setCurrentPage(1)} disabled={safeCurrentPage === 1} className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+            <ChevronsRight className="w-4 h-4" />
+          </button>
+          <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safeCurrentPage === 1} className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+            <ChevronRight className="w-4 h-4" />
+          </button>
+          <span className="px-2 py-1.5 text-xs sm:text-sm font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded-lg whitespace-nowrap">
+            صفحة {safeCurrentPage} من {totalPages}
+          </span>
+          <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safeCurrentPage === totalPages} className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button onClick={() => setCurrentPage(totalPages)} disabled={safeCurrentPage === totalPages} className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+            <ChevronsLeft className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

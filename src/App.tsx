@@ -1253,7 +1253,7 @@ function App() {
               {activeTab === 'records' && (
                 <AttendanceRecords
                   records={attendanceRecords} sessions={sessions} students={students}
-                  onClearRecords={handleClearRecords}
+                  activeSessionId={activeSessionId} onClearRecords={handleClearRecords}
                 />
               )}
             </div>
