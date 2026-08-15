@@ -3,6 +3,7 @@ import { database } from "./config";
 import { Student, AttendanceRecord, AttendanceSession, Stage, College } from "../types/student";
 import { User } from "../types/user";
 import { TelegramConfig } from "../types/telegram";
+import { queueOutbox, getOutboxEntries, clearOutbox, hasOutboxEntries } from "../lib/offlineOutbox";
 
 // ============================================================
 // 🔄 SAVE QUEUE مع Retry تلقائي (3 محاولات مع Exponential Backoff)
@@ -39,6 +40,11 @@ const retryWithBackoff = async (key: string, fn: () => Promise<void>, attempt: n
 };
 
 export const getPendingSavesCount = (): number => retryQueues.size;
+
+export const getDebouncedSavesCount = (): number => pendingSaves.size;
+
+export const hasPendingWrites = async (): Promise<boolean> =>
+  pendingSaves.size > 0 || retryQueues.size > 0 || (await hasOutboxEntries());
 
 // ============================================================
 // 🎓 ACADEMIC YEAR MANAGEMENT
@@ -346,6 +352,10 @@ export const saveStudents = async (
 
   saveLocal(LS.students(adminUid, stageId), students);
 
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    void queueOutbox(`students_${adminUid}_${stageId}`, students);
+  }
+
   const year = await getActiveAcademicYear();
   const saveKey = `students_${adminUid}_${stageId}`;
   
@@ -393,6 +403,10 @@ export const saveAttendanceRecords = async (
   }
 
   saveLocal(LS.records(adminUid, stageId, teacherId), records);
+
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    void queueOutbox(`records_${adminUid}_${stageId}_${teacherId}`, records);
+  }
 
   const year = await getActiveAcademicYear();
   const saveKey = `records_${adminUid}_${stageId}_${teacherId}`;
@@ -472,6 +486,10 @@ export const saveSessions = async (
   }
 
   saveLocal(LS.sessions(adminUid, stageId, teacherId), sessions);
+
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    void queueOutbox(`sessions_${adminUid}_${stageId}_${teacherId}`, sessions);
+  }
 
   const year = await getActiveAcademicYear();
   const saveKey = `sessions_${adminUid}_${stageId}_${teacherId}`;
@@ -670,6 +688,59 @@ export const saveUserData = async (uid: string, userData: User): Promise<void> =
 
 export const syncPendingChanges = async (_uid: string): Promise<void> => {
   await flushAllPendingSaves();
+};
+
+// ============================================================
+// 📦 OUTBOX - رفع البيانات المحفوظة أثناء انقطاع الاتصال
+// ============================================================
+
+export const applyOutbox = async (): Promise<void> => {
+  const entries = await getOutboxEntries();
+  if (entries.length === 0) return;
+
+  console.log(`📦 تطبيق ${entries.length} عنصر من صندوق الأوفلاين...`);
+  const year = await getActiveAcademicYear();
+
+  for (const entry of entries) {
+    try {
+      if (entry.key.startsWith('students_')) {
+        const rest = entry.key.slice('students_'.length);
+        const sid = rest.slice(rest.lastIndexOf('_') + 1);
+        const uid = rest.slice(0, rest.lastIndexOf('_'));
+        await set(
+          ref(database, getStagePath(year, uid, sid, 'students')),
+          (entry.data as unknown[]).map(stripUndefined as any)
+        );
+      } else if (entry.key.startsWith('records_')) {
+        const rest = entry.key.slice('records_'.length);
+        const tid = rest.slice(rest.lastIndexOf('_') + 1);
+        const middle = rest.slice(0, rest.lastIndexOf('_'));
+        const sid = middle.slice(middle.lastIndexOf('_') + 1);
+        const uid = middle.slice(0, middle.lastIndexOf('_'));
+        const { compressRecord } = await import('./dataServiceCompressed');
+        const compressed = (entry.data as AttendanceRecord[]).map(compressRecord);
+        await set(
+          ref(database, `${getYearBasePath(year, uid)}/stageData/${sid}/teacherRecords/${tid}/recordsCompressed`),
+          compressed
+        );
+      } else if (entry.key.startsWith('sessions_')) {
+        const rest = entry.key.slice('sessions_'.length);
+        const tid = rest.slice(rest.lastIndexOf('_') + 1);
+        const middle = rest.slice(0, rest.lastIndexOf('_'));
+        const sid = middle.slice(middle.lastIndexOf('_') + 1);
+        const uid = middle.slice(0, middle.lastIndexOf('_'));
+        await set(
+          ref(database, getTeacherDataPath(year, uid, sid, tid, 'sessions')),
+          (entry.data as unknown[]).map(stripUndefined as any)
+        );
+      }
+    } catch (e) {
+      console.error('❌ فشل تطبيق عنصر من صندوق الأوفلاين:', entry.key, e);
+    }
+  }
+
+  await clearOutbox();
+  console.log('✅ تم رفع صندوق الأوفلاين بالكامل');
 };
 
 // ============================================================
