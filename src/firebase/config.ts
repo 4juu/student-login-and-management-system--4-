@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getDatabase, goOnline, goOffline } from "firebase/database";
+import { getDatabase, goOnline } from "firebase/database";
 import { getStorage } from "firebase/storage";
 import { getAnalytics } from "firebase/analytics";
 
@@ -34,6 +34,9 @@ export const secondaryAuth = getAuth(secondaryApp);
 // ============================================================
 // 🌐 مراقبة حالة الاتصال بالإنترنت
 // ============================================================
+// ملاحظة: لا نستخدم goOffline() هنا عمداً، لأنه يجمّد إرسال البيانات
+// المعلقة ويسبب عدم اكتمال المزامنة بعد رجوع الاتصال.
+// نكتفي بتفعيل goOnline() عند رجوع الاتصال ونترك SDK يعيد الاتصال تلقائياً.
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
     console.log('🟢 رجع الاتصال - تفعيل Firebase');
@@ -41,18 +44,6 @@ if (typeof window !== 'undefined') {
       goOnline(database);
     } catch (e) {
       console.warn('فشل تفعيل Firebase online:', e);
-    }
-  });
-
-  window.addEventListener('offline', () => {
-    console.log('🔴 انقطع الاتصال - وضع offline');
-    try {
-      goOffline(database);
-      setTimeout(() => {
-        goOnline(database);
-      }, 2000);
-    } catch (e) {
-      console.warn('فشل تغيير حالة Firebase:', e);
     }
   });
 

@@ -51,6 +51,14 @@ export const getOutboxEntries = async (): Promise<{ key: string; data: unknown }
 export const hasOutboxEntries = async (): Promise<boolean> =>
   (await getOutboxEntries()).length > 0;
 
+export const removeOutboxEntry = async (key: string): Promise<void> => {
+  try {
+    await dbDelete(`outbox:${key}`);
+  } catch {}
+  const keys = getKeys().filter(k => k !== key);
+  setKeys(keys);
+};
+
 export const clearOutbox = async (): Promise<void> => {
   const keys = getKeys();
   for (const key of keys) {

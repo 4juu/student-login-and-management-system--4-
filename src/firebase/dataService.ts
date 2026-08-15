@@ -3,7 +3,7 @@ import { database } from "./config";
 import { Student, AttendanceRecord, AttendanceSession, Stage, College } from "../types/student";
 import { User } from "../types/user";
 import { TelegramConfig } from "../types/telegram";
-import { queueOutbox, getOutboxEntries, clearOutbox, hasOutboxEntries } from "../lib/offlineOutbox";
+import { queueOutbox, getOutboxEntries, removeOutboxEntry, hasOutboxEntries } from "../lib/offlineOutbox";
 
 // ============================================================
 // 🔄 SAVE QUEUE مع Retry تلقائي (3 محاولات مع Exponential Backoff)
@@ -700,6 +700,7 @@ export const applyOutbox = async (): Promise<void> => {
 
   console.log(`📦 تطبيق ${entries.length} عنصر من صندوق الأوفلاين...`);
   const year = await getActiveAcademicYear();
+  const succeededKeys: string[] = [];
 
   for (const entry of entries) {
     try {
@@ -734,13 +735,21 @@ export const applyOutbox = async (): Promise<void> => {
           (entry.data as unknown[]).map(stripUndefined as any)
         );
       }
+      succeededKeys.push(entry.key);
     } catch (e) {
       console.error('❌ فشل تطبيق عنصر من صندوق الأوفلاين:', entry.key, e);
     }
   }
 
-  await clearOutbox();
-  console.log('✅ تم رفع صندوق الأوفلاين بالكامل');
+  // نمسح فقط العناصر التي رُفعت بنجاح؛ الباقي يبقى لمحاولة لاحقة
+  for (const key of succeededKeys) {
+    await removeOutboxEntry(key);
+  }
+  if (succeededKeys.length === entries.length) {
+    console.log('✅ تم رفع صندوق الأوفلاين بالكامل');
+  } else {
+    console.warn(`⚠️ بقي ${entries.length - succeededKeys.length} عنصر في صندوق الأوفلاين لمحاولة لاحقة`);
+  }
 };
 
 // ============================================================
