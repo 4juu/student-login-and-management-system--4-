@@ -884,9 +884,9 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     <div ref={kioskRef} dir="rtl"
       className={`fixed inset-0 z-[9999] text-white flex flex-col overscroll-none ${kiosk ? 'bg-black' : 'bg-black/70 backdrop-blur-sm'}`}>
       {!kiosk && (
-      <div className="w-full max-w-2xl mx-auto bg-white text-gray-900 rounded-3xl shadow-2xl flex flex-col flex-1 my-2 sm:my-4 overflow-hidden">
+      <div className="w-full bg-white text-gray-900 flex flex-col flex-1 overflow-hidden">
         <header className="flex items-center justify-between px-4 py-3 border-b border-gray-100"
-          style={{ paddingTop: 'max(0.75rem,env(safe-area-inset-top))' }}>
+          style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}>
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-base shrink-0">👤</div>
             <div className="min-w-0">
@@ -930,7 +930,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-4 pb-4 overscroll-contain">
+        <div className="flex-1 overflow-y-auto px-4 overscroll-contain"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}>
           {!kiosk && (
           <div className="grid grid-cols-3 gap-2 mt-4">
             <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-center">
@@ -1090,39 +1091,9 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       )}
 
       {kiosk && (
-      <div className="flex-1 relative min-h-0 overflow-hidden bg-black">
-        <video ref={attachStream}
-          autoPlay playsInline muted
-          onLoadedMetadata={handleVideoReady}
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${videoReady ? 'opacity-100' : 'invisible'}`}
-          style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }}
-        />
-
-        {studentsWithFace.length === 0 && mode !== 'loading' && (
-          <div className="absolute inset-0 flex items-center justify-center z-20 bg-black">
-            <div className="text-center px-4">
-              <div className="text-4xl mb-2">📸</div>
-              <p className="text-white font-bold text-sm">لا يوجد طلاب ببصمة وجه</p>
-              <p className="text-white/50 text-xs mt-1">سجل بصمات الوجوه أولاً</p>
-              <button onClick={handleShowReg} className="mt-3 bg-purple-600 text-white px-4 py-2 rounded-xl text-xs font-bold">📸 إضافة بصمة الآن</button>
-            </div>
-          </div>
-        )}
-
-        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
-
-        {(mode === 'loading' || !videoReady) && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black">
-            <div className="text-center">
-              <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-              <p className="text-white font-bold text-sm">جاري تجهيز الكاميرا...</p>
-            </div>
-          </div>
-        )}
-
-        {/* 🪄 شريط علوي شفاف فوق الفيديو */}
-        <header className="absolute top-0 inset-x-0 z-30 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/85 via-black/40 to-transparent"
-          style={{ paddingTop: 'max(0.75rem,env(safe-area-inset-top))' }}>
+      <div className="flex-1 min-h-0 overflow-hidden bg-black flex flex-col">
+        <header className="flex items-center justify-between px-4 py-3 bg-black/95 border-b border-white/10 shrink-0"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}>
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-base shrink-0">👤</div>
             <div className="min-w-0">
@@ -1133,9 +1104,14 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="hidden sm:flex items-center gap-1.5 bg-black/50 border border-white/20 text-white px-3 py-1.5 rounded-xl text-xs font-bold">
+            <span className="hidden sm:flex items-center gap-1.5 bg-white/10 border border-white/20 text-white px-3 py-1.5 rounded-xl text-xs font-bold">
               <span className="text-emerald-400">●</span> {presentIds.size} حاضر
             </span>
+            {cameraReady && (
+              <button onClick={toggleCamera}
+                className="w-9 h-9 flex items-center justify-center bg-white/10 border border-white/20 text-white rounded-xl active:scale-90 text-sm"
+                title="تبديل الكاميرا">🔄</button>
+            )}
             <button onClick={toggleKiosk}
               className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95">
               <span>⛶</span> خروج
@@ -1143,53 +1119,80 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           </div>
         </header>
 
-        {cameraReady && (
-          <button onClick={toggleCamera}
-            className="absolute top-20 right-3 z-30 w-9 h-9 flex items-center justify-center bg-black/50 border border-white/20 text-white rounded-full active:scale-90 text-sm backdrop-blur-sm"
-            title="تبديل الكاميرا">🔄</button>
-        )}
-
         {error && (
-          <div className="absolute top-20 inset-x-4 z-30 bg-red-500/90 text-white p-3 rounded-xl text-sm font-bold text-center">
+          <div className="mx-4 mt-3 bg-red-500/90 text-white p-3 rounded-xl text-sm font-bold text-center shrink-0">
             {error}
             <button onClick={initCamera} className="block mx-auto mt-2 bg-white text-red-600 px-4 py-1.5 rounded-lg text-xs">🔄 إعادة</button>
           </div>
         )}
 
-        {/* 🎯 تراكب: آخر المسجلين */}
-        <div className="absolute bottom-20 inset-x-3 z-20 flex flex-col gap-1.5 items-start pointer-events-none">
-          {recentMarked.map((l, i) => (
-            <div key={`${l.id}-${l.time}`}
-              className={`flex items-center gap-2 bg-black/75 text-white rounded-xl px-3 py-1.5 backdrop-blur-sm text-xs font-bold shadow-lg animate-fadeIn ${i === 0 ? 'ring-2 ring-emerald-400' : ''}`}>
-              <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-[10px] shrink-0">✓</span>
-              <span className="truncate">{l.name}</span>
-              <span className="text-white/50 text-[10px] shrink-0">#{l.code}</span>
-            </div>
-          ))}
-        </div>
+        <div className="flex-1 relative min-h-0 overflow-hidden">
+          <video ref={attachStream}
+            autoPlay playsInline muted
+            onLoadedMetadata={handleVideoReady}
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${videoReady ? 'opacity-100' : 'invisible'}`}
+            style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }}
+          />
 
-        {/* 🎛️ أدوات الكاميرا أسفل الشاشة */}
-        {cameraReady && (
-          <div className="absolute bottom-4 inset-x-0 z-30 flex items-center justify-center gap-2">
-            <div className="flex items-center gap-1 bg-black/60 border border-white/15 rounded-xl px-2 py-1.5 backdrop-blur-sm">
-              {ZOOM_STEPS.map(s => (
-                <button key={s} onClick={() => applyZoom(s)}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition active:scale-90 ${
-                    Math.abs(zoom - s) < 0.01 ? 'bg-blue-500 text-white' : 'text-white/80 hover:bg-white/10'
-                  }`}>
-                  {s}x
-                </button>
-              ))}
+          {studentsWithFace.length === 0 && mode !== 'loading' && (
+            <div className="absolute inset-0 flex items-center justify-center z-20 bg-black">
+              <div className="text-center px-4">
+                <div className="text-4xl mb-2">📸</div>
+                <p className="text-white font-bold text-sm">لا يوجد طلاب ببصمة وجه</p>
+                <p className="text-white/50 text-xs mt-1">سجل بصمات الوجوه أولاً</p>
+                <button onClick={handleShowReg} className="mt-3 bg-purple-600 text-white px-4 py-2 rounded-xl text-xs font-bold">📸 إضافة بصمة الآن</button>
+              </div>
             </div>
-            {hasTorch && (
-              <button onClick={toggleTorch}
-                className={`w-9 h-9 flex items-center justify-center rounded-full active:scale-90 text-sm bg-black/60 border border-white/15 backdrop-blur-sm ${
-                  torchOn ? 'text-yellow-400' : 'text-white/80'
-                }`}
-                title="فلاش">{torchOn ? '💡' : '🔦'}</button>
-            )}
+          )}
+
+          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+
+          {(mode === 'loading' || !videoReady) && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black">
+              <div className="text-center">
+                <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                <p className="text-white font-bold text-sm">جاري تجهيز الكاميرا...</p>
+              </div>
+            </div>
+          )}
+
+          {/* 🎯 تراكب: آخر المسجلين */}
+          <div className="absolute inset-x-3 z-20 flex flex-col gap-1.5 items-start pointer-events-none"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5rem)' }}>
+            {recentMarked.map((l, i) => (
+              <div key={`${l.id}-${l.time}`}
+                className={`flex items-center gap-2 bg-black/75 text-white rounded-xl px-3 py-1.5 backdrop-blur-sm text-xs font-bold shadow-lg animate-fadeIn ${i === 0 ? 'ring-2 ring-emerald-400' : ''}`}>
+                <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-[10px] shrink-0">✓</span>
+                <span className="truncate">{l.name}</span>
+                <span className="text-white/50 text-[10px] shrink-0">#{l.code}</span>
+              </div>
+            ))}
           </div>
-        )}
+
+          {/* 🎛️ أدوات الكاميرا أسفل الشاشة */}
+          {cameraReady && (
+            <div className="absolute inset-x-0 z-30 flex items-center justify-center gap-2"
+              style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}>
+              <div className="flex items-center gap-1 bg-black/60 border border-white/15 rounded-xl px-2 py-1.5 backdrop-blur-sm">
+                {ZOOM_STEPS.map(s => (
+                  <button key={s} onClick={() => applyZoom(s)}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition active:scale-90 ${
+                      Math.abs(zoom - s) < 0.01 ? 'bg-blue-500 text-white' : 'text-white/80 hover:bg-white/10'
+                    }`}>
+                    {s}x
+                  </button>
+                ))}
+              </div>
+              {hasTorch && (
+                <button onClick={toggleTorch}
+                  className={`w-9 h-9 flex items-center justify-center rounded-full active:scale-90 text-sm bg-black/60 border border-white/15 backdrop-blur-sm ${
+                    torchOn ? 'text-yellow-400' : 'text-white/80'
+                  }`}
+                  title="فلاش">{torchOn ? '💡' : '🔦'}</button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       )}
 

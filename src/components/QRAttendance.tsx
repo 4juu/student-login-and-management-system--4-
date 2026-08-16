@@ -341,15 +341,21 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   useEffect(() => {
     mountedRef.current = true;
     suspendAurora();
-    const prevOverflow = document.body.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
     const prevScroll = document.documentElement.style.overscrollBehavior;
+    const prevBodyScroll = document.body.style.overscrollBehavior;
     document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
     document.documentElement.style.overscrollBehavior = 'contain';
+    document.body.style.overscrollBehavior = 'contain';
     const t = setTimeout(() => { if (mountedRef.current) startCamera('environment'); }, 250);
     return () => {
       mountedRef.current = false;
-      document.body.style.overflow = prevOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
       document.documentElement.style.overscrollBehavior = prevScroll;
+      document.body.style.overscrollBehavior = prevBodyScroll;
       clearTimeout(t);
       resumeAurora();
       (async () => { await hardStop(); })();
@@ -404,9 +410,9 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/80 text-white flex flex-col" dir="rtl">
-      <div className="w-full max-w-2xl mx-auto bg-black rounded-2xl flex flex-col shadow-2xl flex-1 my-2 sm:my-4 overflow-hidden">
+      <div className="w-full bg-black flex flex-col flex-1 overflow-hidden">
       <header className="flex items-center justify-between px-3 py-2 bg-gray-900/95 border-b border-white/10"
-        style={{ paddingTop: 'max(0.5rem,env(safe-area-inset-top))' }}>
+        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}>
         <h2 className="text-sm font-bold flex items-center gap-1.5">🔳 QR</h2>
         <button onClick={onClose}
           className="bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded-lg text-sm font-bold transition active:scale-95">
@@ -415,7 +421,8 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       </header>
 
       <div className="flex-1 overflow-hidden flex flex-col">
-        <div className="flex-1 overflow-y-auto p-3 space-y-3 overscroll-contain">
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 overscroll-contain"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}>
           <div className="w-full mx-auto rounded-xl overflow-hidden border bg-gray-900 relative max-w-lg border-emerald-500/20">
             <div id={QR_REGION_ID} className="w-full" style={{ minHeight: '260px' }} />
 
