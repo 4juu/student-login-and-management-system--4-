@@ -3,6 +3,7 @@ import { Student, AttendanceSession } from '../types/student';
 import { User } from '../types/user';
 import { suspendAurora, resumeAurora } from '../lib/auraControl';
 import { useCameraReady } from '../hooks/useCameraReady';
+import { useSafeArea } from '../hooks/useSafeArea';
 import { createPortal } from 'react-dom';
 
 // 🚀 نافذة تسجيل الوجه تُحمَّل عند فتحها فقط (مكتبة الوجوه ثقيلة)
@@ -68,10 +69,14 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const [torchOn, setTorchOn] = useState(false);
   const [warmup, setWarmup] = useState(0);
   const [presentIds, setPresentIds] = useState<Set<string>>(new Set(alreadyPresentIds));
+  const [kiosk, setKiosk] = useState(false);
+  const { topSafe, bottomSafe } = useSafeArea();
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const { videoReady, handleVideoReady, resetVideoReady, armForceReady } = useCameraReady(videoRef);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const kioskRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const trackRef = useRef<MediaStreamTrack | null>(null);
   const trackerRef = useRef<IOUTracker | null>(null);
@@ -129,10 +134,14 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   useEffect(() => {
     mountedRef.current = true;
     suspendAurora();
-    const prevOverflow = document.body.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
     const prevScroll = document.documentElement.style.overscrollBehavior;
+    const prevBodyScroll = document.body.style.overscrollBehavior;
     document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
     document.documentElement.style.overscrollBehavior = 'contain';
+    document.body.style.overscrollBehavior = 'contain';
     setTimeout(() => {
       if (studentsWithFace.length > 0) {
         buildDescriptorCache(studentsWithFace as any, 0.5);
@@ -147,13 +156,56 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     setTimeout(() => clearInterval(interval), 60000);
     return () => {
       mountedRef.current = false;
-      document.body.style.overflow = prevOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
       document.documentElement.style.overscrollBehavior = prevScroll;
+      document.body.style.overscrollBehavior = prevBodyScroll;
       cleanup();
       clearDescriptorCache();
       resumeAurora();
     };
   }, []);
+
+  // 🛑 منع تمرير الخلفية عند وضع الكشك — حجب حركات اللمس داخل الطبقة
+  useEffect(() => {
+    if (!kiosk) return;
+    const el = kioskRef.current;
+    if (!el) return;
+    const preventTouch = (e: TouchEvent) => {
+      if (e.target instanceof Element && e.target.closest('button, a, input, select, textarea')) return;
+      e.preventDefault();
+    };
+    el.addEventListener('touchmove', preventTouch, { passive: false });
+    return () => el.removeEventListener('touchmove', preventTouch);
+  }, [kiosk]);
+
+  // 🛑 منع انزلاق الخلفية عند حدود تمرير قائمة الطلاب (iOS) مع السماح بالتمرير الداخلي
+  useEffect(() => {
+    if (kiosk) return;
+    const el = scrollAreaRef.current;
+    if (!el) return;
+    let startY = 0;
+    let startScroll = 0;
+    const onTouchStart = (e: TouchEvent) => {
+      startY = e.touches[0].clientY;
+      startScroll = el.scrollTop;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      const t = e.target as Element;
+      if (t.closest('button, a, input, select, textarea')) return;
+      const dy = startY - e.touches[0].clientY;
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      if ((startScroll <= 0 && dy < 0) || (startScroll >= maxScroll && dy > 0)) {
+        e.preventDefault();
+      }
+    };
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+    };
+  }, [kiosk]);
 
   // ⚡ إيقاف الحلقة والكاميرا عند إخفاء التبويب (توفير حرارة/بطارية)
   useEffect(() => {
@@ -178,6 +230,52 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const kioskEnteredRef = useRef(false);
+
+  // ⛶ وضع الكشك — ملء شاشة فعلي مع مزامنة الخروج التلقائي
+  useEffect(() => {
+    const onFsChange = () => {
+      if (document.fullscreenElement) {
+        kioskEnteredRef.current = true;
+      } else if (kioskEnteredRef.current) {
+        kioskEnteredRef.current = false;
+        setKiosk(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+
+  const toggleKiosk = useCallback(async () => {
+    if (kiosk) {
+      setKiosk(false);
+      try {
+        if (document.fullscreenElement) await document.exitFullscreen();
+      } catch {}
+      return;
+    }
+    // 🎬 ندخل وضع الكشك فوراً كطبقة كاملة الشاشة (يعمل حتى على iOS بدون Fullscreen API)
+    setKiosk(true);
+    // ثم نحاول ملء الشاشة الحقيقي إن كان مدعوماً
+    try {
+      const el = kioskRef.current;
+      if (el && typeof el.requestFullscreen === 'function') {
+        await el.requestFullscreen();
+      }
+    } catch {}
+  }, [kiosk]);
+
+  const recentMarked = useMemo(() => logs.filter(l => l.status === 'marked').slice(0, 5), [logs]);
+
+  // 📹 عند إعادة تركيب عنصر الفيديو (تبديل الوضع العادي/الكشك) نعيد ربط البث مباشرة
+  const attachStream = useCallback((el: HTMLVideoElement | null) => {
+    videoRef.current = el;
+    if (el && streamRef.current) {
+      el.srcObject = streamRef.current;
+      el.play().catch(() => {});
+    }
   }, []);
 
   useEffect(() => {
@@ -224,7 +322,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       await cleanup();
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facingRef.current, width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } },
+        video: { facingMode: facingRef.current, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 20, max: 24 } },
         audio: false,
       });
       if (!mountedRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
@@ -780,6 +878,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     stopFaceLoop();
     cleanup();
     clearDescriptorCache();
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     onClose();
   };
 
@@ -813,10 +912,12 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm text-white flex flex-col" dir="rtl">
-      <div className="w-full max-w-2xl mx-auto bg-white text-gray-900 rounded-3xl shadow-2xl flex flex-col flex-1 my-2 sm:my-4 overflow-hidden">
+    <div ref={kioskRef} dir="rtl"
+      className={`fixed inset-0 z-[9999] text-white flex flex-col overscroll-none ${kiosk ? 'bg-black' : 'bg-black/70 backdrop-blur-sm'}`}>
+      {!kiosk && (
+      <div className="w-full bg-white text-gray-900 flex flex-col flex-1 overflow-hidden">
         <header className="flex items-center justify-between px-4 py-3 border-b border-gray-100"
-          style={{ paddingTop: 'max(0.75rem,env(safe-area-inset-top))' }}>
+          style={{ paddingTop: `${topSafe + 12}px` }}>
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-base shrink-0">👤</div>
             <div className="min-w-0">
@@ -836,6 +937,11 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
+            <button onClick={toggleKiosk}
+              className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 flex items-center gap-1">
+              <span>⛶</span>
+              <span className="hidden sm:inline">كشك</span>
+            </button>
             <button onClick={handleShowReg}
               className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 flex items-center gap-1">
               <span>📸</span>
@@ -855,7 +961,9 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-4 pb-4 overscroll-contain">
+        <div ref={scrollAreaRef} className="flex-1 overflow-y-auto px-4 overscroll-contain"
+          style={{ paddingBottom: `${bottomSafe + 16}px` }}>
+          {!kiosk && (
           <div className="grid grid-cols-3 gap-2 mt-4">
             <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-center">
               <div className="text-2xl font-extrabold text-emerald-600">{presentIds.size}</div>
@@ -870,11 +978,11 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
               <div className="text-[10px] text-gray-500 font-bold mt-0.5">⏳ المتبقي</div>
             </div>
           </div>
+          )}
 
-          <div className="mt-4">
-            <div className="relative w-full max-w-md mx-auto rounded-2xl overflow-hidden border border-gray-100 bg-black shadow-lg"
-              style={{ aspectRatio: '3 / 4' }}>
-              <video ref={videoRef}
+          <div className={`${kiosk ? 'mt-0' : 'mt-4'}`}>
+            <div className={`relative rounded-2xl overflow-hidden border border-gray-100 bg-black shadow-lg ${kiosk ? 'w-full aspect-[16/10]' : 'w-full max-w-md mx-auto aspect-[3/4]'}`}>
+              <video ref={attachStream}
                 autoPlay playsInline muted
                 onLoadedMetadata={handleVideoReady}
                 className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${videoReady ? 'opacity-100' : 'invisible'}`}
@@ -914,6 +1022,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
               )}
             </div>
 
+            {!kiosk && (
+            <>
             <div className="flex items-center justify-center gap-2 mt-2.5">
               <div className="flex gap-1">
                 {[0, 1, 2].map(i => (
@@ -962,8 +1072,11 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
                 </span>
               </p>
             )}
+            </>
+            )}
           </div>
 
+          {!kiosk && (
           <div className="mt-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-extrabold text-sm">🎓 الطلاب ({roster.length})</h3>
@@ -1003,8 +1116,117 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
               )}
             </div>
           </div>
+          )}
         </div>
       </div>
+      )}
+
+      {kiosk && (
+      <div className="flex-1 relative min-h-0 overflow-hidden bg-black flex flex-col">
+        <header className="absolute top-0 inset-x-0 z-30 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/70 via-black/20 to-transparent"
+          style={{ paddingTop: `${topSafe + 12}px` }}>
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-base shrink-0">👤</div>
+            <div className="min-w-0">
+              <h1 className="font-extrabold text-sm leading-tight truncate">تسجيل الحضور</h1>
+              <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-white text-[10px] font-bold ${modeConfig[mode].bg}`}>
+                {modeConfig[mode].icon} {modeConfig[mode].text}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="hidden sm:flex items-center gap-1.5 bg-white/10 border border-white/20 text-white px-3 py-1.5 rounded-xl text-xs font-bold">
+              <span className="text-emerald-400">●</span> {presentIds.size} حاضر
+            </span>
+            {cameraReady && (
+              <button onClick={toggleCamera}
+                className="w-9 h-9 flex items-center justify-center bg-white/10 border border-white/20 text-white rounded-xl active:scale-90 text-sm"
+                title="تبديل الكاميرا">🔄</button>
+            )}
+            <button onClick={toggleKiosk}
+              className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95">
+              <span>⛶</span> خروج
+            </button>
+          </div>
+        </header>
+
+        {error && (
+          <div className="absolute inset-x-4 z-30 bg-red-500/90 text-white p-3 rounded-xl text-sm font-bold text-center"
+            style={{ top: `${topSafe + 80}px` }}>
+            {error}
+            <button onClick={initCamera} className="block mx-auto mt-2 bg-white text-red-600 px-4 py-1.5 rounded-lg text-xs">🔄 إعادة</button>
+          </div>
+        )}
+
+        <div className="flex-1 relative min-h-0 overflow-hidden">
+          <video ref={attachStream}
+            autoPlay playsInline muted
+            onLoadedMetadata={handleVideoReady}
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${videoReady ? 'opacity-100' : 'invisible'}`}
+            style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }}
+          />
+
+          {studentsWithFace.length === 0 && mode !== 'loading' && (
+            <div className="absolute inset-0 flex items-center justify-center z-20 bg-black">
+              <div className="text-center px-4">
+                <div className="text-4xl mb-2">📸</div>
+                <p className="text-white font-bold text-sm">لا يوجد طلاب ببصمة وجه</p>
+                <p className="text-white/50 text-xs mt-1">سجل بصمات الوجوه أولاً</p>
+                <button onClick={handleShowReg} className="mt-3 bg-purple-600 text-white px-4 py-2 rounded-xl text-xs font-bold">📸 إضافة بصمة الآن</button>
+              </div>
+            </div>
+          )}
+
+          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+
+          {(mode === 'loading' || !videoReady) && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black">
+              <div className="text-center">
+                <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                <p className="text-white font-bold text-sm">جاري تجهيز الكاميرا...</p>
+              </div>
+            </div>
+          )}
+
+          {/* 🎯 تراكب: آخر المسجلين */}
+          <div className="absolute inset-x-3 z-20 flex flex-col gap-1.5 items-start pointer-events-none"
+            style={{ bottom: `${bottomSafe + 80}px` }}>
+            {recentMarked.map((l, i) => (
+              <div key={`${l.id}-${l.time}`}
+                className={`flex items-center gap-2 bg-black/75 text-white rounded-xl px-3 py-1.5 backdrop-blur-sm text-xs font-bold shadow-lg animate-fadeIn ${i === 0 ? 'ring-2 ring-emerald-400' : ''}`}>
+                <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-[10px] shrink-0">✓</span>
+                <span className="truncate">{l.name}</span>
+                <span className="text-white/50 text-[10px] shrink-0">#{l.code}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* 🎛️ أدوات الكاميرا أسفل الشاشة */}
+          {cameraReady && (
+            <div className="absolute inset-x-0 z-30 flex items-center justify-center gap-2"
+              style={{ bottom: `${bottomSafe + 16}px` }}>
+              <div className="flex items-center gap-1 bg-black/60 border border-white/15 rounded-xl px-2 py-1.5 backdrop-blur-sm">
+                {ZOOM_STEPS.map(s => (
+                  <button key={s} onClick={() => applyZoom(s)}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition active:scale-90 ${
+                      Math.abs(zoom - s) < 0.01 ? 'bg-blue-500 text-white' : 'text-white/80 hover:bg-white/10'
+                    }`}>
+                    {s}x
+                  </button>
+                ))}
+              </div>
+              {hasTorch && (
+                <button onClick={toggleTorch}
+                  className={`w-9 h-9 flex items-center justify-center rounded-full active:scale-90 text-sm bg-black/60 border border-white/15 backdrop-blur-sm ${
+                    torchOn ? 'text-yellow-400' : 'text-white/80'
+                  }`}
+                  title="فلاش">{torchOn ? '💡' : '🔦'}</button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+      )}
 
       {showReg && onUpdateStudent && (
         <Suspense fallback={null}>

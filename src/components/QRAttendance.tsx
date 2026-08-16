@@ -3,6 +3,7 @@ import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { Student, AttendanceSession } from '../types/student';
 import { suspendAurora, resumeAurora } from '../lib/auraControl';
 import { createPortal } from 'react-dom';
+import { useSafeArea } from '../hooks/useSafeArea';
 
 interface QRAttendanceProps {
   students: Student[];
@@ -86,6 +87,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const toastCounterRef = useRef(0);
   const toastSequenceRef = useRef<Map<number, number>>(new Map());
   const qrCodeInputRef = useRef<HTMLInputElement | null>(null);
+  const scrollAreaRef = useRef<HTMLDivElement | null>(null);
 
   const [cameraReady, setCameraReady] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -102,6 +104,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const [torchOn, setTorchOn] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<'starting' | 'ready' | 'error' | 'restarting'>('starting');
   const [facing, setFacing] = useState<CameraFacing>('environment');
+  const { topSafe, bottomSafe } = useSafeArea();
 
   const studentMap = useMemo(() => {
     const m = new Map<string, Student>();
@@ -341,15 +344,21 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   useEffect(() => {
     mountedRef.current = true;
     suspendAurora();
-    const prevOverflow = document.body.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
     const prevScroll = document.documentElement.style.overscrollBehavior;
+    const prevBodyScroll = document.body.style.overscrollBehavior;
     document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
     document.documentElement.style.overscrollBehavior = 'contain';
+    document.body.style.overscrollBehavior = 'contain';
     const t = setTimeout(() => { if (mountedRef.current) startCamera('environment'); }, 250);
     return () => {
       mountedRef.current = false;
-      document.body.style.overflow = prevOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
       document.documentElement.style.overscrollBehavior = prevScroll;
+      document.body.style.overscrollBehavior = prevBodyScroll;
       clearTimeout(t);
       resumeAurora();
       (async () => { await hardStop(); })();
@@ -372,6 +381,33 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+
+  // 🛑 منع انزلاق الخلفية عند حدود تمرير محتوى النافذة (iOS) مع السماح بالتمرير الداخلي
+  useEffect(() => {
+    const el = scrollAreaRef.current;
+    if (!el) return;
+    let startY = 0;
+    let startScroll = 0;
+    const onTouchStart = (e: TouchEvent) => {
+      startY = e.touches[0].clientY;
+      startScroll = el.scrollTop;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      const t = e.target as Element;
+      if (t.closest('button, a, input, select, textarea')) return;
+      const dy = startY - e.touches[0].clientY;
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      if ((startScroll <= 0 && dy < 0) || (startScroll >= maxScroll && dy > 0)) {
+        e.preventDefault();
+      }
+    };
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+    };
   }, []);
 
   const handleQrLinkByCode = useCallback(async (code: string) => {
@@ -403,10 +439,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black/80 text-white flex flex-col" dir="rtl">
-      <div className="w-full max-w-2xl mx-auto bg-black rounded-2xl flex flex-col shadow-2xl flex-1 my-2 sm:my-4 overflow-hidden">
+    <div className="fixed inset-0 z-[9999] bg-black/80 text-white flex flex-col overscroll-none" dir="rtl">
+      <div className="w-full bg-black flex flex-col flex-1 overflow-hidden">
       <header className="flex items-center justify-between px-3 py-2 bg-gray-900/95 border-b border-white/10"
-        style={{ paddingTop: 'max(0.5rem,env(safe-area-inset-top))' }}>
+        style={{ paddingTop: `${topSafe + 8}px` }}>
         <h2 className="text-sm font-bold flex items-center gap-1.5">🔳 QR</h2>
         <button onClick={onClose}
           className="bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded-lg text-sm font-bold transition active:scale-95">
@@ -415,7 +451,8 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       </header>
 
       <div className="flex-1 overflow-hidden flex flex-col">
-        <div className="flex-1 overflow-y-auto p-3 space-y-3 overscroll-contain">
+        <div ref={scrollAreaRef} className="flex-1 overflow-y-auto p-3 space-y-3 overscroll-contain"
+          style={{ paddingBottom: `${bottomSafe + 16}px` }}>
           <div className="w-full mx-auto rounded-xl overflow-hidden border bg-gray-900 relative max-w-lg border-emerald-500/20">
             <div id={QR_REGION_ID} className="w-full" style={{ minHeight: '260px' }} />
 
@@ -496,7 +533,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       </div>
 
       <div className="fixed top-0 left-1/2 -translate-x-1/2 z-[10001] flex flex-col gap-2 w-[92%] max-w-md pointer-events-none"
-        style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        style={{ paddingTop: `${topSafe + 8}px` }}>
         {toasts.map(t => (
           <div key={t.id}
             className={`bg-gradient-to-r ${toastBg[t.type]} rounded-xl px-4 py-3 shadow-2xl transition-all duration-200 ${t.visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'}`}>
