@@ -6,6 +6,8 @@ import {
   normalizeDescriptor, drawFaceLandmarks, getDetectionFrameDims,
 } from '../services/faceRecognition';
 import { useCameraReady } from '../hooks/useCameraReady';
+import { useFaceModels } from '../hooks/useFaceModels';
+import { FaceModelLoadingOverlay } from './FaceModelLoadingOverlay';
 import * as faceapi from 'face-api.js';
 import { createPortal } from 'react-dom';
 
@@ -36,6 +38,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   const searchRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const { videoReady, handleVideoReady, resetVideoReady, armForceReady } = useCameraReady(videoRef);
+  const { loaded: modelsLoaded, progress: modelProgress } = useFaceModels();
   const streamRef = useRef<MediaStream | null>(null);
   const mountedRef = useRef(true);
   const landmarkCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -82,7 +85,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
 
   // continuous detection loop — article pattern
   useEffect(() => {
-    if (!cameraReady || !videoReady || capturing || !videoRef.current) return;
+    if (!cameraReady || !videoReady || capturing || !videoRef.current || !modelsLoaded) return;
     detectIntervalRef.current = window.setInterval(async () => {
       if (!videoRef.current || !mountedRef.current) return;
       try {
@@ -168,6 +171,9 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-3" dir="rtl"
       onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+      {!modelsLoaded && (
+        <FaceModelLoadingOverlay progress={modelProgress} onCancel={onClose} />
+      )}
       <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm max-h-[96vh] overflow-y-auto">
 
         {step === 'search' && (

@@ -304,6 +304,8 @@ function App() {
           await loadInitialData(userData);
           // 🚀 تحميل موديل الكشف الخفيف فور تحميل الواجهة
           setTimeout(() => preloadDetector(), 500);
+          // 🚀 تحميل كامل الموديلات فور تسجيل الدخول (حتى تكون جاهزة عند فتح البصمة)
+          setTimeout(preloadBackground, 1000);
           // 🚀 تحميل مسبق لمكونات تسجيل البصمة بعد الدخول لتعمل حتى عند انقطاع الإنترنت
           setTimeout(preloadAttendanceChunks, 1500);
         } catch (error) {
