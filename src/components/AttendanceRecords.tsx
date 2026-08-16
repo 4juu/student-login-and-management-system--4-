@@ -492,18 +492,13 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+    <div className="glass-card">
       {/* 🆕 شريط السنة الأكاديمية */}
-      <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center gap-2">
-        <GraduationCap className="w-7 h-7 text-indigo-600" />
-        <div>
-          <p className="text-sm font-bold text-indigo-800">
-            السنة الأكاديمية الحالية: {currentAcademicYear.replace('_', ' - ')}
-          </p>
-          <p className="text-xs text-indigo-600">
-            جميع البيانات والسجلات تنتمي لهذه السنة
-          </p>
-        </div>
+      <div className="flex items-center gap-2 mb-6">
+        <span className="glass-badge badge-blue">
+          <GraduationCap className="w-4 h-4" />
+          السنة الأكاديمية الحالية: {currentAcademicYear.replace('_', ' - ')}
+        </span>
       </div>
 
       {/* ============================================================ */}
@@ -512,27 +507,29 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
       <button
         type="button"
         onClick={() => setExportOpen(true)}
-        className="w-full mb-6 sm:mb-8 p-4 sm:p-5 rounded-2xl bg-gradient-to-l from-indigo-600 via-violet-700 to-fuchsia-700 hover:from-indigo-700 hover:via-violet-800 hover:to-fuchsia-800 text-white shadow-lg shadow-indigo-600/25 hover:shadow-violet-700/30 transition-all duration-200 flex items-center gap-3 sm:gap-4 group cursor-pointer"
+        className="group w-full mb-6 sm:mb-8 p-4 sm:p-5 rounded-2xl border border-indigo-500/25 bg-gradient-to-l from-indigo-950/70 via-slate-900 to-slate-900 hover:border-indigo-400/45 hover:shadow-lg hover:shadow-indigo-950/40 transition-all duration-200 flex items-center gap-3 sm:gap-4 cursor-pointer text-right"
       >
-        <span className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-          <FileSpreadsheet className="w-6 h-6 sm:w-7 sm:h-7" />
+        <span className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-700 flex items-center justify-center shrink-0 shadow-md group-hover:scale-105 transition-transform">
+          <FileSpreadsheet className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
         </span>
-        <span className="text-right flex-1">
-          <span className="block text-base sm:text-lg font-bold">تحميل سجل الحضور والغياب (Excel)</span>
-          <span className="block text-xs sm:text-sm text-indigo-100/80 mt-0.5">اختر المدة الزمنية ثم قم بتحميل الملف</span>
+        <span className="flex-1">
+          <span className="block text-base sm:text-lg font-bold text-white">تحميل سجل الحضور والغياب (Excel)</span>
+          <span className="block text-xs sm:text-sm text-slate-400 mt-0.5">اختر المدة الزمنية ثم قم بتحميل الملف</span>
         </span>
-        <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 opacity-80 group-hover:-translate-x-1 transition-transform shrink-0" />
+        <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 text-slate-400 group-hover:-translate-x-1 transition-transform shrink-0" />
       </button>
 
       {/* ============================================================ */}
       {/* 📋 سجل عمليات الدخول المباشر */}
       {/* ============================================================ */}
-      <div className="bg-white/70 dark:bg-slate-800/40 backdrop-blur rounded-xl shadow-sm border border-slate-200/60 dark:border-slate-700/50 p-4 sm:p-6 mt-8">
+      <div className="mt-8 pt-6 border-t border-white/10">
         {/* 🧰 شريط الأدوات */}
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4 border-b border-slate-200/70 dark:border-slate-700/60 pb-4 sm:pb-5 mb-4">
-          <div className="flex items-center gap-2">
-            <CircleCheck className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
-            <h3 className="font-bold text-base sm:text-lg text-slate-800 dark:text-white">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 border-b border-white/10 pb-4 sm:pb-5 mb-4">
+          <div className="flex items-center gap-2.5">
+            <span className="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center shrink-0">
+              <CircleCheck className="w-5 h-5 text-emerald-400" />
+            </span>
+            <h3 className="font-bold text-base sm:text-lg text-white">
               سجل عمليات الدخول المباشر
             </h3>
           </div>
@@ -542,7 +539,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
               <select
                 value={selectedSessionId || ''}
                 onChange={(e) => setSelectedSessionId(e.target.value || null)}
-                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                className="glass-input px-3 py-2 text-sm"
               >
                 <option value="">كل الجلسات ({records.length})</option>
                 {sortedSessions.map(s => {
@@ -559,7 +556,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
             <button
               onClick={handleClearRecords}
               disabled={records.length === 0}
-              className="btn-base bg-gradient-to-r from-red-600/90 to-rose-600/90 hover:from-red-600 hover:to-rose-600 text-white disabled:opacity-30 disabled:cursor-not-allowed"
+              className="btn-base btn-secondary border-red-500/30 text-red-300 hover:bg-red-500/10 hover:border-red-400/40 disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -576,74 +573,24 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
             placeholder="🔍 ابحث بالاسم أو الكود أو الوقت..."
             value={searchRecord}
             onChange={(e) => setSearchRecord(e.target.value)}
-            className="w-full border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+            className="glass-input mb-4"
           />
         </div>
 
-        {/* ⏳ الترقيم العلوي */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-            <button
-              onClick={() => setCurrentPage(1)}
-              disabled={safeCurrentPage === 1}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronsRight className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={safeCurrentPage === 1}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            <span className="px-2 py-1.5 text-xs sm:text-sm font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded-lg whitespace-nowrap">
-              صفحة {safeCurrentPage} من {totalPages}
-            </span>
-            <button
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={safeCurrentPage === totalPages}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setCurrentPage(totalPages)}
-              disabled={safeCurrentPage === totalPages}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronsLeft className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-            <span className="whitespace-nowrap">عدد الصفوف:</span>
-            <select
-              value={pageSize}
-              onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
-              className="border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-white px-2 py-1.5 text-xs sm:text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-            >
-              {PAGE_SIZE_OPTIONS.map(ps => (
-                <option key={ps} value={ps}>{ps}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
         {/* 📊 الجدول */}
-        <div className="overflow-x-auto rounded-lg border border-slate-200/70 dark:border-slate-700/60">
-          <table className="w-full text-right text-sm min-w-[640px]">
+        <div className="table-container">
+          <table className="glass-table min-w-[640px]">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/60">
-                <th className="px-4 py-3 text-center whitespace-nowrap">
-                  <QrCode className="w-4 h-4 inline-block text-emerald-600" />
+              <tr>
+                <th className="!text-center whitespace-nowrap">
+                  <QrCode className="w-4 h-4 inline-block text-emerald-400" />
                 </th>
-                <th className="px-4 py-3 text-right whitespace-nowrap">الطالب</th>
-                <th className="px-4 py-3 text-center whitespace-nowrap">الجلسة</th>
-                <th className="px-4 py-3 text-center whitespace-nowrap">الوقت</th>
-                <th className="px-4 py-3 text-center whitespace-nowrap">الحالة</th>
+                <th className="whitespace-nowrap">الطالب</th>
+                <th className="!text-center whitespace-nowrap">الجلسة</th>
+                <th className="!text-center whitespace-nowrap">الوقت</th>
+                <th className="!text-center whitespace-nowrap">الحالة</th>
                 {(onUpdateRecord || onDeleteRecord) && (
-                  <th className="px-4 py-3 text-center whitespace-nowrap">إجراءات</th>
+                  <th className="!text-center whitespace-nowrap">إجراءات</th>
                 )}
               </tr>
             </thead>
@@ -652,40 +599,40 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                 const stu = studentMap.get(rec.studentId);
                 const isPresent = rec.status === 'present';
                 return (
-                  <tr key={rec.id} className="border-t border-slate-100 dark:border-slate-800 hover:bg-emerald-50/50 dark:hover:bg-slate-700/30 transition-colors">
-                    <td className="px-4 py-2.5 text-center">
-                      <QrCode className="w-4 h-4 text-gray-400 inline-block" />
+                  <tr key={rec.id}>
+                    <td className="!text-center">
+                      <QrCode className="w-4 h-4 text-slate-500 inline-block" />
                     </td>
-                    <td className="px-4 py-2.5 font-semibold text-gray-800 dark:text-gray-200 whitespace-nowrap">
+                    <td className="font-semibold text-slate-100 whitespace-nowrap">
                       {stu ? (
                         <div className="flex flex-col">
                           <span>{stu.name}</span>
-                          <span className="text-xs text-gray-500 dark:text-gray-400" dir="ltr">{rec.studentId}</span>
+                          <span className="text-xs text-slate-500" dir="ltr">{rec.studentId}</span>
                         </div>
                       ) : (
-                        <span className="text-gray-500">غير موجود</span>
+                        <span className="text-slate-500">غير موجود</span>
                       )}
                     </td>
-                    <td className="px-4 py-2.5 text-center text-gray-600 dark:text-gray-400 whitespace-nowrap">{sessionNameMap.get(rec.sessionId) || '—'}</td>
-                    <td className="px-4 py-2.5 text-center text-gray-600 dark:text-gray-400 whitespace-nowrap" dir="ltr">{rec.time || '—'}</td>
-                    <td className="px-4 py-2.5 text-center">
+                    <td className="!text-center text-slate-400 whitespace-nowrap">{sessionNameMap.get(rec.sessionId) || '—'}</td>
+                    <td className="!text-center text-slate-400 whitespace-nowrap" dir="ltr">{rec.time || '—'}</td>
+                    <td className="!text-center">
                       {isPresent ? (
-                        <span className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-bold px-2.5 py-1 rounded-full">
+                        <span className="glass-badge badge-green">
                           <CircleCheck className="w-3.5 h-3.5" /> حاضر
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-bold px-2.5 py-1 rounded-full">
+                        <span className="glass-badge badge-red">
                           <CircleX className="w-3.5 h-3.5" /> غائب
                         </span>
                       )}
                     </td>
                     {(onUpdateRecord || onDeleteRecord) && (
-                      <td className="px-4 py-2.5 text-center whitespace-nowrap">
+                      <td className="!text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
                           {onUpdateRecord && (
                             <button
                               onClick={() => handleOpenEdit(rec)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-700/50 hover:bg-amber-100 transition-colors text-xs font-bold"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/25 text-amber-300 hover:bg-amber-500/25 transition-colors text-xs font-bold"
                               title="تعديل السجل"
                             >
                               <Pencil className="w-3.5 h-3.5" /> تعديل
@@ -694,7 +641,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                           {onDeleteRecord && (
                             <button
                               onClick={() => handleDeleteRecord(rec)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700/50 hover:bg-red-100 transition-colors text-xs font-bold"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-500/15 border border-red-500/25 text-red-300 hover:bg-red-500/25 transition-colors text-xs font-bold"
                               title="حذف السجل"
                             >
                               <Trash2 className="w-3.5 h-3.5" /> حذف
@@ -707,8 +654,17 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                 );
               }) : (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                    لا توجد سجلات لعرضها
+                  <td colSpan={6} className="!text-center px-4 py-12">
+                    <div className="text-4xl mb-3">📭</div>
+                    <p className="text-slate-400 text-sm mb-3">لا توجد سجلات لعرضها</p>
+                    {searchRecord && (
+                      <button
+                        onClick={() => setSearchRecord('')}
+                        className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 text-xs font-bold transition-colors"
+                      >
+                        مسح البحث
+                      </button>
+                    )}
                   </td>
                 </tr>
               )}
@@ -716,23 +672,55 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
           </table>
         </div>
 
-        {/* ⏳ الترقيم السفلي */}
-        <div className="flex items-center justify-center gap-2 mt-4">
-          <button onClick={() => setCurrentPage(1)} disabled={safeCurrentPage === 1} className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-            <ChevronsRight className="w-4 h-4" />
-          </button>
-          <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safeCurrentPage === 1} className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          <span className="px-2 py-1.5 text-xs sm:text-sm font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded-lg whitespace-nowrap">
-            صفحة {safeCurrentPage} من {totalPages}
-          </span>
-          <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safeCurrentPage === totalPages} className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button onClick={() => setCurrentPage(totalPages)} disabled={safeCurrentPage === totalPages} className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-            <ChevronsLeft className="w-4 h-4" />
-          </button>
+        {/* ⏳ شريط الترقيم الموحد */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-white/10">
+          <div className="flex items-center gap-2 text-sm text-slate-400">
+            <span className="whitespace-nowrap">عرض</span>
+            <select
+              value={pageSize}
+              onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+              className="bg-slate-800 border border-slate-600/70 rounded-lg text-slate-200 px-2 py-1.5 text-xs sm:text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+            >
+              {PAGE_SIZE_OPTIONS.map(ps => (
+                <option key={ps} value={ps}>{ps}</option>
+              ))}
+            </select>
+            <span className="whitespace-nowrap">سجل من أصل {filteredRecords.length}</span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={safeCurrentPage === 1}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronsRight className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={safeCurrentPage === 1}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <span className="px-2.5 py-1.5 text-xs sm:text-sm font-bold bg-emerald-500/15 text-emerald-300 rounded-lg whitespace-nowrap">
+              صفحة {safeCurrentPage} من {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={safeCurrentPage === totalPages}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={safeCurrentPage === totalPages}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronsLeft className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
