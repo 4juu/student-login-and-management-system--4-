@@ -550,19 +550,19 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   const allInPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id));
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="glass-card rounded-xl p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold text-gray-800">إدارة الطلاب</h2>
+        <h2 className="text-2xl font-bold text-white">إدارة الطلاب</h2>
       </div>
 
       {students.length > 0 && studentsWithoutFace > 0 && (
-        <div className="mb-4 p-3 bg-emerald-50 border border-emerald-300 rounded-lg flex items-center gap-3">
-          <ScanFace className="w-7 h-7 text-emerald-600" />
+        <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center gap-3">
+          <ScanFace className="w-7 h-7 text-emerald-400" />
           <div className="flex-1">
-            <p className="text-sm font-bold text-emerald-800">
+            <p className="text-sm font-bold text-emerald-300">
               {studentsWithoutFace} طالب بدون بصمة وجه
             </p>
-            <p className="text-xs text-emerald-700">
+            <p className="text-xs text-emerald-400">
               سيتم تسجيل بصمة الوجه تلقائياً عند أول عملية تسجيل. أو يمكنك إضافتها من الملف الشخصي للطالب.
             </p>
           </div>
@@ -572,21 +572,21 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       <form onSubmit={handleSubmit} className="mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               اسم الطالب *
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-500 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="أدخل اسم الطالب"
               dir="rtl"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               رمز الطالب (4 أرقام) *
             </label>
             <input
@@ -597,48 +597,48 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                 if (value.length <= 4) setCode(value);
               }}
               maxLength={4}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-lg font-bold"
+              className="w-full px-4 py-2 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-500 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-lg font-bold"
               placeholder="1001"
               inputMode="numeric"
             />
-            <p className="text-xs text-gray-500 mt-1 text-center">من 1000 إلى 9999</p>
+            <p className="text-xs text-slate-400 mt-1 text-center">من 1000 إلى 9999</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               الكروب (اختياري)
             </label>
             <input
               type="text"
               value={group}
               onChange={(e) => setGroup(e.target.value.toUpperCase())}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
+              className="w-full px-4 py-2 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-500 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
               placeholder="A1"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+            <label className="block text-sm font-medium text-slate-300 mb-2 flex items-center gap-1">
               <IdCard className="w-4 h-4" /> الرقم الجامعي
-              <span className="text-xs text-blue-600">(اختياري)</span>
+              <span className="text-xs text-blue-400">(اختياري)</span>
             </label>
             <input
               type="text"
               value={universityId}
               onChange={(e) => setUniversityId(e.target.value.replace(/\D/g, ''))}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center font-mono"
+              className="w-full px-4 py-2 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-500 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center font-mono"
               placeholder="8886736221"
               inputMode="numeric"
             />
-            <p className="text-xs text-gray-500 mt-1 text-center">رقم الهوية الجامعية</p>
+            <p className="text-xs text-slate-400 mt-1 text-center">رقم الهوية الجامعية</p>
           </div>
         </div>
 
-        <div className="mt-4 p-4 bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-lg">
-          <label className="block text-sm font-bold text-emerald-800 mb-2 flex items-center gap-2">
-            <QrCode className="w-5 h-5 text-emerald-800" />
+        <div className="mt-4 p-4 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border-2 border-emerald-500/30 rounded-lg">
+          <label className="block text-sm font-bold text-emerald-300 mb-2 flex items-center gap-2">
+            <QrCode className="w-5 h-5 text-emerald-300" />
             <span>رمز QR الهوية</span>
-            <span className="text-xs font-normal text-emerald-600 bg-white px-2 py-0.5 rounded-full">
+            <span className="text-xs font-normal text-emerald-300 bg-white/10 px-2 py-0.5 rounded-full">
               اختياري - للمسح السريع
             </span>
           </label>
@@ -646,11 +646,11 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             type="text"
             value={qrCodeId}
             onChange={(e) => setQrCodeId(e.target.value)}
-            className="w-full px-4 py-2 border border-emerald-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono text-sm bg-white"
+            className="w-full px-4 py-2 border border-emerald-500/30 bg-slate-800 text-white placeholder:text-slate-500 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono text-sm"
             placeholder="ألصق هنا: https://sis.mohesr.gov.iq/verify?id=... أو الرمز مباشرة"
             dir="ltr"
           />
-          <p className="text-xs text-emerald-700 mt-2 flex items-start gap-1">
+          <p className="text-xs text-emerald-300 mt-2 flex items-start gap-1">
             <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" />
             <span>
               يمكنك لصق <strong>الرابط الكامل</strong> من هوية الوزارة وسيتم استخراج الرمز تلقائياً،
@@ -669,31 +669,31 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         </div>
 
         {error && (
-          <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md" dir="rtl">
+          <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 text-red-300 rounded-md" dir="rtl">
             {error}
           </div>
         )}
       </form>
 
-      <div className="mb-6 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg">
-        <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-          <FolderOpen className="w-5 h-5 text-blue-600" /> استيراد الطلاب من ملف Excel
+      <div className="mb-6 p-5 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border-2 border-blue-500/30 rounded-lg">
+        <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
+          <FolderOpen className="w-5 h-5 text-blue-400" /> استيراد الطلاب من ملف Excel
         </h3>
-        <div className="mb-4 text-sm text-gray-600 space-y-1">
+        <div className="mb-4 text-sm text-slate-400 space-y-1">
           <p>اختر بادئة الكود ثم ارفع الملف. سيتم اكتشاف الحقول التالية تلقائياً:</p>
           <div className="flex flex-wrap gap-2 mt-2">
-            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium inline-flex items-center gap-1"><SquarePen className="w-3 h-3" /> الاسم</span>
-            <span className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs font-medium inline-flex items-center gap-1"><Users className="w-3 h-3" /> الكروب (A1, B2, ...)</span>
-            <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-medium inline-flex items-center gap-1"><IdCard className="w-3 h-3" /> الرقم الجامعي (8-15 رقم)</span>
-            <span className="px-2 py-1 bg-emerald-100 text-emerald-800 rounded text-xs font-medium inline-flex items-center gap-1"><QrCode className="w-3 h-3" /> رمز QR (رابط الوزارة الكامل)</span>
+            <span className="px-2 py-1 bg-blue-500/15 text-blue-300 rounded text-xs font-medium inline-flex items-center gap-1"><SquarePen className="w-3 h-3" /> الاسم</span>
+            <span className="px-2 py-1 bg-indigo-500/15 text-indigo-300 rounded text-xs font-medium inline-flex items-center gap-1"><Users className="w-3 h-3" /> الكروب (A1, B2, ...)</span>
+            <span className="px-2 py-1 bg-purple-500/15 text-purple-300 rounded text-xs font-medium inline-flex items-center gap-1"><IdCard className="w-3 h-3" /> الرقم الجامعي (8-15 رقم)</span>
+            <span className="px-2 py-1 bg-emerald-500/15 text-emerald-300 rounded text-xs font-medium inline-flex items-center gap-1"><QrCode className="w-3 h-3" /> رمز QR (رابط الوزارة الكامل)</span>
           </div>
-          <p className="text-xs text-emerald-700 mt-2 bg-emerald-50 p-2 rounded border border-emerald-200 flex items-start gap-1">
+          <p className="text-xs text-emerald-300 mt-2 bg-emerald-500/10 p-2 rounded border border-emerald-500/30 flex items-start gap-1">
             <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" /> <strong>نصيحة:</strong> الصق الرابط الكامل من هوية الوزارة بأي عمود، وسيتم استخراج رمز QR تلقائياً لكل طالب.
           </p>
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">اختر بادئة الكود:</label>
+          <label className="block text-sm font-medium text-slate-300 mb-2">اختر بادئة الكود:</label>
           <div className="flex flex-wrap gap-2">
             {[1, 2, 3, 4, 5].map((num) => (
               <button
@@ -703,14 +703,14 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                 className={`w-14 h-14 rounded-lg font-bold text-lg transition duration-200 ${
                   selectedPrefix === num
                     ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg scale-110'
-                    : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-blue-400'
+                    : 'bg-white/10 text-slate-200 border-2 border-slate-600 hover:border-blue-400'
                 }`}
               >
                 {num}
               </button>
             ))}
           </div>
-          <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+          <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
             <Hash className="w-3.5 h-3.5" /> الأكواد ستبدأ من: <strong>{selectedPrefix}001</strong>
           </p>
         </div>
@@ -736,7 +736,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         </div>
 
         {importMessage && (
-          <div className="mt-4 p-3 bg-green-100 border border-green-400 text-green-800 rounded-md" dir="rtl">
+          <div className="mt-4 p-3 bg-green-500/10 border border-green-500/30 text-green-300 rounded-md" dir="rtl">
             {importMessage}
           </div>
         )}
@@ -744,47 +744,47 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
 
       {/* ═══════════ بصمات الوجه ═══════════ */}
       {students.length > 0 && onUpdateStudent && (
-        <div className="mb-6 p-5 bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg">
-          <h3 className="text-lg font-bold text-purple-900 mb-2 flex items-center gap-2">
-            <Smile className="w-5 h-5 text-purple-600" /> بصمات الوجه
-            <span className="text-xs font-normal bg-purple-200 text-purple-800 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+        <div className="mb-6 p-5 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-2 border-purple-500/30 rounded-lg">
+          <h3 className="text-lg font-bold text-purple-200 mb-2 flex items-center gap-2">
+            <Smile className="w-5 h-5 text-purple-400" /> بصمات الوجه
+            <span className="text-xs font-normal bg-purple-500/15 text-purple-300 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
               جديد <Zap className="w-3 h-3" />
             </span>
           </h3>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-            <div className="bg-white rounded-lg p-2 text-center border border-purple-200">
-              <div className="text-2xl font-bold text-purple-600">{studentsWithFace}</div>
-              <div className="text-xs text-purple-700">مسجّلين</div>
+            <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
+              <div className="text-2xl font-bold text-purple-300">{studentsWithFace}</div>
+              <div className="text-xs text-purple-400">مسجّلين</div>
             </div>
-            <div className="bg-white rounded-lg p-2 text-center border border-purple-200">
-              <div className="text-2xl font-bold text-gray-400">{studentsWithoutFace}</div>
-              <div className="text-xs text-gray-600">بدون بصمة</div>
+            <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
+              <div className="text-2xl font-bold text-slate-500">{studentsWithoutFace}</div>
+              <div className="text-xs text-slate-400">بدون بصمة</div>
             </div>
-            <div className="bg-white rounded-lg p-2 text-center border border-purple-200">
-              <div className="text-2xl font-bold text-pink-600">
+            <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
+              <div className="text-2xl font-bold text-pink-300">
                 {students.length > 0 ? Math.round((studentsWithFace / students.length) * 100) : 0}%
               </div>
-              <div className="text-xs text-pink-700">نسبة الإكمال</div>
+              <div className="text-xs text-pink-400">نسبة الإكمال</div>
             </div>
-            <div className="bg-white rounded-lg p-2 text-center border border-emerald-200">
-              <div className="text-2xl font-bold text-emerald-600">
+            <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
+              <div className="text-2xl font-bold text-emerald-300">
                 {compressionStats.totalSizeKB < 1024
                   ? `${compressionStats.totalSizeKB.toFixed(1)}`
                   : `${(compressionStats.totalSizeKB / 1024).toFixed(2)}`
                 }
               </div>
-              <div className="text-xs text-emerald-700">
+              <div className="text-xs text-emerald-400">
                 {compressionStats.totalSizeKB < 1024 ? 'KB' : 'MB'} إجمالي
               </div>
             </div>
           </div>
 
           {studentsWithFace > 0 && (
-            <div className="bg-white rounded-lg p-3 mb-3 border-2 border-purple-200 shadow-sm">
+            <div className="bg-white/5 rounded-lg p-3 mb-3 border-2 border-purple-500/30 shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <h4 className="text-sm font-bold text-gray-800 flex items-center gap-1">
-                  <FileArchive className="w-4 h-4 text-purple-600" /> حالة الضغط
+                <h4 className="text-sm font-bold text-white flex items-center gap-1">
+                  <FileArchive className="w-4 h-4 text-purple-400" /> حالة الضغط
                 </h4>
                 {compressionStats.uncompressedCount > 0 && (
                   <button
@@ -802,42 +802,42 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
 
               {compressing && (
                 <div className="mb-2">
-                  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                  <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
                     <div
                       className="bg-gradient-to-r from-emerald-500 to-teal-500 h-2 transition-all duration-200"
                       style={{ width: `${(compressionProgress.current / compressionProgress.total) * 100}%` }}
                     />
                   </div>
-                  <p className="text-xs text-gray-500 text-center mt-1">
+                  <p className="text-xs text-slate-400 text-center mt-1">
                     جاري الضغط: {compressionProgress.current} من {compressionProgress.total}
                   </p>
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="flex items-center gap-2 bg-emerald-50 p-2 rounded border border-emerald-200">
-                  <span className="text-emerald-600 text-xl">✓</span>
+                <div className="flex items-center gap-2 bg-emerald-500/10 p-2 rounded border border-emerald-500/30">
+                  <span className="text-emerald-300 text-xl">✓</span>
                   <div className="flex-1">
-                    <div className="font-bold text-emerald-800 text-lg leading-none">
+                    <div className="font-bold text-emerald-300 text-lg leading-none">
                       {compressionStats.compressedCount}
                     </div>
-                    <div className="text-emerald-600 text-[10px]">مضغوطة</div>
+                    <div className="text-emerald-400 text-[10px]">مضغوطة</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 bg-amber-50 p-2 rounded border border-amber-200">
-                  <TriangleAlert className="w-6 h-6 text-amber-600" />
+                <div className="flex items-center gap-2 bg-amber-500/10 p-2 rounded border border-amber-500/30">
+                  <TriangleAlert className="w-6 h-6 text-amber-300" />
                   <div className="flex-1">
-                    <div className="font-bold text-amber-800 text-lg leading-none">
+                    <div className="font-bold text-amber-300 text-lg leading-none">
                       {compressionStats.uncompressedCount}
                     </div>
-                    <div className="text-amber-600 text-[10px]">غير مضغوطة</div>
+                    <div className="text-amber-400 text-[10px]">غير مضغوطة</div>
                   </div>
                 </div>
               </div>
 
               {compressionStats.uncompressedCount > 0 && (
-                <div className="mt-2 text-[11px] text-gray-700 bg-gradient-to-r from-amber-50 to-yellow-50 p-2 rounded border border-amber-200 flex items-start gap-1">
-                  <Lightbulb className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" /> يمكنك توفير <strong className="text-emerald-700">~{compressionStats.potentialSavingsKB.toFixed(1)} KB</strong> بضغط البصمات غير المضغوطة. <strong>الضغط آمن</strong> ولا يؤثر على دقة التعرف (أقل من 1%).
+                <div className="mt-2 text-[11px] text-slate-300 bg-gradient-to-r from-amber-500/10 to-yellow-500/10 p-2 rounded border border-amber-500/30 flex items-start gap-1">
+                  <Lightbulb className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-400" /> يمكنك توفير <strong className="text-emerald-400">~{compressionStats.potentialSavingsKB.toFixed(1)} KB</strong> بضغط البصمات غير المضغوطة. <strong>الضغط آمن</strong> ولا يؤثر على دقة التعرف (أقل من 1%).
                 </div>
               )}
 
@@ -845,7 +845,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             </div>
           )}
 
-          <p className="text-xs text-purple-700 mb-3 bg-white/60 p-2 rounded flex items-start gap-1">
+          <p className="text-xs text-purple-300 mb-3 bg-white/5 p-2 rounded flex items-start gap-1">
             <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" /> <strong>كيف يعمل؟</strong> سجّل بصمة وجه كل طالب مرة واحدة (يأخذ ثانيتين فقط)، ثم يستطيع الطلاب تسجيل حضورهم بمجرد المرور قبال الكاميرا تلقائياً، بدون باركود أو كود يدوي.
           </p>
 
@@ -859,9 +859,9 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       )}
 
       {students.length > 1 && (onSortByName || onSortByGroup) && (
-        <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg">
-          <h3 className="text-sm font-bold text-purple-800 mb-3 flex items-center gap-2">
-            <RefreshCw className="w-4 h-4 text-purple-700" /> إعادة ترتيب الطلاب
+        <div className="mb-4 p-4 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-2 border-purple-500/30 rounded-lg">
+          <h3 className="text-sm font-bold text-purple-200 mb-3 flex items-center gap-2">
+            <RefreshCw className="w-4 h-4 text-purple-400" /> إعادة ترتيب الطلاب
           </h3>
           <div className="flex flex-wrap gap-2">
             {onSortByName && (
@@ -900,13 +900,13 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="بحث بالاسم أو الكود أو الكروب أو الرقم الجامعي..."
-              className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 pr-10 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               dir="rtl"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xl"
+                className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-400 text-xl"
               >
                 ×
               </button>
@@ -917,7 +917,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             <select
               value={groupFilter}
               onChange={e => setGroupFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="px-4 py-2 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">جميع الكروبات</option>
               {uniqueGroups.map(g => (
@@ -931,20 +931,20 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       )}
 
       {(searchQuery || groupFilter !== 'all') && (
-        <p className="text-xs text-gray-500 mb-3 flex items-center gap-1">
-          <ChartColumn className="w-3.5 h-3.5 text-gray-400" /> نتائج: <strong>{filteredStudents.length}</strong> من {students.length}
+        <p className="text-xs text-slate-400 mb-3 flex items-center gap-1">
+          <ChartColumn className="w-3.5 h-3.5 text-slate-500" /> نتائج: <strong>{filteredStudents.length}</strong> من {students.length}
         </p>
       )}
 
       {selectedIds.size > 0 && (
-        <div className="mb-4 p-4 bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-300 rounded-lg flex items-center justify-between flex-wrap gap-3">
-          <div className="text-orange-800 font-medium flex items-center gap-1">
+        <div className="mb-4 p-4 bg-gradient-to-r from-orange-500/10 to-red-500/10 border-2 border-orange-500/30 rounded-lg flex items-center justify-between flex-wrap gap-3">
+          <div className="text-orange-300 font-medium flex items-center gap-1">
             <CircleCheck className="w-4 h-4" /> تم تحديد <strong>{selectedIds.size}</strong> من {students.length} طالب
           </div>
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setSelectedIds(new Set())}
-              className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-medium rounded-md transition"
+              className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-medium rounded-md transition"
             >
               إلغاء التحديد
             </button>
@@ -968,19 +968,19 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       )}
 
       {filteredStudents.length > pageSize && (
-        <div className="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between flex-wrap gap-2">
+        <div className="mb-3 p-3 bg-white/5 border border-white/10 rounded-lg flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-gray-600">عرض:</span>
+            <span className="text-slate-400">عرض:</span>
             <select
               value={pageSize}
               onChange={e => setPageSize(Number(e.target.value))}
-              className="px-3 py-1 border border-gray-300 rounded-md text-sm bg-white"
+              className="px-3 py-1 border border-slate-600 bg-slate-800 text-white rounded-md text-sm"
             >
               {PAGE_SIZE_OPTIONS.map(size => (
                 <option key={size} value={size}>{size} طالب</option>
               ))}
             </select>
-            <span className="text-gray-600">
+            <span className="text-slate-400">
               ({((safeCurrentPage - 1) * pageSize) + 1} - {Math.min(safeCurrentPage * pageSize, filteredStudents.length)} من {filteredStudents.length})
             </span>
           </div>
@@ -989,7 +989,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             <button
               onClick={() => setCurrentPage(1)}
               disabled={safeCurrentPage === 1}
-              className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+              className="px-2 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm"
               title="الصفحة الأولى"
             >
               <ChevronsRight className="w-4 h-4" />
@@ -997,7 +997,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={safeCurrentPage === 1}
-              className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
+              className="px-3 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm flex items-center gap-1"
             >
               <ChevronRight className="w-4 h-4" /> السابق
             </button>
@@ -1007,14 +1007,14 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             <button
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={safeCurrentPage === totalPages}
-              className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
+              className="px-3 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm flex items-center gap-1"
             >
               التالي <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={() => setCurrentPage(totalPages)}
               disabled={safeCurrentPage === totalPages}
-              className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+              className="px-2 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm"
               title="الصفحة الأخيرة"
             >
               <ChevronsLeft className="w-4 h-4" />
@@ -1024,8 +1024,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       )}
 
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+        <table className="min-w-full divide-y divide-white/10">
+          <thead className="bg-white/5">
             <tr>
               <th className="px-4 py-3 text-center">
                 {paginatedStudents.length > 0 && (
@@ -1038,20 +1038,20 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                   />
                 )}
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الرمز</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الاسم</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الكروب</th>
-              <th className="hidden md:table-cell px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><IdCard className="w-3.5 h-3.5" /> الرقم الجامعي</span></th>
-              <th className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> رمز QR</span></th>
-              <th className="hidden sm:table-cell px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><Smile className="w-3.5 h-3.5" /> الوجه</span></th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">إجراءات</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">#</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">الرمز</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">الاسم</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">الكروب</th>
+              <th className="hidden md:table-cell px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><IdCard className="w-3.5 h-3.5" /> الرقم الجامعي</span></th>
+              <th className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> رمز QR</span></th>
+              <th className="hidden sm:table-cell px-4 py-3 text-center text-xs font-medium text-slate-400 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><Smile className="w-3.5 h-3.5" /> الوجه</span></th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">إجراءات</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white/5 divide-y divide-white/10">
             {paginatedStudents.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={9} className="px-6 py-8 text-center text-slate-400">
                   <div className="flex flex-col items-center gap-2">
                     <p className="font-medium">
                       {searchQuery || groupFilter !== 'all' ? 'لا توجد نتائج للبحث' : 'لا توجد طلاب مسجلين'}
@@ -1074,7 +1074,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                 return (
                   <tr
                     key={student.id}
-                    className={`hover:bg-gray-50 transition ${selectedIds.has(student.id) ? 'bg-blue-50' : ''}`}
+                    className={`hover:bg-white/5 transition ${selectedIds.has(student.id) ? 'bg-blue-500/10' : ''}`}
                   >
                     <td className="px-4 py-4 text-center">
                       <input
@@ -1084,7 +1084,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                         className="w-5 h-5 cursor-pointer accent-blue-600"
                       />
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-slate-400">
                       {globalIndex}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
@@ -1107,7 +1107,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                                 setTransferGroupValue('');
                               }
                             }}
-                            className="px-2 py-1 border border-blue-400 rounded text-sm"
+                            className="px-2 py-1 border border-blue-500/40 bg-slate-800 text-white rounded text-sm"
                             autoFocus
                             onKeyDown={e => {
                               if (e.key === 'Escape') { setTransferStudentId(null); setTransferGroupValue(''); }
@@ -1124,7 +1124,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                               type="text"
                               value=""
                               onChange={e => setTransferGroupValue(e.target.value.toUpperCase())}
-                              className="w-16 px-2 py-1 border border-blue-400 rounded text-sm text-center"
+                              className="w-16 px-2 py-1 border border-blue-500/40 bg-slate-800 text-white rounded text-sm text-center"
                               placeholder="A1"
                               autoFocus
                             />
@@ -1145,7 +1145,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                           </button>
                           <button
                             onClick={() => { setTransferStudentId(null); setTransferGroupValue(''); }}
-                            className="px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-xs"
+                            className="px-2 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-xs"
                             title="إلغاء"
                           >
                             ×
@@ -1154,16 +1154,16 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                       ) : (
                         <div className="flex items-center gap-2">
                           {student.group ? (
-                            <span className="inline-block px-3 py-1 bg-indigo-100 text-indigo-800 text-sm font-medium rounded-full">
+                            <span className="inline-block px-3 py-1 bg-indigo-500/15 text-indigo-300 text-sm font-medium rounded-full">
                               {student.group}
                             </span>
                           ) : (
-                            <span className="text-gray-400 text-sm">-</span>
+                            <span className="text-slate-500 text-sm">-</span>
                           )}
                           {onUpdateStudent && (
                             <button
                               onClick={() => { setTransferStudentId(student.id); setTransferGroupValue(student.group || ''); }}
-                              className="text-blue-500 hover:text-blue-700 text-xs"
+                              className="text-blue-400 hover:text-blue-300 text-xs"
                               title="نقل إلى كروب آخر"
                             >
                               <RefreshCw className="w-4 h-4" />
@@ -1180,7 +1180,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                             type="text"
                             value={editUniversityId}
                             onChange={e => setEditUniversityId(e.target.value.replace(/\D/g, ''))}
-                            className="w-32 px-2 py-1 border border-blue-400 rounded text-sm font-mono text-center"
+                            className="w-32 px-2 py-1 border border-blue-500/40 bg-slate-800 text-white rounded text-sm font-mono text-center"
                             autoFocus
                             onKeyDown={e => {
                               if (e.key === 'Enter') saveEditUniId();
@@ -1196,7 +1196,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                           </button>
                           <button
                             onClick={cancelEditUniId}
-                            className="px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-xs"
+                            className="px-2 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-xs"
                             title="إلغاء"
                           >
                             ×
@@ -1205,16 +1205,16 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                       ) : (
                         <div className="flex items-center gap-2">
                           {student.universityId ? (
-                            <span className="inline-block px-2 py-1 bg-blue-50 text-blue-700 text-sm font-mono rounded border border-blue-200">
+                            <span className="inline-block px-2 py-1 bg-blue-500/10 text-blue-300 text-sm font-mono rounded border border-blue-500/30">
                               {student.universityId}
                             </span>
                           ) : (
-                            <span className="text-gray-400 text-xs italic">غير مضاف</span>
+                            <span className="text-slate-500 text-xs italic">غير مضاف</span>
                           )}
                           {onUpdateStudent && (
                             <button
                               onClick={() => startEditUniId(student)}
-                              className="text-blue-500 hover:text-blue-700 text-xs"
+                              className="text-blue-400 hover:text-blue-300 text-xs"
                               title="تعديل الرقم الجامعي"
                             >
                               <Pencil className="w-4 h-4" />
@@ -1231,7 +1231,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                             type="text"
                             value={editQrCodeId}
                             onChange={e => setEditQrCodeId(e.target.value)}
-                            className="w-40 px-2 py-1 border border-emerald-400 rounded text-xs font-mono text-center"
+                            className="w-40 px-2 py-1 border border-emerald-500/40 bg-slate-800 text-white rounded text-xs font-mono text-center"
                             dir="ltr"
                             placeholder="QR ID أو رابط"
                             autoFocus
@@ -1249,7 +1249,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                           </button>
                           <button
                             onClick={cancelEditQr}
-                            className="px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-xs"
+                            className="px-2 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-xs"
                             title="إلغاء"
                           >
                             ×
@@ -1259,20 +1259,20 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                         <div className="flex items-center gap-2">
                           {student.qrCodeId ? (
                             <span
-                              className="inline-block px-2 py-1 bg-emerald-50 text-emerald-700 text-xs font-mono rounded border border-emerald-200 max-w-[140px] truncate"
+                              className="inline-block px-2 py-1 bg-emerald-500/10 text-emerald-300 text-xs font-mono rounded border border-emerald-500/30 max-w-[140px] truncate"
                               dir="ltr"
                               title={student.qrCodeId}
                             >
                               {student.qrCodeId}
                             </span>
                           ) : (
-                            <span className="text-gray-400 text-xs italic">غير مربوط</span>
+                            <span className="text-slate-500 text-xs italic">غير مربوط</span>
                           )}
                           {onUpdateStudent && (
                             <>
                               <button
                                 onClick={() => startEditQr(student)}
-                                className="text-emerald-600 hover:text-emerald-800 text-xs"
+                                className="text-emerald-400 hover:text-emerald-300 text-xs"
                                 title="تعديل رمز QR"
                               >
                                 <Pencil className="w-4 h-4" />
@@ -1280,7 +1280,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                               {student.qrCodeId && (
                                 <button
                                   onClick={() => removeQrLink(student)}
-                                  className="text-red-500 hover:text-red-700 text-xs"
+                                  className="text-red-400 hover:text-red-300 text-xs"
                                   title="فك ربط QR"
                                 >
                                   <Unlink className="w-4 h-4" />
@@ -1297,11 +1297,11 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                         {hasFace ? (
                           <>
                             <span
-                              className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border ${
-                                isCompressed
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                  : 'bg-amber-50 text-amber-700 border-amber-200'
-                              }`}
+                                className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border ${
+                                  isCompressed
+                                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                                    : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                }`}
                               title={
                                 student.faceRegisteredAt
                                   ? `سُجلت في: ${new Date(student.faceRegisteredAt).toLocaleDateString('ar-EG')}\n${
@@ -1316,7 +1316,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                             {onUpdateStudent && (
                               <button
                                 onClick={() => removeFaceData(student)}
-                                className="text-red-500 hover:text-red-700 text-xs"
+                                className="text-red-400 hover:text-red-300 text-xs"
                                 title="حذف بصمة الوجه"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -1324,7 +1324,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                             )}
                           </>
                         ) : (
-                          <span className="text-gray-400 text-xs italic">غير مسجّلة</span>
+                          <span className="text-slate-500 text-xs italic">غير مسجّلة</span>
                         )}
                       </div>
                     </td>
@@ -1334,7 +1334,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                         {onOpenProfile && (
                           <button
                             onClick={() => onOpenProfile(student)}
-                            className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                            className="text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1"
                             title="فتح ملف الطالب الكامل"
                           >
                             الملف <ClipboardList className="w-4 h-4" />
@@ -1346,7 +1346,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                               onDeleteStudent(student.id);
                             }
                           }}
-                          className="text-red-600 hover:text-red-900 font-medium"
+                          className="text-red-400 hover:text-red-300 font-medium"
                         >
                           حذف
                         </button>
@@ -1361,18 +1361,18 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       </div>
 
       {filteredStudents.length > pageSize && (
-        <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center gap-1 flex-wrap">
+        <div className="mt-4 p-3 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center gap-1 flex-wrap">
           <button
             onClick={() => setCurrentPage(1)}
             disabled={safeCurrentPage === 1}
-            className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
+            className="px-2 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm flex items-center gap-1"
           >
             <ChevronsRight className="w-4 h-4" /> الأولى
           </button>
           <button
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
             disabled={safeCurrentPage === 1}
-            className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
+            className="px-3 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm flex items-center gap-1"
           >
             <ChevronRight className="w-4 h-4" /> السابق
           </button>
@@ -1395,7 +1395,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                 className={`px-3 py-1 rounded text-sm font-medium ${
                   pageNum === safeCurrentPage
                     ? 'bg-blue-600 text-white'
-                    : 'bg-white border border-gray-300 hover:bg-gray-100'
+                    : 'bg-white/10 border border-white/15 hover:bg-white/20'
                 }`}
               >
                 {pageNum}
@@ -1406,14 +1406,14 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
           <button
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={safeCurrentPage === totalPages}
-            className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
+            className="px-3 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm flex items-center gap-1"
           >
             التالي <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             onClick={() => setCurrentPage(totalPages)}
             disabled={safeCurrentPage === totalPages}
-            className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
+            className="px-2 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm flex items-center gap-1"
           >
             الأخيرة <ChevronsLeft className="w-4 h-4" />
           </button>

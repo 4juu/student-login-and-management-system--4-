@@ -295,23 +295,23 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
   if (generatedLink) {
     return createPortal(
       <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
 
-          <div className="p-5 border-b border-gray-200 bg-gradient-to-l from-emerald-50 to-teal-50">
+          <div className="p-5 border-b border-white/10 bg-gradient-to-l from-emerald-500/15 to-teal-500/15">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <CalendarDays className="w-5 h-5 text-emerald-600" /> رابط تقرير الحضور جاهز
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <CalendarDays className="w-5 h-5 text-emerald-400" /> رابط تقرير الحضور جاهز
                 </h2>
-                <p className="text-sm text-gray-500 mt-1">
-                  <strong className="text-emerald-600">{generatedLink.stageName}</strong> • {generatedLink.collegeName}
+                <p className="text-sm text-slate-400 mt-1">
+                  <strong className="text-emerald-400">{generatedLink.stageName}</strong> • {generatedLink.collegeName}
                 </p>
               </div>
-              <button onClick={onClose} className="bg-red-500 hover:bg-red-600 text-white w-10 h-10 rounded-full font-bold text-lg transition-all hover:scale-110">✕</button>
+              <button onClick={onClose} className="bg-red-500/20 hover:bg-red-500/30 text-red-300 w-10 h-10 rounded-full font-bold text-lg transition-all hover:scale-110">✕</button>
             </div>
           </div>
 
-          <div className="p-4 border-b border-gray-200 bg-gray-50">
+          <div className="p-4 border-b border-white/10 bg-white/5">
             <div className="flex flex-wrap gap-2 items-center">
               <button onClick={handleCopyLink} className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition-all hover:scale-105 flex items-center gap-1.5 shadow-md">
                 <Copy className="w-4 h-4" /> {generatedLink.copied ? 'تم النسخ!' : 'نسخ الرابط'}
@@ -321,14 +321,14 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
                 <FileSpreadsheet className="w-4 h-4" /> تحميل Excel
               </button>
 
-              <button onClick={handleShareWhatsApp} className="px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white text-sm font-bold rounded-xl transition-all hover:scale-105 flex items-center gap-1.5 shadow-md">
+              <button onClick={handleShareWhatsApp} className="px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-xl transition-all hover:scale-105 flex items-center gap-1.5 shadow-md">
                 <Smartphone className="w-4 h-4" /> واتساب
               </button>
 
               <div className="flex-1" />
 
-              <div className="flex items-center gap-2 bg-emerald-50 px-3 py-1.5 rounded-lg">
-                <span className="text-xs text-emerald-700 font-medium flex items-center gap-1">
+              <div className="flex items-center gap-2 bg-emerald-500/15 px-3 py-1.5 rounded-lg border border-emerald-500/30">
+                <span className="text-xs text-emerald-300 font-medium flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5" /> صالحة {generatedLink.expiryDays} يوم
                 </span>
               </div>
@@ -336,36 +336,36 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4">
               <div className="flex items-center gap-3 mb-3">
-                <div className="bg-emerald-100 text-emerald-700 w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg">
+                <div className="bg-emerald-500/15 text-emerald-300 w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg">
                   <CalendarDays className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="font-bold text-gray-800">{generatedLink.subjectName}</p>
-                  <p className="text-xs text-gray-500">اسم المادة (من وصف التدريسي)</p>
+                  <p className="font-bold text-white">{generatedLink.subjectName}</p>
+                  <p className="text-xs text-slate-400">اسم المادة (من وصف التدريسي)</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2 mb-3">
-                <div className="bg-white p-3 rounded-lg border border-gray-200">
-                  <p className="text-xs text-gray-500">الكلية</p>
-                  <p className="font-bold text-gray-800">{generatedLink.collegeName}</p>
+                <div className="bg-slate-800 p-3 rounded-lg border border-white/10">
+                  <p className="text-xs text-slate-400">الكلية</p>
+                  <p className="font-bold text-white">{generatedLink.collegeName}</p>
                 </div>
-                <div className="bg-white p-3 rounded-lg border border-gray-200">
-                  <p className="text-xs text-gray-500">المرحلة</p>
-                  <p className="font-bold text-gray-800">{generatedLink.stageName}</p>
+                <div className="bg-slate-800 p-3 rounded-lg border border-white/10">
+                  <p className="text-xs text-slate-400">المرحلة</p>
+                  <p className="font-bold text-white">{generatedLink.stageName}</p>
                 </div>
               </div>
 
-              <div className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs font-mono text-gray-600 break-all" dir="ltr">
+              <div className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-xs font-mono text-slate-300 break-all" dir="ltr">
                 {generatedLink.url}
               </div>
             </div>
           </div>
 
-          <div className="p-3 border-t border-gray-200 bg-gray-50 text-center">
-            <button onClick={() => setGeneratedLink(null)} className="text-sm text-emerald-600 hover:text-emerald-700 font-medium hover:underline flex items-center gap-1 mx-auto">
+          <div className="p-3 border-t border-white/10 bg-white/5 text-center">
+            <button onClick={() => setGeneratedLink(null)} className="text-sm text-emerald-400 hover:text-emerald-300 font-medium hover:underline flex items-center gap-1 mx-auto">
               <ChevronRight className="w-4 h-4" /> توليد رابط آخر
             </button>
           </div>
@@ -377,17 +377,17 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden">
 
-        <div className="p-5 border-b border-gray-200 bg-gradient-to-l from-teal-50 to-emerald-50">
+        <div className="p-5 border-b border-white/10 bg-gradient-to-l from-teal-500/15 to-emerald-500/15">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                <CalendarDays className="w-5 h-5 text-teal-600" /> إنشاء رابط تقرير الحضور
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <CalendarDays className="w-5 h-5 text-teal-400" /> إنشاء رابط تقرير الحضور
               </h2>
-              <p className="text-sm text-gray-500 mt-1">رابط واحد للمرحلة - الطلاب يرفعون الهوية ويشوفون تقريرهم</p>
+              <p className="text-sm text-slate-400 mt-1">رابط واحد للمرحلة - الطلاب يرفعون الهوية ويشوفون تقريرهم</p>
             </div>
-            <button onClick={onClose} className="bg-red-500 hover:bg-red-600 text-white w-10 h-10 rounded-full font-bold text-lg transition-all hover:scale-110">✕</button>
+            <button onClick={onClose} className="bg-red-500/20 hover:bg-red-500/30 text-red-300 w-10 h-10 rounded-full font-bold text-lg transition-all hover:scale-110">✕</button>
           </div>
         </div>
 
@@ -395,23 +395,23 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1.5"><Landmark className="w-4 h-4" /> الكلية</label>
+              <label className="block text-sm font-bold text-slate-300 mb-1 flex items-center gap-1.5"><Landmark className="w-4 h-4" /> الكلية</label>
               <select
                 value={selectedCollegeId}
                 onChange={e => { setSelectedCollegeId(e.target.value); setSelectedStageId(''); }}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                className="w-full px-3 py-2.5 border border-slate-600 bg-slate-800 text-white rounded-xl focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30"
               >
                 <option value="">اختر كلية...</option>
                 {colleges.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1.5"><Library className="w-4 h-4" /> المرحلة</label>
+              <label className="block text-sm font-bold text-slate-300 mb-1 flex items-center gap-1.5"><Library className="w-4 h-4" /> المرحلة</label>
               <select
                 value={selectedStageId}
                 onChange={e => handleStageChange(e.target.value)}
                 disabled={!selectedCollegeId}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl disabled:bg-gray-100 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                className="w-full px-3 py-2.5 border border-slate-600 bg-slate-800 text-white rounded-xl disabled:bg-slate-800 disabled:opacity-50 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30"
               >
                 <option value="">اختر مرحلة...</option>
                 {stagesForCollege.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -419,43 +419,43 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
             </div>
           </div>
 
-          <div className="bg-teal-50 border border-teal-200 rounded-xl p-4">
-            <label className="flex items-center justify-between text-sm font-bold text-teal-800 mb-2">
+          <div className="bg-teal-500/10 border border-teal-500/30 rounded-xl p-4">
+            <label className="flex items-center justify-between text-sm font-bold text-teal-300 mb-2">
               <span className="flex items-center gap-1.5"><CalendarDays className="w-4 h-4" /> مدة صلاحية الرابط</span>
               <span className="bg-teal-600 text-white px-3 py-1 rounded-full text-xs">{expiryDays} يوم</span>
             </label>
-            <input type="range" min="1" max="90" value={expiryDays} onChange={e => setExpiryDays(Number(e.target.value))} className="w-full accent-teal-600 h-2" />
-            <div className="flex justify-between text-xs text-teal-500 mt-1">
+            <input type="range" min="1" max="90" value={expiryDays} onChange={e => setExpiryDays(Number(e.target.value))} className="w-full accent-teal-500 h-2" />
+            <div className="flex justify-between text-xs text-teal-400 mt-1">
               <span>1 يوم</span><span>30 يوم</span><span>90 يوم</span>
             </div>
           </div>
 
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-            <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5">
+          <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+            <label className="block text-sm font-bold text-slate-300 mb-2 flex items-center gap-1.5">
               <BookOpen className="w-4 h-4" /> المادة
             </label>
-            <div className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-800 font-medium">
+            <div className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white font-medium">
               {subjectName || 'لم يتم تعيين وصف للمادة في الملف الشخصي'}
             </div>
-            <p className="text-xs text-gray-500 mt-1">يؤخذ من البايو في إعدادات الملف الشخصي</p>
+            <p className="text-xs text-slate-400 mt-1">يؤخذ من البايو في إعدادات الملف الشخصي</p>
           </div>
 
           {selectedStageId && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-              <p className="text-sm text-emerald-800 font-medium flex items-center gap-1.5">
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
+              <p className="text-sm text-emerald-300 font-medium flex items-center gap-1.5">
                 <Users className="w-4 h-4" /> سيتم إنشاء رابط واحد مشترك لكل طلاب مرحلة <strong>{selectedStage?.name}</strong>
               </p>
-              <p className="text-xs text-emerald-600 mt-1">الطالب يرفع هويته → يتطابق الاسم → يشوف أيام حضوره وغيابه</p>
+              <p className="text-xs text-emerald-400 mt-1">الطالب يرفع هويته → يتطابق الاسم → يشوف أيام حضوره وغيابه</p>
             </div>
           )}
 
         </div>
 
-        <div className="p-4 border-t border-gray-200 bg-gradient-to-l from-teal-50 to-emerald-50">
+        <div className="p-4 border-t border-white/10 bg-gradient-to-l from-teal-500/15 to-emerald-500/15">
           <button
             onClick={handleGenerateLink}
             disabled={!selectedStageId || generating}
-            className="w-full bg-gradient-to-l from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl active:scale-[0.98] transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 text-lg"
+            className="w-full bg-gradient-to-l from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl active:scale-[0.98] transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 text-lg"
           >
             {generating
               ? <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> جاري التوليد...</>
@@ -466,14 +466,14 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
         {confirmState &&
           createPortal(
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] p-4" onClick={() => setConfirmState(null)}>
-              <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center" onClick={e => e.stopPropagation()}>
-                <h3 className="text-lg font-bold text-gray-800 mb-2">{confirmState.title}</h3>
-                <p className="text-sm text-gray-600 mb-6 whitespace-pre-line">{confirmState.message}</p>
+              <div className="bg-slate-900 border border-white/10 text-white rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center" onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-bold text-white mb-2">{confirmState.title}</h3>
+                <p className="text-sm text-slate-400 mb-6 whitespace-pre-line">{confirmState.message}</p>
                 <div className="flex gap-2">
-                  <button onClick={confirmState.onConfirm} className="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg transition">
+                  <button onClick={confirmState.onConfirm} className="flex-1 bg-teal-600 hover:bg-teal-500 text-white font-bold py-3 px-4 rounded-lg transition">
                     {confirmState.confirmLabel || 'موافق'}
                   </button>
-                  <button onClick={() => setConfirmState(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-3 px-4 rounded-lg transition">
+                  <button onClick={() => setConfirmState(null)} className="bg-white/10 hover:bg-white/20 text-slate-300 font-medium py-3 px-4 rounded-lg transition">
                     إلغاء
                   </button>
                 </div>

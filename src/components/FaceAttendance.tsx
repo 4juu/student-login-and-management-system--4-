@@ -915,8 +915,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     <div ref={kioskRef} dir="rtl"
       className={`fixed inset-0 z-[9999] text-white flex flex-col overscroll-none ${kiosk ? 'bg-black' : 'bg-black/70 backdrop-blur-sm'}`}>
       {!kiosk && (
-      <div className="w-full bg-white text-gray-900 flex flex-col flex-1 overflow-hidden">
-        <header className="flex items-center justify-between px-4 py-3 border-b border-gray-100"
+      <div className="w-full bg-slate-900 text-slate-100 flex flex-col flex-1 overflow-hidden">
+        <header className="flex items-center justify-between px-4 py-3 border-b border-white/10"
           style={{ paddingTop: `${topSafe + 12}px` }}>
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-base shrink-0">👤</div>
@@ -928,7 +928,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
                   <span className="truncate max-w-[110px]">{modeConfig[mode].text}</span>
                 </span>
                 {warmup < 2 && (
-                  <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
                     <span className={`w-1.5 h-1.5 rounded-full ${warmup === 0 ? 'bg-red-400 animate-pulse' : 'bg-amber-400 animate-pulse'}`} />
                     {warmup === 0 ? 'تحميل الموديلات...' : 'الإحماء جاري...'}
                   </span>
@@ -938,26 +938,26 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <button onClick={toggleKiosk}
-              className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 flex items-center gap-1">
+              className="bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 flex items-center gap-1">
               <span>⛶</span>
               <span className="hidden sm:inline">كشك</span>
             </button>
             <button onClick={handleShowReg}
-              className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 flex items-center gap-1">
+              className="bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 flex items-center gap-1">
               <span>📸</span>
               <span className="hidden sm:inline">بصمة</span>
             </button>
             <button onClick={handleClose}
-              className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95">
+              className="bg-white/10 hover:bg-white/20 text-slate-300 px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95">
               ✕
             </button>
           </div>
         </header>
 
         {error && (
-          <div className="mx-4 mt-3 bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm font-bold text-center">
+          <div className="mx-4 mt-3 bg-red-500/10 border border-red-500/30 text-red-300 p-3 rounded-xl text-sm font-bold text-center">
             {error}
-            <button onClick={initCamera} className="block mx-auto mt-2 bg-red-600 text-white px-4 py-1.5 rounded-lg text-xs">🔄 إعادة</button>
+            <button onClick={initCamera} className="block mx-auto mt-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 px-4 py-1.5 rounded-lg text-xs">🔄 إعادة</button>
           </div>
         )}
 
@@ -965,23 +965,23 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           style={{ paddingBottom: `${bottomSafe + 16}px` }}>
           {!kiosk && (
           <div className="grid grid-cols-3 gap-2 mt-4">
-            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-center">
-              <div className="text-2xl font-extrabold text-emerald-600">{presentIds.size}</div>
-              <div className="text-[10px] text-emerald-700 font-bold mt-0.5">✅ حاضر اليوم</div>
+            <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-2xl p-3 text-center">
+              <div className="text-2xl font-extrabold text-emerald-400">{presentIds.size}</div>
+              <div className="text-[10px] text-emerald-300 font-bold mt-0.5">✅ حاضر اليوم</div>
             </div>
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-center">
-              <div className="text-2xl font-extrabold text-amber-600">{counts.already}</div>
-              <div className="text-[10px] text-amber-700 font-bold mt-0.5">⚠️ مسجل مسبقاً</div>
+            <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-3 text-center">
+              <div className="text-2xl font-extrabold text-amber-400">{counts.already}</div>
+              <div className="text-[10px] text-amber-300 font-bold mt-0.5">⚠️ مسجل مسبقاً</div>
             </div>
-            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-3 text-center">
-              <div className="text-2xl font-extrabold text-gray-600">{Math.max(0, studentsWithFace.length - presentIds.size)}</div>
-              <div className="text-[10px] text-gray-500 font-bold mt-0.5">⏳ المتبقي</div>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-3 text-center">
+              <div className="text-2xl font-extrabold text-slate-200">{Math.max(0, studentsWithFace.length - presentIds.size)}</div>
+              <div className="text-[10px] text-slate-400 font-bold mt-0.5">⏳ المتبقي</div>
             </div>
           </div>
           )}
 
           <div className={`${kiosk ? 'mt-0' : 'mt-4'}`}>
-            <div className={`relative rounded-2xl overflow-hidden border border-gray-100 bg-black shadow-lg ${kiosk ? 'w-full aspect-[16/10]' : 'w-full max-w-md mx-auto aspect-[3/4]'}`}>
+            <div className={`relative rounded-2xl overflow-hidden border border-white/10 bg-black shadow-lg ${kiosk ? 'w-full aspect-[16/10]' : 'w-full max-w-md mx-auto aspect-[3/4]'}`}>
               <video ref={attachStream}
                 autoPlay playsInline muted
                 onLoadedMetadata={handleVideoReady}
@@ -1028,22 +1028,22 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
               <div className="flex gap-1">
                 {[0, 1, 2].map(i => (
                   <div key={i} className={`w-8 h-1.5 rounded-full transition-all duration-500 ${
-                    warmup > i ? 'bg-emerald-500' : warmup === i && i === 0 ? 'bg-red-400 animate-pulse' : warmup === i ? 'bg-amber-400 animate-pulse' : 'bg-gray-200'
+                    warmup > i ? 'bg-emerald-500' : warmup === i && i === 0 ? 'bg-red-400 animate-pulse' : warmup === i ? 'bg-amber-400 animate-pulse' : 'bg-white/15'
                   }`} />
                 ))}
               </div>
-              <span className="text-[10px] font-bold text-gray-400">
+              <span className="text-[10px] font-bold text-slate-400">
                 {warmup === 2 ? 'النظام جاهز للتعرف' : warmup === 1 ? 'الإحماء جاري...' : 'تحميل موديلات التعرف...'}
               </span>
             </div>
 
             {cameraReady && (
               <div className="flex items-center justify-center gap-2 mt-2">
-                <div className="flex items-center gap-1 bg-gray-100 rounded-xl px-2 py-1.5">
+                <div className="flex items-center gap-1 bg-white/10 rounded-xl px-2 py-1.5">
                   {ZOOM_STEPS.map(s => (
                     <button key={s} onClick={() => applyZoom(s)}
                       className={`px-2 py-1 rounded-lg text-[10px] font-bold transition active:scale-90 ${
-                        Math.abs(zoom - s) < 0.01 ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 shadow-sm'
+                        Math.abs(zoom - s) < 0.01 ? 'bg-blue-600 text-white' : 'bg-white/10 text-slate-300 hover:bg-white/20'
                       }`}>
                       {s}x
                     </button>
@@ -1052,7 +1052,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
                 {hasTorch && (
                   <button onClick={toggleTorch}
                     className={`w-8 h-8 flex items-center justify-center rounded-full active:scale-90 text-sm ${
-                      torchOn ? 'bg-yellow-400 text-black' : 'bg-gray-100 text-gray-500'
+                      torchOn ? 'bg-yellow-400 text-black' : 'bg-white/10 text-slate-300'
                     }`}
                     title="فلاش">
                     {torchOn ? '💡' : '🔦'}
@@ -1062,7 +1062,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
             )}
 
             {cameraReady && mode === 'active' && studentsWithFace.length > 0 && (
-              <p className="text-center text-[11px] text-gray-400 font-medium mt-2">
+              <p className="text-center text-[11px] text-slate-400 font-medium mt-2">
                 <span className="inline-flex items-center gap-1.5">
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -1080,7 +1080,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           <div className="mt-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-extrabold text-sm">🎓 الطلاب ({roster.length})</h3>
-              <span className="text-[10px] text-gray-400 font-bold">{presentIds.size} حاضر</span>
+              <span className="text-[10px] text-slate-400 font-bold">{presentIds.size} حاضر</span>
             </div>
             <div className="space-y-1.5 pb-2">
               {roster.map(student => {
@@ -1088,17 +1088,17 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
                 return (
                   <div key={student.id}
                     className={`flex items-center gap-3 p-2.5 rounded-2xl border transition-all duration-500 ${
-                      present ? 'bg-emerald-50 border-emerald-300' : 'bg-white border-gray-100'
+                      present ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-white/5 border-white/10'
                     }`}>
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0 ${avatarColor(student)}`}>
                       {student.name.trim().charAt(0) || '؟'}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-sm truncate">{student.name}</p>
-                      <p className="text-[10px] text-gray-400">#{student.code}{student.group ? ` · ${student.group}` : ''}</p>
+                      <p className="text-[10px] text-slate-400">#{student.code}{student.group ? ` · ${student.group}` : ''}</p>
                     </div>
                     {present ? (
-                      <span className="flex items-center gap-1 text-emerald-600 text-xs font-extrabold shrink-0">
+                      <span className="flex items-center gap-1 text-emerald-400 text-xs font-extrabold shrink-0">
                         <span className="relative flex h-2 w-2">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
@@ -1106,13 +1106,13 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
                         حاضر
                       </span>
                     ) : (
-                      <span className="text-gray-300 text-xs shrink-0">بانتظار...</span>
+                      <span className="text-slate-400 text-xs shrink-0">بانتظار...</span>
                     )}
                   </div>
                 );
               })}
               {roster.length === 0 && studentsWithFace.length === 0 && (
-                <div className="text-center py-8 text-gray-400 text-sm">لا يوجد طلاب ببصمة وجه في هذه المرحلة</div>
+                <div className="text-center py-8 text-slate-400 text-sm">لا يوجد طلاب ببصمة وجه في هذه المرحلة</div>
               )}
             </div>
           </div>

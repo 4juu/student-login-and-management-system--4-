@@ -68,10 +68,10 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
   }, [searchQuery, groupFilter, pageSize]);
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="glass-card rounded-xl p-6">
       <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
-        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Users className="w-6 h-6 text-gray-700" /> قائمة الطلاب</h2>
-        <div className="px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg text-sm font-medium flex items-center gap-2">
+        <h2 className="text-2xl font-bold text-white flex items-center gap-2"><Users className="w-6 h-6 text-slate-300" /> قائمة الطلاب</h2>
+        <div className="px-4 py-2 bg-yellow-500/15 text-yellow-300 rounded-lg text-sm font-medium flex items-center gap-2">
           <Eye className="w-4 h-4" /> عرض فقط - الإدارة من قبل الأدمن
         </div>
       </div>
@@ -80,7 +80,7 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
       <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* البحث */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+          <label className="block text-sm font-medium text-slate-300 mb-2 flex items-center gap-1">
             <Search className="w-4 h-4" /> البحث (الاسم أو الرمز)
           </label>
           <div className="relative">
@@ -89,13 +89,13 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="اكتب اسم الطالب أو الرمز..."
-              className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 pr-10 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-500 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               dir="rtl"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xl"
+                className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-400 text-xl"
               >
                 ×
               </button>
@@ -105,13 +105,13 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
 
         {/* فلتر الكروب */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+          <label className="block text-sm font-medium text-slate-300 mb-2 flex items-center gap-1">
             <Tag className="w-4 h-4" /> تصفية حسب الكروب
           </label>
           <select
             value={groupFilter}
             onChange={(e) => setGroupFilter(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-4 py-2 border border-slate-600 bg-slate-800 text-white rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="all">جميع الكروبات ({students.length})</option>
             {uniqueGroups.map(g => (
@@ -125,15 +125,15 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
 
       {/* إحصائيات الكروبات - أزرار سريعة */}
       {uniqueGroups.length > 0 && uniqueGroups.length <= 20 && (
-        <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg">
-          <h3 className="text-sm font-bold text-blue-800 mb-3 flex items-center gap-2"><ChartColumn className="w-4 h-4" /> إحصائيات الكروبات</h3>
+        <div className="mb-6 p-4 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border-2 border-blue-500/30 rounded-lg">
+          <h3 className="text-sm font-bold text-blue-300 mb-3 flex items-center gap-2"><ChartColumn className="w-4 h-4" /> إحصائيات الكروبات</h3>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setGroupFilter('all')}
               className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
                 groupFilter === 'all'
                   ? 'bg-blue-600 text-white shadow-md'
-                  : 'bg-white text-blue-700 border border-blue-300 hover:bg-blue-50'
+                  : 'bg-white/10 text-blue-300 border border-blue-500/30 hover:bg-blue-500/10'
               }`}
             >
               الكل: {students.length}
@@ -145,7 +145,7 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
                 className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
                   groupFilter === g
                     ? 'bg-blue-600 text-white shadow-md'
-                    : 'bg-white text-blue-700 border border-blue-300 hover:bg-blue-50'
+                    : 'bg-white/10 text-blue-300 border border-blue-500/30 hover:bg-blue-500/10'
                 }`}
               >
                 {g}: {groupStats[g!]}
@@ -157,19 +157,19 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
 
       {/* 🆕 شريط Pagination العلوي */}
       {filteredStudents.length > pageSize && (
-        <div className="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between flex-wrap gap-2">
+        <div className="mb-3 p-3 bg-white/5 border border-white/10 rounded-lg flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-gray-600">عرض:</span>
+            <span className="text-slate-400">عرض:</span>
             <select
               value={pageSize}
               onChange={e => setPageSize(Number(e.target.value))}
-              className="px-3 py-1 border border-gray-300 rounded-md text-sm bg-white"
+              className="px-3 py-1 border border-slate-600 bg-slate-800 text-white rounded-md text-sm"
             >
               {PAGE_SIZE_OPTIONS.map(size => (
                 <option key={size} value={size}>{size} طالب</option>
               ))}
             </select>
-            <span className="text-gray-600">
+            <span className="text-slate-400">
               ({((safeCurrentPage - 1) * pageSize) + 1} - {Math.min(safeCurrentPage * pageSize, filteredStudents.length)} من {filteredStudents.length})
             </span>
           </div>
@@ -178,7 +178,7 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
             <button
               onClick={() => setCurrentPage(1)}
               disabled={safeCurrentPage === 1}
-              className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+              className="px-2 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm"
               title="الصفحة الأولى"
             >
               <ChevronsRight className="w-4 h-4" />
@@ -186,7 +186,7 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={safeCurrentPage === 1}
-              className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
+              className="px-3 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm flex items-center gap-1"
             >
               <ChevronRight className="w-4 h-4" /> السابق
             </button>
@@ -196,14 +196,14 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
             <button
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={safeCurrentPage === totalPages}
-              className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
+              className="px-3 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm flex items-center gap-1"
             >
               التالي <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={() => setCurrentPage(totalPages)}
               disabled={safeCurrentPage === totalPages}
-              className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm"
+              className="px-2 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm"
               title="الصفحة الأخيرة"
             >
               <ChevronsLeft className="w-4 h-4" />
@@ -214,8 +214,8 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
 
       {/* جدول الطلاب */}
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+        <table className="min-w-full divide-y divide-white/10">
+          <thead className="bg-white/5">
             <tr>
               <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 #
@@ -231,12 +231,12 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white/5 divide-y divide-white/10">
             {paginatedStudents.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-3 sm:px-6 py-8 sm:py-12 text-center text-gray-500">
+                <td colSpan={4} className="px-3 sm:px-6 py-8 sm:py-12 text-center text-slate-400">
                   <div className="flex flex-col items-center gap-2">
-                    <svg className="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-16 h-16 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                     {searchQuery || groupFilter !== 'all' ? (
@@ -247,7 +247,7 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
                             setSearchQuery('');
                             setGroupFilter('all');
                           }}
-                          className="text-blue-600 hover:underline text-sm"
+                          className="text-blue-400 hover:underline text-sm"
                         >
                           إعادة تعيين الفلاتر
                         </button>
@@ -264,29 +264,29 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
                 return (
                   <tr
                     key={student.id}
-                    className={`hover:bg-blue-50 transition ${onOpenProfile ? 'cursor-pointer' : ''}`}
+                    className={`hover:bg-blue-500/10 transition ${onOpenProfile ? 'cursor-pointer' : ''}`}
                     onClick={onOpenProfile ? () => onOpenProfile(student) : undefined}
                   >
-                    <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-slate-400">
                       {globalIndex}
                     </td>
                     <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm sm:text-lg font-bold text-blue-600 bg-blue-50 px-2 sm:px-3 py-1 rounded-md">
+                      <span className="text-sm sm:text-lg font-bold text-blue-300 bg-blue-500/10 px-2 sm:px-3 py-1 rounded-md">
                         {student.code}
                       </span>
                     </td>
-                    <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right font-medium text-gray-900 text-sm">
-                      <span className={onOpenProfile ? 'text-blue-700 hover:underline' : ''}>
+                    <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right font-medium text-white text-sm">
+                      <span className={onOpenProfile ? 'text-blue-400 hover:underline' : ''}>
                         {student.name}
                       </span>
                     </td>
                     <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right">
                       {student.group ? (
-                        <span className="inline-block px-3 py-1 bg-indigo-100 text-indigo-800 text-sm font-medium rounded-full">
+                        <span className="inline-block px-3 py-1 bg-indigo-500/15 text-indigo-300 text-sm font-medium rounded-full">
                           {student.group}
                         </span>
                       ) : (
-                        <span className="text-gray-400 text-sm">-</span>
+                        <span className="text-slate-500 text-sm">-</span>
                       )}
                     </td>
                   </tr>
@@ -299,18 +299,18 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
 
       {/* 🆕 شريط Pagination السفلي */}
       {filteredStudents.length > pageSize && (
-        <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center gap-1 flex-wrap">
+        <div className="mt-4 p-3 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center gap-1 flex-wrap">
           <button
             onClick={() => setCurrentPage(1)}
             disabled={safeCurrentPage === 1}
-            className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
+            className="px-2 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm flex items-center gap-1"
           >
             <ChevronsRight className="w-4 h-4" /> الأولى
           </button>
           <button
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
             disabled={safeCurrentPage === 1}
-            className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
+            className="px-3 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm flex items-center gap-1"
           >
             <ChevronRight className="w-4 h-4" /> السابق
           </button>
@@ -334,7 +334,7 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
                 className={`px-3 py-1 rounded text-sm font-medium ${
                   pageNum === safeCurrentPage
                     ? 'bg-blue-600 text-white'
-                    : 'bg-white border border-gray-300 hover:bg-gray-100'
+                    : 'bg-white/10 border border-white/15 hover:bg-white/20'
                 }`}
               >
                 {pageNum}
@@ -345,14 +345,14 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
           <button
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={safeCurrentPage === totalPages}
-            className="px-3 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
+            className="px-3 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm flex items-center gap-1"
           >
             التالي <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             onClick={() => setCurrentPage(totalPages)}
             disabled={safeCurrentPage === totalPages}
-            className="px-2 py-1 bg-white border border-gray-300 rounded disabled:opacity-30 hover:bg-gray-100 text-sm flex items-center gap-1"
+            className="px-2 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm flex items-center gap-1"
           >
             الأخيرة <ChevronsLeft className="w-4 h-4" />
           </button>
@@ -361,8 +361,8 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
 
       {/* ملخص النتائج */}
       {students.length > 0 && (
-        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
-          <p className="text-sm text-blue-800 flex items-center gap-1">
+        <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-md">
+          <p className="text-sm text-blue-300 flex items-center gap-1">
             <ChartColumn className="w-4 h-4 shrink-0" /> <strong>عدد الطلاب المعروضين:</strong> {filteredStudents.length}
             {filteredStudents.length !== students.length && (
               <span className="mr-2">من أصل {students.length}</span>
@@ -371,7 +371,7 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
               <span className="mr-2">| <strong>الكروب:</strong> {groupFilter}</span>
             )}
             {filteredStudents.length > pageSize && (
-              <span className="mr-2 text-purple-700">| <strong>الصفحة:</strong> {safeCurrentPage}/{totalPages}</span>
+              <span className="mr-2 text-purple-400">| <strong>الصفحة:</strong> {safeCurrentPage}/{totalPages}</span>
             )}
           </p>
         </div>

@@ -508,11 +508,11 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
           <div className="grid grid-cols-2 gap-2 w-full max-w-lg mx-auto">
             <div className="bg-white/5 rounded-lg p-2.5 text-center">
               <div className="text-2xl font-bold text-emerald-400">{scanCount}</div>
-              <div className="text-[10px] text-gray-400">مسجّل</div>
+              <div className="text-[10px] text-slate-400">مسجّل</div>
             </div>
             <div className="bg-white/5 rounded-lg p-2.5 text-center">
               <div className="text-lg font-bold">{cameraStatus === 'ready' ? '🟢' : '🔴'}</div>
-              <div className="text-[10px] text-gray-400">{cameraStatus === 'ready' ? 'تعمل' : 'خطأ'}</div>
+              <div className="text-[10px] text-slate-400">{cameraStatus === 'ready' ? 'تعمل' : 'خطأ'}</div>
             </div>
           </div>
 
@@ -550,7 +550,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
       {pendingQrId && (
         <div className="fixed inset-0 z-[10000] bg-black/90 flex items-center justify-center p-4">
-          <div className="bg-white text-gray-900 rounded-2xl p-5 w-full max-w-sm">
+          <div className="bg-slate-900 border border-white/10 text-white rounded-2xl p-5 w-full max-w-sm">
             <div className="text-center mb-4">
               <div className="text-4xl mb-2">🔗</div>
               <h3 className="text-lg font-bold">ربط هوية</h3>
@@ -559,14 +559,14 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               type="text" value={qrLinkCode}
               onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); setQrLinkCode(v); setQrLinkMessage(''); if (v.length === 4) setTimeout(() => handleQrLinkByCode(v), 150); }}
               placeholder="0000"
-              className="w-full text-center text-3xl font-bold tracking-[1em] py-3 border-2 border-emerald-300 rounded-xl focus:border-emerald-500 outline-none"
+              className="w-full text-center text-3xl font-bold tracking-[1em] py-3 border-2 border-emerald-500/30 bg-slate-800 text-white placeholder:text-slate-500 rounded-xl focus:border-emerald-500 outline-none"
               maxLength={4} inputMode="numeric" autoFocus />
             {qrLinkMessage && (
-              <div className="mt-3 p-2 rounded text-center text-xs font-medium bg-red-50 text-red-700 border border-red-200">{qrLinkMessage}</div>
+              <div className="mt-3 p-2 rounded text-center text-xs font-medium bg-red-500/10 text-red-300 border border-red-500/30">{qrLinkMessage}</div>
             )}
             <div className="grid grid-cols-2 gap-2 mt-4">
               <button onClick={() => { setPendingQrId(null); setQrLinkCode(''); }}
-                className="py-3 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95">إلغاء</button>
+                className="py-3 bg-white/10 hover:bg-white/20 text-slate-300 font-bold rounded-lg active:scale-95">إلغاء</button>
               <button onClick={() => handleQrLinkByCode(qrLinkCode)} disabled={qrLinkCode.length !== 4}
                 className="py-3 bg-emerald-600 disabled:opacity-40 text-white font-bold rounded-lg active:scale-95">🔗 ربط</button>
             </div>
