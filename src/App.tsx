@@ -78,6 +78,12 @@ const preloadBackground = (): void => {
     .catch(() => {});
 };
 
+// 🚀 تحميل مسبق لمكونات تسجيل الحضور بالبصمة (حتى تعمل أثناء انقطاع الإنترنت)
+const preloadAttendanceChunks = (): void => {
+  import('./components/FaceAttendance').catch(() => {});
+  import('./components/FaceRegistration').catch(() => {});
+};
+
 type Tab = 'stage-selector' | 'colleges' | 'login' | 'manage' | 'records' | 'settings' | 'sessions' | 'teachers' | 'profile' | 'system-settings';
 
 interface AllStagesData {
@@ -226,6 +232,8 @@ function App() {
   useEffect(() => {
     // 🚀 تحميل موديل الكشف الخفيف بالخلفية من أول لحظة فتح الموقع (بدون تثبيت)
     preloadDetector();
+    // 🚀 تحميل مسبق لمكونات تسجيل البصمة لتعمل حتى عند انقطاع الإنترنت
+    setTimeout(preloadAttendanceChunks, 300);
   }, []);
 
   useEffect(() => {
