@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { AttendanceSession, Student, AttendanceRecord } from '../types/student';
 import { getCurrentAcademicYear } from '../firebase/dataService';
 import { AbsenceSendLogEntry, GroupSendProgress } from '../types/telegram';
-import { Calendar, ChartColumn, Circle, CircleCheck, ClipboardList, GraduationCap, Library, Lightbulb, Pencil, TriangleAlert } from 'lucide-react';
+import { Calendar, ChartColumn, Circle, CircleCheck, ClipboardList, GraduationCap, Library, Pencil, TriangleAlert } from 'lucide-react';
 
 interface SessionManagerProps {
   sessions: AttendanceSession[];
@@ -546,20 +546,6 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
       {/* 📋 نافذة سجل إرسال الغيابات */}
       {sendLogSessionId && renderSendLogModal()}
 
-      {sessions.length > 0 && (
-        <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <div className="flex items-start gap-2">
-            <svg className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div className="text-sm text-yellow-800">
-              <p className="font-medium mb-1 flex items-center gap-1"><Lightbulb className="w-4 h-4 text-yellow-600" /> ملاحظة</p>
-              <p>السجل النشط هو الذي سيتم تسجيل الحضور فيه. يمكنك تبديل السجل في أي وقت.</p>
-
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

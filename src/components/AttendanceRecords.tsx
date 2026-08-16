@@ -486,33 +486,49 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
         </div>
 
         <div className="bg-white p-3 sm:p-4 rounded-lg border border-green-200 mb-3 sm:mb-4">
-          <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-2 sm:mb-3">اختر المدة الزمنية للتصدير:</label>
+          <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-2 sm:mb-3">حدد المدة الزمنية للتصدير:</label>
 
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-6 mb-3 sm:mb-4">
-            <label className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition flex-1 min-w-[140px] sm:min-w-[200px] ${exportType === 'range' ? 'border-green-600 bg-green-50 font-bold text-green-800' : 'border-gray-200 hover:bg-gray-50'}`}>
-              <input
-                type="radio"
-                name="exportType"
-                checked={exportType === 'range'}
-                onChange={() => setExportType('range')}
-                className="accent-green-600 w-4 h-4"
-              />
-              <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> مدة زمنية (من - إلى)</span>
-            </label>
-
-            <label className={`flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition flex-1 min-w-[140px] sm:min-w-[200px] ${exportType === 'single' ? 'border-green-600 bg-green-50 font-bold text-green-800' : 'border-gray-200 hover:bg-gray-50'}`}>
-              <input
-                type="radio"
-                name="exportType"
-                checked={exportType === 'single'}
-                onChange={() => setExportType('single')}
-                className="accent-green-600 w-4 h-4"
-              />
-              <span className="flex items-center gap-1"><MapPin className="w-4 h-4" /> يوم واحد محدد</span>
-            </label>
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-3 sm:mb-4">
+            <button
+              type="button"
+              onClick={() => setExportType('single')}
+              className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition text-sm font-bold ${
+                exportType === 'single'
+                  ? 'border-green-600 bg-green-600 text-white shadow-md'
+                  : 'border-green-300 bg-green-50 text-green-800 hover:bg-green-100'
+              }`}
+            >
+              <MapPin className="w-4 h-4" /> يوم واحد
+            </button>
+            <button
+              type="button"
+              onClick={() => setExportType('range')}
+              className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition text-sm font-bold ${
+                exportType === 'range'
+                  ? 'border-green-600 bg-green-600 text-white shadow-md'
+                  : 'border-green-300 bg-green-50 text-green-800 hover:bg-green-100'
+              }`}
+            >
+              <Calendar className="w-4 h-4" /> عدة أيام
+            </button>
           </div>
 
-          {exportType === 'range' ? (
+          {exportType === 'single' ? (
+            <div className="p-3 bg-green-50/30 rounded-md border border-green-100 max-w-md">
+              <label className="block text-xs font-bold text-gray-600 mb-1">اختر اليوم من السجلات:</label>
+              <select
+                value={singleDate}
+                onChange={e => setSingleDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 font-bold text-gray-800"
+              >
+                {normalizedDateOptions.map(s => (
+                  <option key={s.id} value={s.isoDate}>
+                    {s.name} ({s.isoDate})
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 bg-green-50/30 rounded-md border border-green-100">
               <div>
                 <label className="block text-xs font-bold text-gray-600 mb-1">من تاريخ:</label>
@@ -532,20 +548,6 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 font-bold text-gray-800"
                 />
               </div>
-            </div>
-          ) : (
-            <div className="p-3 bg-green-50/30 rounded-md border border-green-100 max-w-md">
-              <select
-                value={singleDate}
-                onChange={e => setSingleDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 font-bold text-gray-800"
-              >
-                {normalizedDateOptions.map(s => (
-                  <option key={s.id} value={s.isoDate}>
-                    {s.name} ({s.isoDate})
-                  </option>
-                ))}
-              </select>
             </div>
           )}
         </div>
