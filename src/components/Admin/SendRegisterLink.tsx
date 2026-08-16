@@ -1,6 +1,7 @@
 // src/components/Admin/SendRegisterLink.tsx
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useModalBehavior } from '../../hooks/useModalBehavior';
 import { Student, Stage, College } from '../../types/student';
 import { TelegramConfig } from '../../types/telegram';
 import {
@@ -377,6 +378,11 @@ export const SendRegisterLink: React.FC<SendRegisterLinkProps> = ({
     confirmLabel?: string;
     onConfirm: () => void;
   } | null>(null);
+
+  const modalBehaviorRef = useModalBehavior({
+    open: !!confirmState,
+    onClose: () => setConfirmState(null),
+  });
 
   const selectedCollege = colleges.find(c => c.id === selectedCollegeId);
   const selectedStage = stages.find(s => s.id === selectedStageId);
@@ -841,7 +847,7 @@ const handleDownloadExcel = async () => {
       {confirmState &&
         createPortal(
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] p-4" onClick={() => setConfirmState(null)}>
-            <div className="modal-panel bg-slate-900 border border-white/10 text-white rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center" onClick={e => e.stopPropagation()}>
+            <div ref={modalBehaviorRef} className="modal-panel bg-slate-900 border border-white/10 text-white rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center" onClick={e => e.stopPropagation()}>
               <h3 className="text-lg font-bold text-white mb-2">{confirmState.title}</h3>
               <p className="text-sm text-slate-400 mb-6 whitespace-pre-line">{confirmState.message}</p>
               <div className="flex gap-2">

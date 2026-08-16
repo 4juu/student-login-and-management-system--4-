@@ -13,7 +13,6 @@ import {
   Stage,
 } from '../types/student';
 import { User } from '../types/user';
-import { AnimatePresence, motion } from "motion/react"
 import { MorphPanel } from './MorphPanel';
 import { ArrowUp, ChevronLeft, CircleCheck, CircleX, ClipboardList, MessageCircle, Mic, Search, Sparkles, Square } from 'lucide-react';
 
@@ -1198,31 +1197,15 @@ ${dataContext}`;
       )}
 
       {/* 📄 نافذة الشات — أنيميشن انسحاب الورقة */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            key="chat-window"
-            initial={{ width: 120, height: 44, borderRadius: 20, opacity: 0 }}
-            animate={{ width: 420, height: 520, borderRadius: 16, opacity: 1 }}
-            exit={{ width: 120, height: 44, borderRadius: 20, opacity: 0 }}
-              transition={{
-                type: "spring",
-                stiffness: 300,
-                damping: 24,
-                mass: 0.7,
-              }}
-            className="fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-50 overflow-hidden border border-white/10 shadow-2xl max-w-[calc(100vw-1.5rem)] sm:max-w-[calc(100vw-3rem)] max-h-[calc(100vh-3rem)] overscroll-contain"
-            style={{ backgroundColor: '#0f172a' }}
-            onKeyDown={e => { e.stopPropagation(); }}
-            onKeyUp={e => { e.stopPropagation(); }}
-          >
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ delay: 0.18, duration: 0.2 }}
-              className="flex flex-col h-full"
-            >
+      {isOpen && (
+        <div
+          key="chat-window"
+          className="fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-50 overflow-hidden border border-white/10 shadow-2xl max-w-[calc(100vw-1.5rem)] sm:max-w-[calc(100vw-3rem)] max-h-[calc(100vh-3rem)] overscroll-contain animate-modalUp"
+          style={{ backgroundColor: '#0f172a' }}
+          onKeyDown={e => { e.stopPropagation(); }}
+          onKeyUp={e => { e.stopPropagation(); }}
+        >
+          <div className="flex flex-col h-full animate-fadeIn" style={{ animationDelay: '0.12s' }}>
               {/* شريط علوي: زر الإغلاق (يمين) مع خط فاصل تحته */}
               <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10">
                 <span className="text-xs text-slate-400 font-medium">المساعد الذكي</span>
@@ -1476,13 +1459,10 @@ ${dataContext}`;
 
               {/* 💬 الرسائل */}
               <div className="flex-1 overflow-y-auto pb-4 space-y-3 px-3 overscroll-contain" style={{ backgroundColor: '#0f172a' }}>
-                {messages.map((msg, idx) => (
-                    <motion.div
+                {messages.map((msg) => (
+                    <div
                       key={msg.id}
-                      initial={{ opacity: 0, y: 14, scale: 0.96 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      transition={{ duration: 0.45, ease: [0.22, 0.08, 0.22, 1], delay: idx === messages.length - 1 ? 0.12 : 0 }}
-                      className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                      className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} animate-fadeUp`}
                     >
                     <div className={`max-w-[90%] rounded-2xl p-3 shadow-sm ${
                       msg.type === 'user'
@@ -1503,16 +1483,11 @@ ${dataContext}`;
                         {msg.timestamp.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
-                  </motion.div>
+                  </div>
                 ))}
 
                 {isTyping && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.25 }}
-                    className="flex justify-start"
-                  >
+                  <div className="flex justify-start animate-fadeUp">
                     <div className="bg-slate-800 border border-white/10 rounded-2xl rounded-bl-sm p-3 shadow-sm">
                       <div className="flex items-center gap-2">
                         <div className="flex gap-1">
@@ -1523,7 +1498,7 @@ ${dataContext}`;
                         <span className="text-xs text-slate-400">يكتب...</span>
                       </div>
                     </div>
-                  </motion.div>
+                  </div>
                 )}
                 <div ref={messagesEndRef} />
               </div>
@@ -1619,10 +1594,9 @@ ${dataContext}`;
                   </div>
                 );
               })()}
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         )}
-      </AnimatePresence>
     </>
   );
 };

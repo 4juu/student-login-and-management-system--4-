@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useModalBehavior } from '../hooks/useModalBehavior';
 import { Student, AttendanceRecord, Stage, College } from '../types/student';
 import { User } from '../types/user';
 import { TelegramConfig } from '../types/telegram';
@@ -61,6 +62,11 @@ export const Settings: React.FC<SettingsProps> = ({
     | null
   >(null);
   const [resetTypedConfirm, setResetTypedConfirm] = useState('');
+
+  const modalBehaviorRef = useModalBehavior({
+    open: !!resetDialog,
+    onClose: () => { if (resetDialog?.type !== 'success') setResetDialog(null); },
+  });
 
   // 🏛️ عنوان النظام (للأدمن الرئيسي فقط)
   const [systemTitleDraft, setSystemTitleDraft] = useState(systemTitle);
@@ -700,6 +706,7 @@ export const Settings: React.FC<SettingsProps> = ({
           onClick={() => resetDialog.type !== 'success' && setResetDialog(null)}
         >
           <div
+            ref={modalBehaviorRef}
             className="modal-panel bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center"
             onClick={e => e.stopPropagation()}
             dir="rtl"

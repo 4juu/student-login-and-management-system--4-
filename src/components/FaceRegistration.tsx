@@ -10,6 +10,7 @@ import { useFaceModels } from '../hooks/useFaceModels';
 import { FaceModelLoadingOverlay } from './FaceModelLoadingOverlay';
 import * as faceapi from 'face-api.js';
 import { createPortal } from 'react-dom';
+import { useModalBehavior } from '../hooks/useModalBehavior';
 
 interface FaceRegistrationProps {
   students: Student[];
@@ -20,6 +21,7 @@ interface FaceRegistrationProps {
 type Step = 'search' | 'camera' | 'capture' | 'success' | 'confirm';
 
 export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, onUpdateStudent, onClose }) => {
+  const panelRef = useModalBehavior({ open: true, onClose });
   const [step, setStep] = useState<Step>('search');
   const [search, setSearch] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -169,7 +171,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   useEffect(() => () => { cleanupCamera(); }, []);
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-3" dir="rtl"
+    <div ref={panelRef} className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-3" dir="rtl"
       onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
       {!modelsLoaded && (
         <FaceModelLoadingOverlay progress={modelProgress} onCancel={onClose} />

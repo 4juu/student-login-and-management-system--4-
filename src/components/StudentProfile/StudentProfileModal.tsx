@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useModalBehavior } from '../../hooks/useModalBehavior';
 import { Student, AttendanceRecord, AttendanceSession } from '../../types/student';
 import { BookOpen, Check, ClipboardList, Copy, Ticket } from 'lucide-react';
 
@@ -61,6 +62,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
   onClose,
 }) => {
   const [page, setPage] = useState(1);
+  const panelRef = useModalBehavior({ open: true, onClose });
 
   const studentRecords = useMemo(
     () => records.filter(r => r.studentId === student.id),
@@ -133,6 +135,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
       dir="rtl"
     >
       <div
+        ref={panelRef}
         className="modal-height bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden border border-slate-200"
         onClick={e => e.stopPropagation()}
       >
