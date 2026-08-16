@@ -1091,13 +1091,13 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       )}
 
       {kiosk && (
-      <div className="flex-1 min-h-0 overflow-hidden bg-black flex flex-col">
-        <header className="flex items-center justify-between px-4 py-3 bg-black/95 border-b border-white/10 shrink-0"
+      <div className="flex-1 relative min-h-0 overflow-hidden bg-black flex flex-col">
+        <header className="absolute top-0 inset-x-0 z-30 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/70 via-black/20 to-transparent"
           style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}>
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-base shrink-0">👤</div>
             <div className="min-w-0">
-              <h1 className="font-extrabold text-sm leading-tight truncate">تسجيل الحضور — وضع الكشك</h1>
+              <h1 className="font-extrabold text-sm leading-tight truncate">تسجيل الحضور</h1>
               <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-white text-[10px] font-bold ${modeConfig[mode].bg}`}>
                 {modeConfig[mode].icon} {modeConfig[mode].text}
               </span>
@@ -1120,7 +1120,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
         </header>
 
         {error && (
-          <div className="mx-4 mt-3 bg-red-500/90 text-white p-3 rounded-xl text-sm font-bold text-center shrink-0">
+          <div className="absolute inset-x-4 z-30 bg-red-500/90 text-white p-3 rounded-xl text-sm font-bold text-center"
+            style={{ top: 'calc(env(safe-area-inset-top, 0px) + 5rem)' }}>
             {error}
             <button onClick={initCamera} className="block mx-auto mt-2 bg-white text-red-600 px-4 py-1.5 rounded-lg text-xs">🔄 إعادة</button>
           </div>
