@@ -1,6 +1,5 @@
 export interface AdminNotification {
   id: string;
-  title: string;
   body: string;
   senderUid: string;
   senderName: string;

@@ -22,12 +22,12 @@ export const subscribeNotifications = (
 };
 
 // ── Send (main admin only) ──
-export const sendNotification = async (input: { title: string; body: string; senderUid: string; senderName: string }): Promise<void> => {
+// إشعار واحد (body) يُبثّ لكل التدريسيين — ليس رسالة موجّهة
+export const sendNotification = async (input: { content: string; senderUid: string; senderName: string }): Promise<void> => {
   const r = push(messagesRef());
   const now = Date.now();
   await set(r, {
-    title: input.title,
-    body: input.body,
+    body: input.content,
     senderUid: input.senderUid,
     senderName: input.senderName,
     createdAt: now,

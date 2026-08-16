@@ -1052,7 +1052,7 @@ function App() {
 
             {(isOffline || !syncDone) && <OfflineWarningIcon />}
 
-            <Notifications currentUser={currentUser} />
+            {(currentUser?.role === 'teacher' || currentUser?.role === 'admin') && <Notifications currentUser={currentUser} />}
 
             <button
               onClick={handleLogout}

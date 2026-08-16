@@ -15,8 +15,7 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
   const [items, setItems] = useState<AdminNotification[]>([]);
   const [open, setOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
+  const [content, setContent] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
@@ -52,14 +51,18 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
   }, [uid]);
 
   const handleSend = async () => {
-    if (!title.trim() || !body.trim() || !currentUser) return;
+    if (!content.trim() || !currentUser) return;
     setSending(true);
     setError('');
     try {
-      await sendNotification({ title: title.trim(), body: body.trim(), senderUid: currentUser.uid, senderName: currentUser.displayName });
-      setTitle(''); setBody(''); setComposeOpen(false);
-    } catch {
-      setError('فشل إرسال الرسالة');
+      await sendNotification({ content: content.trim(), senderUid: currentUser.uid, senderName: currentUser.displayName });
+      setContent(''); setComposeOpen(false);
+    } catch (err: any) {
+      const code = err?.code || '';
+      const isPermission = code === 'PERMISSION_DENIED' || /permission/i.test(String(err?.message || ''));
+      setError(isPermission
+        ? 'PERMISSION_DENIED — انشر قواعد قاعدة البيانات في Firebase Console أولاً'
+        : `فشل إرسال الإشعار: ${err?.message || err || ''}`);
     } finally {
       setSending(false);
     }
@@ -131,7 +134,7 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
                 )}
                 {items.length > 0 && mainAdminCanSend && (
                   <button
-                    onClick={() => { if (confirm('حذف كل الرسائل؟')) deleteAllNotifications(); }}
+                    onClick={() => { if (confirm('حذف كل الإشعارات؟')) deleteAllNotifications(); }}
                     className="bg-white/5 hover:bg-red-500/15 text-slate-300 hover:text-red-300 p-2 rounded-lg transition active:scale-90"
                     title="حذف الكل"
                   >
@@ -147,29 +150,28 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
             {/* Compose form (admin) */}
             {composeOpen && mainAdminCanSend && (
               <div className="px-5 py-4 border-b border-white/10 bg-blue-950/20 space-y-2.5">
-                <input
-                  value={title}
-                  onChange={e => setTitle(e.target.value)}
-                  placeholder="عنوان الرسالة"
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-800 border border-white/15 text-white placeholder:text-slate-500 focus:border-blue-500 outline-none text-sm"
-                />
                 <textarea
-                  value={body}
-                  onChange={e => setBody(e.target.value)}
-                  placeholder="نص الرسالة..."
+                  value={content}
+                  onChange={e => setContent(e.target.value)}
+                  placeholder="محتوى الإشعار... يظهر لكل التدريسيين"
                   rows={3}
+                  maxLength={500}
                   className="w-full px-3 py-2.5 rounded-xl bg-slate-800 border border-white/15 text-white placeholder:text-slate-500 focus:border-blue-500 outline-none text-sm resize-none"
                 />
-                {error && <p className="text-red-400 text-xs font-bold">{error}</p>}
-                <div className="flex items-center justify-end gap-2">
-                  <button onClick={() => setComposeOpen(false)} className="text-slate-400 text-xs font-bold px-3 py-2 hover:text-white">إلغاء</button>
-                  <button
-                    onClick={handleSend}
-                    disabled={sending || !title.trim() || !body.trim()}
-                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1 transition active:scale-95"
-                  >
-                    {sending ? 'جاري الإرسال...' : 'إرسال الآن'}
-                  </button>
+                <div className="text-[10px] text-slate-500 text-left">{content.length}/500</div>
+                {error && <p className="text-red-400 text-xs font-bold break-words">{error}</p>}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-slate-500">يُبثّ لجميع التدريسيين</span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setComposeOpen(false)} className="text-slate-400 text-xs font-bold px-3 py-2 hover:text-white">إلغاء</button>
+                    <button
+                      onClick={handleSend}
+                      disabled={sending || !content.trim()}
+                      className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1 transition active:scale-95"
+                    >
+                      {sending ? 'جاري الإرسال...' : 'إرسال الإشعار'}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -185,6 +187,8 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
 
               {items.map(n => {
                 const read = isNotificationRead(n, uid);
+                const title = (((n as unknown) as Record<string, unknown>).title as string) || '';
+                const showTitle = !!title.trim();
                 return (
                   <button
                     key={n.id}
@@ -202,8 +206,8 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
-                          <p className={`font-extrabold text-sm truncate ${read ? 'text-slate-200' : 'text-white'}`}>{n.title}</p>
-                          <span className="text-[10px] text-slate-500 shrink-0 whitespace-nowrap">{formatTime(n.createdAt)}</span>
+                          {showTitle && <p className={`font-extrabold text-sm truncate ${read ? 'text-slate-200' : 'text-white'}`}>{title}</p>}
+                          <span className={`text-[10px] text-slate-500 shrink-0 whitespace-nowrap ${showTitle ? '' : 'ms-auto'}`}>{formatTime(n.createdAt)}</span>
                         </div>
                         <p className={`text-xs mt-1 leading-relaxed break-words ${read ? 'text-slate-400' : 'text-slate-200'}`}>{n.body}</p>
                         <div className="flex items-center justify-between mt-2">
