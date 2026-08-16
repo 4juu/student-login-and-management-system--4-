@@ -3,6 +3,7 @@ import { AttendanceRecord, AttendanceSession, Student } from '../types/student';
 import { getCurrentAcademicYear } from '../firebase/dataService';
 import { CalendarCheck, CalendarRange, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, CircleX, Download, FileSpreadsheet, GraduationCap, QrCode, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
 
 interface AttendanceRecordsProps {
   records: AttendanceRecord[];
@@ -686,10 +687,11 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
       {/* ============================================================ */}
       {/* 📥 نافذة تصدير سجل الحضور والغياب */}
       {/* ============================================================ */}
+      {createPortal(
       <AnimatePresence>
         {exportOpen && (
           <motion.div
-            className="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6"
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -840,7 +842,9 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body
+      )}
     </div>
   );
 });
