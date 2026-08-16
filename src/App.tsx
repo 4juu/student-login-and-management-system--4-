@@ -14,22 +14,38 @@ import { OfflineWarningIcon } from './components/OfflineWarningIcon';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { SessionManager } from './components/SessionManager';
 import { Login } from './components/Login';
-import { TeacherManagement } from './components/TeacherManagement';
-import { ProfileSettings } from './components/ProfileSettings';
-import { Settings } from './components/Settings';
-import { CollegeManager } from './components/CollegeManager';
 import { StageSelector } from './components/StageSelector';
-import { SmartChatBot } from './components/SmartChatBot';
 import { Masthead } from './components/Masthead';
 import { MorphingSquare } from './components/MorphingSquare';
 import { TextScramble } from './components/TextScramble';
 import { SendProgressModal } from './components/SendProgressModal';
 import { Crown, Landmark, LogOut, Home, ChevronLeft, GraduationCap } from 'lucide-react';
 
-// 🆕 نظام التسجيل الذاتي
-import { SelfRegisterPage } from './components/SelfRegister/SelfRegisterPage';
-import { SendRegisterLink } from './components/Admin/SendRegisterLink';
-import { SendAttendanceLink } from './components/Admin/SendAttendanceLink';
+// 🚀 تحميل متأخر للمكونات الثقيلة (تُحمَّل عند الحاجة فقط — خفض حجم الحزمة الأولية)
+const SmartChatBot = lazy(() =>
+  import('./components/SmartChatBot').then(m => ({ default: m.SmartChatBot }))
+);
+const TeacherManagement = lazy(() =>
+  import('./components/TeacherManagement').then(m => ({ default: m.TeacherManagement }))
+);
+const Settings = lazy(() =>
+  import('./components/Settings').then(m => ({ default: m.Settings }))
+);
+const ProfileSettings = lazy(() =>
+  import('./components/ProfileSettings').then(m => ({ default: m.ProfileSettings }))
+);
+const CollegeManager = lazy(() =>
+  import('./components/CollegeManager').then(m => ({ default: m.CollegeManager }))
+);
+const SelfRegisterPage = lazy(() =>
+  import('./components/SelfRegister/SelfRegisterPage').then(m => ({ default: m.SelfRegisterPage }))
+);
+const SendRegisterLink = lazy(() =>
+  import('./components/Admin/SendRegisterLink').then(m => ({ default: m.SendRegisterLink }))
+);
+const SendAttendanceLink = lazy(() =>
+  import('./components/Admin/SendAttendanceLink').then(m => ({ default: m.SendAttendanceLink }))
+);
 
 // 🚀 طلبات التسجيل تُحمَّل عند فتحها فقط (تحتوي مكتبة الوجوه)
 const LazyPendingRegistrations = lazy(() =>
@@ -85,6 +101,15 @@ const preloadAttendanceChunks = (): void => {
 };
 
 type Tab = 'stage-selector' | 'colleges' | 'login' | 'manage' | 'records' | 'settings' | 'sessions' | 'teachers' | 'profile' | 'system-settings';
+
+const TabFallback = () => (
+  <div className="py-16 flex items-center justify-center">
+    <div className="flex items-center gap-3 text-slate-400">
+      <div className="w-6 h-6 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      <span className="text-sm font-bold">جاري التحميل...</span>
+    </div>
+  </div>
+);
 
 interface AllStagesData {
   [stageId: string]: {
@@ -232,8 +257,7 @@ function App() {
   useEffect(() => {
     // 🚀 تحميل موديل الكشف الخفيف بالخلفية من أول لحظة فتح الموقع (بدون تثبيت)
     preloadDetector();
-    // 🚀 تحميل مسبق لمكونات تسجيل البصمة لتعمل حتى عند انقطاع الإنترنت
-    setTimeout(preloadAttendanceChunks, 300);
+    // (مكونات تسجيل البصمة تُحمَّل بعد تسجيل الدخول فقط لتقليل حمل شاشة الدخول)
   }, []);
 
   useEffect(() => {
@@ -280,6 +304,8 @@ function App() {
           await loadInitialData(userData);
           // 🚀 تحميل موديل الكشف الخفيف فور تحميل الواجهة
           setTimeout(() => preloadDetector(), 500);
+          // 🚀 تحميل مسبق لمكونات تسجيل البصمة بعد الدخول لتعمل حتى عند انقطاع الإنترنت
+          setTimeout(preloadAttendanceChunks, 1500);
         } catch (error) {
           console.error('❌ Error loading user:', error);
           setCurrentUser(null);
@@ -679,6 +705,15 @@ function App() {
     setAttendanceRecords([]);
   };
 
+  const handleUpdateRecord = (recordId: string, updates: Partial<AttendanceRecord>) => {
+    setAttendanceRecords(prev => prev.map(r => r.id === recordId ? { ...r, ...updates } : r));
+  };
+
+  const handleDeleteRecord = (recordId: string) => {
+    intentionalDeleteRef.current.records = true;
+    setAttendanceRecords(prev => prev.filter(r => r.id !== recordId));
+  };
+
   const handleCreateSession = (session: AttendanceSession) => {
     setSessions(prev => [...prev.map(s => ({ ...s, isActive: false })), session]);
     setActiveSessionId(session.id);
@@ -927,7 +962,15 @@ function App() {
   }, [currentUser, isMainAdmin, isCollegeAdmin, colleges, stages]);
 
   if (registerToken) {
-    return <SelfRegisterPage token={registerToken} onExit={handleExitSelfRegister} />;
+    return (
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center bg-[#0B1220]">
+          <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }>
+        <SelfRegisterPage token={registerToken} onExit={handleExitSelfRegister} />
+      </Suspense>
+    );
   }
 
   if (loading || !tokenChecked) {
@@ -1138,30 +1181,38 @@ function App() {
                 <StageSelector user={currentUser} colleges={colleges} stages={stages} onSelect={handleSelectStage} />
               )}
               {activeTab === 'colleges' && isMainAdmin && (
-                <CollegeManager
-                  colleges={colleges} stages={stages} adminUid={currentUser.uid}
-                  onAddCollege={handleAddCollege} onDeleteCollege={handleDeleteCollege}
-                  onAddStage={handleAddStage} onDeleteStage={handleDeleteStage}
-                  onSelectStage={handleSelectStage}
-                />
+                <Suspense fallback={<TabFallback />}>
+                  <CollegeManager
+                    colleges={colleges} stages={stages} adminUid={currentUser.uid}
+                    onAddCollege={handleAddCollege} onDeleteCollege={handleDeleteCollege}
+                    onAddStage={handleAddStage} onDeleteStage={handleDeleteStage}
+                    onSelectStage={handleSelectStage}
+                  />
+                </Suspense>
               )}
               {activeTab === 'teachers' && (isMainAdmin || isCollegeAdmin) && (
-                <TeacherManagement
-                  currentUser={currentUser}
-                  colleges={isCollegeAdmin ? colleges.filter(c => c.id === currentUser.collegeId) : colleges}
-                  stages={isCollegeAdmin ? stages.filter(s => s.collegeId === currentUser.collegeId) : stages}
-                />
+                <Suspense fallback={<TabFallback />}>
+                  <TeacherManagement
+                    currentUser={currentUser}
+                    colleges={isCollegeAdmin ? colleges.filter(c => c.id === currentUser.collegeId) : colleges}
+                    stages={isCollegeAdmin ? stages.filter(s => s.collegeId === currentUser.collegeId) : stages}
+                  />
+                </Suspense>
               )}
               {activeTab === 'system-settings' && isMainAdmin && (
-                <Settings
-                  students={students} attendanceRecords={attendanceRecords} currentUser={currentUser}
-                  onResetComplete={handleResetComplete}
-                  stages={stages} colleges={colleges} onTelegramConfigChange={handleTelegramConfigChange}
-                  systemTitle={systemTitle} onSystemTitleChange={setSystemTitle}
-                />
+                <Suspense fallback={<TabFallback />}>
+                  <Settings
+                    students={students} attendanceRecords={attendanceRecords} currentUser={currentUser}
+                    onResetComplete={handleResetComplete}
+                    stages={stages} colleges={colleges} onTelegramConfigChange={handleTelegramConfigChange}
+                    systemTitle={systemTitle} onSystemTitleChange={setSystemTitle}
+                  />
+                </Suspense>
               )}
               {activeTab === 'profile' && (
-                <ProfileSettings currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />
+                <Suspense fallback={<TabFallback />}>
+                  <ProfileSettings currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />
+                </Suspense>
               )}
             </div>
           </div>
@@ -1261,6 +1312,7 @@ function App() {
                 <AttendanceRecords
                   records={attendanceRecords} sessions={sessions} students={students}
                   activeSessionId={activeSessionId} onClearRecords={handleClearRecords}
+                  onUpdateRecord={handleUpdateRecord} onDeleteRecord={handleDeleteRecord}
                 />
               )}
             </div>
@@ -1277,43 +1329,49 @@ function App() {
       </div>
 
       {/* ✨ الشات بوت الذكي */}
-      <SmartChatBot
-        user={currentUser} colleges={colleges} stages={stages}
-        currentCollegeId={selectedCollegeId} currentStageId={selectedStageId}
-        students={students} records={attendanceRecords} sessions={sessions}
-        activeSessionId={activeSessionId}
-        allTeachers={isMainAdmin ? allTeachers : []}
-        allStagesData={isMainAdmin && universityDataLoaded ? allStagesData : {}}
-        onRequestUniversityData={isAdmin ? loadAllAdminData : undefined}
-        universityDataLoaded={universityDataLoaded}
-        universityDataLoading={universityDataLoading}
-      />
+      <Suspense fallback={null}>
+        <SmartChatBot
+          user={currentUser} colleges={colleges} stages={stages}
+          currentCollegeId={selectedCollegeId} currentStageId={selectedStageId}
+          students={students} records={attendanceRecords} sessions={sessions}
+          activeSessionId={activeSessionId}
+          allTeachers={isMainAdmin ? allTeachers : []}
+          allStagesData={isMainAdmin && universityDataLoaded ? allStagesData : {}}
+          onRequestUniversityData={isAdmin ? loadAllAdminData : undefined}
+          universityDataLoaded={universityDataLoaded}
+          universityDataLoading={universityDataLoading}
+        />
+      </Suspense>
 
       {showSendLink && currentUser && isMainAdmin && (
-        <SendRegisterLink
-          adminUid={currentUser.uid}
-          colleges={isCollegeAdmin ? colleges.filter(c => c.id === currentUser.collegeId) : colleges}
-          stages={isCollegeAdmin ? stages.filter(s => s.collegeId === currentUser.collegeId) : stages}
-          loadStudents={async (stageId: string) => {
-            const uid = isCollegeAdmin ? getAdminUid() : currentUser.uid;
-            return await loadStudentsForStage(uid, stageId);
-          }}
-          telegramConfig={telegramConfig}
-          onClose={() => setShowSendLink(false)}
-        />
+        <Suspense fallback={null}>
+          <SendRegisterLink
+            adminUid={currentUser.uid}
+            colleges={isCollegeAdmin ? colleges.filter(c => c.id === currentUser.collegeId) : colleges}
+            stages={isCollegeAdmin ? stages.filter(s => s.collegeId === currentUser.collegeId) : stages}
+            loadStudents={async (stageId: string) => {
+              const uid = isCollegeAdmin ? getAdminUid() : currentUser.uid;
+              return await loadStudentsForStage(uid, stageId);
+            }}
+            telegramConfig={telegramConfig}
+            onClose={() => setShowSendLink(false)}
+          />
+        </Suspense>
       )}
 
       {showAttendanceLink && currentUser && (
-        <SendAttendanceLink
-          adminUid={getAdminUid()}
-          colleges={attendanceLinkScope.colleges}
-          stages={attendanceLinkScope.stages}
-          loadStudents={async (stageId: string) => loadStudentsForStage(getAdminUid(), stageId)}
-          telegramConfig={telegramConfig}
-          subjectName={currentUser?.bio || currentUser?.displayName || 'المادة'}
-          teacherId={getTeacherId()}
-          onClose={() => setShowAttendanceLink(false)}
-        />
+        <Suspense fallback={null}>
+          <SendAttendanceLink
+            adminUid={getAdminUid()}
+            colleges={attendanceLinkScope.colleges}
+            stages={attendanceLinkScope.stages}
+            loadStudents={async (stageId: string) => loadStudentsForStage(getAdminUid(), stageId)}
+            telegramConfig={telegramConfig}
+            subjectName={currentUser?.bio || currentUser?.displayName || 'المادة'}
+            teacherId={getTeacherId()}
+            onClose={() => setShowAttendanceLink(false)}
+          />
+        </Suspense>
       )}
 
       {showPendingRegistrations && currentUser && (isMainAdmin || isCollegeAdmin) && (

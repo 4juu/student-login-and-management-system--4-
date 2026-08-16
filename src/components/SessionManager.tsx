@@ -99,6 +99,30 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
     onCreateSession(newSession);
   };
 
+  // 🛑 تأكيد عند تغيير السجل النشط — منع تغيير غير مقصود أثناء المحاضرة
+  const handleActivateSession = (sessionId: string) => {
+    if (sessionId === activeSessionId) return;
+    const target = sessions.find(s => s.id === sessionId);
+    const activeCount = activeSessionId ? records.filter(r => r.sessionId === activeSessionId).length : 0;
+
+    setConfirmState({
+      title: 'تأكيد تغيير السجل النشط',
+      message:
+        `سيتم تحويل عمليات تسجيل الحضور إلى السجل: "${target?.name || ''}"\n\n` +
+        (activeSessionId
+          ? activeCount > 0
+            ? `السجل النشط الحالي يحتوي على ${activeCount} عملية تسجيل ولن تُحذف.\n`
+            : 'السجل النشط الحالي لا يحتوي على أي سجلات حضور.\n'
+          : '') +
+        'هل تريد المتابعة؟',
+      confirmLabel: 'نعم، تفعيل',
+      onConfirm: () => {
+        setConfirmState(null);
+        onSelectSession(sessionId);
+      },
+    });
+  };
+
   const handleCustomCreate = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -404,7 +428,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
                 <div className="flex gap-1.5 sm:gap-2 flex-wrap">
                   {session.id !== activeSessionId && (
                     <button
-                      onClick={() => onSelectSession(session.id)}
+                      onClick={() => handleActivateSession(session.id)}
                       className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 sm:py-2 px-3 sm:px-4 rounded-md transition duration-200 text-xs sm:text-sm"
                     >
                       تفعيل

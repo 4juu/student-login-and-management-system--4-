@@ -68,10 +68,12 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const [torchOn, setTorchOn] = useState(false);
   const [warmup, setWarmup] = useState(0);
   const [presentIds, setPresentIds] = useState<Set<string>>(new Set(alreadyPresentIds));
+  const [kiosk, setKiosk] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const { videoReady, handleVideoReady, resetVideoReady, armForceReady } = useCameraReady(videoRef);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const kioskRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const trackRef = useRef<MediaStreamTrack | null>(null);
   const trackerRef = useRef<IOUTracker | null>(null);
@@ -180,6 +182,29 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ⛶ وضع الكشك — ملء شاشة فعلي مع مزامنة الخروج التلقائي
+  useEffect(() => {
+    const onFsChange = () => {
+      if (!document.fullscreenElement) setKiosk(false);
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+
+  const toggleKiosk = useCallback(async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+        setKiosk(false);
+      } else if (kioskRef.current) {
+        await kioskRef.current.requestFullscreen();
+        setKiosk(true);
+      }
+    } catch {}
+  }, []);
+
+  const recentMarked = useMemo(() => logs.filter(l => l.status === 'marked').slice(0, 5), [logs]);
+
   useEffect(() => {
     if (studentsWithFace.length > 0) {
       buildDescriptorCache(studentsWithFace as any, 0.5);
@@ -224,7 +249,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       await cleanup();
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facingRef.current, width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } },
+        video: { facingMode: facingRef.current, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 20, max: 24 } },
         audio: false,
       });
       if (!mountedRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
@@ -780,6 +805,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     stopFaceLoop();
     cleanup();
     clearDescriptorCache();
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     onClose();
   };
 
@@ -814,7 +840,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm text-white flex flex-col" dir="rtl">
-      <div className="w-full max-w-2xl mx-auto bg-white text-gray-900 rounded-3xl shadow-2xl flex flex-col flex-1 my-2 sm:my-4 overflow-hidden">
+      <div ref={kioskRef}
+        className={`w-full mx-auto bg-white text-gray-900 shadow-2xl flex flex-col flex-1 overflow-hidden ${kiosk ? 'max-w-none my-0 rounded-none' : 'max-w-2xl my-2 sm:my-4 rounded-3xl'}`}>
         <header className="flex items-center justify-between px-4 py-3 border-b border-gray-100"
           style={{ paddingTop: 'max(0.75rem,env(safe-area-inset-top))' }}>
           <div className="flex items-center gap-2 min-w-0">
@@ -836,6 +863,11 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
+            <button onClick={toggleKiosk}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 flex items-center gap-1 ${kiosk ? 'bg-emerald-600 text-white' : 'bg-blue-50 hover:bg-blue-100 text-blue-700'}`}>
+              <span>{kiosk ? '⛶' : '⛶'}</span>
+              <span className="hidden sm:inline">{kiosk ? 'خروج' : 'كشك'}</span>
+            </button>
             <button onClick={handleShowReg}
               className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 flex items-center gap-1">
               <span>📸</span>
@@ -856,6 +888,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
         )}
 
         <div className="flex-1 overflow-y-auto px-4 pb-4 overscroll-contain">
+          {!kiosk && (
           <div className="grid grid-cols-3 gap-2 mt-4">
             <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-center">
               <div className="text-2xl font-extrabold text-emerald-600">{presentIds.size}</div>
@@ -870,10 +903,10 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
               <div className="text-[10px] text-gray-500 font-bold mt-0.5">⏳ المتبقي</div>
             </div>
           </div>
+          )}
 
-          <div className="mt-4">
-            <div className="relative w-full max-w-md mx-auto rounded-2xl overflow-hidden border border-gray-100 bg-black shadow-lg"
-              style={{ aspectRatio: '3 / 4' }}>
+          <div className={`${kiosk ? 'mt-0' : 'mt-4'}`}>
+            <div className={`relative rounded-2xl overflow-hidden border border-gray-100 bg-black shadow-lg ${kiosk ? 'w-full aspect-[16/10]' : 'w-full max-w-md mx-auto aspect-[3/4]'}`}>
               <video ref={videoRef}
                 autoPlay playsInline muted
                 onLoadedMetadata={handleVideoReady}
@@ -912,8 +945,37 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
                   </div>
                 </div>
               )}
+
+              {kiosk && (
+                <div className="absolute bottom-3 right-3 left-3 z-10 flex items-start justify-between gap-3 pointer-events-none">
+                  <div className="flex flex-col gap-1.5 min-w-0">
+                    {recentMarked.length > 0 && (
+                      <div className="flex flex-col gap-1.5">
+                        {recentMarked.map((l, i) => (
+                          <div key={`${l.id}-${l.time}`}
+                            className={`flex items-center gap-2 bg-black/75 text-white rounded-xl px-3 py-1.5 backdrop-blur-sm text-xs font-bold shadow-lg animate-fadeIn ${i === 0 ? 'ring-2 ring-emerald-400' : ''}`}>
+                            <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-[10px] shrink-0">✓</span>
+                            <span className="truncate">{l.name}</span>
+                            <span className="text-white/50 text-[10px] shrink-0">#{l.code}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div key={counts.marked}
+                    className="animate-pulse-badge flex items-center gap-2 bg-emerald-600/95 text-white rounded-2xl px-4 py-2 shadow-lg">
+                    <span className="text-lg">🎉</span>
+                    <div>
+                      <div className="text-xl font-extrabold leading-none">{counts.marked}</div>
+                      <div className="text-[10px] font-bold text-emerald-100">تم تسجيل الآن</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
+            {!kiosk && (
+            <>
             <div className="flex items-center justify-center gap-2 mt-2.5">
               <div className="flex gap-1">
                 {[0, 1, 2].map(i => (
@@ -962,8 +1024,11 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
                 </span>
               </p>
             )}
+            </>
+            )}
           </div>
 
+          {!kiosk && (
           <div className="mt-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-extrabold text-sm">🎓 الطلاب ({roster.length})</h3>
@@ -1003,6 +1068,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
               )}
             </div>
           </div>
+          )}
         </div>
       </div>
 
