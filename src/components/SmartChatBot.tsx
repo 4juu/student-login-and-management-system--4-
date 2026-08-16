@@ -1155,18 +1155,18 @@ ${dataContext}`;
     return lines.map((line, i) => {
       const lineHasCheck = line.includes('✅');
       const lineHasCross = line.includes('❌');
-      let lineClass = 'text-gray-800';
-      if (lineHasCheck) lineClass = 'text-green-700';
-      if (lineHasCross) lineClass = 'text-red-700';
+      let lineClass = 'text-slate-300';
+      if (lineHasCheck) lineClass = 'text-green-400';
+      if (lineHasCross) lineClass = 'text-red-400';
 
       const parts: React.ReactNode[] = [];
       const boldRegex = /\*\*(.+?)\*\*/g;
       let lastIndex = 0, match, key = 0;
       while ((match = boldRegex.exec(line)) !== null) {
         if (match.index > lastIndex) parts.push(<React.Fragment key={`t-${i}-${key++}`}>{line.substring(lastIndex, match.index)}</React.Fragment>);
-        let boldClass = 'font-bold text-gray-900';
-        if (lineHasCheck) boldClass = 'font-bold text-green-800';
-        if (lineHasCross) boldClass = 'font-bold text-red-800';
+        let boldClass = 'font-bold text-white';
+        if (lineHasCheck) boldClass = 'font-bold text-green-300';
+        if (lineHasCross) boldClass = 'font-bold text-red-300';
         parts.push(<strong key={`b-${i}-${key++}`} className={boldClass}>{match[1]}</strong>);
         lastIndex = match.index + match[0].length;
       }
@@ -1211,8 +1211,8 @@ ${dataContext}`;
                 damping: 24,
                 mass: 0.7,
               }}
-            className="fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-50 overflow-hidden border border-gray-200 shadow-2xl max-w-[calc(100vw-1.5rem)] sm:max-w-[calc(100vw-3rem)] max-h-[calc(100vh-3rem)] overscroll-contain"
-            style={{ backgroundColor: '#ffffff' }}
+            className="fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-50 overflow-hidden border border-white/10 shadow-2xl max-w-[calc(100vw-1.5rem)] sm:max-w-[calc(100vw-3rem)] max-h-[calc(100vh-3rem)] overscroll-contain"
+            style={{ backgroundColor: '#0f172a' }}
             onKeyDown={e => { e.stopPropagation(); }}
             onKeyUp={e => { e.stopPropagation(); }}
           >
@@ -1224,11 +1224,11 @@ ${dataContext}`;
               className="flex flex-col h-full"
             >
               {/* شريط علوي: زر الإغلاق (يمين) مع خط فاصل تحته */}
-              <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-gray-200">
-                <span className="text-xs text-gray-400 font-medium">المساعد الذكي</span>
+              <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10">
+                <span className="text-xs text-slate-400 font-medium">المساعد الذكي</span>
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-red-50 text-red-400 hover:text-red-600 text-sm transition"
+                  className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-red-500/20 text-red-400 hover:text-red-300 text-sm transition"
                 >
                   ✕
                 </button>
@@ -1238,33 +1238,33 @@ ${dataContext}`;
               {students.length > 0 && (
                 <div className="w-full px-4 pt-2">
                   <div className="max-w-xl mx-auto">
-                    <div className="bg-gray-50 border-b border-gray-200">
+                    <div className="bg-white/5 border-b border-white/10">
                       <div className="relative px-3 py-2">
-                        <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 focus-within:border-gray-400 focus-within:ring-1 focus-within:ring-gray-300 transition shadow-sm">
-                          <span className="pr-3 text-gray-400 text-sm flex items-center"><Search className="w-4 h-4" /></span>
+                        <div className="flex items-center gap-2 bg-slate-800 rounded-xl border border-white/10 focus-within:border-indigo-500/60 focus-within:ring-1 focus-within:ring-indigo-500/30 transition shadow-sm">
+                          <span className="pr-3 text-slate-400 text-sm flex items-center"><Search className="w-4 h-4" /></span>
                           <input
                             type="text"
                             value={studentSearchQuery}
                             onChange={e => handleStudentSearch(e.target.value)}
                             onFocus={() => { if (studentSuggestions.length > 0) setShowSuggestions(true); }}
                             placeholder="ابحث عن طالب بالاسم أو الكود..."
-                            className="flex-1 py-2 pl-3 text-sm bg-transparent outline-none text-right text-gray-900 placeholder-gray-400"
+                            className="flex-1 py-2 pl-3 text-sm bg-transparent outline-none text-right text-white placeholder:text-slate-500"
                             dir="rtl"
                             autoComplete="off"
                           />
                           {studentSearchQuery && (
                             <button
                               onClick={() => { setStudentSearchQuery(''); setStudentSuggestions([]); setShowSuggestions(false); setShowStudentCard(false); setSelectedStudentCard(null); }}
-                              className="pl-2 pr-1 text-gray-400 hover:text-gray-700 transition"
+                              className="pl-2 pr-1 text-slate-400 hover:text-slate-200 transition"
                             >
                               ×
                             </button>
                           )}
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-1 text-right">اكتب الاسم أو الكود لعرض أيام الحضور والغياب فوراً</p>
+                        <p className="text-[10px] text-slate-500 mt-1 text-right">اكتب الاسم أو الكود لعرض أيام الحضور والغياب فوراً</p>
 
                         {showSuggestions && studentSuggestions.length > 0 && (
-                          <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-200 z-[70] overflow-hidden max-h-[320px] overflow-y-auto">
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 rounded-xl shadow-xl border border-white/10 z-[70] overflow-hidden max-h-[320px] overflow-y-auto">
                             {studentSuggestions.map(student => {
                               const sRecords = scope.records.filter(r => r.studentId === student.id);
                               const presentIds = new Set(sRecords.filter(r => r.status === 'present').map(r => r.sessionId));
@@ -1276,22 +1276,22 @@ ${dataContext}`;
                               <button
                                 key={student.id}
                                 onClick={() => handleSelectStudent(student)}
-                                className="w-full text-right px-4 py-3 hover:bg-gray-50 flex items-center gap-3 transition border-b border-gray-100 last:border-0"
+                                className="w-full text-right px-4 py-3 hover:bg-white/5 flex items-center gap-3 transition border-b border-white/10 last:border-0"
                               >
-                                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-bold text-sm border border-blue-200">
+                                <div className="w-10 h-10 bg-blue-500/15 rounded-full flex items-center justify-center text-blue-300 font-bold text-sm border border-blue-500/30">
                                   {student.name.charAt(0)}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-semibold text-gray-900 truncate">{student.name}</p>
-                                  <p className="text-[11px] text-gray-500">
+                                  <p className="text-sm font-semibold text-white truncate">{student.name}</p>
+                                  <p className="text-[11px] text-slate-400">
                                     {student.code && `كود: ${student.code}`}
                                     {student.group && ` • كروب: ${student.group}`}
                                   </p>
-                                  <p className="text-[10px] mt-0.5 text-gray-400">
+                                  <p className="text-[10px] mt-0.5 text-slate-500">
                                     ✅ {sAttended} / ❌ {sAbsent} — {sPct}%
                                   </p>
                                 </div>
-                                <span className="text-gray-400 text-xs"><ChevronLeft className="w-4 h-4" /></span>
+                                <span className="text-slate-500 text-xs"><ChevronLeft className="w-4 h-4" /></span>
                               </button>
                               );
                             })}
@@ -1304,16 +1304,16 @@ ${dataContext}`;
               )}
 
                   {showStudentCard && selectedStudentCard && (
-                    <div className="mt-2 bg-white rounded-xl border border-gray-200 shadow-md overflow-hidden">
-                      <div className="bg-blue-50 px-4 py-3">
+                    <div className="mt-2 bg-slate-800 rounded-xl border border-white/10 shadow-md overflow-hidden">
+                      <div className="bg-blue-500/10 px-4 py-3">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-lg font-bold border border-blue-200 text-blue-700">
+                            <div className="w-10 h-10 bg-blue-500/15 rounded-full flex items-center justify-center text-lg font-bold border border-blue-500/30 text-blue-300">
                               {selectedStudentCard.student.name.charAt(0)}
                             </div>
                             <div>
-                              <h4 className="font-bold text-sm text-gray-900">{selectedStudentCard.student.name}</h4>
-                              <p className="text-[11px] text-gray-500">
+                              <h4 className="font-bold text-sm text-white">{selectedStudentCard.student.name}</h4>
+                              <p className="text-[11px] text-slate-400">
                                 {selectedStudentCard.student.code && `كود: ${selectedStudentCard.student.code}`}
                                 {selectedStudentCard.student.group && ` • كروب: ${selectedStudentCard.student.group}`}
                               </p>
@@ -1321,21 +1321,21 @@ ${dataContext}`;
                           </div>
                           <div className="flex items-center gap-2">
                             {selectedStudentCard.isPresentToday ? (
-                              <div className="text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 bg-green-500/10 text-green-700">
+                              <div className="text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 bg-green-500/15 text-green-300">
                                 <CircleCheck className="w-3.5 h-3.5" /> حاضر اليوم
                               </div>
                             ) : selectedStudentCard.isAbsentToday ? (
-                              <div className="text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 bg-red-500/10 text-red-700">
+                              <div className="text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 bg-red-500/15 text-red-300">
                                 <CircleX className="w-3.5 h-3.5" /> غائب اليوم
                               </div>
                             ) : (
-                              <div className="text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 bg-gray-500/10 text-gray-600">
+                              <div className="text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 bg-slate-500/15 text-slate-300">
                                 <CircleX className="w-3.5 h-3.5" /> غير مسجل اليوم
                               </div>
                             )}
                             <button
                               onClick={() => { setShowStudentCard(false); setSelectedStudentCard(null); setStudentSearchQuery(''); }}
-                              className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-red-50 text-red-400 hover:text-red-600 text-sm transition flex-shrink-0"
+                              className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-red-500/20 text-red-400 hover:text-red-300 text-sm transition flex-shrink-0"
                             >
                               ✕
                             </button>
@@ -1343,55 +1343,55 @@ ${dataContext}`;
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 divide-x divide-x-reverse divide-gray-200">
+                      <div className="grid grid-cols-3 divide-x divide-x-reverse divide-white/10">
                         <div className="text-center py-3 px-2">
-                          <p className="text-lg font-bold text-green-600">{selectedStudentCard.attendedCount}</p>
-                          <p className="text-[10px] text-gray-500 flex items-center justify-center gap-1"><CircleCheck className="w-3 h-3" /> حضور</p>
+                          <p className="text-lg font-bold text-green-400">{selectedStudentCard.attendedCount}</p>
+                          <p className="text-[10px] text-slate-400 flex items-center justify-center gap-1"><CircleCheck className="w-3 h-3" /> حضور</p>
                         </div>
                         <div className="text-center py-3 px-2">
-                          <p className="text-lg font-bold text-red-500">{selectedStudentCard.absentCount}</p>
-                          <p className="text-[10px] text-gray-500 flex items-center justify-center gap-1"><CircleX className="w-3 h-3" /> غياب</p>
+                          <p className="text-lg font-bold text-red-400">{selectedStudentCard.absentCount}</p>
+                          <p className="text-[10px] text-slate-400 flex items-center justify-center gap-1"><CircleX className="w-3 h-3" /> غياب</p>
                         </div>
                         <div className="text-center py-3 px-2">
-                          <p className={`text-lg font-bold ${parseFloat(selectedStudentCard.percentage) >= 75 ? 'text-green-600' : parseFloat(selectedStudentCard.percentage) >= 50 ? 'text-yellow-600' : 'text-red-500'}`}>
+                          <p className={`text-lg font-bold ${parseFloat(selectedStudentCard.percentage) >= 75 ? 'text-green-400' : parseFloat(selectedStudentCard.percentage) >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
                             {selectedStudentCard.percentage}%
                           </p>
-                          <p className="text-[10px] text-gray-500">النسبة</p>
+                          <p className="text-[10px] text-slate-400">النسبة</p>
                         </div>
                       </div>
 
-                      <div className="border-t border-gray-200">
+                      <div className="border-t border-white/10">
                         <button
                           onClick={() => setShowDayDetails(v => !v)}
-                          className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-50 transition"
+                          className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/5 transition"
                         >
-                          <span className="flex items-center gap-1.5"><ClipboardList className="w-3.5 h-3.5 text-blue-600" /> أيام الحضور والغياب</span>
-                          <span className="text-gray-400">{showDayDetails ? '▲' : '▼'}</span>
+                          <span className="flex items-center gap-1.5"><ClipboardList className="w-3.5 h-3.5 text-blue-400" /> أيام الحضور والغياب</span>
+                          <span className="text-slate-400">{showDayDetails ? '▲' : '▼'}</span>
                         </button>
                         {showDayDetails && (
                           <div className="px-3 pb-3 space-y-2.5 max-h-48 overflow-y-auto">
                             <div>
-                              <p className="text-[11px] font-bold text-green-700 mb-1">✅ أيام الحضور ({selectedStudentCard.attendedDays.length})</p>
+                              <p className="text-[11px] font-bold text-green-400 mb-1">✅ أيام الحضور ({selectedStudentCard.attendedDays.length})</p>
                               <div className="space-y-1">
                                 {selectedStudentCard.attendedDays.length === 0 ? (
-                                  <p className="text-[11px] text-gray-400 px-1">لا يوجد</p>
+                                  <p className="text-[11px] text-slate-500 px-1">لا يوجد</p>
                                 ) : selectedStudentCard.attendedDays.map(d => (
-                                  <div key={d.date} className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-2.5 py-1.5 text-xs text-green-800">
+                                  <div key={d.date} className="flex items-center justify-between bg-green-500/10 border border-green-500/30 rounded-lg px-2.5 py-1.5 text-xs text-green-300">
                                     <span>{d.label}</span>
-                                    <span className="text-[10px] text-green-600">{d.count} محاضرة</span>
+                                    <span className="text-[10px] text-green-400">{d.count} محاضرة</span>
                                   </div>
                                 ))}
                               </div>
                             </div>
                             <div>
-                              <p className="text-[11px] font-bold text-red-700 mb-1">❌ أيام الغياب ({selectedStudentCard.absentDays.length})</p>
+                              <p className="text-[11px] font-bold text-red-400 mb-1">❌ أيام الغياب ({selectedStudentCard.absentDays.length})</p>
                               <div className="space-y-1">
                                 {selectedStudentCard.absentDays.length === 0 ? (
-                                  <p className="text-[11px] text-gray-400 px-1">لا يوجد</p>
+                                  <p className="text-[11px] text-slate-500 px-1">لا يوجد</p>
                                 ) : selectedStudentCard.absentDays.map(d => (
-                                  <div key={d.date} className="flex items-center justify-between bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5 text-xs text-red-800">
+                                  <div key={d.date} className="flex items-center justify-between bg-red-500/10 border border-red-500/30 rounded-lg px-2.5 py-1.5 text-xs text-red-300">
                                     <span>{d.label}</span>
-                                    <span className="text-[10px] text-red-600">{d.count} محاضرة</span>
+                                    <span className="text-[10px] text-red-400">{d.count} محاضرة</span>
                                   </div>
                                 ))}
                               </div>
@@ -1400,7 +1400,7 @@ ${dataContext}`;
                         )}
                       </div>
 
-                      <div className="flex gap-2 p-3 bg-gray-50 border-t border-gray-200">
+                      <div className="flex gap-2 p-3 bg-white/5 border-t border-white/10">
                         <button
                           onClick={() => setShowSessionsModal(true)}
                           className="flex-1 bg-gradient-to-l from-emerald-500 to-green-600 text-white text-[11px] py-2.5 rounded-lg hover:from-emerald-600 hover:to-green-700 transition font-medium shadow-sm flex items-center justify-center gap-1.5"
@@ -1419,53 +1419,53 @@ ${dataContext}`;
 
               {/* نافذة منبثقة لكل السجلات */}
               {showSessionsModal && selectedStudentCard && (
-                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
                      onMouseDown={() => setShowSessionsModal(false)}>
-                  <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-[calc(100%-16px)] max-h-[calc(100%-16px)] flex flex-col overflow-hidden"
+                  <div className="bg-slate-900 rounded-2xl shadow-2xl border border-white/10 w-[calc(100%-16px)] max-h-[calc(100%-16px)] flex flex-col overflow-hidden"
                        onMouseDown={e => e.stopPropagation()}>
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50 flex-shrink-0">
-                      <span className="text-sm font-bold text-gray-900 flex items-center gap-1.5"><ClipboardList className="w-4 h-4" /> سجلات حضور {selectedStudentCard.student.name}</span>
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/5 flex-shrink-0">
+                      <span className="text-sm font-bold text-white flex items-center gap-1.5"><ClipboardList className="w-4 h-4" /> سجلات حضور {selectedStudentCard.student.name}</span>
                       <button
                         onClick={() => setShowSessionsModal(false)}
-                        className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-red-50 text-red-400 hover:text-red-600 text-sm transition"
+                        className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-red-500/20 text-red-400 hover:text-red-300 text-sm transition"
                       >
                         ✕
                       </button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
                       {selectedStudentCard.attendedSessions.length === 0 ? (
-                        <div className="text-center py-8 text-gray-400 text-sm">لا توجد سجلات</div>
+                        <div className="text-center py-8 text-slate-400 text-sm">لا توجد سجلات</div>
                       ) : (
                         selectedStudentCard.attendedSessions.map((as_, idx) => (
                           <div key={idx}
                                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm ${
                                  as_.present
-                                   ? 'bg-green-50 border border-green-200 text-green-800'
+                                   ? 'bg-green-500/10 border border-green-500/30 text-green-300'
                                    : as_.absent
-                                   ? 'bg-red-50 border border-red-200 text-red-800'
-                                   : 'bg-gray-50 border border-gray-200 text-gray-500'
+                                   ? 'bg-red-500/10 border border-red-500/30 text-red-300'
+                                   : 'bg-white/5 border border-white/10 text-slate-400'
                                }`}>
-                            <span className="flex-shrink-0">{as_.present ? <CircleCheck className="w-5 h-5 text-green-600" /> : as_.absent ? <CircleX className="w-5 h-5 text-red-600" /> : <CircleX className="w-5 h-5 text-gray-400" />}</span>
+                            <span className="flex-shrink-0">{as_.present ? <CircleCheck className="w-5 h-5 text-green-400" /> : as_.absent ? <CircleX className="w-5 h-5 text-red-400" /> : <CircleX className="w-5 h-5 text-slate-400" />}</span>
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold truncate">{as_.session.name}</p>
-                              <p className={`text-[11px] mt-0.5 ${as_.present ? 'text-green-600' : as_.absent ? 'text-red-600' : 'text-gray-400'}`}>
+                              <p className={`text-[11px] mt-0.5 ${as_.present ? 'text-green-400' : as_.absent ? 'text-red-400' : 'text-slate-400'}`}>
                                 {formatDateWithDay(as_.session._normalizedDate)}
                               </p>
                             </div>
                             {!as_.present && !as_.absent && (
-                              <span className="text-[10px] font-medium text-gray-400 flex-shrink-0">غير مسجل</span>
+                              <span className="text-[10px] font-medium text-slate-400 flex-shrink-0">غير مسجل</span>
                             )}
                           </div>
                         ))
                       )}
                     </div>
-                    <div className="px-4 py-2.5 border-t border-gray-200 bg-gray-50 flex-shrink-0 flex justify-between items-center">
-                      <span className="text-[11px] text-gray-500 flex items-center gap-1">
+                    <div className="px-4 py-2.5 border-t border-white/10 bg-white/5 flex-shrink-0 flex justify-between items-center">
+                      <span className="text-[11px] text-slate-400 flex items-center gap-1">
                         <CircleCheck className="w-3 h-3" /> {selectedStudentCard.attendedCount} حضور • <CircleX className="w-3 h-3" /> {selectedStudentCard.absentCount} غياب
                       </span>
                       <button
                         onClick={() => setShowSessionsModal(false)}
-                        className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs rounded-lg transition font-medium"
+                        className="px-4 py-1.5 bg-white/10 hover:bg-white/20 text-slate-300 text-xs rounded-lg transition font-medium"
                       >
                         إغلاق
                       </button>
@@ -1475,7 +1475,7 @@ ${dataContext}`;
               )}
 
               {/* 💬 الرسائل */}
-              <div className="flex-1 overflow-y-auto pb-4 space-y-3 px-3 overscroll-contain" style={{ backgroundColor: '#ffffff' }}>
+              <div className="flex-1 overflow-y-auto pb-4 space-y-3 px-3 overscroll-contain" style={{ backgroundColor: '#0f172a' }}>
                 {messages.map((msg, idx) => (
                     <motion.div
                       key={msg.id}
@@ -1486,19 +1486,19 @@ ${dataContext}`;
                     >
                     <div className={`max-w-[90%] rounded-2xl p-3 shadow-sm ${
                       msg.type === 'user'
-                        ? 'bg-blue-500 text-white rounded-br-sm'
-                        : 'bg-gray-100 text-gray-900 border border-gray-200 rounded-bl-sm'
+                        ? 'bg-blue-600 text-white rounded-br-sm'
+                        : 'bg-slate-800 text-white border border-white/10 rounded-bl-sm'
                     }`}>
                       {msg.type === 'bot' && (
-                        <div className="flex items-center gap-1 mb-1.5 text-[10px] text-gray-500 font-semibold">
-                          <Sparkles className="w-3.5 h-3.5 text-amber-500" /><span>المساعد الذكي</span>
+                        <div className="flex items-center gap-1 mb-1.5 text-[10px] text-slate-400 font-semibold">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-400" /><span>المساعد الذكي</span>
                         </div>
                       )}
                       <div className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${
-                        msg.type === 'user' ? 'text-white' : 'text-gray-900'
+                        msg.type === 'user' ? 'text-white' : 'text-slate-200'
                       }`}>{formatMessage(msg.content)}</div>
                       <p className={`text-[10px] mt-1.5 ${
-                        msg.type === 'user' ? 'text-white/70' : 'text-gray-500'
+                        msg.type === 'user' ? 'text-white/70' : 'text-slate-400'
                       }`}>
                         {msg.timestamp.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
                       </p>
@@ -1513,14 +1513,14 @@ ${dataContext}`;
                     transition={{ duration: 0.25 }}
                     className="flex justify-start"
                   >
-                    <div className="bg-gray-100 border border-gray-200 rounded-2xl rounded-bl-sm p-3 shadow-sm">
+                    <div className="bg-slate-800 border border-white/10 rounded-2xl rounded-bl-sm p-3 shadow-sm">
                       <div className="flex items-center gap-2">
                         <div className="flex gap-1">
-                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                          <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                         </div>
-                        <span className="text-xs text-gray-500">يكتب...</span>
+                        <span className="text-xs text-slate-400">يكتب...</span>
                       </div>
                     </div>
                   </motion.div>
@@ -1530,8 +1530,8 @@ ${dataContext}`;
 
               {/* ⚠️ شريط الأخطاء */}
               {error && (
-                <div className="px-3 py-2 bg-red-50 border-t border-red-200">
-                  <p className="text-xs text-red-600 flex items-center gap-1.5"><CircleX className="w-3.5 h-3.5 shrink-0" /> {error}</p>
+                <div className="px-3 py-2 bg-red-500/10 border-t border-red-500/30">
+                  <p className="text-xs text-red-300 flex items-center gap-1.5"><CircleX className="w-3.5 h-3.5 shrink-0" /> {error}</p>
                 </div>
               )}
 
@@ -1539,24 +1539,24 @@ ${dataContext}`;
               {(() => {
                 const isInputBlocked = !isAdmin && !currentStageId;
                 return (
-                  <div className="border-t border-gray-200" style={{ backgroundColor: '#ffffff' }}>
+                  <div className="border-t border-white/10" style={{ backgroundColor: '#0f172a' }}>
                     {!isTyping && !isInputBlocked && messages.length > 0 && (
                       <div className="px-3 pt-2 pb-0 flex flex-wrap gap-1.5">
                         <button
                           onClick={() => sendMessage('منو حضر اليوم؟')}
-                          className="text-[11px] font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full px-3 py-1.5 transition"
+                          className="text-[11px] font-medium text-slate-300 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-3 py-1.5 transition"
                         >
                           ✅ منو حضر اليوم؟
                         </button>
                         <button
                           onClick={() => sendMessage('منو غاب اليوم؟')}
-                          className="text-[11px] font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full px-3 py-1.5 transition"
+                          className="text-[11px] font-medium text-slate-300 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-3 py-1.5 transition"
                         >
                           ❌ منو غاب اليوم؟
                         </button>
                         <button
                           onClick={() => sendMessage('إحصائيات اليوم')}
-                          className="text-[11px] font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full px-3 py-1.5 transition"
+                          className="text-[11px] font-medium text-slate-300 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-3 py-1.5 transition"
                         >
                           📊 إحصائيات اليوم
                         </button>
@@ -1564,7 +1564,7 @@ ${dataContext}`;
                     )}
                     <div className="px-3 py-2">
                       {(isListening || voiceError) && (
-                        <div className="mb-2 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium bg-red-50 text-red-600 border border-red-200">
+                        <div className="mb-2 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium bg-red-500/10 text-red-300 border border-red-500/30">
                           {voiceError ? (
                             <>
                               <CircleX className="w-3.5 h-3.5 shrink-0" />
@@ -1578,8 +1578,8 @@ ${dataContext}`;
                           )}
                         </div>
                       )}
-                      <div className={`flex items-end gap-2 rounded-xl border-2 bg-white px-3 py-2 transition ${
-                        isInputBlocked ? 'border-gray-200 opacity-50' : 'border-gray-900 focus-within:border-gray-700'
+                      <div className={`flex items-end gap-2 rounded-xl border-2 bg-slate-800 px-3 py-2 transition ${
+                        isInputBlocked ? 'border-slate-600 opacity-50' : 'border-white/20 focus-within:border-indigo-500'
                       }`}>
                         <textarea
                           ref={inputRef as React.Ref<HTMLTextAreaElement>}
@@ -1587,7 +1587,7 @@ ${dataContext}`;
                           onChange={e => setInput(e.target.value)}
                           onKeyDown={handleKeyDown}
                           placeholder={isInputBlocked ? 'الإدخال متوقف مؤقتاً...' : 'اكتب سؤالك هنا...'}
-                          className="flex-1 resize-none outline-none text-sm bg-transparent text-gray-900 placeholder-gray-400"
+                          className="flex-1 resize-none outline-none text-sm bg-transparent text-white placeholder:text-slate-500"
                           rows={1}
                           style={{ minHeight: 24, maxHeight: 80 }}
                           disabled={isTyping || isInputBlocked}
@@ -1601,7 +1601,7 @@ ${dataContext}`;
                             className={`w-7 h-7 flex items-center justify-center rounded-lg transition flex-shrink-0 text-sm disabled:opacity-30 disabled:cursor-not-allowed ${
                               isListening
                                 ? 'bg-red-500 text-white animate-pulse'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                : 'bg-white/10 text-slate-300 hover:bg-white/20'
                             }`}
                           >
                             {isListening ? <Square className="w-3.5 h-3.5" /> : <Mic className="w-4 h-4" />}
@@ -1610,7 +1610,7 @@ ${dataContext}`;
                         <button
                           onClick={handleSend}
                           disabled={isTyping || !input.trim() || isInputBlocked}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition flex-shrink-0 text-sm"
+                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-30 disabled:cursor-not-allowed transition flex-shrink-0 text-sm"
                         >
                           <ArrowUp className="w-4 h-4" />
                         </button>

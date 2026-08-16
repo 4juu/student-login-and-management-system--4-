@@ -577,8 +577,8 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
           />
         </div>
 
-        {/* 📊 الجدول */}
-        <div className="table-container">
+        {/* 📊 الجدول (سطح المكتب) */}
+        <div className="table-container hidden md:block">
           <table className="glass-table min-w-[640px]">
             <thead>
               <tr>
@@ -670,6 +670,79 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* 🃏 بطاقات الجوال (الموبايل) */}
+        <div className="md:hidden space-y-3">
+          {paginatedRecords.length > 0 ? paginatedRecords.map((rec, idx) => {
+            const stu = studentMap.get(rec.studentId);
+            const isPresent = rec.status === 'present';
+            return (
+              <div
+                key={rec.id}
+                className="rounded-xl border border-white/10 bg-white/5 overflow-hidden"
+              >
+                <div className="p-3.5 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold ${isPresent ? 'bg-green-500/15 text-green-300' : 'bg-red-500/15 text-red-300'}`}>
+                        {idx + 1}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-100 text-sm truncate">
+                          {stu ? stu.name : 'غير موجود'}
+                        </p>
+                        <p className="text-[11px] text-slate-500 font-mono" dir="ltr">{rec.studentId}</p>
+                      </div>
+                    </div>
+                    <span className={`glass-badge shrink-0 ${isPresent ? 'badge-green' : 'badge-red'}`}>
+                      {isPresent ? <CircleCheck className="w-3.5 h-3.5" /> : <CircleX className="w-3.5 h-3.5" />}
+                      {isPresent ? 'حاضر' : 'غائب'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between px-1 text-xs text-slate-400">
+                    <span className="truncate pl-2">{sessionNameMap.get(rec.sessionId) || '—'}</span>
+                    <span className="font-mono shrink-0" dir="ltr">{rec.time || '—'}</span>
+                  </div>
+                </div>
+
+                {(onUpdateRecord || onDeleteRecord) && (
+                  <div className="flex border-t border-white/10">
+                    {onUpdateRecord && (
+                      <button
+                        onClick={() => handleOpenEdit(rec)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold bg-amber-500/10 text-amber-300 active:bg-amber-500/25 transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5" /> تعديل
+                      </button>
+                    )}
+                    {onDeleteRecord && (
+                      <button
+                        onClick={() => handleDeleteRecord(rec)}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold bg-red-500/10 text-red-300 active:bg-red-500/25 transition-colors ${onUpdateRecord ? 'border-r border-r-white/10' : ''}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> حذف
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          }) : (
+            <div className="text-center px-4 py-10">
+              <div className="text-4xl mb-3">📭</div>
+              <p className="text-slate-400 text-sm mb-3">لا توجد سجلات لعرضها</p>
+              {searchRecord && (
+                <button
+                  onClick={() => setSearchRecord('')}
+                  className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 text-xs font-bold transition-colors"
+                >
+                  مسح البحث
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ⏳ شريط الترقيم الموحد */}

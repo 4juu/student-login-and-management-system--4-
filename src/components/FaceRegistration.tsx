@@ -168,47 +168,47 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-3" dir="rtl"
       onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[96vh] overflow-y-auto">
+      <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm max-h-[96vh] overflow-y-auto">
 
         {step === 'search' && (
           <div className="p-5">
             <div className="text-center mb-4">
               <div className="text-4xl mb-2">📸</div>
-              <h3 className="text-lg font-bold text-gray-800">إضافة بصمة وجه</h3>
-              <p className="text-xs text-gray-500 mt-1">ابحث عن الطالب بكود أو اسم</p>
+              <h3 className="text-lg font-bold text-white">إضافة بصمة وجه</h3>
+              <p className="text-xs text-slate-400 mt-1">ابحث عن الطالب بكود أو اسم</p>
             </div>
             <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)}
               placeholder="ابحث بكود الطالب أو اسمه..." autoFocus
-              className="w-full p-3 border-2 border-purple-300 rounded-xl text-sm focus:border-purple-500 outline-none" />
+              className="w-full p-3 border-2 border-purple-500/30 rounded-xl text-sm bg-slate-800 text-white placeholder:text-slate-500 focus:border-purple-500 outline-none" />
             {filtered.length > 0 && (
               <div className="mt-3 space-y-1 max-h-60 overflow-y-auto">
                 {filtered.map(s => (
                   <button key={s.id} onClick={() => handleSelectStudent(s)}
-                    className="w-full text-right p-3 rounded-xl border border-gray-200 hover:border-purple-300 hover:bg-purple-50 flex items-center justify-between gap-2">
+                    className="w-full text-right p-3 rounded-xl border border-white/10 hover:border-purple-500/40 hover:bg-purple-500/10 flex items-center justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-bold text-gray-800 truncate">{s.name}</div>
-                      <div className="text-[10px] text-gray-500">#{s.code}{s.group ? ` • ${s.group}` : ''}</div>
+                      <div className="text-sm font-bold text-white truncate">{s.name}</div>
+                      <div className="text-[10px] text-slate-400">#{s.code}{s.group ? ` • ${s.group}` : ''}</div>
                     </div>
-                    {hasFaceDesc(s) && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full shrink-0">لديه بصمة</span>}
+                    {hasFaceDesc(s) && <span className="text-[10px] bg-amber-500/15 text-amber-300 px-2 py-0.5 rounded-full shrink-0">لديه بصمة</span>}
                   </button>
                 ))}
               </div>
             )}
-            {search.trim() && filtered.length === 0 && <p className="mt-3 text-center text-sm text-gray-500">❌ لا يوجد طالب</p>}
-            <button onClick={onClose} className="w-full mt-4 py-3 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95 text-sm">إلغاء</button>
+            {search.trim() && filtered.length === 0 && <p className="mt-3 text-center text-sm text-slate-400">❌ لا يوجد طالب</p>}
+            <button onClick={onClose} className="w-full mt-4 py-3 bg-white/10 hover:bg-white/20 text-slate-300 font-bold rounded-lg active:scale-95 text-sm">إلغاء</button>
           </div>
         )}
 
         {step === 'confirm' && selectedStudent && (
           <div className="p-5 text-center">
             <div className="text-5xl mb-3">🔄</div>
-            <h3 className="text-lg font-bold text-gray-800 mb-2">بصمة موجودة</h3>
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
-              <p className="text-sm font-bold text-amber-800 mb-1">{selectedStudent.name}</p>
-              <p className="text-xs text-amber-600">هذا الطالب لديه بصمة مسجلة بالفعل. هل تريد تحديثها؟</p>
+            <h3 className="text-lg font-bold text-white mb-2">بصمة موجودة</h3>
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-4">
+              <p className="text-sm font-bold text-amber-300 mb-1">{selectedStudent.name}</p>
+              <p className="text-xs text-amber-400">هذا الطالب لديه بصمة مسجلة بالفعل. هل تريد تحديثها؟</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={handleBackToSearch} className="py-3.5 bg-gray-200 text-gray-700 font-bold rounded-xl active:scale-95 text-sm">إلغاء</button>
+              <button onClick={handleBackToSearch} className="py-3.5 bg-white/10 hover:bg-white/20 text-slate-300 font-bold rounded-xl active:scale-95 text-sm">إلغاء</button>
               <button onClick={() => setStep('camera')} className="py-3.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold rounded-xl active:scale-95 text-sm">✅ تحديث</button>
             </div>
           </div>
@@ -217,8 +217,8 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
         {step === 'camera' && selectedStudent && (
           <div className="p-5 text-center">
             <div className="text-4xl mb-2">📷</div>
-            <h3 className="text-lg font-bold text-gray-800 mb-1">{selectedStudent.name}</h3>
-            <p className="text-xs text-gray-500 mb-4">اختر الكاميرا</p>
+            <h3 className="text-lg font-bold text-white mb-1">{selectedStudent.name}</h3>
+            <p className="text-xs text-slate-400 mb-4">اختر الكاميرا</p>
             <div className="grid grid-cols-2 gap-3">
               <button onClick={() => handleCameraChoice('user')}
                 className="py-6 bg-gradient-to-br from-purple-500 to-pink-600 text-white font-bold rounded-2xl active:scale-95">
@@ -231,17 +231,17 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
                 <div className="text-sm">خلفية</div>
               </button>
             </div>
-            <button onClick={handleBackToSearch} className="w-full mt-4 py-3 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95 text-sm">🔙 رجوع</button>
+            <button onClick={handleBackToSearch} className="w-full mt-4 py-3 bg-white/10 hover:bg-white/20 text-slate-300 font-bold rounded-lg active:scale-95 text-sm">🔙 رجوع</button>
           </div>
         )}
 
         {step === 'capture' && selectedStudent && (
           <div className="p-4">
             <div className="text-center mb-3">
-              <h3 className="text-sm font-bold text-gray-800 truncate">{selectedStudent.name}</h3>
+              <h3 className="text-sm font-bold text-white truncate">{selectedStudent.name}</h3>
             </div>
 
-            {error && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs">{error}</div>}
+            {error && <div className="mb-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-300 text-xs">{error}</div>}
 
             <div className="relative mb-3">
               <div className="relative rounded-2xl overflow-hidden bg-gray-900 w-full" style={{ aspectRatio: '4 / 3' }}>
@@ -274,7 +274,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
 
             {cameraReady && !capturing && (
               <div className="grid grid-cols-2 gap-2">
-                <button onClick={handleBackToSearch} className="py-3 bg-gray-200 text-gray-700 font-bold rounded-lg active:scale-95 text-sm">🔙 رجوع</button>
+                <button onClick={handleBackToSearch} className="py-3 bg-white/10 hover:bg-white/20 text-slate-300 font-bold rounded-lg active:scale-95 text-sm">🔙 رجوع</button>
                 <button onClick={handleCapture} className="py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg active:scale-95 text-sm">
                   {faceDetected ? '📸 التقاط' : '⏳ انتظر الكشف'}
                 </button>
@@ -286,8 +286,8 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
         {step === 'success' && selectedStudent && (
           <div className="p-5 text-center">
             <div className="text-5xl mb-3 animate-bounce">🎉</div>
-            <h3 className="text-lg font-bold text-green-700 mb-1">تم تسجيل البصمة!</h3>
-            <p className="text-gray-800 font-bold">{selectedStudent.name}</p>
+            <h3 className="text-lg font-bold text-emerald-400 mb-1">تم تسجيل البصمة!</h3>
+            <p className="text-white font-bold">{selectedStudent.name}</p>
             <button onClick={onClose} className="w-full mt-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-lg active:scale-95 text-sm">👍 موافق</button>
           </div>
         )}

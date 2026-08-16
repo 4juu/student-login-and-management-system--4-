@@ -211,20 +211,20 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
   
   return (
     <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[95vh] flex flex-col">
+      <div className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[95vh] flex flex-col">
         
         {/* Header */}
-        <div className="p-5 border-b border-gray-200 flex items-center justify-between">
+        <div className="p-5 border-b border-white/10 flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <ClipboardList className="w-6 h-6 text-indigo-600" /> طلبات التسجيل الذاتي
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <ClipboardList className="w-6 h-6 text-indigo-400" /> طلبات التسجيل الذاتي
               {stats.pending > 0 && (
                 <span className="bg-red-500 text-white text-sm px-2.5 py-0.5 rounded-full animate-pulse">
                   {stats.pending}
                 </span>
               )}
             </h2>
-            <p className="text-sm text-gray-500">مراجعة طلبات الطلاب الذاتية</p>
+            <p className="text-sm text-slate-400">مراجعة طلبات الطلاب الذاتية</p>
           </div>
           <button
             onClick={onClose}
@@ -235,64 +235,64 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         </div>
         
         {/* الإحصائيات */}
-        <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
+        <div className="px-5 py-3 border-b border-white/10 bg-white/5">
           <div className="grid grid-cols-5 gap-2">
             <button
               onClick={() => setFilter('all')}
               className={`p-2 rounded-lg text-center transition ${
-                filter === 'all' ? 'bg-blue-100 border-2 border-blue-400' : 'bg-white border border-gray-200'
+                filter === 'all' ? 'bg-blue-500/15 border-2 border-blue-500/50' : 'bg-white/5 border border-white/10'
               }`}
             >
-              <div className="text-lg font-bold text-gray-700">{stats.total}</div>
-              <div className="text-[10px] text-gray-500">الإجمالي</div>
+              <div className="text-lg font-bold text-white">{stats.total}</div>
+              <div className="text-[10px] text-slate-400">الإجمالي</div>
             </button>
             <button
               onClick={() => setFilter('pending')}
               className={`p-2 rounded-lg text-center transition ${
-                filter === 'pending' ? 'bg-amber-100 border-2 border-amber-400' : 'bg-white border border-gray-200'
+                filter === 'pending' ? 'bg-amber-500/15 border-2 border-amber-500/50' : 'bg-white/5 border border-white/10'
               }`}
             >
-              <div className="text-lg font-bold text-amber-600">{stats.pending}</div>
-              <div className="text-[10px] text-amber-700">قيد المراجعة</div>
+              <div className="text-lg font-bold text-amber-300">{stats.pending}</div>
+              <div className="text-[10px] text-amber-400">قيد المراجعة</div>
             </button>
             <button
               onClick={() => setFilter('approved')}
               className={`p-2 rounded-lg text-center transition ${
-                filter === 'approved' ? 'bg-emerald-100 border-2 border-emerald-400' : 'bg-white border border-gray-200'
+                filter === 'approved' ? 'bg-emerald-500/15 border-2 border-emerald-500/50' : 'bg-white/5 border border-white/10'
               }`}
             >
-              <div className="text-lg font-bold text-emerald-600">{stats.approved}</div>
-              <div className="text-[10px] text-emerald-700">موافق عليها</div>
+              <div className="text-lg font-bold text-emerald-300">{stats.approved}</div>
+              <div className="text-[10px] text-emerald-400">موافق عليها</div>
             </button>
             <button
               onClick={() => setFilter('auto-approved')}
               className={`p-2 rounded-lg text-center transition ${
-                filter === 'auto-approved' ? 'bg-teal-100 border-2 border-teal-400' : 'bg-white border border-gray-200'
+                filter === 'auto-approved' ? 'bg-teal-500/15 border-2 border-teal-500/50' : 'bg-white/5 border border-white/10'
               }`}
             >
-              <div className="text-lg font-bold text-teal-600">{stats.autoApproved}</div>
-              <div className="text-[10px] text-teal-700">تلقائي</div>
+              <div className="text-lg font-bold text-teal-300">{stats.autoApproved}</div>
+              <div className="text-[10px] text-teal-400">تلقائي</div>
             </button>
             <button
               onClick={() => setFilter('rejected')}
               className={`p-2 rounded-lg text-center transition ${
-                filter === 'rejected' ? 'bg-red-100 border-2 border-red-400' : 'bg-white border border-gray-200'
+                filter === 'rejected' ? 'bg-red-500/15 border-2 border-red-500/50' : 'bg-white/5 border border-white/10'
               }`}
             >
-              <div className="text-lg font-bold text-red-600">{stats.rejected}</div>
-              <div className="text-[10px] text-red-700">مرفوضة</div>
+              <div className="text-lg font-bold text-red-300">{stats.rejected}</div>
+              <div className="text-[10px] text-red-400">مرفوضة</div>
             </button>
           </div>
         </div>
         
         {/* البحث */}
-        <div className="px-5 py-3 border-b border-gray-200">
+        <div className="px-5 py-3 border-b border-white/10">
           <input
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="بحث بالاسم أو الكود..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            className="w-full px-3 py-2 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-500 rounded-lg text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
           />
         </div>
         
@@ -303,8 +303,8 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
               <SkeletonTable rows={4} cols={4} />
             </div>
           ) : filteredRequests.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
-              <div className="mx-auto w-14 h-14 rounded-full bg-gray-500/10 border border-gray-500/20 flex items-center justify-center mb-4"><Mail className="w-7 h-7 text-gray-400" /></div>
+            <div className="text-center py-12 text-slate-400">
+              <div className="mx-auto w-14 h-14 rounded-full bg-slate-500/10 border border-slate-500/30 flex items-center justify-center mb-4"><Mail className="w-7 h-7 text-slate-400" /></div>
               <p className="font-medium">
                 {filter === 'pending' ? 'لا توجد طلبات قيد المراجعة' : 'لا توجد طلبات'}
               </p>
@@ -323,27 +323,27 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                 <div
                   key={req.id}
                   className={`border-2 rounded-xl p-4 transition ${
-                    isPending ? 'border-amber-300 bg-amber-50' :
-                    isAutoApproved ? 'border-teal-300 bg-teal-50' :
-                    isApproved ? 'border-emerald-300 bg-emerald-50' :
-                    'border-red-300 bg-red-50'
+                    isPending ? 'border-amber-500/40 bg-amber-500/10' :
+                    isAutoApproved ? 'border-teal-500/40 bg-teal-500/10' :
+                    isApproved ? 'border-emerald-500/40 bg-emerald-500/10' :
+                    'border-red-500/40 bg-red-500/10'
                   }`}
                 >
                   {/* الحالة */}
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <span className={`text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 ${
-                        isPending ? 'bg-amber-200 text-amber-800' :
-                        isAutoApproved ? 'bg-teal-200 text-teal-800' :
-                        isApproved ? 'bg-emerald-200 text-emerald-800' :
-                        'bg-red-200 text-red-800'
+                        isPending ? 'bg-amber-500/20 text-amber-300' :
+                        isAutoApproved ? 'bg-teal-500/20 text-teal-300' :
+                        isApproved ? 'bg-emerald-500/20 text-emerald-300' :
+                        'bg-red-500/20 text-red-300'
                       }`}>
                         {isPending ? <><LoaderCircle className="w-3 h-3 animate-spin" /> قيد المراجعة</> :
                          isAutoApproved ? <><BadgeCheck className="w-3 h-3" /> موافقة تلقائية</> :
                          isApproved ? <><CircleCheck className="w-3 h-3" /> تمت الموافقة</> :
                          <><CircleX className="w-3 h-3" /> مرفوض</>}
                       </span>
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-slate-400">
                         {new Date(req.createdAt).toLocaleString('ar-EG')}
                       </span>
                     </div>
@@ -359,32 +359,32 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                   
                   {/* مقارنة الأسماء */}
                   <div className="grid grid-cols-2 gap-3 mb-3">
-                    <div className="bg-white rounded-lg p-3 border border-blue-200">
-                      <p className="text-xs text-blue-600 font-bold mb-1 flex items-center gap-1"><Camera className="w-3.5 h-3.5" /> من الهوية:</p>
-                      <p className="font-bold text-blue-900 text-sm">{req.nameFromID}</p>
+                    <div className="bg-slate-800 rounded-lg p-3 border border-blue-500/30">
+                      <p className="text-xs text-blue-400 font-bold mb-1 flex items-center gap-1"><Camera className="w-3.5 h-3.5" /> من الهوية:</p>
+                      <p className="font-bold text-blue-200 text-sm">{req.nameFromID}</p>
                     </div>
-                    <div className="bg-white rounded-lg p-3 border border-purple-200">
-                      <p className="text-xs text-purple-600 font-bold mb-1 flex items-center gap-1"><Save className="w-3.5 h-3.5" /> من النظام:</p>
-                      <p className="font-bold text-purple-900 text-sm">{req.nameInSystem}</p>
-                      <p className="text-[10px] text-purple-500 mt-0.5">الرمز: {req.studentCode}</p>
+                    <div className="bg-slate-800 rounded-lg p-3 border border-purple-500/30">
+                      <p className="text-xs text-purple-400 font-bold mb-1 flex items-center gap-1"><Save className="w-3.5 h-3.5" /> من النظام:</p>
+                      <p className="font-bold text-purple-200 text-sm">{req.nameInSystem}</p>
+                      <p className="text-[10px] text-purple-400 mt-0.5">الرمز: {req.studentCode}</p>
                     </div>
                   </div>
                   
                   {/* معلومات إضافية */}
                   <div className="flex gap-2 flex-wrap mb-3">
-                    <span className="text-[10px] bg-white border border-gray-300 rounded-full px-2 py-1 flex items-center gap-1">
+                    <span className="text-[10px] bg-slate-800 border border-slate-600 rounded-full px-2 py-1 flex items-center gap-1">
                       <QrCode className="w-3 h-3" /> QR: <code className="font-mono">{req.qrCodeId ? `${req.qrCodeId.slice(0, 16)}...` : '—'}</code>
                     </span>
-                    <span className="text-[10px] bg-white border border-gray-300 rounded-full px-2 py-1 flex items-center gap-1">
+                    <span className="text-[10px] bg-slate-800 border border-slate-600 rounded-full px-2 py-1 flex items-center gap-1">
                       <Smile className="w-3 h-3" /> بصمة وجه مسجلة
                     </span>
                     {req.hasExistingQr && (
-                      <span className="text-[10px] bg-amber-100 border border-amber-300 text-amber-800 rounded-full px-2 py-1 flex items-center gap-1">
+                      <span className="text-[10px] bg-amber-500/15 border border-amber-500/30 text-amber-300 rounded-full px-2 py-1 flex items-center gap-1">
                         <TriangleAlert className="w-3 h-3" /> سيتم استبدال QR قديم
                       </span>
                     )}
                     {req.hasExistingFace && (
-                      <span className="text-[10px] bg-amber-100 border border-amber-300 text-amber-800 rounded-full px-2 py-1 flex items-center gap-1">
+                      <span className="text-[10px] bg-amber-500/15 border border-amber-500/30 text-amber-300 rounded-full px-2 py-1 flex items-center gap-1">
                         <TriangleAlert className="w-3 h-3" /> سيتم استبدال بصمة قديمة
                       </span>
                     )}
@@ -392,20 +392,20 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                   
                   {/* سبب الرفض */}
                   {isRejected && req.rejectionReason && (
-                    <div className="mb-3 p-2 bg-red-100 border border-red-300 rounded text-xs text-red-800">
+                    <div className="mb-3 p-2 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-300">
                       <strong>سبب الرفض:</strong> {req.rejectionReason}
                     </div>
                   )}
                   
                   {/* نموذج الرفض */}
                   {isRejecting && (
-                    <div className="mb-3 p-3 bg-white border-2 border-red-300 rounded-lg">
+                    <div className="mb-3 p-3 bg-slate-800 border-2 border-red-500/40 rounded-lg">
                       <textarea
                         value={rejectReason}
                         onChange={e => setRejectReason(e.target.value)}
                         placeholder="سبب الرفض (اختياري)..."
                         rows={2}
-                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                        className="w-full px-2 py-1 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-500 rounded text-sm focus:border-red-500 focus:ring-2 focus:ring-red-500/30"
                       />
                       <div className="grid grid-cols-2 gap-2 mt-2">
                         <button
@@ -413,7 +413,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                             setRejectingId(null);
                             setRejectReason('');
                           }}
-                          className="py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded"
+                          className="py-1.5 bg-white/10 hover:bg-white/20 text-slate-300 text-xs font-bold rounded"
                         >
                           إلغاء
                         </button>
@@ -456,7 +456,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                       {(isApproved || isAutoApproved || isRejected) && (
                         <button
                           onClick={() => handleDelete(req)}
-                          className="flex-1 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-1.5"
+                          className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-1.5"
                         >
                           <Trash2 className="w-4 h-4" /> حذف من السجل
                         </button>

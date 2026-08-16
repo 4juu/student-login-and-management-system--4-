@@ -567,24 +567,24 @@ const handleDownloadExcel = async () => {
   if (showLinks) {
     return (
       <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
 
           {/* Header */}
-          <div className="p-5 border-b border-gray-200 bg-gradient-to-l from-indigo-50 to-purple-50">
+          <div className="p-5 border-b border-white/10 bg-gradient-to-l from-indigo-500/15 to-purple-500/15">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <Send className="w-5 h-5 text-indigo-600" /> الروابط الجاهزة للإرسال
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Send className="w-5 h-5 text-indigo-400" /> الروابط الجاهزة للإرسال
                 </h2>
-                <p className="text-sm text-gray-500 mt-1">
-                  <strong className="text-indigo-600">{generatedLinks.length}</strong> رابط
+                <p className="text-sm text-slate-400 mt-1">
+                  <strong className="text-indigo-400">{generatedLinks.length}</strong> رابط
                   {selectedCollege && <> • {selectedCollege.name}</>}
                   {selectedStage && <> • {selectedStage.name}</>}
                 </p>
               </div>
               <button
                 onClick={onClose}
-                className="bg-red-500 hover:bg-red-600 text-white w-10 h-10 rounded-full font-bold text-lg transition-all hover:scale-110"
+                className="bg-red-500/20 hover:bg-red-500/30 text-red-300 w-10 h-10 rounded-full font-bold text-lg transition-all hover:scale-110"
               >
                 ✕
               </button>
@@ -592,7 +592,7 @@ const handleDownloadExcel = async () => {
           </div>
 
           {/* أزرار التصدير */}
-          <div className="p-4 border-b border-gray-200 bg-gray-50">
+          <div className="p-4 border-b border-white/10 bg-white/5">
             <div className="flex flex-wrap gap-2 items-center">
               <button
                 onClick={handleCopyAll}
@@ -623,8 +623,8 @@ const handleDownloadExcel = async () => {
 
               <div className="flex-1" />
 
-              <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-lg">
-                <span className="text-xs text-indigo-700 font-medium flex items-center gap-1">
+              <div className="flex items-center gap-2 bg-indigo-500/15 border border-indigo-500/30 px-3 py-1.5 rounded-lg">
+                <span className="text-xs text-indigo-300 font-medium flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5" /> صالحة {expiryDays} يوم
                 </span>
               </div>
@@ -636,22 +636,22 @@ const handleDownloadExcel = async () => {
             {generatedLinks.map((link, idx) => (
               <div
                 key={link.studentId}
-                className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 hover:bg-indigo-50/50 hover:border-indigo-200 transition-all group"
+                className="bg-white/5 border border-white/10 rounded-xl p-3.5 hover:bg-indigo-500/10 hover:border-indigo-500/30 transition-all group"
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-3">
-                    <div className="bg-indigo-100 text-indigo-700 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">
+                    <div className="bg-indigo-500/15 text-indigo-300 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">
                       {idx + 1}
                     </div>
                     <div>
-                      <p className="font-bold text-gray-800">{link.studentName}</p>
-                      <p className="text-xs text-gray-500 font-mono">{link.studentCode}</p>
+                      <p className="font-bold text-white">{link.studentName}</p>
+                      <p className="text-xs text-slate-400 font-mono">{link.studentCode}</p>
                     </div>
                   </div>
                   <div className="flex gap-1.5">
                     <button
                       onClick={() => handleShareWhatsApp(link)}
-                      className="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105"
+                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105"
                     >
                       <Smartphone className="w-3.5 h-3.5" /> واتساب
                     </button>
@@ -660,14 +660,14 @@ const handleDownloadExcel = async () => {
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 flex items-center gap-1 ${
                         link.copied
                           ? 'bg-emerald-500 text-white'
-                          : 'bg-blue-500 hover:bg-blue-600 text-white'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
                       }`}
                     >
                       {link.copied ? <><Check className="w-3.5 h-3.5" /> تم!</> : <><Copy className="w-3.5 h-3.5" /> نسخ</>}
                     </button>
                   </div>
                 </div>
-                <div className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs font-mono text-gray-600 break-all group-hover:border-indigo-300 transition-colors" dir="ltr">
+                <div className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-xs font-mono text-slate-300 break-all group-hover:border-indigo-500/40 transition-colors" dir="ltr">
                   {link.url}
                 </div>
               </div>
@@ -675,10 +675,10 @@ const handleDownloadExcel = async () => {
           </div>
 
           {/* Footer */}
-          <div className="p-3 border-t border-gray-200 bg-gray-50 text-center">
+          <div className="p-3 border-t border-white/10 bg-white/5 text-center">
             <button
               onClick={() => setShowLinks(false)}
-              className="text-sm text-indigo-600 hover:text-indigo-700 font-medium hover:underline flex items-center gap-1"
+              className="text-sm text-indigo-400 hover:text-indigo-300 font-medium hover:underline flex items-center gap-1"
             >
               <ChevronRight className="w-4 h-4" /> الرجوع لاختيار طلاب آخرين
             </button>
@@ -694,16 +694,16 @@ const handleDownloadExcel = async () => {
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
 
         {/* Header */}
-        <div className="p-5 border-b border-gray-200 bg-gradient-to-l from-purple-50 to-indigo-50">
+        <div className="p-5 border-b border-white/10 bg-gradient-to-l from-purple-500/15 to-indigo-500/15">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><Send className="w-5 h-5 text-purple-600" /> إرسال روابط التسجيل</h2>
-              <p className="text-sm text-gray-500 mt-1">دع الطلاب يسجلون بصمات وجوههم وQR بأنفسهم</p>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2"><Send className="w-5 h-5 text-purple-400" /> إرسال روابط التسجيل</h2>
+              <p className="text-sm text-slate-400 mt-1">دع الطلاب يسجلون بصمات وجوههم وQR بأنفسهم</p>
             </div>
-            <button onClick={onClose} className="bg-red-500 hover:bg-red-600 text-white w-10 h-10 rounded-full font-bold text-lg transition-all hover:scale-110">✕</button>
+            <button onClick={onClose} className="bg-red-500/20 hover:bg-red-500/30 text-red-300 w-10 h-10 rounded-full font-bold text-lg transition-all hover:scale-110">✕</button>
           </div>
         </div>
 
@@ -712,23 +712,23 @@ const handleDownloadExcel = async () => {
           {/* اختيار الكلية والمرحلة */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1.5"><Landmark className="w-4 h-4" /> الكلية</label>
+              <label className="block text-sm font-bold text-slate-300 mb-1 flex items-center gap-1.5"><Landmark className="w-4 h-4" /> الكلية</label>
               <select
                 value={selectedCollegeId}
                 onChange={e => { setSelectedCollegeId(e.target.value); setSelectedStageId(''); setStudents([]); }}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                className="w-full px-3 py-2.5 border border-slate-600 bg-slate-800 text-white rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
               >
                 <option value="">اختر كلية...</option>
                 {colleges.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1.5"><Library className="w-4 h-4" /> المرحلة</label>
+              <label className="block text-sm font-bold text-slate-300 mb-1 flex items-center gap-1.5"><Library className="w-4 h-4" /> المرحلة</label>
               <select
                 value={selectedStageId}
                 onChange={e => handleStageChange(e.target.value)}
                 disabled={!selectedCollegeId}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl disabled:bg-gray-100 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                className="w-full px-3 py-2.5 border border-slate-600 bg-slate-800 text-white rounded-xl disabled:bg-slate-800 disabled:opacity-50 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
               >
                 <option value="">اختر مرحلة...</option>
                 {stagesForCollege.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -737,13 +737,13 @@ const handleDownloadExcel = async () => {
           </div>
 
           {/* مدة الصلاحية */}
-          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
-            <label className="flex items-center justify-between text-sm font-bold text-indigo-800 mb-2">
+          <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4">
+            <label className="flex items-center justify-between text-sm font-bold text-indigo-300 mb-2">
               <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" /> مدة صلاحية الرابط</span>
               <span className="bg-indigo-600 text-white px-3 py-1 rounded-full text-xs">{expiryDays} يوم</span>
             </label>
-            <input type="range" min="1" max="90" value={expiryDays} onChange={e => setExpiryDays(Number(e.target.value))} className="w-full accent-indigo-600 h-2" />
-            <div className="flex justify-between text-xs text-indigo-500 mt-1">
+            <input type="range" min="1" max="90" value={expiryDays} onChange={e => setExpiryDays(Number(e.target.value))} className="w-full accent-indigo-500 h-2" />
+            <div className="flex justify-between text-xs text-indigo-400 mt-1">
               <span>1 يوم</span><span>30 يوم</span><span>90 يوم</span>
             </div>
           </div>
@@ -751,7 +751,7 @@ const handleDownloadExcel = async () => {
           {loading && (
             <div className="text-center py-8">
               <div className="inline-block w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm text-gray-500 mt-3">جاري تحميل الطلاب...</p>
+              <p className="text-sm text-slate-400 mt-3">جاري تحميل الطلاب...</p>
             </div>
           )}
 
@@ -762,29 +762,29 @@ const handleDownloadExcel = async () => {
                 <input
                   type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                   placeholder="بحث بالاسم أو الكود..."
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                  className="w-full px-4 py-2.5 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-500 rounded-xl text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
                 />
-                <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+                <div className="flex gap-1 bg-white/5 border border-white/10 rounded-xl p-1">
                   {([
                     { key: 'all' as const, label: `الكل (${students.length})` },
                     { key: 'without-qr' as const, label: `بدون QR (${students.filter(s => !s.qrCodeId).length})` },
                     { key: 'without-face' as const, label: `بدون وجه (${students.filter(s => !s.faceDescriptor).length})` },
                   ]).map(f => (
                     <button key={f.key} onClick={() => setFilterMode(f.key)}
-                      className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${filterMode === f.key ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                      className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${filterMode === f.key ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
                     >{f.label}</button>
                   ))}
                 </div>
               </div>
 
               {/* تحديد الكل */}
-              <div className="flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-xl p-3">
+              <div className="flex items-center justify-between bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-3">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox"
                     checked={selectedIds.size === filteredStudents.length && filteredStudents.length > 0}
-                    onChange={toggleSelectAll} className="w-5 h-5 accent-indigo-600 rounded"
+                    onChange={toggleSelectAll} className="w-5 h-5 accent-indigo-500 rounded"
                   />
-                  <span className="font-bold text-indigo-800">تحديد الكل ({filteredStudents.length})</span>
+                  <span className="font-bold text-indigo-300">تحديد الكل ({filteredStudents.length})</span>
                 </label>
                 <span className="bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-bold">
                   {selectedIds.size} محدد
@@ -792,25 +792,25 @@ const handleDownloadExcel = async () => {
               </div>
 
               {/* قائمة الطلاب */}
-              <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-xl">
+              <div className="max-h-64 overflow-y-auto border border-white/10 rounded-xl">
                 {filteredStudents.map((s, idx) => (
                   <label key={s.id}
-                    className={`flex items-center gap-3 p-3 border-b border-gray-100 cursor-pointer transition ${selectedIds.has(s.id) ? 'bg-indigo-50 hover:bg-indigo-100' : 'hover:bg-gray-50'}`}
+                    className={`flex items-center gap-3 p-3 border-b border-white/10 cursor-pointer transition ${selectedIds.has(s.id) ? 'bg-indigo-500/10 hover:bg-indigo-500/20' : 'hover:bg-white/5'}`}
                   >
-                    <input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => toggleStudent(s.id)} className="w-4 h-4 accent-indigo-600" />
-                    <div className="bg-gray-200 text-gray-600 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold">{idx + 1}</div>
+                    <input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => toggleStudent(s.id)} className="w-4 h-4 accent-indigo-500" />
+                    <div className="bg-slate-700 text-slate-300 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold">{idx + 1}</div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm text-gray-800 truncate">{s.name}</p>
-                      <p className="text-xs text-gray-500 font-mono">{s.code} {s.group && `• ${s.group}`}</p>
+                      <p className="font-medium text-sm text-white truncate">{s.name}</p>
+                      <p className="text-xs text-slate-400 font-mono">{s.code} {s.group && `• ${s.group}`}</p>
                     </div>
                     <div className="flex gap-1.5">
                       {s.qrCodeId
-                        ? <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"><QrCode className="w-3 h-3" /> QR</span>
-                        : <span className="bg-red-100 text-red-500 text-xs px-2 py-0.5 rounded-full">بدون QR</span>
+                        ? <span className="bg-emerald-500/15 text-emerald-300 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"><QrCode className="w-3 h-3" /> QR</span>
+                        : <span className="bg-red-500/15 text-red-300 text-xs px-2 py-0.5 rounded-full">بدون QR</span>
                       }
                       {s.faceDescriptor
-                        ? <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"><Smile className="w-3 h-3" /> وجه</span>
-                        : <span className="bg-orange-100 text-orange-500 text-xs px-2 py-0.5 rounded-full">بدون وجه</span>
+                        ? <span className="bg-purple-500/15 text-purple-300 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"><Smile className="w-3 h-3" /> وجه</span>
+                        : <span className="bg-orange-500/15 text-orange-300 text-xs px-2 py-0.5 rounded-full">بدون وجه</span>
                       }
                     </div>
                   </label>
@@ -822,11 +822,11 @@ const handleDownloadExcel = async () => {
 
         {/* Footer */}
         {students.length > 0 && (
-          <div className="p-4 border-t border-gray-200 bg-gradient-to-l from-purple-50 to-indigo-50">
+          <div className="p-4 border-t border-white/10 bg-gradient-to-l from-purple-500/15 to-indigo-500/15">
             <button
               onClick={handleGenerateLinks}
               disabled={selectedIds.size === 0 || generating}
-              className="w-full bg-gradient-to-l from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl active:scale-[0.98] transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 text-lg"
+              className="w-full bg-gradient-to-l from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl active:scale-[0.98] transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 text-lg"
             >
               {generating
                 ? <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> جاري التوليد...</>
@@ -841,19 +841,19 @@ const handleDownloadExcel = async () => {
       {confirmState &&
         createPortal(
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] p-4" onClick={() => setConfirmState(null)}>
-            <div className="modal-panel bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center" onClick={e => e.stopPropagation()}>
-              <h3 className="text-lg font-bold text-gray-800 mb-2">{confirmState.title}</h3>
-              <p className="text-sm text-gray-600 mb-6 whitespace-pre-line">{confirmState.message}</p>
+            <div className="modal-panel bg-slate-900 border border-white/10 text-white rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center" onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-white mb-2">{confirmState.title}</h3>
+              <p className="text-sm text-slate-400 mb-6 whitespace-pre-line">{confirmState.message}</p>
               <div className="flex gap-2">
                 <button
                   onClick={confirmState.onConfirm}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition"
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-lg transition"
                 >
                   {confirmState.confirmLabel || 'موافق'}
                 </button>
                 <button
                   onClick={() => setConfirmState(null)}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-3 px-4 rounded-lg transition"
+                  className="bg-white/10 hover:bg-white/20 text-slate-300 font-medium py-3 px-4 rounded-lg transition"
                 >
                   إلغاء
                 </button>
