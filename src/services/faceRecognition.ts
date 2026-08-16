@@ -7,6 +7,51 @@ let modelsLoaded = false;
 let loadingPromise: Promise<void> | null = null;
 let preloadStarted = false;
 
+// ── Progress-aware loading ──
+export interface LoadProgressInfo {
+  stage: 'detector' | 'landmarks' | 'recognition' | 'done' | 'error';
+  stageIndex: number; // 0,1,2,3
+  percent: number;    // 0-100
+  detail: string;     // Arabic label
+  error?: string;
+}
+type ProgressListener = (info: LoadProgressInfo) => void;
+const _progressListeners: Set<ProgressListener> = new Set();
+let _lastProgress: LoadProgressInfo = { stage: 'detector', stageIndex: 0, percent: 0, detail: 'جاري تحميل الموديلات...' };
+
+export function onModelProgress(cb: ProgressListener): () => void {
+  _progressListeners.add(cb);
+  cb(_lastProgress);
+  return () => { _progressListeners.delete(cb); };
+}
+function _emitProgress(info: LoadProgressInfo) {
+  _lastProgress = info;
+  _progressListeners.forEach(cb => cb(info));
+}
+
+// ── XHR fetch with real download progress ──
+function fetchWithProgress(url: string, onProgress?: (loaded: number, total: number) => void): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.responseType = 'arraybuffer';
+    xhr.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(e.loaded, e.total);
+    };
+    xhr.onload = () => {
+      if (xhr.status === 200 || xhr.status === 0) resolve(xhr.response);
+      else reject(new Error(`HTTP ${xhr.status} for ${url}`));
+    };
+    xhr.onerror = () => reject(new Error(`Network error loading ${url}`));
+    xhr.ontimeout = () => reject(new Error(`Timeout loading ${url}`));
+    xhr.timeout = 30000;
+    xhr.send();
+  });
+}
+
+// ── Yield to main thread ──
+const yieldToMain = () => new Promise<void>(r => setTimeout(r, 0));
+
 // ── Performance metrics ──
 export interface FacePerfMetrics {
   modelDownloadMs: number;
@@ -140,6 +185,93 @@ export const loadFaceModels = async (): Promise<void> => {
   return loadingPromise;
 };
 
+// ── Progress-aware model loading (with real XHR progress + yields) ──
+const MODEL_NAMES = ['tinyFaceDetector', 'faceLandmark68TinyNet', 'faceRecognitionNet'] as const;
+const MODEL_STAGES: Array<{ key: typeof MODEL_NAMES[number]; label: string; stage: LoadProgressInfo['stage']; stageIndex: number }> = [
+  { key: 'tinyFaceDetector',      label: 'كشف الوجوه',          stage: 'detector',    stageIndex: 0 },
+  { key: 'faceLandmark68TinyNet',  label: 'نقاط الوجه',          stage: 'landmarks',   stageIndex: 1 },
+  { key: 'faceRecognitionNet',     label: 'التعرف على الهوية',   stage: 'recognition', stageIndex: 2 },
+];
+
+export const loadModelsWithProgress = async (onProgress?: ProgressListener): Promise<void> => {
+  if (modelsLoaded) return;
+  if (loadingPromise) return loadingPromise;
+
+  loadingPromise = (async () => {
+    startPerfTimer('modelDownload');
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const baseUrl = MODEL_URLS[attempt % MODEL_URLS.length];
+      try {
+        for (let i = 0; i < MODEL_STAGES.length; i++) {
+          const { key, label, stage, stageIndex } = MODEL_STAGES[i];
+          const basePercent = (i / MODEL_STAGES.length) * 100;
+          const stageWeight = 100 / MODEL_STAGES.length;
+
+          _emitProgress({ stage, stageIndex, percent: basePercent, detail: `جاري تحميل ${label}...` });
+          if (onProgress) onProgress({ stage, stageIndex, percent: basePercent, detail: `جاري تحميل ${label}...` });
+
+          // Download model weights via XHR with progress
+          const jsonUrl = `${baseUrl}/${key}.json`;
+          const binUrl = `${baseUrl}/${key}.weights.bin`;
+
+          // Load JSON topology (small, fast)
+          await fetchWithProgress(jsonUrl);
+          // Load binary weights with progress tracking
+          await fetchWithProgress(binUrl, (loaded, total) => {
+            const dlPercent = total > 0 ? (loaded / total) : 0;
+            const pct = basePercent + dlPercent * stageWeight * 0.7; // 70% for download
+            _emitProgress({ stage, stageIndex, percent: pct, detail: `جاري تحميل ${label}...` });
+            if (onProgress) onProgress({ stage, stageIndex, percent: pct, detail: `جاري تحميل ${label}...` });
+          });
+
+          // Initialize model (yields to main thread after)
+          const initPct = basePercent + stageWeight * 0.7;
+          _emitProgress({ stage, stageIndex, percent: initPct, detail: `تهيئة ${label}...` });
+          if (onProgress) onProgress({ stage, stageIndex, percent: initPct, detail: `تهيئة ${label}...` });
+
+          // @ts-ignore – internal API: load from fetched data
+          const net = faceapi.nets[key];
+          if (!net) throw new Error(`Unknown model: ${key}`);
+          await net.loadFromUri(baseUrl);
+
+          const donePct = basePercent + stageWeight;
+          _emitProgress({ stage, stageIndex, percent: donePct, detail: `✓ ${label} جاهز` });
+          if (onProgress) onProgress({ stage, stageIndex, percent: donePct, detail: `✓ ${label} جاهز` });
+
+          if (i === 0) { _detectorReady = true; }
+          if (i === 1) { _landmarksReady = true; }
+
+          // Yield to main thread between models to prevent freeze
+          await yieldToMain();
+        }
+
+        _loadProgress = 100;
+        endPerfTimer('modelDownload');
+        modelsLoaded = true;
+        _perf.preloadCompleted = true;
+        _perf.totalStartupMs = performance.now() - (_perfTimers['totalStartup'] || performance.now());
+
+        _emitProgress({ stage: 'done', stageIndex: 3, percent: 100, detail: 'الموديلات جاهزة!' });
+        if (onProgress) onProgress({ stage: 'done', stageIndex: 3, percent: 100, detail: 'الموديلات جاهزة!' });
+
+        loadingPromise = null;
+        return;
+      } catch (e: any) {
+        console.warn(`Model load attempt ${attempt + 1} from ${baseUrl} failed:`, e);
+        _loadProgress = 0;
+        _emitProgress({ stage: 'error', stageIndex: 0, percent: 0, detail: '', error: e.message || 'فشل التحميل' });
+        if (onProgress) onProgress({ stage: 'error', stageIndex: 0, percent: 0, detail: '', error: e.message || 'فشل التحميل' });
+        if (attempt < 2) await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
+      }
+    }
+    loadingPromise = null;
+    throw new Error('فشل تحميل موديلات التعرف على الوجه');
+  })();
+
+  return loadingPromise;
+};
+
 // ── Preload in background using requestIdleCallback ──
 export function startBackgroundPreload(): void {
   if (preloadStarted || modelsLoaded) return;
@@ -148,7 +280,7 @@ export function startBackgroundPreload(): void {
   startPerfTimer('totalStartup');
 
   const doLoad = () => {
-    loadFaceModels().catch((err) => {
+    loadModelsWithProgress().catch((err) => {
       console.warn('Background preload failed, will retry on demand:', err);
       preloadStarted = false;
     });
@@ -186,8 +318,9 @@ export function startDetectorPreload(): void {
 }
 
 export function isPreloadStarted(): boolean { return preloadStarted; }
-export const resetModels = () => { modelsLoaded = false; loadingPromise = null; _loadProgress = 0; _detectorReady = false; _landmarksReady = false; preloadStarted = false; _detectorPreloadStarted = false; };
+export const resetModels = () => { modelsLoaded = false; loadingPromise = null; _loadProgress = 0; _detectorReady = false; _landmarksReady = false; preloadStarted = false; _detectorPreloadStarted = false; _lastProgress = { stage: 'detector', stageIndex: 0, percent: 0, detail: 'جاري تحميل الموديلات...' }; };
 export const areModelsLoaded = () => modelsLoaded;
+export const getLastModelProgress = (): LoadProgressInfo => _lastProgress;
 
 // ── Detector options ──
 // inputSize قابل للتمرير: 160/224 للكشف المباشر الخفيف، و320 فقط للالتقاط النهائي

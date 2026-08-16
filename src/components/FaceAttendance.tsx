@@ -4,6 +4,8 @@ import { User } from '../types/user';
 import { suspendAurora, resumeAurora } from '../lib/auraControl';
 import { useCameraReady } from '../hooks/useCameraReady';
 import { useSafeArea } from '../hooks/useSafeArea';
+import { useFaceModels } from '../hooks/useFaceModels';
+import { FaceModelLoadingOverlay } from './FaceModelLoadingOverlay';
 import { createPortal } from 'react-dom';
 
 // 🚀 نافذة تسجيل الوجه تُحمَّل عند فتحها فقط (مكتبة الوجوه ثقيلة)
@@ -71,6 +73,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const [presentIds, setPresentIds] = useState<Set<string>>(new Set(alreadyPresentIds));
   const [kiosk, setKiosk] = useState(false);
   const { topSafe, bottomSafe } = useSafeArea();
+  const { loaded: modelsLoaded, progress: modelProgress } = useFaceModels();
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const { videoReady, handleVideoReady, resetVideoReady, armForceReady } = useCameraReady(videoRef);
@@ -914,6 +917,9 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   return createPortal(
     <div ref={kioskRef} dir="rtl"
       className={`fixed inset-0 z-[9999] text-white flex flex-col overscroll-none ${kiosk ? 'bg-black' : 'bg-black/70 backdrop-blur-sm'}`}>
+      {!modelsLoaded && (
+        <FaceModelLoadingOverlay progress={modelProgress} onCancel={onClose} />
+      )}
       {!kiosk && (
       <div className="w-full bg-slate-900 text-slate-100 flex flex-col flex-1 overflow-hidden">
         <header className="flex items-center justify-between px-4 py-3 border-b border-white/10"
@@ -927,10 +933,10 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
                   <span>{modeConfig[mode].icon}</span>
                   <span className="truncate max-w-[110px]">{modeConfig[mode].text}</span>
                 </span>
-                {warmup < 2 && (
+                {warmup < 2 && modelProgress.stage !== 'done' && (
                   <span className="text-[10px] text-slate-400 flex items-center gap-1">
                     <span className={`w-1.5 h-1.5 rounded-full ${warmup === 0 ? 'bg-red-400 animate-pulse' : 'bg-amber-400 animate-pulse'}`} />
-                    {warmup === 0 ? 'تحميل الموديلات...' : 'الإحماء جاري...'}
+                    {modelProgress.detail || (warmup === 0 ? 'تحميل الموديلات...' : 'الإحماء جاري...')}
                   </span>
                 )}
               </div>
@@ -1024,6 +1030,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
             {!kiosk && (
             <>
+            {warmup < 2 && (
             <div className="flex items-center justify-center gap-2 mt-2.5">
               <div className="flex gap-1">
                 {[0, 1, 2].map(i => (
@@ -1033,9 +1040,10 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
                 ))}
               </div>
               <span className="text-[10px] font-bold text-slate-400">
-                {warmup === 2 ? 'النظام جاهز للتعرف' : warmup === 1 ? 'الإحماء جاري...' : 'تحميل موديلات التعرف...'}
+                {modelProgress.detail || (warmup === 1 ? 'الإحماء جاري...' : 'تحميل موديلات التعرف...')}
               </span>
             </div>
+            )}
 
             {cameraReady && (
               <div className="flex items-center justify-center gap-2 mt-2">
