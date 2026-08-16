@@ -74,6 +74,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const { videoReady, handleVideoReady, resetVideoReady, armForceReady } = useCameraReady(videoRef);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const kioskRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const trackRef = useRef<MediaStreamTrack | null>(null);
   const trackerRef = useRef<IOUTracker | null>(null);
@@ -174,6 +175,34 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     };
     el.addEventListener('touchmove', preventTouch, { passive: false });
     return () => el.removeEventListener('touchmove', preventTouch);
+  }, [kiosk]);
+
+  // 🛑 منع انزلاق الخلفية عند حدود تمرير قائمة الطلاب (iOS) مع السماح بالتمرير الداخلي
+  useEffect(() => {
+    if (kiosk) return;
+    const el = scrollAreaRef.current;
+    if (!el) return;
+    let startY = 0;
+    let startScroll = 0;
+    const onTouchStart = (e: TouchEvent) => {
+      startY = e.touches[0].clientY;
+      startScroll = el.scrollTop;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      const t = e.target as Element;
+      if (t.closest('button, a, input, select, textarea')) return;
+      const dy = startY - e.touches[0].clientY;
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      if ((startScroll <= 0 && dy < 0) || (startScroll >= maxScroll && dy > 0)) {
+        e.preventDefault();
+      }
+    };
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+    };
   }, [kiosk]);
 
   // ⚡ إيقاف الحلقة والكاميرا عند إخفاء التبويب (توفير حرارة/بطارية)
@@ -930,7 +959,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-4 overscroll-contain"
+        <div ref={scrollAreaRef} className="flex-1 overflow-y-auto px-4 overscroll-contain"
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}>
           {!kiosk && (
           <div className="grid grid-cols-3 gap-2 mt-4">
