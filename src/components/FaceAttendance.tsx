@@ -3,6 +3,7 @@ import { Student, AttendanceSession } from '../types/student';
 import { User } from '../types/user';
 import { suspendAurora, resumeAurora } from '../lib/auraControl';
 import { useCameraReady } from '../hooks/useCameraReady';
+import { createPortal } from 'react-dom';
 
 // 🚀 نافذة تسجيل الوجه تُحمَّل عند فتحها فقط (مكتبة الوجوه ثقيلة)
 const LazyFaceRegistration = lazy(() =>
@@ -128,6 +129,10 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   useEffect(() => {
     mountedRef.current = true;
     suspendAurora();
+    const prevOverflow = document.body.style.overflow;
+    const prevScroll = document.documentElement.style.overscrollBehavior;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overscrollBehavior = 'contain';
     setTimeout(() => {
       if (studentsWithFace.length > 0) {
         buildDescriptorCache(studentsWithFace as any, 0.5);
@@ -140,7 +145,14 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       if (isDetectorReady() && !faceLoopStartedRef.current) startFaceLoop();
     }, 200);
     setTimeout(() => clearInterval(interval), 60000);
-    return () => { mountedRef.current = false; cleanup(); clearDescriptorCache(); resumeAurora(); };
+    return () => {
+      mountedRef.current = false;
+      document.body.style.overflow = prevOverflow;
+      document.documentElement.style.overscrollBehavior = prevScroll;
+      cleanup();
+      clearDescriptorCache();
+      resumeAurora();
+    };
   }, []);
 
   // ⚡ إيقاف الحلقة والكاميرا عند إخفاء التبويب (توفير حرارة/بطارية)
@@ -800,7 +812,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     already: logs.filter(l => l.status === 'already').length,
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm text-white flex flex-col" dir="rtl">
       <div className="w-full max-w-2xl mx-auto bg-white text-gray-900 rounded-3xl shadow-2xl flex flex-col flex-1 my-2 sm:my-4 overflow-hidden">
         <header className="flex items-center justify-between px-4 py-3 border-b border-gray-100"
@@ -843,7 +855,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-4 pb-4">
+        <div className="flex-1 overflow-y-auto px-4 pb-4 overscroll-contain">
           <div className="grid grid-cols-3 gap-2 mt-4">
             <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-center">
               <div className="text-2xl font-extrabold text-emerald-600">{presentIds.size}</div>
@@ -1003,7 +1015,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           />
         </Suspense>
       )}
-    </div>
+    </div>,
+    document.body
   );
 };
 

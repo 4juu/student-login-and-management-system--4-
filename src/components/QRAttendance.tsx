@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { Student, AttendanceSession } from '../types/student';
 import { suspendAurora, resumeAurora } from '../lib/auraControl';
+import { createPortal } from 'react-dom';
 
 interface QRAttendanceProps {
   students: Student[];
@@ -340,9 +341,15 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   useEffect(() => {
     mountedRef.current = true;
     suspendAurora();
+    const prevOverflow = document.body.style.overflow;
+    const prevScroll = document.documentElement.style.overscrollBehavior;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overscrollBehavior = 'contain';
     const t = setTimeout(() => { if (mountedRef.current) startCamera('environment'); }, 250);
     return () => {
       mountedRef.current = false;
+      document.body.style.overflow = prevOverflow;
+      document.documentElement.style.overscrollBehavior = prevScroll;
       clearTimeout(t);
       resumeAurora();
       (async () => { await hardStop(); })();
@@ -395,7 +402,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️',
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/80 text-white flex flex-col" dir="rtl">
       <div className="w-full max-w-2xl mx-auto bg-black rounded-2xl flex flex-col shadow-2xl flex-1 my-2 sm:my-4 overflow-hidden">
       <header className="flex items-center justify-between px-3 py-2 bg-gray-900/95 border-b border-white/10"
@@ -408,7 +415,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       </header>
 
       <div className="flex-1 overflow-hidden flex flex-col">
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 overscroll-contain">
           <div className="w-full mx-auto rounded-xl overflow-hidden border bg-gray-900 relative max-w-lg border-emerald-500/20">
             <div id={QR_REGION_ID} className="w-full" style={{ minHeight: '260px' }} />
 
@@ -538,7 +545,8 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         #${QR_REGION_ID} video{width:100%!important;height:auto!important;min-height:260px!important;object-fit:cover!important;display:block!important}
         #${QR_REGION_ID} img[alt="Info icon"],#${QR_REGION_ID} button,#${QR_REGION_ID}>div:last-child:not(:first-child){display:none!important}
       `}</style>
-    </div>
+    </div>,
+    document.body
   );
 };
 
