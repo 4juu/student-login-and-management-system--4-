@@ -29,26 +29,6 @@ function _emitProgress(info: LoadProgressInfo) {
   _progressListeners.forEach(cb => cb(info));
 }
 
-// ── XHR fetch with real download progress ──
-function fetchWithProgress(url: string, onProgress?: (loaded: number, total: number) => void): Promise<ArrayBuffer> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('GET', url, true);
-    xhr.responseType = 'arraybuffer';
-    xhr.onprogress = (e) => {
-      if (e.lengthComputable && onProgress) onProgress(e.loaded, e.total);
-    };
-    xhr.onload = () => {
-      if (xhr.status === 200 || xhr.status === 0) resolve(xhr.response);
-      else reject(new Error(`HTTP ${xhr.status} for ${url}`));
-    };
-    xhr.onerror = () => reject(new Error(`Network error loading ${url}`));
-    xhr.ontimeout = () => reject(new Error(`Timeout loading ${url}`));
-    xhr.timeout = 30000;
-    xhr.send();
-  });
-}
-
 // ── Yield to main thread ──
 const yieldToMain = () => new Promise<void>(r => setTimeout(r, 0));
 
@@ -185,12 +165,17 @@ export const loadFaceModels = async (): Promise<void> => {
   return loadingPromise;
 };
 
-// ── Progress-aware model loading (with real XHR progress + yields) ──
-const MODEL_NAMES = ['tinyFaceDetector', 'faceLandmark68TinyNet', 'faceRecognitionNet'] as const;
-const MODEL_STAGES: Array<{ key: typeof MODEL_NAMES[number]; label: string; stage: LoadProgressInfo['stage']; stageIndex: number }> = [
-  { key: 'tinyFaceDetector',      label: 'كشف الوجوه',          stage: 'detector',    stageIndex: 0 },
-  { key: 'faceLandmark68TinyNet',  label: 'نقاط الوجه',          stage: 'landmarks',   stageIndex: 1 },
-  { key: 'faceRecognitionNet',     label: 'التعرف على الهوية',   stage: 'recognition', stageIndex: 2 },
+// ── Progress-aware model loading (using loadFromUri with yields between models) ──
+interface ModelStageDef {
+  net: 'tinyFaceDetector' | 'faceLandmark68TinyNet' | 'faceRecognitionNet';
+  label: string;
+  stage: LoadProgressInfo['stage'];
+  stageIndex: number;
+}
+const MODEL_STAGES: ModelStageDef[] = [
+  { net: 'tinyFaceDetector',     label: 'كشف الوجوه',        stage: 'detector',    stageIndex: 0 },
+  { net: 'faceLandmark68TinyNet', label: 'نقاط الوجه',        stage: 'landmarks',   stageIndex: 1 },
+  { net: 'faceRecognitionNet',    label: 'التعرف على الهوية', stage: 'recognition', stageIndex: 2 },
 ];
 
 export const loadModelsWithProgress = async (onProgress?: ProgressListener): Promise<void> => {
@@ -204,36 +189,15 @@ export const loadModelsWithProgress = async (onProgress?: ProgressListener): Pro
       const baseUrl = MODEL_URLS[attempt % MODEL_URLS.length];
       try {
         for (let i = 0; i < MODEL_STAGES.length; i++) {
-          const { key, label, stage, stageIndex } = MODEL_STAGES[i];
+          const { net, label, stage, stageIndex } = MODEL_STAGES[i];
           const basePercent = (i / MODEL_STAGES.length) * 100;
           const stageWeight = 100 / MODEL_STAGES.length;
 
           _emitProgress({ stage, stageIndex, percent: basePercent, detail: `جاري تحميل ${label}...` });
           if (onProgress) onProgress({ stage, stageIndex, percent: basePercent, detail: `جاري تحميل ${label}...` });
 
-          // Download model weights via XHR with progress
-          const jsonUrl = `${baseUrl}/${key}.json`;
-          const binUrl = `${baseUrl}/${key}.weights.bin`;
-
-          // Load JSON topology (small, fast)
-          await fetchWithProgress(jsonUrl);
-          // Load binary weights with progress tracking
-          await fetchWithProgress(binUrl, (loaded, total) => {
-            const dlPercent = total > 0 ? (loaded / total) : 0;
-            const pct = basePercent + dlPercent * stageWeight * 0.7; // 70% for download
-            _emitProgress({ stage, stageIndex, percent: pct, detail: `جاري تحميل ${label}...` });
-            if (onProgress) onProgress({ stage, stageIndex, percent: pct, detail: `جاري تحميل ${label}...` });
-          });
-
-          // Initialize model (yields to main thread after)
-          const initPct = basePercent + stageWeight * 0.7;
-          _emitProgress({ stage, stageIndex, percent: initPct, detail: `تهيئة ${label}...` });
-          if (onProgress) onProgress({ stage, stageIndex, percent: initPct, detail: `تهيئة ${label}...` });
-
-          // @ts-ignore – internal API: load from fetched data
-          const net = faceapi.nets[key];
-          if (!net) throw new Error(`Unknown model: ${key}`);
-          await net.loadFromUri(baseUrl);
+          // Use face-api.js loadFromUri (handles correct file names internally)
+          await faceapi.nets[net].loadFromUri(baseUrl);
 
           const donePct = basePercent + stageWeight;
           _emitProgress({ stage, stageIndex, percent: donePct, detail: `✓ ${label} جاهز` });
