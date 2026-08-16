@@ -21,6 +21,7 @@ import { TextScramble } from './components/TextScramble';
 import { SendProgressModal } from './components/SendProgressModal';
 import { Crown, Landmark, LogOut, Home, ChevronLeft, GraduationCap } from 'lucide-react';
 import { Notifications } from './components/Notifications';
+import { ConfirmDialog } from './components/ConfirmDialog';
 
 // 🚀 تحميل متأخر للمكونات الثقيلة (تُحمَّل عند الحاجة فقط — خفض حجم الحزمة الأولية)
 const SmartChatBot = lazy(() =>
@@ -600,13 +601,20 @@ function App() {
     setCurrentUser(user);
   };
 
-  const handleLogout = async () => {
-    if (window.confirm('هل أنت متأكد من تسجيل الخروج؟')) {
-      flushAllPendingSaves();
-      await signOut();
-      setCurrentUser(null);
-      resetData();
-    }
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = () => setLogoutConfirmOpen(true);
+
+  const confirmLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    flushAllPendingSaves();
+    await signOut();
+    setCurrentUser(null);
+    resetData();
+    setLogoutConfirmOpen(false);
+    setLoggingOut(false);
   };
 
   const handleAddCollege = useCallback((college: College) => setColleges(prev => [...prev, college]), []);
@@ -1428,6 +1436,17 @@ function App() {
       <OfflineModal
         open={isOffline && !offlineModalDismissed}
         onDismiss={() => setOfflineModalDismissed(true)}
+      />
+
+      {/* 🔒 تأكيد تسجيل الخروج */}
+      <ConfirmDialog
+        open={logoutConfirmOpen}
+        title="تسجيل الخروج"
+        message="هل أنت متأكد من تسجيل الخروج؟ سيتم حفظ كل التغييرات قبل الخروج."
+        confirmLabel={loggingOut ? 'جاري الخروج...' : 'تسجيل الخروج'}
+        cancelLabel="إبقاء الجلسة"
+        onConfirm={confirmLogout}
+        onCancel={() => setLogoutConfirmOpen(false)}
       />
     </div>
   );
