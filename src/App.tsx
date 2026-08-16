@@ -1065,22 +1065,6 @@ function App() {
                     >
                        إرسال روابط تسجيل
                     </button>
-                    <div className="shrink-0 relative" style={{ overflow: 'visible' }}>
-                      <button
-                        onClick={() => setShowPendingRegistrations(true)}
-                        className="btn-base btn-secondary"
-                      >
-                         طلبات التسجيل
-                      </button>
-                      {pendingCount > 0 && (
-                        <span
-                          className="absolute bg-red-500 text-white text-xs font-bold rounded-full min-w-[22px] h-[22px] px-1.5 flex items-center justify-center shadow-lg"
-                          style={{ top: '-8px', left: '-8px', zIndex: 9999, animation: 'pulse-badge 1.5s ease-in-out infinite' }}
-                        >
-                          {pendingCount > 99 ? '99+' : pendingCount}
-                        </span>
-                      )}
-                    </div>
                   </>
                 )}
                 {isCollegeAdmin && (
@@ -1090,6 +1074,24 @@ function App() {
                   >
                     👨‍🏫 صلاحيات التدريسيين
                   </button>
+                )}
+                {(isMainAdmin || isCollegeAdmin) && (
+                  <div className="shrink-0 relative" style={{ overflow: 'visible' }}>
+                    <button
+                      onClick={() => setShowPendingRegistrations(true)}
+                      className="btn-base btn-secondary"
+                    >
+                       طلبات التسجيل
+                    </button>
+                    {pendingCount > 0 && (
+                      <span
+                        className="absolute bg-red-500 text-white text-xs font-bold rounded-full min-w-[22px] h-[22px] px-1.5 flex items-center justify-center shadow-lg"
+                        style={{ top: '-8px', left: '-8px', zIndex: 9999, animation: 'pulse-badge 1.5s ease-in-out infinite' }}
+                      >
+                        {pendingCount > 99 ? '99+' : pendingCount}
+                      </span>
+                    )}
+                  </div>
                 )}
                 <button
                   onClick={() => setActiveTab('profile')}
@@ -1200,24 +1202,6 @@ function App() {
                 >
                   📅 رابط الحضور والغياب
                 </button>
-              )}
-              {(isMainAdmin || isCollegeAdmin) && (
-                <div className="shrink-0 relative" style={{ overflow: 'visible' }}>
-                  <button
-                    onClick={() => setShowPendingRegistrations(true)}
-                    className="btn-base btn-secondary text-xs py-1.5 px-2"
-                  >
-                    📋 طلبات التسجيل
-                  </button>
-                  {pendingCount > 0 && (
-                    <span
-                      className="absolute bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[20px] h-[20px] px-1 flex items-center justify-center shadow-lg"
-                      style={{ top: '-7px', left: '-7px', zIndex: 9999, animation: 'pulse-badge 1.5s ease-in-out infinite' }}
-                    >
-                      {pendingCount > 99 ? '99+' : pendingCount}
-                    </span>
-                  )}
-                </div>
               )}
             </div>
 
