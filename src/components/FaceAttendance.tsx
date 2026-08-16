@@ -131,10 +131,14 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   useEffect(() => {
     mountedRef.current = true;
     suspendAurora();
-    const prevOverflow = document.body.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
     const prevScroll = document.documentElement.style.overscrollBehavior;
+    const prevBodyScroll = document.body.style.overscrollBehavior;
     document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
     document.documentElement.style.overscrollBehavior = 'contain';
+    document.body.style.overscrollBehavior = 'contain';
     setTimeout(() => {
       if (studentsWithFace.length > 0) {
         buildDescriptorCache(studentsWithFace as any, 0.5);
@@ -149,13 +153,28 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     setTimeout(() => clearInterval(interval), 60000);
     return () => {
       mountedRef.current = false;
-      document.body.style.overflow = prevOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
       document.documentElement.style.overscrollBehavior = prevScroll;
+      document.body.style.overscrollBehavior = prevBodyScroll;
       cleanup();
       clearDescriptorCache();
       resumeAurora();
     };
   }, []);
+
+  // 🛑 منع تمرير الخلفية عند وضع الكشك — حجب حركات اللمس داخل الطبقة
+  useEffect(() => {
+    if (!kiosk) return;
+    const el = kioskRef.current;
+    if (!el) return;
+    const preventTouch = (e: TouchEvent) => {
+      if (e.target instanceof Element && e.target.closest('button, a, input, select, textarea')) return;
+      e.preventDefault();
+    };
+    el.addEventListener('touchmove', preventTouch, { passive: false });
+    return () => el.removeEventListener('touchmove', preventTouch);
+  }, [kiosk]);
 
   // ⚡ إيقاف الحلقة والكاميرا عند إخفاء التبويب (توفير حرارة/بطارية)
   useEffect(() => {
@@ -863,7 +882,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
   return createPortal(
     <div ref={kioskRef} dir="rtl"
-      className={`fixed inset-0 z-[9999] text-white flex flex-col ${kiosk ? 'bg-black' : 'bg-black/70 backdrop-blur-sm'}`}>
+      className={`fixed inset-0 z-[9999] text-white flex flex-col overscroll-none ${kiosk ? 'bg-black' : 'bg-black/70 backdrop-blur-sm'}`}>
       {!kiosk && (
       <div className="w-full max-w-2xl mx-auto bg-white text-gray-900 rounded-3xl shadow-2xl flex flex-col flex-1 my-2 sm:my-4 overflow-hidden">
         <header className="flex items-center justify-between px-4 py-3 border-b border-gray-100"
@@ -1137,26 +1156,16 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           </div>
         )}
 
-        {/* 🎯 تراكب: آخر المسجلين + عدّاد مباشر */}
-        <div className="absolute bottom-24 inset-x-3 z-20 flex items-end justify-between gap-3 pointer-events-none">
-          <div className="flex flex-col gap-1.5 min-w-0">
-            {recentMarked.map((l, i) => (
-              <div key={`${l.id}-${l.time}`}
-                className={`flex items-center gap-2 bg-black/75 text-white rounded-xl px-3 py-1.5 backdrop-blur-sm text-xs font-bold shadow-lg animate-fadeIn ${i === 0 ? 'ring-2 ring-emerald-400' : ''}`}>
-                <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-[10px] shrink-0">✓</span>
-                <span className="truncate">{l.name}</span>
-                <span className="text-white/50 text-[10px] shrink-0">#{l.code}</span>
-              </div>
-            ))}
-          </div>
-          <div key={counts.marked}
-            className="animate-pulse-badge flex items-center gap-2 bg-emerald-600/95 text-white rounded-2xl px-4 py-2 shadow-lg">
-            <span className="text-lg">🎉</span>
-            <div>
-              <div className="text-xl font-extrabold leading-none">{counts.marked}</div>
-              <div className="text-[10px] font-bold text-emerald-100">تم تسجيل الآن</div>
+        {/* 🎯 تراكب: آخر المسجلين */}
+        <div className="absolute bottom-20 inset-x-3 z-20 flex flex-col gap-1.5 items-start pointer-events-none">
+          {recentMarked.map((l, i) => (
+            <div key={`${l.id}-${l.time}`}
+              className={`flex items-center gap-2 bg-black/75 text-white rounded-xl px-3 py-1.5 backdrop-blur-sm text-xs font-bold shadow-lg animate-fadeIn ${i === 0 ? 'ring-2 ring-emerald-400' : ''}`}>
+              <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-[10px] shrink-0">✓</span>
+              <span className="truncate">{l.name}</span>
+              <span className="text-white/50 text-[10px] shrink-0">#{l.code}</span>
             </div>
-          </div>
+          ))}
         </div>
 
         {/* 🎛️ أدوات الكاميرا أسفل الشاشة */}
