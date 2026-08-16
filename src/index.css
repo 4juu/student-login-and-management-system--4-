@@ -964,6 +964,11 @@
   animation: fadeIn 0.3s ease-out;
 }
 
+@keyframes pulse-badge {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.85; }
+}
+
 .animate-pulse-badge {
   animation: pulse-badge 0.5s ease-in-out 3;
 }

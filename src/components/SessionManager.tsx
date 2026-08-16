@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useModalBehavior } from '../hooks/useModalBehavior';
 import { AttendanceSession, Student, AttendanceRecord } from '../types/student';
 import { getCurrentAcademicYear } from '../firebase/dataService';
 import { AbsenceSendLogEntry, GroupSendProgress } from '../types/telegram';
@@ -24,7 +25,7 @@ interface SessionManagerProps {
   completedGroupData?: Record<string, GroupSendProgress[]>;
 }
 
-export const SessionManager: React.FC<SessionManagerProps> = ({
+export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
   sessions,
   activeSessionId,
   onCreateSession,
@@ -54,6 +55,15 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
     confirmLabel?: string;
     onConfirm: () => void;
   } | null>(null);
+
+  const modalBehaviorRef = useModalBehavior({
+    open: !!(absentSessionId || sendLogSessionId || confirmState),
+    onClose: () => {
+      if (absentSessionId) { setAbsentSessionId(null); setSelectedGroups(new Set()); }
+      if (sendLogSessionId) setSendLogSessionId(null);
+      if (confirmState) setConfirmState(null);
+    },
+  });
 
   const currentAcademicYear = useMemo(() => getCurrentAcademicYear(), []);
 
@@ -206,7 +216,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
 
     return createPortal(
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setSendLogSessionId(null)}>
-        <div className="modal-height bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden border border-slate-600" dir="rtl" onClick={e => e.stopPropagation()}>
+        <div ref={modalBehaviorRef} className="modal-height bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden border border-slate-600" dir="rtl" onClick={e => e.stopPropagation()}>
           <div className="shrink-0 px-6 pt-6 pb-4 border-b border-slate-700">
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-lg font-bold text-white flex items-center gap-2"><ClipboardList className="w-5 h-5" /> سجل إرسال الغيابات</h2>
@@ -463,7 +473,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
       {absentSessionId &&
         createPortal(
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setAbsentSessionId(null)}>
-          <div className="modal-panel bg-slate-900 border border-white/10 rounded-xl shadow-2xl max-w-lg w-full overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+          <div ref={modalBehaviorRef} className="modal-panel bg-slate-900 border border-white/10 rounded-xl shadow-2xl max-w-lg w-full overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-white flex items-center gap-2"><Circle className="w-3 h-3 fill-red-500 text-red-500" /> تسجيل غياب الكروبات</h3>
               <button onClick={() => setAbsentSessionId(null)} className="text-slate-400 hover:text-white text-2xl">&times;</button>
@@ -545,7 +555,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
       {confirmState &&
         createPortal(
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4" onClick={() => setConfirmState(null)}>
-            <div className="modal-panel bg-slate-900 border border-white/10 rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center" onClick={e => e.stopPropagation()}>
+            <div ref={modalBehaviorRef} className="modal-panel bg-slate-900 border border-white/10 rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center" onClick={e => e.stopPropagation()}>
               <h3 className="text-lg font-bold text-white mb-2">{confirmState.title}</h3>
               <p className="text-sm text-slate-300 mb-6 whitespace-pre-line">{confirmState.message}</p>
               <div className="flex gap-2">
@@ -572,4 +582,4 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
 
     </div>
   );
-};
+});

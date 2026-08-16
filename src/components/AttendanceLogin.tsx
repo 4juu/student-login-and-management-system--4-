@@ -18,7 +18,7 @@ interface AttendanceLoginProps {
   onUpdateStudent?: (id: string, updates: Partial<Student>) => void;
   currentUser?: User | null;
 }
-export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
+export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
   students,
   activeSessionId,
   activeSession,
@@ -359,4 +359,4 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = ({
       )}
     </>
   );
-};
+});

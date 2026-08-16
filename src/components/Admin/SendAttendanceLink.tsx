@@ -1,6 +1,7 @@
 // src/components/Admin/SendAttendanceLink.tsx
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useModalBehavior } from '../../hooks/useModalBehavior';
 import { Student, Stage, College } from '../../types/student';
 import { TelegramConfig } from '../../types/telegram';
 import {
@@ -197,6 +198,15 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
     onConfirm: () => void;
   } | null>(null);
 
+  const modalBehaviorRef = useModalBehavior({
+    open: !!confirmState && !generatedLink,
+    onClose: () => setConfirmState(null),
+  });
+  const modalBehaviorRefLink = useModalBehavior({
+    open: !!generatedLink,
+    onClose,
+  });
+
   const selectedCollege = colleges.find(c => c.id === selectedCollegeId);
   const selectedStage = stages.find(s => s.id === selectedStageId);
 
@@ -295,7 +305,7 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
   if (generatedLink) {
     return createPortal(
       <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
-        <div className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+        <div ref={modalBehaviorRefLink} className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
 
           <div className="p-5 border-b border-white/10 bg-gradient-to-l from-emerald-500/15 to-teal-500/15">
             <div className="flex items-center justify-between">
@@ -377,7 +387,7 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
-      <div className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden">
+      <div ref={modalBehaviorRefLink} className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden">
 
         <div className="p-5 border-b border-white/10 bg-gradient-to-l from-teal-500/15 to-emerald-500/15">
           <div className="flex items-center justify-between">
@@ -466,7 +476,7 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
         {confirmState &&
           createPortal(
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] p-4" onClick={() => setConfirmState(null)}>
-              <div className="bg-slate-900 border border-white/10 text-white rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center" onClick={e => e.stopPropagation()}>
+              <div ref={modalBehaviorRef} className="bg-slate-900 border border-white/10 text-white rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center" onClick={e => e.stopPropagation()}>
                 <h3 className="text-lg font-bold text-white mb-2">{confirmState.title}</h3>
                 <p className="text-sm text-slate-400 mb-6 whitespace-pre-line">{confirmState.message}</p>
                 <div className="flex gap-2">

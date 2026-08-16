@@ -20,7 +20,7 @@ interface TeacherManagementProps {
   stages: Stage[];
 }
 
-export const TeacherManagement: React.FC<TeacherManagementProps> = ({ 
+export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({ 
   currentUser, 
   colleges, 
   stages 
@@ -1039,4 +1039,4 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = ({
       </div>
     </div>
   );
-};
+});

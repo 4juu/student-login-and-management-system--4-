@@ -1,5 +1,4 @@
 import React from "react"
-import { motion } from "motion/react"
 
 import { cn } from "@/lib/utils"
 
@@ -207,13 +206,9 @@ export function MorphPanel({
 }: MorphPanelProps) {
   if (!isExpanded) {
     return (
-      <motion.div
-        whileHover={{ scale: 1.08 }}
-        whileTap={{ scale: 0.92 }}
-        className={cn("fixed bottom-6 right-6 z-50", className)}
-      >
+      <div className={cn("fixed bottom-6 right-6 z-50", className)}>
         <DockBar onToggle={onToggle} />
-      </motion.div>
+      </div>
     )
   }
 
@@ -235,7 +230,7 @@ function DockBar({ onToggle }: { onToggle: () => void }) {
     <button
       type="button"
       onMouseDown={onToggle}
-      className="flex h-14 w-14 items-center justify-center rounded-full cursor-pointer select-none active:scale-90 transition-transform"
+      className="flex h-14 w-14 items-center justify-center rounded-full cursor-pointer select-none hover:scale-105 active:scale-90 transition-transform"
     >
       <ColorOrb dimension="44px" tones={{ base: "oklch(22.64% 0 0)" }} />
     </button>
@@ -261,11 +256,7 @@ function InputForm({
 
   return (
     <div className="w-full">
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="flex flex-col"
-      >
+      <div className="flex flex-col animate-fadeIn">
         <textarea
           ref={inputRef as React.Ref<HTMLTextAreaElement>}
           placeholder="..."
@@ -282,7 +273,7 @@ function InputForm({
           disabled={isTyping}
           spellCheck={false}
         />
-      </motion.div>
+      </div>
     </div>
   )
 }

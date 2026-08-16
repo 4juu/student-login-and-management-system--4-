@@ -7,6 +7,7 @@ import { useSafeArea } from '../hooks/useSafeArea';
 import { useFaceModels } from '../hooks/useFaceModels';
 import { FaceModelLoadingOverlay } from './FaceModelLoadingOverlay';
 import { createPortal } from 'react-dom';
+import { useModalBehavior } from '../hooks/useModalBehavior';
 
 // 🚀 نافذة تسجيل الوجه تُحمَّل عند فتحها فقط (مكتبة الوجوه ثقيلة)
 const LazyFaceRegistration = lazy(() =>
@@ -61,6 +62,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   alreadyPresentIds, onClose,
 }) => {
   const [mode, setMode] = useState<FaceMode>('loading');
+  const modalBehaviorRef = useModalBehavior({ open: true, onClose });
   const [error, setError] = useState('');
   const [showReg, setShowReg] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -921,7 +923,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   };
 
   return createPortal(
-    <div ref={kioskRef} dir="rtl"
+    <div ref={(el) => { modalBehaviorRef.current = el; kioskRef.current = el; }} dir="rtl"
       className={`fixed inset-0 z-[9999] text-white flex flex-col overscroll-none ${kiosk ? 'bg-black' : 'bg-black/70 backdrop-blur-sm'}`}>
       {!modelsLoaded && (
         <FaceModelLoadingOverlay progress={modelProgress} onCancel={onClose} />

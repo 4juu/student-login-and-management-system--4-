@@ -13,7 +13,7 @@ interface CollegeManagerProps {
   onSelectStage: (collegeId: string, stageId: string) => void;
 }
 
-export const CollegeManager: React.FC<CollegeManagerProps> = ({
+export const CollegeManager: React.FC<CollegeManagerProps> = React.memo(({
   colleges,
   stages,
   adminUid,
@@ -370,4 +370,4 @@ export const CollegeManager: React.FC<CollegeManagerProps> = ({
 
     </div>
   );
-};
+});

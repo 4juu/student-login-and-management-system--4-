@@ -28,7 +28,6 @@ export default defineConfig({
           'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/database'],
           'face-api': ['face-api.js'],
           'xlsx': ['xlsx-js-style'],
-          'animations': ['framer-motion'],
           'icons': ['lucide-react'],
         },
       },

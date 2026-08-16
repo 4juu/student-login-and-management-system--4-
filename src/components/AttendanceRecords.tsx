@@ -2,8 +2,8 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { AttendanceRecord, AttendanceSession, Student } from '../types/student';
 import { getCurrentAcademicYear } from '../firebase/dataService';
 import { CalendarCheck, CalendarRange, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, CircleX, Download, FileSpreadsheet, GraduationCap, Pencil, QrCode, Trash2, X } from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import { useModalBehavior } from '../hooks/useModalBehavior';
 
 interface AttendanceRecordsProps {
   records: AttendanceRecord[];
@@ -129,6 +129,14 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
   const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
   const [editStatus, setEditStatus] = useState<'present' | 'absent'>('present');
   const [editTime, setEditTime] = useState('');
+
+  const modalBehaviorRef = useModalBehavior({
+    open: !!exportOpen || !!editingRecord,
+    onClose: () => {
+      if (exportOpen && !exporting) setExportOpen(false);
+      if (editingRecord) setEditingRecord(null);
+    },
+  });
 
   const handleOpenEdit = (rec: AttendanceRecord) => {
     setEditingRecord(rec);
@@ -801,27 +809,15 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
       {/* 📥 نافذة تصدير سجل الحضور والغياب */}
       {/* ============================================================ */}
       {createPortal(
-      <AnimatePresence>
-        {exportOpen && (
-          <motion.div
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <motion.div
+        exportOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 animate-fadeIn">
+            <div
               className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
               onClick={() => !exporting && setExportOpen(false)}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
             />
-            <motion.div
-              className="relative w-full max-w-md rounded-2xl overflow-hidden bg-slate-900 border border-slate-700/60 shadow-2xl shadow-slate-950/50"
-              initial={{ scale: 0.92, y: 28, opacity: 0 }}
-              animate={{ scale: 1, y: 0, opacity: 1 }}
-              exit={{ scale: 0.95, y: 14, opacity: 0 }}
-              transition={{ type: 'spring', damping: 24, stiffness: 320 }}
+            <div
+              ref={modalBehaviorRef}
+              className="relative w-full max-w-md rounded-2xl overflow-hidden bg-slate-900 border border-slate-700/60 shadow-2xl shadow-slate-950/50 animate-modalUp"
             >
               <div className="relative px-6 pt-6 pb-5 overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-700 to-slate-900">
                 <div className="absolute -top-16 -left-16 w-48 h-48 rounded-full bg-white/10 blur-2xl" />
@@ -875,37 +871,24 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                   </div>
                 </div>
 
-                <AnimatePresence mode="wait">
-                  {exportType === 'single' ? (
-                    <motion.div
-                      key="single"
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
-                      transition={{ duration: 0.18 }}
+                {exportType === 'single' ? (
+                  <div key="single" className="animate-fadeIn">
+                    <p className="text-xs font-bold text-slate-300 mb-2">اختر اليوم من السجلات</p>
+                    <select
+                      value={singleDate}
+                      onChange={e => setSingleDate(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-600/70 text-white rounded-xl px-3.5 py-3 text-sm font-semibold focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow"
                     >
-                      <p className="text-xs font-bold text-slate-300 mb-2">اختر اليوم من السجلات</p>
-                      <select
-                        value={singleDate}
-                        onChange={e => setSingleDate(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-600/70 text-white rounded-xl px-3.5 py-3 text-sm font-semibold focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow"
-                      >
-                        {normalizedDateOptions.map(s => (
-                          <option key={s.id} value={s.isoDate}>
-                            {s.name} ({s.isoDate})
-                          </option>
-                        ))}
-                      </select>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="range"
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
-                      transition={{ duration: 0.18 }}
-                    >
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {normalizedDateOptions.map(s => (
+                        <option key={s.id} value={s.isoDate}>
+                          {s.name} ({s.isoDate})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div key="range" className="animate-fadeIn">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <p className="text-xs font-bold text-slate-300 mb-2">من تاريخ</p>
                           <input
@@ -925,9 +908,8 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                           />
                         </div>
                       </div>
-                    </motion.div>
+                    </div>
                   )}
-                </AnimatePresence>
 
                 <button
                   type="button"
@@ -941,43 +923,29 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                   className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-700 hover:from-indigo-500 hover:to-violet-600 text-white font-bold text-base flex items-center justify-center gap-2 shadow-lg shadow-indigo-700/30 hover:shadow-indigo-600/40 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {exporting ? (
-                    <motion.span
-                      className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white inline-block"
-                      animate={{ rotate: 360 }}
-                      transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
-                    />
+                    <span className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white inline-block animate-spin" />
                   ) : (
                     <Download className="w-5 h-5" />
                   )}
                   {exporting ? 'جاري تجهيز الملف...' : 'تحميل الملف'}
                 </button>
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>,
+            </div>
+          </div>
+        ),
       document.body
       )}
 
       {createPortal(
-      <AnimatePresence>
-        {editingRecord && (
-          <motion.div
-            className="fixed inset-0 z-[110] flex items-center justify-center p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <motion.div
+        editingRecord && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 animate-fadeIn">
+            <div
               className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
               onClick={() => setEditingRecord(null)}
             />
-            <motion.div
-              className="relative w-full max-w-sm rounded-2xl overflow-hidden bg-slate-900 border border-slate-700/60 shadow-2xl shadow-slate-950/50"
-              initial={{ scale: 0.92, y: 28, opacity: 0 }}
-              animate={{ scale: 1, y: 0, opacity: 1 }}
-              exit={{ scale: 0.95, y: 14, opacity: 0 }}
-              transition={{ type: 'spring', damping: 24, stiffness: 320 }}
+            <div
+              ref={modalBehaviorRef}
+              className="relative w-full max-w-sm rounded-2xl overflow-hidden bg-slate-900 border border-slate-700/60 shadow-2xl shadow-slate-950/50 animate-modalUp"
             >
               <div className="relative px-5 pt-5 pb-4 overflow-hidden bg-gradient-to-br from-amber-600 via-orange-700 to-slate-900">
                 <div className="absolute -top-16 -left-16 w-44 h-44 rounded-full bg-white/10 blur-2xl" />
@@ -1056,10 +1024,9 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                   </button>
                 </div>
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>,
+            </div>
+          </div>
+        ),
       document.body
       )}
     </div>

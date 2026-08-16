@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref as dbRef, onValue, off } from 'firebase/database';
 import { Student, AttendanceRecord, AttendanceSession, College, Stage } from './types/student';
@@ -12,6 +12,7 @@ import { PwaInstallButton } from './components/PwaInstallButton';
 import { OfflineModal } from './components/OfflineModal';
 import { OfflineWarningIcon } from './components/OfflineWarningIcon';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
+import { useHorizontalSwipe } from './hooks/useHorizontalSwipe';
 import { SessionManager } from './components/SessionManager';
 import { Login } from './components/Login';
 import { StageSelector } from './components/StageSelector';
@@ -20,6 +21,7 @@ import { MorphingSquare } from './components/MorphingSquare';
 import { TextScramble } from './components/TextScramble';
 import { SendProgressModal } from './components/SendProgressModal';
 import { Crown, Landmark, LogOut, Home, ChevronLeft, GraduationCap } from 'lucide-react';
+import { Notifications } from './components/Notifications';
 
 // 🚀 تحميل متأخر للمكونات الثقيلة (تُحمَّل عند الحاجة فقط — خفض حجم الحزمة الأولية)
 const SmartChatBot = lazy(() =>
@@ -103,10 +105,21 @@ const preloadAttendanceChunks = (): void => {
 type Tab = 'stage-selector' | 'colleges' | 'login' | 'manage' | 'records' | 'settings' | 'sessions' | 'teachers' | 'profile' | 'system-settings';
 
 const TabFallback = () => (
-  <div className="py-16 flex items-center justify-center">
-    <div className="flex items-center gap-3 text-slate-400">
-      <div className="w-6 h-6 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
-      <span className="text-sm font-bold">جاري التحميل...</span>
+  <div className="space-y-4 animate-fadeIn" role="status" aria-label="جاري التحميل">
+    <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="h-9 w-24 shrink-0 rounded-full skeleton-block" />
+      ))}
+    </div>
+    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3 overflow-hidden">
+          <div className="h-4 w-2/3 rounded-md skeleton-block" />
+          <div className="h-3 w-full rounded skeleton-block" />
+          <div className="h-3 w-4/5 rounded skeleton-block" />
+          <div className="h-8 w-24 rounded-lg skeleton-block" />
+        </div>
+      ))}
     </div>
   </div>
 );
@@ -434,7 +447,7 @@ function App() {
     }
   };
 
-  const handleSelectStage = async (collegeId: string, stageId: string) => {
+  const handleSelectStage = useCallback(async (collegeId: string, stageId: string) => {
     preloadBackground();
     setSelectedCollegeId(collegeId);
     setSelectedStageId(stageId);
@@ -483,7 +496,7 @@ function App() {
       setStageSyncing(false);
       setTimeout(() => setDataLoaded(true), 300);
     }
-  };
+  }, [currentUser]);
 
   const handleBackToStages = () => {
     flushAllPendingSaves();
@@ -513,7 +526,7 @@ function App() {
     setActiveTab('stage-selector');
   };
 
-  const handleResetComplete = () => resetData();
+  const handleResetComplete = useCallback(() => resetData(), []);
 
   useEffect(() => {
     if (currentUser?.role === 'admin' && dataLoaded) {
@@ -597,9 +610,9 @@ function App() {
     }
   };
 
-  const handleAddCollege = (college: College) => setColleges(prev => [...prev, college]);
+  const handleAddCollege = useCallback((college: College) => setColleges(prev => [...prev, college]), []);
 
-  const handleDeleteCollege = (collegeId: string) => {
+  const handleDeleteCollege = useCallback((collegeId: string) => {
     intentionalDeleteRef.current.colleges = true;
     intentionalDeleteRef.current.stages = true;
     setColleges(prev => prev.filter(c => c.id !== collegeId));
@@ -609,28 +622,28 @@ function App() {
       deleteStageData(currentUser!.uid, stage.id);
       setAllStagesData(prev => { const updated = { ...prev }; delete updated[stage.id]; return updated; });
     });
-  };
+  }, [stages, currentUser]);
 
-  const handleAddStage = (stage: Stage) => setStages(prev => [...prev, stage]);
+  const handleAddStage = useCallback((stage: Stage) => setStages(prev => [...prev, stage]), []);
 
-  const handleDeleteStage = (stageId: string) => {
+  const handleDeleteStage = useCallback((stageId: string) => {
     intentionalDeleteRef.current.stages = true;
     setStages(prev => prev.filter(s => s.id !== stageId));
     deleteStageData(currentUser!.uid, stageId);
     setAllStagesData(prev => { const updated = { ...prev }; delete updated[stageId]; return updated; });
-  };
+  }, [currentUser]);
 
-  const handleAddStudent = (student: Student) => {
+  const handleAddStudent = useCallback((student: Student) => {
     userModifiedStudentsRef.current = true;
     setStudents(prev => [...prev, student]);
-  };
+  }, []);
 
-  const handleAddMultipleStudents = (newStudents: Student[]) => {
+  const handleAddMultipleStudents = useCallback((newStudents: Student[]) => {
     userModifiedStudentsRef.current = true;
     setStudents(prev => [...prev, ...newStudents]);
-  };
+  }, []);
 
-  const handleUpdateStudent = (id: string, updates: Partial<Student>) => {
+  const handleUpdateStudent = useCallback((id: string, updates: Partial<Student>) => {
     userModifiedStudentsRef.current = true;
     setStudents(prev =>
       prev.map(student => {
@@ -643,9 +656,9 @@ function App() {
         return merged as Student;
       })
     );
-  };
+  }, []);
 
-  const handleDeleteStudent = (id: string) => {
+  const handleDeleteStudent = useCallback((id: string) => {
     if (window.confirm('هل أنت متأكد من حذف هذا الطالب؟')) {
       userModifiedStudentsRef.current = true;
       intentionalDeleteRef.current.students = true;
@@ -653,21 +666,21 @@ function App() {
       setStudents(prev => prev.filter(s => s.id !== id));
       setAttendanceRecords(prev => prev.filter(r => r.studentId !== id));
     }
-  };
+  }, []);
 
-  const handleDeleteSelectedStudents = (ids: string[]) => {
+  const handleDeleteSelectedStudents = useCallback((ids: string[]) => {
     userModifiedStudentsRef.current = true;
     intentionalDeleteRef.current.students = true;
     intentionalDeleteRef.current.records = true;
     setStudents(prev => prev.filter(s => !ids.includes(s.id)));
     setAttendanceRecords(prev => prev.filter(r => !ids.includes(r.studentId)));
-  };
+  }, []);
 
-  const handleSortByName = () => {
+  const handleSortByName = useCallback(() => {
     setStudents(prev => [...prev].sort((a, b) => a.name.localeCompare(b.name, 'ar')));
-  };
+  }, []);
 
-  const handleSortByGroup = () => {
+  const handleSortByGroup = useCallback(() => {
     setStudents(prev => [...prev].sort((a, b) => {
       const ga = a.group || 'ZZZ';
       const gb = b.group || 'ZZZ';
@@ -679,12 +692,12 @@ function App() {
       if (na !== nb) return na - nb;
       return a.name.localeCompare(b.name, 'ar');
     }));
-  };
+  }, []);
 
   const processedAttendanceRef = useRef(new Set<string>());
   const markAbsentInFlightRef = useRef(new Set<string>());
 
-  const handleAttendanceRecord = (record: AttendanceRecord) => {
+  const handleAttendanceRecord = useCallback((record: AttendanceRecord) => {
     if (record.status === 'present') {
       const cacheKey = `${record.sessionId}_${record.studentId}`;
       if (processedAttendanceRef.current.has(cacheKey)) return;
@@ -698,48 +711,48 @@ function App() {
     } else {
       setAttendanceRecords(prev => [...prev, record]);
     }
-  };
+  }, []);
 
-  const handleClearRecords = () => {
+  const handleClearRecords = useCallback(() => {
     cancelAllPendingSaves();
     intentionalDeleteRef.current.records = true;
     markAbsentInFlightRef.current.clear();
     setAttendanceRecords([]);
-  };
+  }, []);
 
-  const handleUpdateRecord = (recordId: string, updates: Partial<AttendanceRecord>) => {
+  const handleUpdateRecord = useCallback((recordId: string, updates: Partial<AttendanceRecord>) => {
     setAttendanceRecords(prev => prev.map(r => r.id === recordId ? { ...r, ...updates } : r));
-  };
+  }, []);
 
-  const handleDeleteRecord = (recordId: string) => {
+  const handleDeleteRecord = useCallback((recordId: string) => {
     intentionalDeleteRef.current.records = true;
     setAttendanceRecords(prev => prev.filter(r => r.id !== recordId));
-  };
+  }, []);
 
-  const handleCreateSession = (session: AttendanceSession) => {
+  const handleCreateSession = useCallback((session: AttendanceSession) => {
     setSessions(prev => [...prev.map(s => ({ ...s, isActive: false })), session]);
     setActiveSessionId(session.id);
-  };
+  }, []);
 
-  const handleSelectSession = (sessionId: string) => {
+  const handleSelectSession = useCallback((sessionId: string) => {
     setSessions(prev => prev.map(s => ({ ...s, isActive: s.id === sessionId })));
     setActiveSessionId(sessionId);
-  };
+  }, []);
 
-  const handleRenameSession = (sessionId: string, newName: string) => {
+  const handleRenameSession = useCallback((sessionId: string, newName: string) => {
     setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, name: newName } : s));
-  };
+  }, []);
 
-  const handleDeleteSession = (sessionId: string) => {
+  const handleDeleteSession = useCallback((sessionId: string) => {
     intentionalDeleteRef.current.sessions = true;
     intentionalDeleteRef.current.records = true;
     markAbsentInFlightRef.current.clear();
     setSessions(prev => prev.filter(s => s.id !== sessionId));
     setAttendanceRecords(prev => prev.filter(r => r.sessionId !== sessionId));
     if (activeSessionId === sessionId) setActiveSessionId(null);
-  };
+  }, [activeSessionId]);
 
-  const handleMarkAbsent = async (sessionId: string, studentIds: string[]) => {
+  const handleMarkAbsent = useCallback(async (sessionId: string, studentIds: string[]) => {
     const stage = stages.find(s => s.id === selectedStageId);
     const stageName = stage?.name || '';
     const now = new Date();
@@ -913,10 +926,10 @@ function App() {
         setCurrentSendingSessionId(null);
       });
     }
-  };
+  }, [stages, selectedStageId, currentUser, students, attendanceRecords, telegramConfig]);
 
-  const handleTelegramConfigChange = (config: TelegramConfig | null) => setTelegramConfig(config);
-  const handleUpdateProfile = (updatedUser: User) => setCurrentUser(updatedUser);
+  const handleTelegramConfigChange = useCallback((config: TelegramConfig | null) => setTelegramConfig(config), []);
+  const handleUpdateProfile = useCallback((updatedUser: User) => setCurrentUser(updatedUser), []);
 
   const handleExitSelfRegister = () => {
     setRegisterToken(null);
@@ -932,6 +945,31 @@ function App() {
   const canEditStudents = isAdmin || isCollegeAdmin;
   const isMainAdmin = isAdmin;
   const canSendAttendanceLink = isAdmin || isCollegeAdmin || currentUser?.role === 'teacher';
+
+  // 👆 ترتيب التبويبات للسحب الأفقي (Swipe Navigation)
+  const tabOrder = useMemo<readonly Tab[]>(() => {
+    if (selectedStageId) return ['sessions', 'login', 'manage', 'records'] as Tab[];
+    const order: Tab[] = ['stage-selector'];
+    if (isMainAdmin) order.push('colleges', 'teachers', 'system-settings');
+    else if (isCollegeAdmin) order.push('teachers');
+    order.push('profile');
+    return order;
+  }, [selectedStageId, isMainAdmin, isCollegeAdmin]);
+
+  const swipeIndex = tabOrder.indexOf(activeTab);
+  const handleSwipeLeft = useCallback(() => {
+    if (swipeIndex < 0 || swipeIndex >= tabOrder.length - 1) return;
+    setActiveTab(tabOrder[swipeIndex + 1]);
+  }, [swipeIndex, tabOrder]);
+  const handleSwipeRight = useCallback(() => {
+    if (swipeIndex <= 0) return;
+    setActiveTab(tabOrder[swipeIndex - 1]);
+  }, [swipeIndex, tabOrder]);
+  useHorizontalSwipe({
+    onSwipeLeft: handleSwipeLeft,
+    onSwipeRight: handleSwipeRight,
+    enabled: !!currentUser && tabOrder.length > 1,
+  });
 
   // 🎯 نطاق رابط الحضور: الأدمن الرئيسي يرى كل الكليات والمراحل،
   // أما أدمن الكلية/التدريسي فيرى كليته فقط والمراحل المسموح لها بصلاحياته
@@ -1039,6 +1077,8 @@ function App() {
             <PwaInstallButton />
 
             {(isOffline || !syncDone) && <OfflineWarningIcon />}
+
+            <Notifications currentUser={currentUser} />
 
             <button
               onClick={handleLogout}

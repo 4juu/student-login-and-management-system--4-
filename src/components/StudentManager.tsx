@@ -43,7 +43,7 @@ const extractQrCodeId = (raw: string): string => {
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const DEFAULT_PAGE_SIZE = 50;
 
-export const StudentManager: React.FC<StudentManagerProps> = ({
+export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
   students,
   onAddStudent,
   onAddMultipleStudents,
@@ -1431,4 +1431,4 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       )}
     </div>
   );
-};
+});

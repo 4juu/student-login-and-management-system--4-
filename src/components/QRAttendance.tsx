@@ -4,6 +4,7 @@ import { Student, AttendanceSession } from '../types/student';
 import { suspendAurora, resumeAurora } from '../lib/auraControl';
 import { createPortal } from 'react-dom';
 import { useSafeArea } from '../hooks/useSafeArea';
+import { useModalBehavior } from '../hooks/useModalBehavior';
 
 interface QRAttendanceProps {
   students: Student[];
@@ -78,6 +79,7 @@ const playError = () => {
 export const QRAttendance: React.FC<QRAttendanceProps> = ({
   students, onMarkAttendance, onUpdateStudent, alreadyPresentIds, onClose,
 }) => {
+  const panelRef = useModalBehavior({ open: true, onClose });
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const trackRef = useRef<MediaStreamTrack | null>(null);
   const processingRef = useRef(false);
@@ -439,7 +441,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black/80 text-white flex flex-col overscroll-none" dir="rtl">
+    <div ref={panelRef} className="fixed inset-0 z-[9999] bg-black/80 text-white flex flex-col overscroll-none" dir="rtl">
       <div className="w-full bg-black flex flex-col flex-1 overflow-hidden">
       <header className="flex items-center justify-between px-3 py-2 bg-gray-900/95 border-b border-white/10"
         style={{ paddingTop: `${topSafe + 8}px` }}>

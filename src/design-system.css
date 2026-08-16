@@ -432,6 +432,45 @@
   animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+@keyframes modalUp {
+  from { opacity: 0; transform: translateY(32px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-modalUp {
+  animation: modalUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes fadePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.animate-fadePulse {
+  animation: fadePulse 1.2s ease-in-out infinite;
+}
+
+/* ============================================ */
+/* 🦴 Skeleton Shimmer                          */
+/* ============================================ */
+@keyframes skeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skeleton-block {
+  background: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0.12) 25%,
+    rgba(148, 163, 184, 0.22) 50%,
+    rgba(148, 163, 184, 0.12) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.6s ease-in-out infinite;
+}
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.animate-skeleton { animation: skeletonPulse 1.6s ease-in-out infinite; }
+
 /* ============================================ */
 /* 🌟 Scrollbar                                 */
 /* ============================================ */
@@ -442,6 +481,18 @@
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.5); }
+
+/* ضبط سلوك التمرير على الجوال: منع نقل السحب لتسلسل الصفحة أثناء التمرير داخل الحاويات */
+html, body { overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; }
+
+/* الحاويات القابلة للتمرير: احتواء السحب وعدم نقل الشريط للخلف (pull-to-refresh) */
+* { -webkit-tap-highlight-color: transparent; }
+[data-modal-region],
+.overflow-y-auto,
+.overflow-auto {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
 
 /* ============================================ */
 /* 📦 Grid Helpers                               */
@@ -464,9 +515,25 @@
 @media (min-width: 1024px) { .grid-auto-2 { gap: 20px; } }
 
 /* ============================================ */
-/* 🔴 Badge Pulse Animation                     */
+/* 🔢 Z-Index Semantic Layers (unified)         */
 /* ============================================ */
-@keyframes pulse-badge {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.15); opacity: 0.85; }
+/* base                  → 0
+   sticky / popover      → 50
+   panel / dialog modal  → 60
+   notifications panel   → 9010
+   fullscreen dialogs    → 100
+   attendance edit       → 110
+   camera overlays       → 9999
+   confirm on top of cam → 10000
+   loading close button  → 10001 */
+:root {
+  --z-base: 0;
+  --z-sticky: 50;
+  --z-dialog: 60;
+  --z-notifications: 9010;
+  --z-page-overlay: 100;
+  --z-sheet: 110;
+  --z-camera: 9999;
+  --z-camera-confirm: 10000;
+  --z-topmost: 10001;
 }
