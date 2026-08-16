@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { AttendanceRecord, AttendanceSession, Student } from '../types/student';
 import { getCurrentAcademicYear } from '../firebase/dataService';
-import { Calendar, ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, CircleX, Download, GraduationCap, MapPin, QrCode } from 'lucide-react';
+import { CalendarCheck, CalendarRange, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, CircleX, Download, FileSpreadsheet, GraduationCap, QrCode, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 
 interface AttendanceRecordsProps {
   records: AttendanceRecord[];
@@ -114,6 +115,8 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
   }, [selectedSessionId, searchRecord, filteredRecords.length]);
 
   const [exportType, setExportType] = useState<'single' | 'range'>('range');
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [startDate, setStartDate] = useState<string>(firstDate);
   const [endDate, setEndDate] = useState<string>(lastDate);
   const [singleDate, setSingleDate] = useState<string>(lastDate);
@@ -221,15 +224,15 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
   // ============================================================
   // 📊 إنشاء وتصدير ملف الإكسل المنسق
   // ============================================================
-  const handleExportOfficialExcel = async () => {
+  const handleExportOfficialExcel = async (): Promise<boolean> => {
     if (students.length === 0) {
       alert('لا يوجد طلاب مسجلين في هذه المرحلة للتصدير.');
-      return;
+      return false;
     }
 
     if (sessions.length === 0) {
       alert('لا توجد أيام حضور (سجلات) مسجلة للتصدير.');
-      return;
+      return false;
     }
 
     let targetSessions: AttendanceSession[] = [];
@@ -259,19 +262,21 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
     };
 
     if (exportType === 'single') {
-      if (!singleDate) return alert('الرجاء تحديد التاريخ');
+      if (!singleDate) { alert('الرجاء تحديد التاريخ'); return false; }
       targetSessions = sessions.filter(s => normalizeForFilter(s.date) === singleDate);
       if (targetSessions.length === 0) {
-        return alert(`لا توجد سجلات حضور مسجلة في يوم ${singleDate}`);
+        alert(`لا توجد سجلات حضور مسجلة في يوم ${singleDate}`);
+        return false;
       }
     } else {
-      if (!startDate || !endDate) return alert('الرجاء تحديد تاريخ البدء والانتهاء');
+      if (!startDate || !endDate) { alert('الرجاء تحديد تاريخ البدء والانتهاء'); return false; }
       targetSessions = sessions.filter(s => {
         const normalized = normalizeForFilter(s.date);
         return normalized >= startDate && normalized <= endDate;
       });
       if (targetSessions.length === 0) {
-        return alert('لا توجد سجلات حضور في هذه المدة الزمنية');
+        alert('لا توجد سجلات حضور في هذه المدة الزمنية');
+        return false;
       }
     }
 
@@ -451,6 +456,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
     }
 
     XLSX.writeFile(wb, `${fileName}.xlsx`);
+    return true;
   };
 
   const handleClearRecords = () => {
@@ -475,96 +481,22 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
       </div>
 
       {/* ============================================================ */}
-      {/* 📥 لوحة التصدير */}
+      {/* 📥 تصدير سجل الحضور والغياب */}
       {/* ============================================================ */}
-      <div className="mb-6 sm:mb-8 p-4 sm:p-6 bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-500 rounded-xl shadow-sm">
-        <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-          <ChartColumn className="w-9 h-9 sm:w-11 sm:h-11 text-green-600" />
-          <div>
-            <h3 className="text-base sm:text-xl font-bold text-gray-800">تصدير سجل الحضور والغياب الرسمي (Excel)</h3>
-          </div>
-        </div>
-
-        <div className="bg-white p-3 sm:p-4 rounded-lg border border-green-200 mb-3 sm:mb-4">
-          <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-2 sm:mb-3">حدد المدة الزمنية للتصدير:</label>
-
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-3 sm:mb-4">
-            <button
-              type="button"
-              onClick={() => setExportType('single')}
-              className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition text-sm font-bold ${
-                exportType === 'single'
-                  ? 'border-green-600 bg-green-600 text-white shadow-md'
-                  : 'border-green-300 bg-green-50 text-green-800 hover:bg-green-100'
-              }`}
-            >
-              <MapPin className="w-4 h-4" /> يوم واحد
-            </button>
-            <button
-              type="button"
-              onClick={() => setExportType('range')}
-              className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition text-sm font-bold ${
-                exportType === 'range'
-                  ? 'border-green-600 bg-green-600 text-white shadow-md'
-                  : 'border-green-300 bg-green-50 text-green-800 hover:bg-green-100'
-              }`}
-            >
-              <Calendar className="w-4 h-4" /> عدة أيام
-            </button>
-          </div>
-
-          {exportType === 'single' ? (
-            <div className="p-3 bg-green-50/30 rounded-md border border-green-100 max-w-md">
-              <label className="block text-xs font-bold text-gray-600 mb-1">اختر اليوم من السجلات:</label>
-              <select
-                value={singleDate}
-                onChange={e => setSingleDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 font-bold text-gray-800"
-              >
-                {normalizedDateOptions.map(s => (
-                  <option key={s.id} value={s.isoDate}>
-                    {s.name} ({s.isoDate})
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 bg-green-50/30 rounded-md border border-green-100">
-              <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1">من تاريخ:</label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={e => setStartDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 font-bold text-gray-800"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1">إلى تاريخ:</label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={e => setEndDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 font-bold text-gray-800"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        <button
-          onClick={handleExportOfficialExcel}
-          className="w-full bg-gradient-to-r from-green-600 to-emerald-700 hover:from-green-700 hover:to-emerald-800 text-white font-bold py-2.5 sm:py-3 px-4 sm:px-6 rounded-lg transition duration-200 shadow-md flex items-center justify-center gap-2 text-sm sm:text-lg"
-        >
-          <Download className="w-5 h-5 sm:w-6 sm:h-6" />
-          تحميل كشف الحضور والغياب الرسمي (Excel)
-        </button>
-
-        <div className="mt-3 text-xs text-gray-600 flex flex-wrap gap-4 justify-center font-medium">
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-500 inline-block" /> خلية خضراء للحاضر</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-500 inline-block" /> خلية حمراء للغائب</span>
-        </div>
-      </div>
+      <button
+        type="button"
+        onClick={() => setExportOpen(true)}
+        className="w-full mb-6 sm:mb-8 p-4 sm:p-5 rounded-2xl bg-gradient-to-l from-indigo-600 via-violet-700 to-fuchsia-700 hover:from-indigo-700 hover:via-violet-800 hover:to-fuchsia-800 text-white shadow-lg shadow-indigo-600/25 hover:shadow-violet-700/30 transition-all duration-200 flex items-center gap-3 sm:gap-4 group cursor-pointer"
+      >
+        <span className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+          <FileSpreadsheet className="w-6 h-6 sm:w-7 sm:h-7" />
+        </span>
+        <span className="text-right flex-1">
+          <span className="block text-base sm:text-lg font-bold">تحميل سجل الحضور والغياب (Excel)</span>
+          <span className="block text-xs sm:text-sm text-indigo-100/80 mt-0.5">اختر المدة الزمنية ثم قم بتحميل الملف</span>
+        </span>
+        <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 opacity-80 group-hover:-translate-x-1 transition-transform shrink-0" />
+      </button>
 
       {/* ============================================================ */}
       {/* 📋 سجل عمليات الدخول المباشر */}
@@ -750,6 +682,165 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
           </button>
         </div>
       </div>
+
+      {/* ============================================================ */}
+      {/* 📥 نافذة تصدير سجل الحضور والغياب */}
+      {/* ============================================================ */}
+      <AnimatePresence>
+        {exportOpen && (
+          <motion.div
+            className="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+              onClick={() => !exporting && setExportOpen(false)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            />
+            <motion.div
+              className="relative w-full max-w-md rounded-2xl overflow-hidden bg-slate-900 border border-slate-700/60 shadow-2xl shadow-slate-950/50"
+              initial={{ scale: 0.92, y: 28, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 14, opacity: 0 }}
+              transition={{ type: 'spring', damping: 24, stiffness: 320 }}
+            >
+              <div className="relative px-6 pt-6 pb-5 overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-700 to-slate-900">
+                <div className="absolute -top-16 -left-16 w-48 h-48 rounded-full bg-white/10 blur-2xl" />
+                <div className="absolute -bottom-20 -right-10 w-40 h-40 rounded-full bg-fuchsia-500/20 blur-2xl" />
+                <div className="relative flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0 shadow-inner">
+                    <FileSpreadsheet className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">تصدير سجل الحضور والغياب</h3>
+                    <p className="text-xs text-indigo-100/80 mt-0.5">حدد المدة الزمنية وقم بتحميل ملف Excel</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setExportOpen(false)}
+                  disabled={exporting}
+                  className="absolute top-4 left-4 w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors disabled:opacity-40"
+                  aria-label="إغلاق"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-5">
+                <div>
+                  <p className="text-xs font-bold text-slate-300 mb-2">نوع المدة الزمنية</p>
+                  <div className="grid grid-cols-2 gap-1.5 p-1.5 bg-slate-800/80 border border-slate-700/60 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setExportType('single')}
+                      className={`flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                        exportType === 'single'
+                          ? 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-600/30'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <CalendarCheck className="w-4 h-4" /> يوم واحد
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExportType('range')}
+                      className={`flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                        exportType === 'range'
+                          ? 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-600/30'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <CalendarRange className="w-4 h-4" /> عدة أيام
+                    </button>
+                  </div>
+                </div>
+
+                <AnimatePresence mode="wait">
+                  {exportType === 'single' ? (
+                    <motion.div
+                      key="single"
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.18 }}
+                    >
+                      <p className="text-xs font-bold text-slate-300 mb-2">اختر اليوم من السجلات</p>
+                      <select
+                        value={singleDate}
+                        onChange={e => setSingleDate(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-600/70 text-white rounded-xl px-3.5 py-3 text-sm font-semibold focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow"
+                      >
+                        {normalizedDateOptions.map(s => (
+                          <option key={s.id} value={s.isoDate}>
+                            {s.name} ({s.isoDate})
+                          </option>
+                        ))}
+                      </select>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="range"
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.18 }}
+                    >
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-xs font-bold text-slate-300 mb-2">من تاريخ</p>
+                          <input
+                            type="date"
+                            value={startDate}
+                            onChange={e => setStartDate(e.target.value)}
+                            className="w-full bg-slate-800 border border-slate-600/70 text-white rounded-xl px-3.5 py-3 text-sm font-semibold focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow [color-scheme:dark]"
+                          />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-300 mb-2">إلى تاريخ</p>
+                          <input
+                            type="date"
+                            value={endDate}
+                            onChange={e => setEndDate(e.target.value)}
+                            className="w-full bg-slate-800 border border-slate-600/70 text-white rounded-xl px-3.5 py-3 text-sm font-semibold focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow [color-scheme:dark]"
+                          />
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <button
+                  type="button"
+                  disabled={exporting}
+                  onClick={async () => {
+                    setExporting(true);
+                    const ok = await handleExportOfficialExcel();
+                    setExporting(false);
+                    if (ok) setExportOpen(false);
+                  }}
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-700 hover:from-indigo-500 hover:to-violet-600 text-white font-bold text-base flex items-center justify-center gap-2 shadow-lg shadow-indigo-700/30 hover:shadow-indigo-600/40 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {exporting ? (
+                    <motion.span
+                      className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white inline-block"
+                      animate={{ rotate: 360 }}
+                      transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
+                    />
+                  ) : (
+                    <Download className="w-5 h-5" />
+                  )}
+                  {exporting ? 'جاري تجهيز الملف...' : 'تحميل الملف'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 });
