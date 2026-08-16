@@ -12,7 +12,6 @@ import { PwaInstallButton } from './components/PwaInstallButton';
 import { OfflineModal } from './components/OfflineModal';
 import { OfflineWarningIcon } from './components/OfflineWarningIcon';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
-import { useHorizontalSwipe } from './hooks/useHorizontalSwipe';
 import { SessionManager } from './components/SessionManager';
 import { Login } from './components/Login';
 import { StageSelector } from './components/StageSelector';
@@ -945,31 +944,6 @@ function App() {
   const canEditStudents = isAdmin || isCollegeAdmin;
   const isMainAdmin = isAdmin;
   const canSendAttendanceLink = isAdmin || isCollegeAdmin || currentUser?.role === 'teacher';
-
-  // 👆 ترتيب التبويبات للسحب الأفقي (Swipe Navigation)
-  const tabOrder = useMemo<readonly Tab[]>(() => {
-    if (selectedStageId) return ['sessions', 'login', 'manage', 'records'] as Tab[];
-    const order: Tab[] = ['stage-selector'];
-    if (isMainAdmin) order.push('colleges', 'teachers', 'system-settings');
-    else if (isCollegeAdmin) order.push('teachers');
-    order.push('profile');
-    return order;
-  }, [selectedStageId, isMainAdmin, isCollegeAdmin]);
-
-  const swipeIndex = tabOrder.indexOf(activeTab);
-  const handleSwipeLeft = useCallback(() => {
-    if (swipeIndex < 0 || swipeIndex >= tabOrder.length - 1) return;
-    setActiveTab(tabOrder[swipeIndex + 1]);
-  }, [swipeIndex, tabOrder]);
-  const handleSwipeRight = useCallback(() => {
-    if (swipeIndex <= 0) return;
-    setActiveTab(tabOrder[swipeIndex - 1]);
-  }, [swipeIndex, tabOrder]);
-  useHorizontalSwipe({
-    onSwipeLeft: handleSwipeLeft,
-    onSwipeRight: handleSwipeRight,
-    enabled: !!currentUser && tabOrder.length > 1,
-  });
 
   // 🎯 نطاق رابط الحضور: الأدمن الرئيسي يرى كل الكليات والمراحل،
   // أما أدمن الكلية/التدريسي فيرى كليته فقط والمراحل المسموح لها بصلاحياته
