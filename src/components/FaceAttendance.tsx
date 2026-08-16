@@ -3,6 +3,7 @@ import { Student, AttendanceSession } from '../types/student';
 import { User } from '../types/user';
 import { suspendAurora, resumeAurora } from '../lib/auraControl';
 import { useCameraReady } from '../hooks/useCameraReady';
+import { useSafeArea } from '../hooks/useSafeArea';
 import { createPortal } from 'react-dom';
 
 // 🚀 نافذة تسجيل الوجه تُحمَّل عند فتحها فقط (مكتبة الوجوه ثقيلة)
@@ -69,6 +70,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const [warmup, setWarmup] = useState(0);
   const [presentIds, setPresentIds] = useState<Set<string>>(new Set(alreadyPresentIds));
   const [kiosk, setKiosk] = useState(false);
+  const { topSafe, bottomSafe } = useSafeArea();
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const { videoReady, handleVideoReady, resetVideoReady, armForceReady } = useCameraReady(videoRef);
@@ -915,7 +917,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       {!kiosk && (
       <div className="w-full bg-white text-gray-900 flex flex-col flex-1 overflow-hidden">
         <header className="flex items-center justify-between px-4 py-3 border-b border-gray-100"
-          style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}>
+          style={{ paddingTop: `${topSafe + 12}px` }}>
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-base shrink-0">👤</div>
             <div className="min-w-0">
@@ -960,7 +962,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
         )}
 
         <div ref={scrollAreaRef} className="flex-1 overflow-y-auto px-4 overscroll-contain"
-          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}>
+          style={{ paddingBottom: `${bottomSafe + 16}px` }}>
           {!kiosk && (
           <div className="grid grid-cols-3 gap-2 mt-4">
             <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-center">
@@ -1122,7 +1124,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       {kiosk && (
       <div className="flex-1 relative min-h-0 overflow-hidden bg-black flex flex-col">
         <header className="absolute top-0 inset-x-0 z-30 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/70 via-black/20 to-transparent"
-          style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}>
+          style={{ paddingTop: `${topSafe + 12}px` }}>
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-base shrink-0">👤</div>
             <div className="min-w-0">
@@ -1150,7 +1152,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
         {error && (
           <div className="absolute inset-x-4 z-30 bg-red-500/90 text-white p-3 rounded-xl text-sm font-bold text-center"
-            style={{ top: 'calc(env(safe-area-inset-top, 0px) + 5rem)' }}>
+            style={{ top: `${topSafe + 80}px` }}>
             {error}
             <button onClick={initCamera} className="block mx-auto mt-2 bg-white text-red-600 px-4 py-1.5 rounded-lg text-xs">🔄 إعادة</button>
           </div>
@@ -1188,7 +1190,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
           {/* 🎯 تراكب: آخر المسجلين */}
           <div className="absolute inset-x-3 z-20 flex flex-col gap-1.5 items-start pointer-events-none"
-            style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5rem)' }}>
+            style={{ bottom: `${bottomSafe + 80}px` }}>
             {recentMarked.map((l, i) => (
               <div key={`${l.id}-${l.time}`}
                 className={`flex items-center gap-2 bg-black/75 text-white rounded-xl px-3 py-1.5 backdrop-blur-sm text-xs font-bold shadow-lg animate-fadeIn ${i === 0 ? 'ring-2 ring-emerald-400' : ''}`}>
@@ -1202,7 +1204,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           {/* 🎛️ أدوات الكاميرا أسفل الشاشة */}
           {cameraReady && (
             <div className="absolute inset-x-0 z-30 flex items-center justify-center gap-2"
-              style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}>
+              style={{ bottom: `${bottomSafe + 16}px` }}>
               <div className="flex items-center gap-1 bg-black/60 border border-white/15 rounded-xl px-2 py-1.5 backdrop-blur-sm">
                 {ZOOM_STEPS.map(s => (
                   <button key={s} onClick={() => applyZoom(s)}
