@@ -11,6 +11,7 @@ import {
 } from '../services/faceRecognition';
 import { useCameraReady } from '../hooks/useCameraReady';
 import * as faceapi from 'face-api.js';
+import { createPortal } from 'react-dom';
 
 interface FaceRegisterProps {
   students: Student[];
@@ -267,7 +268,7 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({ students, onUpdateSt
   const progressPct = withFaceCount > 0 ? Math.round((withFaceCount / students.length) * 100) : 0;
   const bulkPct = bulkTotal > 0 ? Math.round((Math.min(doneCount + 1, bulkTotal) / bulkTotal) * 100) : 0;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-3" dir="rtl"
       onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[96vh] overflow-y-auto">
@@ -445,7 +446,8 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({ students, onUpdateSt
         )}
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
