@@ -150,7 +150,6 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
         buildDescriptorCache(studentsWithFace as any, 0.5);
       }
     }, 0);
-    initCamera();
     const interval = setInterval(() => {
       if (!mountedRef.current) return;
       setWarmup(areModelsLoaded() ? 2 : isDetectorReady() ? 1 : 0);
@@ -168,6 +167,13 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       resumeAurora();
     };
   }, []);
+
+  // 🎯 فتح الكاميرا فور اكتمال تحميل الموديلات (بدون تجميد)
+  useEffect(() => {
+    if (modelsLoaded && mountedRef.current) {
+      initCamera();
+    }
+  }, [modelsLoaded]);
 
   // 🛑 منع تمرير الخلفية عند وضع الكشك — حجب حركات اللمس داخل الطبقة
   useEffect(() => {

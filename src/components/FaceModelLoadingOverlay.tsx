@@ -27,8 +27,19 @@ export const FaceModelLoadingOverlay: React.FC<FaceModelLoadingOverlayProps> = (
     <div
       dir="rtl"
       className="fixed inset-0 z-[10000] flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}
+      style={{ backgroundColor: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(16px)' }}
     >
+      {/* Floating close button — always responsive */}
+      {onCancel && (
+        <button
+          onClick={onCancel}
+          className="fixed top-4 left-4 z-[10001] w-11 h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full text-lg font-bold transition active:scale-90 backdrop-blur-sm border border-white/20"
+          style={{ touchAction: 'manipulation' }}
+        >
+          ✕
+        </button>
+      )}
+
       <div className="w-full max-w-sm mx-4 text-center">
         {/* Face icon with pulse animation */}
         <div className="relative w-24 h-24 mx-auto mb-8">
