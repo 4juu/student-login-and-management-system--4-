@@ -191,20 +191,42 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       if (!link) return;
 
       if (link.type === 'attendance') {
+        if (allStudents.length === 0) {
+          setErrorMsg('لم نجد بيانات طلاب لهذه المرحلة');
+          goTo('invalid-link');
+          return;
+        }
+
+        let matched: Student | null = null;
+
         if (student) {
-          const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link, student.id);
-          setAttendanceRecords(records);
-          setSessionNameMap(namesMap);
-          setMatchedStudent(student);
-          goTo('attendance-report');
+          matched = student;
         } else if (allStudents.length === 1) {
-          setMatchedStudent(allStudents[0]);
-          const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link, allStudents[0].id);
+          matched = allStudents[0];
+        } else {
+          if (result.qrId) {
+            matched = allStudents.find(s =>
+              s.qrCodeId === result.qrId || s.code === result.qrId
+            ) || null;
+          }
+
+          if (!matched && result.ocrText) {
+            for (const s of allStudents) {
+              const check = findNameInOCRText(s.name, result.ocrText);
+              if (check.matched) { matched = s; break; }
+            }
+          }
+        }
+
+        if (matched) {
+          setStudent(matched);
+          setMatchedStudent(matched);
+          const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link, matched.id);
           setAttendanceRecords(records);
           setSessionNameMap(namesMap);
           goTo('attendance-report');
         } else {
-          goTo('upload-id');
+          goTo('name-mismatch');
         }
         return;
       }
@@ -330,22 +352,35 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   }
 
   if (step === 'name-mismatch' && idData) {
+    const isAttendance = link?.type === 'attendance';
     return (
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
         <div className="glass-card p-8 max-w-md w-full text-center">
           <div className="mx-auto w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4">
             <AlertTriangle className="w-8 h-8 text-amber-400" />
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">الاسم غير متطابق</h2>
+          <h2 className="text-2xl font-bold text-white mb-2">
+            {isAttendance ? 'تعذر التعرف على البطاقة' : 'الاسم غير متطابق'}
+          </h2>
           <div className="glass-card-sm p-4 mb-4 text-right space-y-2">
             {student && (
               <p className="text-sm text-white/50">الاسم في النظام: <span className="text-white font-bold">{student.name}</span></p>
             )}
+            {isAttendance && !student && (
+              <p className="text-sm text-white/50">لم نتمكن من مطابقة البطاقة مع أي طالب في القائمة</p>
+            )}
             {idData.ocrText && (
-              <p className="text-sm text-white/50">النصوص المستخرجة: <span className="text-white/80 font-mono text-xs break-all">{idData.ocrText.slice(0, 200)}</span></p>
+              <p className="text-sm text-white/50">النصوص المستخرجة: <span className="text-white/80 font-mono text-xs break-all">{idData.ocrText.slice(0, 300)}</span></p>
+            )}
+            {idData.qrId && (
+              <p className="text-sm text-white/50">رمز QR: <span className="text-white/80 font-mono text-xs">{idData.qrId}</span></p>
             )}
           </div>
-          <p className="text-sm text-white/60 mb-6">الاسم المستخرج من البطاقة لا يتطابق مع اسمك في النظام. حاول التصوير بشكل أوضح.</p>
+          <p className="text-sm text-white/60 mb-6">
+            {isAttendance
+              ? 'البطاقة التي رفعتها لا تتطابق مع أي طالب في هذه المرحلة. حاول التصوير بشكل أوضح أو تأكد أنك تستخدم البطاقة الصحيحة.'
+              : 'الاسم المستخرج من البطاقة لا يتطابق مع اسمك في النظام. حاول التصوير بشكل أوضح.'}
+          </p>
           <button onClick={() => goTo('upload-id')} className="btn-base btn-secondary w-full py-3">
             <XCircle className="w-4 h-4" /> إعادة التصوير
           </button>
