@@ -201,7 +201,7 @@ export const matchArabicNames = (name1: string, name2: string): number => {
 };
 
 export const AUTO_APPROVE_THRESHOLD = 90;
-export const MIN_ACCEPTABLE_THRESHOLD = 60;
+export const MIN_ACCEPTABLE_THRESHOLD = 80;
 
 export type MatchLevel = 'auto-approve' | 'review-needed' | 'rejected';
 
