@@ -4,7 +4,7 @@ import { ref, onValue, off, update, set, get } from 'firebase/database';
 import { database } from '../../firebase/config';
 import { Student } from '../../types/student';
 import { PendingRegistration } from '../../types/registration';
-import { getMatchDescription, AUTO_APPROVE_THRESHOLD } from '../../services/nameMatching';
+import { getMatchDescription, AUTO_APPROVE_THRESHOLD, MIN_ACCEPTABLE_THRESHOLD } from '../../services/nameMatching';
 import { getActiveAcademicYear } from '../../firebase/dataService';
 import { SkeletonTable } from '../Skeleton';
 import { checkForTamperingAsync, normalizeDescriptor } from '../../services/faceRecognition';
@@ -350,10 +350,10 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                     
                     <div className={`text-sm font-bold px-3 py-1 rounded-full ${
                       req.matchPercentage >= AUTO_APPROVE_THRESHOLD ? 'bg-green-500 text-white' :
-                      req.matchPercentage >= 60 ? 'bg-amber-500 text-white' :
+                      req.matchPercentage >= MIN_ACCEPTABLE_THRESHOLD ? 'bg-amber-500 text-white' :
                       'bg-red-500 text-white'
                     }`}>
-                      {desc.emoji} {req.matchPercentage}%
+                      {desc.emoji} {req.matchPercentage} أسماء متطابقة
                     </div>
                   </div>
                   

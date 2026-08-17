@@ -390,7 +390,8 @@ export const extractNameFromOCR = (rawText: string): string | null => {
     const nameWords = words.filter(w => isKnownName(w));
 
     if (nameWords.length >= 2) {
-      const result = nameWords.join(' ');
+      const inferred = inferCompoundNames(nameWords);
+      const result = inferred.join(' ');
       console.log('✅ استخراج من حقل الاسم:', result);
       return result;
     }
@@ -400,7 +401,8 @@ export const extractNameFromOCR = (rawText: string): string | null => {
     const filteredWords = allSplitWords.filter(w => isKnownName(w));
 
     if (filteredWords.length >= 2) {
-      const result = filteredWords.join(' ');
+      const inferred = inferCompoundNames(filteredWords);
+      const result = inferred.join(' ');
       console.log('✅ استخراج من حقل الاسم (بعد فصل):', result);
       return result;
     }
@@ -416,13 +418,103 @@ export const extractNameFromOCR = (rawText: string): string | null => {
   const nameWords = words.filter(w => isKnownName(w));
 
   if (nameWords.length >= 2) {
-    const result = nameWords.join(' ');
+    const inferred = inferCompoundNames(nameWords);
+    const result = inferred.join(' ');
     console.log('✅ استخراج من fallback:', result);
     return result;
   }
 
   console.log('❌ ما لقينا أي اسم في النص');
   return null;
+};
+
+/**
+ * محاولة استكمال الأسماء المركبة الناقصة
+ * مثال: "هدى مؤيد سالم" → نضيف "نور" قبل "هدى" إذا "نور الهدى" مركبة معروفة
+ */
+const COMPOUND_FIRST_PARTS: Record<string, string[]> = {
+  'هدى': ['نور'],
+  'الهدى': ['نور'],
+  'الدين': ['نور', 'صلاح', 'علاء', 'عماد', 'سيف', 'حسام', 'بهاء', 'شمس', 'محي', 'تاج', 'فخر', 'شرف', 'جمال', 'كمال', 'بدر', 'ضياء', 'ركن', 'عز', 'معين', 'ناصر', 'قمر'],
+  'الاسلام': ['نور'],
+  'الزهراء': ['نور'],
+  'العين': ['نور'],
+  'الرحمن': ['عبد', 'نور'],
+  'الرحيم': ['عبد', 'نور'],
+  'الكريم': ['عبد', 'نور'],
+  'العزيز': ['عبد'],
+  'الحسين': ['عبد'],
+  'الحسن': ['عبد'],
+  'الهادي': ['عبد'],
+  'الباقي': ['عبد'],
+  'الخالق': ['عبد'],
+  'الصمد': ['عبد'],
+  'العظيم': ['عبد'],
+  'الغفور': ['عبد'],
+  'الغني': ['عبد'],
+  'الفتاح': ['عبد'],
+  'المنعم': ['عبد'],
+  'الوهاب': ['عبد'],
+  'النور': ['عبد'],
+  'الناصر': ['عبد'],
+  'الملك': ['عبد'],
+  'البر': ['عبد'],
+  'المتين': ['عبد'],
+  'الكافي': ['عبد'],
+  'الشكور': ['عبد'],
+  'القيوم': ['عبد'],
+  'الودود': ['عبد'],
+  'التواب': ['عبد'],
+  'الحفيظ': ['عبد'],
+  'المؤمن': ['عبد'],
+  'الحي': ['عبد'],
+  'القهار': ['عبد'],
+  'الجبار': ['عبد'],
+  'الرزاق': ['عبد'],
+  'الستار': ['عبد'],
+  'السلام': ['عبد'],
+  'القادر': ['عبد'],
+  'اللطيف': ['عبد'],
+  'المجيد': ['عبد'],
+  'المحسن': ['عبد'],
+  'بكر': ['ابو'],
+  'زيد': ['ابو'],
+  'محمد': ['ابو'],
+  'طالب': ['ابو'],
+  'الياس': ['ابو'],
+  'حسن': ['ابو', 'ام'],
+  'حسين': ['ابو'],
+  'علي': ['ابو', 'ام'],
+  'سعيد': ['ابو', 'ام'],
+  'كلثوم': ['ام'],
+  'البنين': ['ام'],
+  'خالد': ['ام'],
+  'حبيب': ['ام'],
+  'ابراهيم': ['ابو', 'ام'],
+  'المؤمنين': ['ام'],
+  'عبدالرحمن': ['ام'],
+  'العباس': ['ابو'],
+  'القاسم': ['ابو'],
+};
+
+const inferCompoundNames = (nameWords: string[]): string[] => {
+  const result = [...nameWords];
+  for (let i = 0; i < result.length; i++) {
+    const norm = normalizeArabic(result[i]);
+    const stripped = stripAl(norm);
+    const firstParts = COMPOUND_FIRST_PARTS[norm] || COMPOUND_FIRST_PARTS[stripped];
+    if (firstParts && i === 0) {
+      for (const prefix of firstParts) {
+        const compoundNorm = normalizeArabic(prefix + result[i]);
+        if (ALL_COMPOUND_PARTS_SET.has(compoundNorm) || SINGLE_NAMES_SET.has(normalizeArabic(prefix))) {
+          console.log(`🔮 استكمال مركبة: "${prefix} ${result[i]}"`);
+          result.unshift(prefix);
+          break;
+        }
+      }
+    }
+  }
+  return result;
 };
 
 /**

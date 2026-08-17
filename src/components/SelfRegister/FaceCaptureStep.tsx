@@ -285,9 +285,9 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
           <p className="text-xs text-gray-600">
             مرحباً <span className="font-bold text-purple-700">{student.name}</span>
           </p>
-          {matchPercentage >= 90 && (
+          {matchPercentage >= 3 && (
             <div className="mt-2 inline-block bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
-              <Check className="w-3.5 h-3.5" /> تطابق الاسم: {matchPercentage}%
+              <Check className="w-3.5 h-3.5" /> تطابق الاسم: {matchPercentage} أسماء متطابقة
             </div>
           )}
         </div>

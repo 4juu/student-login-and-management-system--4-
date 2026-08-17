@@ -700,7 +700,8 @@ const preprocessMediumFromBlob = (blob: Blob): Promise<Blob> =>
 
 export const extractIDData = async (
   imageFile: File,
-  onProgress?: (status: string, percent: number) => void
+  onProgress?: (status: string, percent: number) => void,
+  skipDeskew = false
 ): Promise<IDExtractionResult> => {
   try {
     onProgress?.('', 5);
@@ -741,18 +742,22 @@ export const extractIDData = async (
     onProgress?.('', 25);
     const worker = await getWorker();
 
-    // محاولة تصحيح الميل أولاً
+    // محاولة تصحيح الميل أولاً (إلا إذا الصورة معدّلة يدوياً)
     let deskewedImg: HTMLImageElement | null = null;
-    try {
-      const deskewedBlob = await deskewImage(img);
-      deskewedImg = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const url = URL.createObjectURL(deskewedBlob);
-        const im = new Image();
-        im.onload = () => { URL.revokeObjectURL(url); resolve(im); };
-        im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('')); };
-        im.src = url;
-      });
-    } catch { deskewedImg = null; }
+    if (!skipDeskew) {
+      try {
+        const deskewedBlob = await deskewImage(img);
+        deskewedImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const url = URL.createObjectURL(deskewedBlob);
+          const im = new Image();
+          im.onload = () => { URL.revokeObjectURL(url); resolve(im); };
+          im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('')); };
+          im.src = url;
+        });
+      } catch { deskewedImg = null; }
+    } else {
+      console.log('⏭️ تخطي تصحيح الميل (صورة معدّلة يدوياً)');
+    }
 
     const ROTATION_ANGLES = [0, 90, 180, 270, 5, -5, 10, -10];
     const rotationAttempts: OCRAttempt[] = [];

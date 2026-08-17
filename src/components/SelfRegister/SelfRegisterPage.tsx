@@ -9,6 +9,8 @@ import {
 } from '../../services/tokenService';
 import {
   matchArabicNames,
+  MatchResult,
+  MIN_CONSECUTIVE_MATCHES,
 } from '../../services/nameMatching';
 import { IDCardUpload } from './IDCardUpload';
 import { RegistrationSuccess } from './RegistrationSuccess';
@@ -21,8 +23,6 @@ import { AlertTriangle, XCircle, RotateCcw, CalendarDays, CheckCircle, XCircle a
 const LazyFaceCaptureStep = lazy(() =>
   import('./FaceCaptureStep').then(m => ({ default: m.FaceCaptureStep }))
 );
-
-const MIN_MATCH = 80;
 
 type Step =
   | 'loading'
@@ -97,7 +97,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   const [student, setStudent] = useState<Student | null>(null);
   const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [idData, setIdData] = useState<IDExtractionResult | null>(null);
-  const [matchPercentage, setMatchPercentage] = useState(0);
+  const [matchResult, setMatchResult] = useState<MatchResult>({ isMatch: false, consecutiveMatches: 0, totalMatches: 0 });
   const [errorMsg, setErrorMsg] = useState('');
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [matchedStudent, setMatchedStudent] = useState<Student | null>(null);
@@ -184,12 +184,12 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     return { records, sessionNameMap };
   };
 
-  const findMatchingStudent = (extractedName: string, students: Student[]): { student: Student; percentage: number } | null => {
-    let bestMatch: { student: Student; percentage: number } | null = null;
+  const findMatchingStudent = (extractedName: string, students: Student[]): { student: Student; result: MatchResult } | null => {
+    let bestMatch: { student: Student; result: MatchResult } | null = null;
     for (const s of students) {
-      const pct = matchArabicNames(s.name, extractedName);
-      if (pct >= MIN_MATCH && (!bestMatch || pct > bestMatch.percentage)) {
-        bestMatch = { student: s, percentage: pct };
+      const result = matchArabicNames(s.name, extractedName);
+      if (result.isMatch && (!bestMatch || result.consecutiveMatches > bestMatch.result.consecutiveMatches)) {
+        bestMatch = { student: s, result };
       }
     }
     return bestMatch;
@@ -290,11 +290,11 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       if (link.type === 'attendance') {
         const match = findMatchingStudent(extractedName, allStudents);
         if (!match) {
-          setMatchPercentage(0);
+          setMatchResult({ isMatch: false, consecutiveMatches: 0, totalMatches: 0 });
           goTo('name-mismatch');
           return;
         }
-        setMatchPercentage(match.percentage);
+        setMatchResult(match.result);
         setMatchedStudent(match.student);
 
         const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link, match.student.id);
@@ -305,10 +305,10 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       }
 
       if (!student) return;
-      const pct = matchArabicNames(student.name, extractedName);
-      setMatchPercentage(pct);
+      const result2 = matchArabicNames(student.name, extractedName);
+      setMatchResult(result2);
 
-      if (pct < MIN_MATCH) {
+      if (!result2.isMatch) {
         goTo('name-mismatch');
         return;
       }
@@ -359,7 +359,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
         studentCode: student.code,
         nameFromID: idData?.name || '',
         nameInSystem: student.name,
-        matchPercentage,
+        matchPercentage: matchResult.consecutiveMatches,
         qrCodeUrl: idData?.qrUrl || '',
         qrCodeId: idData?.qrId || '',
         faceDescriptor: cleanFaceDescriptor,
@@ -455,7 +455,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
             <AlertTriangle className="w-8 h-8 text-amber-400" />
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">الاسم غير متطابق</h2>
-          <p className="text-sm text-white/50 mb-4">نسبة التطابق: {matchPercentage}% (المطلوب {MIN_MATCH}% فأكثر)</p>
+          <p className="text-sm text-white/50 mb-4">عدد الأسماء المتطابقة: {matchResult.consecutiveMatches} (المطلوب {MIN_CONSECUTIVE_MATCHES} فأكثر)</p>
           <div className="glass-card-sm p-4 mb-4 text-right">
             {matchedStudent ? (
               <p className="text-sm text-white/50">أقرب تطابق: <span className="text-white font-bold">{matchedStudent.name}</span></p>
@@ -483,7 +483,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       }>
         <LazyFaceCaptureStep
           student={student}
-          matchPercentage={matchPercentage}
+          matchPercentage={matchResult.consecutiveMatches}
           allStudents={allStudents}
           onCaptured={handleFaceCaptured}
           onCancel={() => goTo('upload-id')}
@@ -505,7 +505,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   }
 
   if (step === 'success' && student) {
-    return <RegistrationSuccess student={student} matchPercentage={matchPercentage} autoApproved={false} onExit={onExit} />;
+    return <RegistrationSuccess student={student} matchPercentage={matchResult.consecutiveMatches} autoApproved={matchResult.isMatch} onExit={onExit} />;
   }
 
   if (step === 'error') {

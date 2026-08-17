@@ -64,7 +64,7 @@ export const RegistrationSuccess: React.FC<RegistrationSuccessProps> = ({
             <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-4"><CircleCheck className="w-8 h-8 text-emerald-500" /></div>
             <p className="font-bold text-emerald-800 mb-1">تم تفعيل حسابك تلقائياً</p>
             <p className="text-sm text-emerald-700">
-              تطابق الاسم: <strong>{matchPercentage}%</strong>
+              تطابق الاسم: <strong>{matchPercentage} أسماء متطابقة</strong>
             </p>
             <p className="text-xs text-emerald-600 mt-2">
               يمكنك الآن تسجيل حضورك في الكلية باستخدام:
@@ -80,7 +80,7 @@ export const RegistrationSuccess: React.FC<RegistrationSuccessProps> = ({
             <div className="mx-auto w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4"><LoaderCircle className="w-8 h-8 text-amber-500 animate-spin" /></div>
             <p className="font-bold text-amber-800 mb-1">في انتظار موافقة المشرف</p>
             <p className="text-sm text-amber-700">
-              تطابق الاسم: <strong>{matchPercentage}%</strong>
+              تطابق الاسم: <strong>{matchPercentage} أسماء متطابقة</strong>
             </p>
             <p className="text-xs text-amber-600 mt-2">
               تم إرسال طلبك للمراجعة. سيتم تفعيل حسابك قريباً بعد موافقة الأدمن.

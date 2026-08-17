@@ -91,67 +91,49 @@ const levenshteinDistance = (a: string, b: string): number => {
   return matrix[b.length][a.length];
 };
 
-const MIN_SEQUENTIAL_SCORE = 0.5;
+export const MIN_SEQUENTIAL_SCORE = 0.5;
+export const MIN_CONSECUTIVE_MATCHES = 3;
 
 /**
- * مطابقة تسلسلية مع دعم التطابق الجزئي
- * تُرجع عدد التطابقات (0 = لا شيء، shorter.length = كامل)
+ * حساب أطول سلسلة متتالية من التطابق
+ * يُرجع عدد التطابقات المتتالية (ต้อง >= MIN_CONSECUTIVE_MATCHES لاعتبارها مطابقة)
  */
-const sequentialMatchCount = (parts1: string[], parts2: string[]): number => {
+const consecutiveMatchCount = (parts1: string[], parts2: string[]): number => {
   const shorter = parts1.length <= parts2.length ? parts1 : parts2;
   const longer = parts1.length <= parts2.length ? parts2 : parts1;
 
+  let bestConsecutive = 0;
+  let currentConsecutive = 0;
   let longerIdx = 0;
-  let matches = 0;
 
   for (let i = 0; i < shorter.length; i++) {
-    let bestScore = 0;
-    let bestJ = -1;
+    let found = false;
     for (let j = longerIdx; j < longer.length; j++) {
       const sim = stringSimilarity(shorter[i], longer[j]);
-      if (sim > bestScore) { bestScore = sim; bestJ = j; }
+      if (sim >= MIN_SEQUENTIAL_SCORE) {
+        currentConsecutive++;
+        longerIdx = j + 1;
+        found = true;
+        break;
+      }
     }
-    if (bestScore >= MIN_SEQUENTIAL_SCORE && bestJ !== -1) {
-      matches++;
-      longerIdx = bestJ + 1;
+    if (!found) {
+      if (currentConsecutive > bestConsecutive) {
+        bestConsecutive = currentConsecutive;
+      }
+      currentConsecutive = 0;
     }
   }
-  return matches;
+  if (currentConsecutive > bestConsecutive) {
+    bestConsecutive = currentConsecutive;
+  }
+  return bestConsecutive;
 };
 
 /**
- * حساب درجة التطابق بناءً على الكلمات المتطابقة
- * يُرجع 0-90
+ * عدد الكلمات المتطابقة (بغض النظر عن الترتيب)
  */
-const computeMatchScore = (name1: string, name2: string): number => {
-  if (!name1 || !name2) return 0;
-
-  const norm1 = normalizeArabicName(name1);
-  const norm2 = normalizeArabicName(name2);
-  if (norm1 === norm2) return 90;
-  if (deepNormalize(norm1) === deepNormalize(norm2)) return 90;
-
-  // محاولة 1: smart-split (يحافظ على الأسماء المركبة)
-  const parts1 = smartSplitName(name1);
-  const parts2 = smartSplitName(name2);
-  const smartMatches = sequentialMatchCount(parts1, parts2);
-  if (smartMatches >= parts1.length && smartMatches >= parts2.length) return 90;
-  if (smartMatches > 0) {
-    const ratio = smartMatches / Math.max(parts1.length, parts2.length);
-    if (ratio >= 0.9) return 90;
-  }
-
-  // محاولة 2: تقسيم لكلمات فردية (يعالج OCR الذي يكسر المركبات)
-  const words1 = norm1.split(/\s+/).filter(Boolean);
-  const words2 = norm2.split(/\s+/).filter(Boolean);
-  const wordMatches = sequentialMatchCount(words1, words2);
-  if (wordMatches >= words1.length && wordMatches >= words2.length) return 90;
-  if (wordMatches > 0) {
-    const ratio = wordMatches / Math.max(words1.length, words2.length);
-    if (ratio >= 0.9) return 90;
-  }
-
-  // محاولة 3: التطابق الجزئي (أي كلمة من الاسم تطابق أي كلمة في النظام)
+const looseMatchCount = (parts1: string[], parts2: string[]): number => {
   const allWords1 = new Set<string>();
   const allWords2 = new Set<string>();
   for (const p of parts1) {
@@ -165,8 +147,7 @@ const computeMatchScore = (name1: string, name2: string): number => {
     }
   }
 
-  // حساب عدد الكلمات المتطابقة بشكل غير تسلسلي
-  let looseMatches = 0;
+  let matches = 0;
   const usedWords2 = new Set<number>();
   for (const w1 of allWords1) {
     let bestSim = 0;
@@ -179,42 +160,76 @@ const computeMatchScore = (name1: string, name2: string): number => {
       idx++;
     }
     if (bestSim >= MIN_SEQUENTIAL_SCORE && bestIdx !== -1) {
-      looseMatches++;
+      matches++;
       usedWords2.add(bestIdx);
     }
   }
-
-  if (looseMatches >= 3) return 85;
-  if (looseMatches === 2) {
-    const ratio = looseMatches / Math.max(allWords1.size, allWords2.size);
-    if (ratio >= 0.66) return 80;
-  }
-  if (looseMatches === 1) {
-    // كلمة واحدة فقط — لا نعتبرها تطابق كافي
-  }
-
-  return 0;
+  return matches;
 };
 
-export const matchArabicNames = (name1: string, name2: string): number => {
-  return computeMatchScore(name1, name2);
+export interface MatchResult {
+  isMatch: boolean;
+  consecutiveMatches: number;
+  totalMatches: number;
+}
+
+/**
+ * مطابقة الأسماء بعدد الكلمات المتتالية
+ * 3 أسماء متتالية متطابقة = مطابقة
+ */
+export const matchArabicNames = (name1: string, name2: string): MatchResult => {
+  const empty: MatchResult = { isMatch: false, consecutiveMatches: 0, totalMatches: 0 };
+  if (!name1 || !name2) return empty;
+
+  const norm1 = normalizeArabicName(name1);
+  const norm2 = normalizeArabicName(name2);
+  if (norm1 === norm2 || deepNormalize(norm1) === deepNormalize(norm2)) {
+    return { isMatch: true, consecutiveMatches: Math.max(norm1.split(/\s+/).length, norm2.split(/\s+/).length), totalMatches: Math.max(norm1.split(/\s+/).length, norm2.split(/\s+/).length) };
+  }
+
+  // محاولة 1: smart-split
+  const parts1 = smartSplitName(name1);
+  const parts2 = smartSplitName(name2);
+  const smartConsecutive = consecutiveMatchCount(parts1, parts2);
+  const smartTotal = looseMatchCount(parts1, parts2);
+  if (smartConsecutive >= MIN_CONSECUTIVE_MATCHES) {
+    return { isMatch: true, consecutiveMatches: smartConsecutive, totalMatches: smartTotal };
+  }
+
+  // محاولة 2: تقسيم لكلمات فردية
+  const words1 = norm1.split(/\s+/).filter(Boolean);
+  const words2 = norm2.split(/\s+/).filter(Boolean);
+  const wordConsecutive = consecutiveMatchCount(words1, words2);
+  const wordTotal = looseMatchCount(words1, words2);
+  if (wordConsecutive >= MIN_CONSECUTIVE_MATCHES) {
+    return { isMatch: true, consecutiveMatches: wordConsecutive, totalMatches: wordTotal };
+  }
+
+  const bestConsecutive = Math.max(smartConsecutive, wordConsecutive);
+  const bestTotal = Math.max(smartTotal, wordTotal);
+
+  return {
+    isMatch: bestConsecutive >= MIN_CONSECUTIVE_MATCHES,
+    consecutiveMatches: bestConsecutive,
+    totalMatches: bestTotal,
+  };
 };
 
-export const AUTO_APPROVE_THRESHOLD = 80;
-export const MIN_ACCEPTABLE_THRESHOLD = 70;
+export const AUTO_APPROVE_THRESHOLD = 3;
+export const MIN_ACCEPTABLE_THRESHOLD = 2;
 
 export type MatchLevel = 'auto-approve' | 'review-needed' | 'rejected';
 
-export const classifyMatch = (percentage: number): MatchLevel => {
-  if (percentage >= AUTO_APPROVE_THRESHOLD) return 'auto-approve';
-  if (percentage >= MIN_ACCEPTABLE_THRESHOLD) return 'review-needed';
+export const classifyMatch = (consecutiveMatches: number): MatchLevel => {
+  if (consecutiveMatches >= AUTO_APPROVE_THRESHOLD) return 'auto-approve';
+  if (consecutiveMatches >= MIN_ACCEPTABLE_THRESHOLD) return 'review-needed';
   return 'rejected';
 };
 
-export const getMatchDescription = (percentage: number): { emoji: string; text: string; color: string } => {
-  if (percentage >= 90) return { emoji: '✅', text: 'تطابق ممتاز', color: 'green' };
-  if (percentage >= AUTO_APPROVE_THRESHOLD) return { emoji: '✅', text: 'تطابق جيد', color: 'green' };
-  if (percentage >= MIN_ACCEPTABLE_THRESHOLD) return { emoji: '🟡', text: 'تطابق مقبول - يحتاج مراجعة', color: 'amber' };
+export const getMatchDescription = (consecutiveMatches: number): { emoji: string; text: string; color: string } => {
+  if (consecutiveMatches >= 4) return { emoji: '✅', text: 'تطابق ممتاز', color: 'green' };
+  if (consecutiveMatches >= AUTO_APPROVE_THRESHOLD) return { emoji: '✅', text: 'تطابق جيد', color: 'green' };
+  if (consecutiveMatches >= MIN_ACCEPTABLE_THRESHOLD) return { emoji: '🟡', text: 'تطابق مقبول - يحتاج مراجعة', color: 'amber' };
   return { emoji: '❌', text: 'لا يوجد تطابق', color: 'red' };
 };
 
@@ -256,23 +271,22 @@ export const extractNameFromOCR = (ocrText: string): string | null => {
 
 export const runMatchTests = () => {
   const tests = [
-    { id: 'نور الهدى مؤيد سالم جاسم', system: 'نور الهدى مؤيد سالم', expected: '85-90' },
-    { id: 'نور الهدى مؤيد سالم جاسم', system: 'نور الهدى مؤيد سالم جاسم', expected: '90' },
-    { id: 'نور الهدي مويد سالم', system: 'نور الهدى مؤيد سالم', expected: '90' },
-    { id: 'عبد الله احمد محمد', system: 'عبدالله احمد محمد', expected: '90' },
-    { id: 'احمد علي حسن', system: 'نور الهدى مؤيد سالم', expected: '0' },
-    { id: 'نور الدين مؤيد', system: 'نور الهدى مؤيد', expected: '80-90' },
-    { id: 'مؤيد سالم', system: 'نور الهدى مؤيد سالم', expected: '80-85' },
+    { id: 'نور الهدى مؤيد سالم جاسم', system: 'نور الهدى مؤيد سالم', expected: 'match (4 consecutive)' },
+    { id: 'نور الهدى مؤيد سالم جاسم', system: 'نور الهدى مؤيد سالم جاسم', expected: 'match (5 consecutive)' },
+    { id: 'نور الهدي مويد سالم', system: 'نور الهدى مؤيد سالم', expected: 'match (4 consecutive)' },
+    { id: 'عبد الله احمد محمد', system: 'عبدالله احمد محمد', expected: 'match (3 consecutive)' },
+    { id: 'احمد علي حسن', system: 'نور الهدى مؤيد سالم', expected: 'no match' },
+    { id: 'نور الدين مؤيد', system: 'نور الهدى مؤيد', expected: 'match (3 consecutive: نور, الدين/الهدى, مؤيد)' },
+    { id: 'مؤيد سالم', system: 'نور الهدى مؤيد سالم', expected: 'match (2 consecutive)' },
   ];
 
   console.log('🧪 === اختبارات مطابقة الأسماء ===\n');
   for (const test of tests) {
     const result = matchArabicNames(test.id, test.system);
-    const desc = getMatchDescription(result);
     console.log(`📝 هوية:  "${test.id}"`);
     console.log(`💾 نظام:  "${test.system}"`);
-    console.log(`📊 نتيجة: ${result}% ${desc.emoji} (متوقع: ${test.expected}%)`);
-    console.log(`🏷️ تصنيف: ${classifyMatch(result)}`);
+    console.log(`🎯 نتيجة: ${result.isMatch ? '✅ مطابق' : '❌ غير متطابق'} ( متتالي: ${result.consecutiveMatches}, إجمالي: ${result.totalMatches})`);
+    console.log(`🏷️ متوقع: ${test.expected}`);
     console.log('---');
   }
 };

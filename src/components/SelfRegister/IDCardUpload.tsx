@@ -10,7 +10,7 @@ import {
   Check,
   CircleX,
   IdCard,
-  Image,
+  Image as ImageIcon,
   Lightbulb,
   Lock,
   RefreshCw,
@@ -27,6 +27,60 @@ interface IDCardUploadProps {
 
 const CARD_RATIO = 85.6 / 53.98;
 
+const blobFromCanvas = (canvas: HTMLCanvasElement): Promise<Blob> =>
+  new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('فشل تحويل الصورة'));
+    }, 'image/jpeg', 0.95);
+  });
+
+const rasterizeTransform = async (
+  imageUrl: string,
+  rotation: number,
+  scale: number,
+  translateX: number,
+  translateY: number,
+  containerW: number,
+  containerH: number
+): Promise<Blob> => {
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  await new Promise<void>((res, rej) => {
+    img.onload = () => res();
+    img.onerror = () => rej(new Error('فشل تحميل الصورة'));
+    img.src = imageUrl;
+  });
+
+  const dpr = 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = containerW * dpr;
+  canvas.height = containerH * dpr;
+  const ctx = canvas.getContext('2d')!;
+  ctx.scale(dpr, dpr);
+
+  const cx = containerW / 2;
+  const cy = containerH / 2;
+
+  ctx.translate(cx + translateX, cy + translateY);
+  ctx.rotate((rotation * Math.PI) / 180);
+  ctx.scale(scale, scale);
+
+  const imgAspect = img.width / img.height;
+  const contAspect = containerW / containerH;
+  let drawW: number, drawH: number;
+  if (imgAspect > contAspect) {
+    drawW = containerW;
+    drawH = containerW / imgAspect;
+  } else {
+    drawH = containerH;
+    drawW = containerH * imgAspect;
+  }
+
+  ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+  return blobFromCanvas(canvas);
+};
+
 export const IDCardUpload: React.FC<IDCardUploadProps> = ({
   student,
   onExtracted,
@@ -40,6 +94,7 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const {
     transform,
@@ -85,7 +140,38 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
     setProcessing(true);
     setError('');
     try {
-      const result = await extractIDData(file, (_s, pct) => setProgress(pct));
+      let imageToSend: File | Blob = file;
+      let skipDeskew = false;
+
+      const isTransformed =
+        transform.rotation !== 0 ||
+        transform.scale !== 1 ||
+        transform.translateX !== 0 ||
+        transform.translateY !== 0;
+
+      if (isTransformed && preview && containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const blob = await rasterizeTransform(
+          preview,
+          transform.rotation,
+          transform.scale,
+          transform.translateX,
+          transform.translateY,
+          rect.width,
+          rect.height
+        );
+        imageToSend = blob;
+        skipDeskew = true;
+        console.log('🖼️ الصورة بعد التعديل اليدوي');
+      }
+
+      const result = await extractIDData(
+        imageToSend instanceof Blob
+          ? new File([imageToSend], 'adjusted.jpg', { type: 'image/jpeg' })
+          : imageToSend,
+        (_s, pct) => setProgress(pct),
+        skipDeskew
+      );
       if (!result.success) {
         setError(result.error || 'فشل قراءة الهوية');
         setProcessing(false);
@@ -157,7 +243,7 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
                 onClick={() => fileInputRef.current?.click()}
                 className="w-full bg-white hover:bg-gray-50 border-2 border-purple-300 text-purple-700 font-bold py-4 px-6 rounded-xl active:scale-95 transition flex items-center justify-center gap-3"
               >
-                <Image className="w-6 h-6" />
+                <ImageIcon className="w-6 h-6" />
                 <span>اختيار من المعرض</span>
               </button>
             </div>
@@ -182,6 +268,7 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
           <div className="space-y-3">
             {/* حاوية الصورة + المستطيل */}
             <div
+              ref={containerRef}
               className="relative w-full bg-gray-900 rounded-xl overflow-hidden touch-none select-none"
               style={{ aspectRatio: `${CARD_RATIO} / 1`, touchAction: 'none' }}
               onTouchStart={handleTouchStart}
