@@ -204,17 +204,21 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
         } else if (allStudents.length === 1) {
           matched = allStudents[0];
         } else {
-          if (result.qrId) {
-            matched = allStudents.find(s =>
-              s.qrCodeId === result.qrId || s.code === result.qrId
-            ) || null;
-          }
-
-          if (!matched && result.ocrText) {
+          if (result.ocrText) {
+            let bestMatch: { student: Student; confidence: number } | null = null;
             for (const s of allStudents) {
               const check = findNameInOCRText(s.name, result.ocrText);
-              if (check.matched) { matched = s; break; }
+              if (check.matched && (!bestMatch || check.confidence > bestMatch.confidence)) {
+                bestMatch = { student: s, confidence: check.confidence };
+              }
             }
+            matched = bestMatch?.student || null;
+          }
+
+          if (!matched && result.qrId) {
+            matched = allStudents.find(s =>
+              s.universityId === result.qrId || s.qrCodeId === result.qrId
+            ) || null;
           }
         }
 
