@@ -46,9 +46,6 @@ export const terminateOCR = async (): Promise<void> => {
 // 🖼️ تحميل الصورة وفحص الجودة
 // ============================================================
 
-/**
- * تحميل الصورة من File إلى HTMLImageElement (باستخدام createObjectURL — أسرع)
- */
 const loadImageFromFile = (file: File): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
     const img = new Image();
@@ -64,9 +61,6 @@ const loadImageFromFile = (file: File): Promise<HTMLImageElement> =>
     img.src = url;
   });
 
-/**
- * تكبير الصورة إذا كانت صغيرة
- */
 const upscaleIfNeeded = (
   img: HTMLImageElement,
   ctx: CanvasRenderingContext2D,
@@ -84,10 +78,38 @@ const upscaleIfNeeded = (
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 };
 
+// ============================================================
+// 🔄 تدوير الصورة
+// ============================================================
+
 /**
- * 🔍 كشف تشويش الصورة (Laplacian variance)
- * القيمة < 100 تعني الصورة مشوشة
+ * تدوير HTMLImageElement بزاوية معينة وإرجاع Blob
  */
+const rotateImageToBlob = (
+  img: HTMLImageElement,
+  degrees: number
+): Promise<Blob> => {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+
+  const rad = (degrees * Math.PI) / 180;
+  const cos = Math.abs(Math.cos(rad));
+  const sin = Math.abs(Math.sin(rad));
+
+  canvas.width = Math.round(img.width * cos + img.height * sin);
+  canvas.height = Math.round(img.width * sin + img.height * cos);
+
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate(rad);
+  ctx.drawImage(img, -img.width / 2, -img.height / 2);
+
+  return blobFromCanvas(canvas);
+};
+
+// ============================================================
+// 🔍 كشف جودة الصورة
+// ============================================================
+
 const detectBlur = (img: HTMLImageElement): number => {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d')!;
@@ -126,9 +148,6 @@ const detectBlur = (img: HTMLImageElement): number => {
   return count > 0 ? sum / count : 0;
 };
 
-/**
- * فحص سطوع الصورة
- */
 const detectBrightness = (
   img: HTMLImageElement
 ): { mean: number; isDark: boolean; isBright: boolean } => {
@@ -155,9 +174,6 @@ const detectBrightness = (
 // 🖼️ معالجة الصورة — مستويات متعددة
 // ============================================================
 
-/**
- * تحويل Canvas إلى Blob
- */
 const blobFromCanvas = (canvas: HTMLCanvasElement): Promise<Blob> =>
   new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -166,9 +182,6 @@ const blobFromCanvas = (canvas: HTMLCanvasElement): Promise<Blob> =>
     }, 'image/jpeg', 0.95);
   });
 
-/**
- * 🟢 خفيفة — grayscale + تباين بسيط (للصور النظيفة)
- */
 const preprocessLight = (img: HTMLImageElement): Promise<Blob> => {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d')!;
@@ -194,9 +207,6 @@ const preprocessLight = (img: HTMLImageElement): Promise<Blob> => {
   return blobFromCanvas(canvas);
 };
 
-/**
- * 🟡 متوسطة — grayscale + تباين ذكي + حدة (للصور العادية)
- */
 const preprocessMedium = (img: HTMLImageElement): Promise<Blob> => {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d')!;
@@ -255,9 +265,6 @@ const preprocessMedium = (img: HTMLImageElement): Promise<Blob> => {
   return blobFromCanvas(canvas);
 };
 
-/**
- * 🔴 قوية — percentile stretching + حدة أقوى (للصور السيئة/الإضاءة الضعيفة)
- */
 const preprocessStrong = (img: HTMLImageElement): Promise<Blob> => {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d')!;
@@ -330,7 +337,7 @@ export const preprocessForQR = async (file: File): Promise<Blob> => {
 };
 
 // ============================================================
-// 🔧 إصلاح أخطاء OCR الشائعة في العربي
+// 🔧 إصلاح أخطاء OCR الشائعة
 // ============================================================
 
 const fixCommonOCRErrors = (text: string): string => {
@@ -365,25 +372,28 @@ const isValidName = (name: string): boolean => {
   );
 };
 
+const COMPOUND_SECOND_PARTS = new Set([
+  'الله', 'الرحمن', 'الرحيم', 'الكريم', 'الامير', 'الحسين', 'الحسن',
+  'العزيز', 'الواحد', 'الجبار', 'الرزاق', 'الستار', 'السلام', 'القادر',
+  'اللطيف', 'المجيد', 'المحسن', 'الهادي', 'الباقي', 'الخالق', 'الصمد',
+  'العظيم', 'الغفور', 'الغني', 'الفتاح', 'المنعم', 'الوهاب',
+  'الهدى', 'الهدي', 'الدين', 'الاسلام',
+  'العابدين', 'العالي', 'السميع', 'البصير', 'الودود', 'التواب',
+  'الحفيظ', 'المنصور', 'المتعال', 'الوارث', 'الخبير',
+]);
+
+const COMPOUND_FIRST_PARTS = new Set([
+  'عبد', 'ابو', 'ام', 'نور', 'زين', 'صلاح', 'علاء', 'عماد', 'سيف',
+  'حسام', 'بهاء', 'شمس', 'محي', 'تاج', 'فخر', 'شرف', 'جمال', 'كمال',
+  'بدر', 'ضياء', 'ركن', 'عز', 'معين', 'ناصر', 'قمر', 'ضوء', 'سراج',
+  'منصور', 'فؤاد', 'حيدر', 'ماجد', 'وليد', 'عادل', 'هشام', 'اياد',
+]);
+
+/**
+ * دمج الأسماء المركبة العربية — فقط للأزواج المعروفة
+ */
 const mergeArabicCompoundNames = (name: string): string => {
   if (!name) return name;
-
-  const compoundSecondParts = new Set([
-    'الله', 'الرحمن', 'الرحيم', 'الكريم', 'الامير', 'الحسين', 'الحسن',
-    'العزيز', 'الواحد', 'الجبار', 'الرزاق', 'الستار', 'السلام', 'القادر',
-    'اللطيف', 'المجيد', 'المحسن', 'الهادي', 'الباقي', 'الخالق', 'الصمد',
-    'العظيم', 'الغفور', 'الغني', 'الفتاح', 'المنعم', 'الوهاب',
-    'الهدى', 'الهدي', 'الدين', 'الاسلام',
-    'العابدين', 'العالي', 'السميع', 'البصير', 'الودود', 'التواب',
-    'الحفيظ', 'المنصور', 'المتعال', 'الوارث', 'الخبير',
-  ]);
-
-  const compoundFirstParts = new Set([
-    'عبد', 'ابو', 'ام', 'زين', 'صلاح', 'علاء', 'عماد', 'سيف', 'حسام',
-    'بهاء', 'شمس', 'محي', 'تاج', 'فخر', 'شرف', 'جمال', 'كمال', 'بدر',
-    'ضياء', 'ركن', 'عز', 'معين', 'ناصر', 'قمر', 'نور', 'ضوء', 'سراج',
-    'منصور', 'فؤاد', 'حيدر', 'ماجد', 'وليد', 'عادل', 'هشام', 'اياد',
-  ]);
 
   const words = name.split(/\s+/).filter(Boolean);
   const result: string[] = [];
@@ -393,13 +403,15 @@ const mergeArabicCompoundNames = (name: string): string => {
     const current = words[i];
     const next = words[i + 1];
 
-    if (next && next.startsWith('ال') && compoundFirstParts.has(current)) {
-      result.push(current + ' ' + next);
-      i += 2;
-      continue;
-    }
-
-    if (next && compoundSecondParts.has(next)) {
+    // دمج فقط إذا:
+    // 1. الكلمة الأولى من compoundFirstParts
+    // 2. الكلمة الثانية تبدأ بـ "ال" وتكون من compoundSecondParts
+    if (
+      next &&
+      COMPOUND_FIRST_PARTS.has(current) &&
+      next.startsWith('ال') &&
+      COMPOUND_SECOND_PARTS.has(next)
+    ) {
       result.push(current + ' ' + next);
       i += 2;
       continue;
@@ -543,21 +555,15 @@ export const extractArabicName = (rawText: string): string | null => {
 };
 
 // ============================================================
-// 🎯 الدالة الرئيسية: استخراج كل البيانات (multi-pass)
+// 🎯 OCR مع تدوير متعدد الزوايا
 // ============================================================
 
-/**
- * نتيجة محاولة OCR مع درجة الثقة
- */
 interface OCRAttempt {
   text: string;
   confidence: number;
   label: string;
 }
 
-/**
- * تجربة OCR على صورة معينة مع إعدادات معينة
- */
 const tryOCR = async (
   worker: Tesseract.Worker,
   image: Blob,
@@ -579,6 +585,45 @@ const tryOCR = async (
   return { text, confidence, label };
 };
 
+/**
+ * تجربة OCR مع تدوير الصورة بزاوية معينة
+ */
+const tryOCRWithRotation = async (
+  worker: Tesseract.Worker,
+  img: HTMLImageElement,
+  degrees: number,
+  label: string
+): Promise<OCRAttempt> => {
+  const blob =
+    degrees === 0
+      ? await preprocessMedium(img)
+      : await rotateImageToBlob(img, degrees);
+  const processed = degrees === 0 ? blob : await preprocessMediumFromBlob(blob);
+  return tryOCR(worker, processed, '3', label);
+};
+
+/**
+ * معالجة متوسطة من Blob (للتداول)
+ */
+const preprocessMediumFromBlob = (blob: Blob): Promise<Blob> =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      preprocessMedium(img).then(resolve, reject);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('فشل تحميل الصورة'));
+    };
+    img.src = url;
+  });
+
+// ============================================================
+// 🎯 الدالة الرئيسية
+// ============================================================
+
 export const extractIDData = async (
   imageFile: File,
   onProgress?: (status: string, percent: number) => void
@@ -586,7 +631,6 @@ export const extractIDData = async (
   try {
     onProgress?.('', 5);
 
-    // ── تحميل الصورة مرة واحدة ──
     const img = await loadImageFromFile(imageFile);
 
     // ── فحص جودة الصورة ──
@@ -615,60 +659,87 @@ export const extractIDData = async (
       };
     }
 
-    // ── QR: محاولات متعددة ──
+    // ── QR ──
     onProgress?.('', 15);
     const qrPromise = extractQRFromImageFile(imageFile).catch(() => null);
 
-    // ── OCR: معالجة متعددة المحاولات ──
+    // ── المرحلة 1: تدوير متعدد الزوايا (للصور المائلة) ──
     onProgress?.('', 25);
+    const worker = await getWorker();
+
+    const ROTATION_ANGLES = [0, 90, 180, 270, 5, -5, 10, -10];
+    const rotationAttempts: OCRAttempt[] = [];
+
+    console.log(`🔄 تجربة ${ROTATION_ANGLES.length} زوايا تدوير...`);
+
+    // تجربة كل زاوية بالتوازي
+    const rotationPromises = ROTATION_ANGLES.map((angle) =>
+      tryOCRWithRotation(worker, img, angle, `rotation-${angle}°`)
+    );
+    const rotationResults = await Promise.all(rotationPromises);
+    rotationAttempts.push(...rotationResults);
+
+    // اختيار أفضل نتيجة من التدوير
+    let bestRotationName: string | null = null;
+    let bestRotationScore = 0;
+
+    for (const attempt of rotationAttempts) {
+      const name = extractArabicName(attempt.text);
+      if (name) {
+        const score =
+          attempt.confidence * Math.min(name.length / 10, 1);
+        if (score > bestRotationScore) {
+          bestRotationScore = score;
+          bestRotationName = name;
+          console.log(
+            `🎯 أفضل نتيجة تدوير من ${attempt.label} (نقطة: ${score.toFixed(1)}):`,
+            name
+          );
+        }
+      }
+    }
+
+    // إذا وجدنا اسماً بعد التدوير، نكمل مع معالجات إضافية
+    if (bestRotationName && bestRotationScore > 50) {
+      console.log('✅ وجدنا اسم من التدوير، نكمل المعالجة...');
+    }
+
+    // ── المرحلة 2: معالجات إضافية على الصورة الأصلية ──
+    onProgress?.('', 50);
     const [lightBlob, mediumBlob, strongBlob] = await Promise.all([
       preprocessLight(img),
       preprocessMedium(img),
       preprocessStrong(img),
     ]);
 
-    onProgress?.('', 45);
-    const worker = await getWorker();
+    const extraAttempts: OCRAttempt[] = [];
 
-    // تجربة على الصور المحسّنة مع PSMات مختلفة
-    const attempts: OCRAttempt[] = [];
+    const e1 = await tryOCR(worker, mediumBlob, '6', 'متوسطة+PSM6');
+    extraAttempts.push(e1);
 
-    const a1 = await tryOCR(worker, mediumBlob, '3', 'متوسطة+PSM3');
-    attempts.push(a1);
+    const e2 = await tryOCR(worker, mediumBlob, '4', 'متوسطة+PSM4');
+    extraAttempts.push(e2);
 
-    // ⚡ إنهاء مبكر: إذا الثقة > 80% ووجدنا اسماً صالحاً
-    const name1 = extractArabicName(a1.text);
-    if (!(a1.confidence > 80 && name1)) {
-      const a2 = await tryOCR(worker, lightBlob, '3', 'خفيفة+PSM3');
-      attempts.push(a2);
+    const e3 = await tryOCR(worker, mediumBlob, '11', 'متوسطة+PSM11');
+    extraAttempts.push(e3);
 
-      const name2 = extractArabicName(a2.text);
-      if (!(a2.confidence > 80 && name2)) {
-        const a3 = await tryOCR(worker, strongBlob, '3', 'قوية+PSM3');
-        attempts.push(a3);
+    const e4 = await tryOCR(worker, lightBlob, '3', 'خفيفة+PSM3');
+    extraAttempts.push(e4);
 
-        const a4 = await tryOCR(worker, mediumBlob, '6', 'متوسطة+PSM6');
-        attempts.push(a4);
+    const e5 = await tryOCR(worker, strongBlob, '3', 'قوية+PSM3');
+    extraAttempts.push(e5);
 
-        const a5 = await tryOCR(worker, mediumBlob, '4', 'متوسطة+PSM4');
-        attempts.push(a5);
+    const e6 = await tryOCR(worker, strongBlob, '6', 'قوية+PSM6');
+    extraAttempts.push(e6);
 
-        const a6 = await tryOCR(
-          worker,
-          mediumBlob,
-          '11',
-          'متوسطة+PSM11'
-        );
-        attempts.push(a6);
-      }
-    }
+    // ── الجمع والتقييم ──
+    const allAttempts = [...rotationAttempts, ...extraAttempts];
 
-    // اختيار أفضل نتيجة: وزن = ثقة × طول الاسم
     let bestText = '';
     let bestName: string | null = null;
     let bestScore = 0;
 
-    for (const attempt of attempts) {
+    for (const attempt of allAttempts) {
       const name = extractArabicName(attempt.text);
       if (name) {
         const score =
@@ -688,7 +759,7 @@ export const extractIDData = async (
     // إذا لم نجد اسماً، جرّب النص الأطول
     if (!bestName) {
       bestText =
-        attempts.sort((a, b) => b.text.length - a.text.length)[0]
+        allAttempts.sort((a, b) => b.text.length - a.text.length)[0]
           ?.text || '';
       bestName = extractArabicName(bestText);
     }

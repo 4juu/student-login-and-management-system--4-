@@ -91,9 +91,13 @@ const levenshteinDistance = (a: string, b: string): number => {
   return matrix[b.length][a.length];
 };
 
-const MIN_SEQUENTIAL_SCORE = 0.6;
+const MIN_SEQUENTIAL_SCORE = 0.5;
 
-const hasSequentialMatch = (parts1: string[], parts2: string[]): boolean => {
+/**
+ * مطابقة تسلسلية مع دعم التطابق الجزئي
+ * تُرجع عدد التطابقات (0 = لا شيء، shorter.length = كامل)
+ */
+const sequentialMatchCount = (parts1: string[], parts2: string[]): number => {
   const shorter = parts1.length <= parts2.length ? parts1 : parts2;
   const longer = parts1.length <= parts2.length ? parts2 : parts1;
 
@@ -110,13 +114,16 @@ const hasSequentialMatch = (parts1: string[], parts2: string[]): boolean => {
     if (bestScore >= MIN_SEQUENTIAL_SCORE && bestJ !== -1) {
       matches++;
       longerIdx = bestJ + 1;
-      if (matches >= shorter.length) return true;
     }
   }
-  return matches >= shorter.length;
+  return matches;
 };
 
-export const matchArabicNames = (name1: string, name2: string): number => {
+/**
+ * حساب درجة التطابق بناءً على الكلمات المتطابقة
+ * يُرجع 0-90
+ */
+const computeMatchScore = (name1: string, name2: string): number => {
   if (!name1 || !name2) return 0;
 
   const norm1 = normalizeArabicName(name1);
@@ -124,17 +131,73 @@ export const matchArabicNames = (name1: string, name2: string): number => {
   if (norm1 === norm2) return 90;
   if (deepNormalize(norm1) === deepNormalize(norm2)) return 90;
 
-  // Try smart-split first (preserves compounds like نور الهدى)
+  // محاولة 1: smart-split (يحافظ على الأسماء المركبة)
   const parts1 = smartSplitName(name1);
   const parts2 = smartSplitName(name2);
-  if (hasSequentialMatch(parts1, parts2)) return 90;
+  const smartMatches = sequentialMatchCount(parts1, parts2);
+  if (smartMatches >= parts1.length && smartMatches >= parts2.length) return 90;
+  if (smartMatches > 0) {
+    const ratio = smartMatches / Math.max(parts1.length, parts2.length);
+    if (ratio >= 0.9) return 90;
+  }
 
-  // Fallback: split into individual words (handles OCR that breaks compounds)
+  // محاولة 2: تقسيم لكلمات فردية (يعالج OCR الذي يكسر المركبات)
   const words1 = norm1.split(/\s+/).filter(Boolean);
   const words2 = norm2.split(/\s+/).filter(Boolean);
-  if (hasSequentialMatch(words1, words2)) return 90;
+  const wordMatches = sequentialMatchCount(words1, words2);
+  if (wordMatches >= words1.length && wordMatches >= words2.length) return 90;
+  if (wordMatches > 0) {
+    const ratio = wordMatches / Math.max(words1.length, words2.length);
+    if (ratio >= 0.9) return 90;
+  }
+
+  // محاولة 3: التطابق الجزئي (أي كلمة من الاسم تطابق أي كلمة في النظام)
+  const allWords1 = new Set<string>();
+  const allWords2 = new Set<string>();
+  for (const p of parts1) {
+    for (const w of p.split(/\s+/).filter(Boolean)) {
+      allWords1.add(deepNormalize(w));
+    }
+  }
+  for (const p of parts2) {
+    for (const w of p.split(/\s+/).filter(Boolean)) {
+      allWords2.add(deepNormalize(w));
+    }
+  }
+
+  // حساب عدد الكلمات المتطابقة بشكل غير تسلسلي
+  let looseMatches = 0;
+  const usedWords2 = new Set<number>();
+  for (const w1 of allWords1) {
+    let bestSim = 0;
+    let bestIdx = -1;
+    let idx = 0;
+    for (const w2 of allWords2) {
+      if (usedWords2.has(idx)) { idx++; continue; }
+      const sim = stringSimilarity(w1, w2);
+      if (sim > bestSim) { bestSim = sim; bestIdx = idx; }
+      idx++;
+    }
+    if (bestSim >= MIN_SEQUENTIAL_SCORE && bestIdx !== -1) {
+      looseMatches++;
+      usedWords2.add(bestIdx);
+    }
+  }
+
+  if (looseMatches >= 3) return 85;
+  if (looseMatches === 2) {
+    const ratio = looseMatches / Math.max(allWords1.size, allWords2.size);
+    if (ratio >= 0.66) return 80;
+  }
+  if (looseMatches === 1) {
+    // كلمة واحدة فقط — لا نعتبرها تطابق كافي
+  }
 
   return 0;
+};
+
+export const matchArabicNames = (name1: string, name2: string): number => {
+  return computeMatchScore(name1, name2);
 };
 
 export const AUTO_APPROVE_THRESHOLD = 90;
@@ -194,11 +257,13 @@ export const extractNameFromOCR = (ocrText: string): string | null => {
 
 export const runMatchTests = () => {
   const tests = [
-    { id: 'نور الهدى مؤيد سالم جاسم', system: 'نور الهدى مؤيد سالم', expected: '90' },
+    { id: 'نور الهدى مؤيد سالم جاسم', system: 'نور الهدى مؤيد سالم', expected: '85-90' },
     { id: 'نور الهدى مؤيد سالم جاسم', system: 'نور الهدى مؤيد سالم جاسم', expected: '90' },
     { id: 'نور الهدي مويد سالم', system: 'نور الهدى مؤيد سالم', expected: '90' },
     { id: 'عبد الله احمد محمد', system: 'عبدالله احمد محمد', expected: '90' },
     { id: 'احمد علي حسن', system: 'نور الهدى مؤيد سالم', expected: '0' },
+    { id: 'نور الدين مؤيد', system: 'نور الهدى مؤيد', expected: '80-90' },
+    { id: 'مؤيد سالم', system: 'نور الهدى مؤيد سالم', expected: '80-85' },
   ];
 
   console.log('🧪 === اختبارات مطابقة الأسماء ===\n');
