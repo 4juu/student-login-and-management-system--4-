@@ -20,7 +20,6 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
   const [file, setFile] = useState<File | null>(null);
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState('');
   const [error, setError] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -55,8 +54,7 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
     setError('');
 
     try {
-      const result = await extractIDData(file, (statusText, pct) => {
-        setStatus(statusText);
+      const result = await extractIDData(file, (_status, pct) => {
         setProgress(pct);
       });
 
@@ -82,7 +80,6 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
     setPreview(null);
     setFile(null);
     setError('');
-    setStatus('');
     setProgress(0);
   };
 
@@ -160,11 +157,12 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
             <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-xl">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-8 h-8 border-3 border-purple-600 border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm font-bold text-purple-800 flex-1">{status}</p>
+                <p className="text-sm font-bold text-purple-800 flex-1">جاري التحليل...</p>
               </div>
               <div className="w-full bg-white rounded-full h-3 overflow-hidden border border-purple-200">
-                <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300" style={{ width: `${progress}%` }} />
+                <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500" style={{ width: `${progress}%` }} />
               </div>
+              <p className="text-xs text-purple-500 mt-2 text-center">{Math.round(progress)}%</p>
             </div>
           )}
 
@@ -176,9 +174,8 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-xs font-bold text-blue-800 mb-2 flex items-center gap-1.5"><Lightbulb className="w-3.5 h-3.5" /> نصائح:</p>
               <ul className="text-xs text-blue-700 space-y-1 list-disc list-inside">
-                <li>يمكنك رفع الصورة بأي اتجاه — عمودي أو أفقي</li>
-                <li>الصورة تعمل بغض النظر عن الإضاءة أو الأبعاد</li>
-                <li>تأكد من ظهور رمز QR والاسم بشكل واضح</li>
+                <li>ضع الهوية بإضاءة واضحة</li>
+                <li>تجنب انعكاسات الإضاءة على البلاستيك</li>
               </ul>
             </div>
           )}

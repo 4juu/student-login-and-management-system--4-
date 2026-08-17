@@ -478,21 +478,20 @@ export const extractIDData = async (
   onProgress?: (status: string, percent: number) => void
 ): Promise<IDExtractionResult> => {
   try {
-    onProgress?.('🔍 جاري تحليل الصورة...', 5);
+    onProgress?.('', 5);
 
     // ── QR: محاولات متعددة ──
-    onProgress?.('🔳 جاري قراءة رمز QR...', 10);
     const qrPromise = extractQRFromImageFile(imageFile).catch(() => null);
 
     // ── OCR: معالجة متعددة المحاولات ──
-    onProgress?.('✨ جاري تحسين جودة الصورة...', 20);
+    onProgress?.('', 20);
     const [lightBlob, mediumBlob, strongBlob] = await Promise.all([
       preprocessLight(imageFile),
       preprocessMedium(imageFile),
       preprocessStrong(imageFile),
     ]);
 
-    onProgress?.('📖 جاري قراءة النص العربي...', 40);
+    onProgress?.('', 40);
     const worker = await getWorker();
 
     // تجربة على الصور المحسّنة مع PSM 3 (أوتوماتيكي) أولاً
@@ -534,7 +533,7 @@ export const extractIDData = async (
     console.log('📜 أفضل نص OCR:', bestText.substring(0, 300));
     console.log('🎯 الاسم المستخرج:', bestName);
 
-    onProgress?.('🔳 جاري معالجة رمز QR...', 85);
+    onProgress?.('', 85);
     const qrText = await qrPromise;
 
     if (!qrText) {
@@ -568,7 +567,7 @@ export const extractIDData = async (
       };
     }
 
-    onProgress?.('✅ تم بنجاح!', 100);
+    onProgress?.('', 100);
 
     return {
       success: true,
