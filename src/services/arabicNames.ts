@@ -49,16 +49,16 @@ const MALE_NAMES_RAW = [
   'مؤيد', 'كاظم', 'جعفر', 'مصطفى', 'بشير', 'باقر', 'تيسير', 'ثامر',
   'حاتم', 'حمزة', 'راغب', 'رياض', 'زهير', 'عامر', 'عباس', 'عمار',
   'عمرو', 'غازي', 'قاسم', 'لؤي', 'مأمون', 'مراد', 'نايف', 'واثق',
-  'راشد', 'صالح', 'هاني', 'هادي', 'هيثم', 'وائل', 'وسام', 'يوسف',
-  'زياد', 'سلمان', 'سمير', 'شريف', 'سفيان', 'شادي', 'صابر', 'طلال',
-  'ظافر', 'فادي', 'فلاح', 'مازن', 'وسيم', 'يزيد', 'يونس',
-  'башير', 'تامر', 'جوليان', 'ديما', 'رياض', 'سراج', 'شاذلي',
-  'عامر', 'غانم', 'فؤاد', 'مازن', 'مراد', 'مناف', 'هلال', 'وسيم',
-  'ياسر', 'يامن', 'يزيد', 'يونس', 'زياد',
+  'راشد', 'هاني', 'هادي', 'هيثم', 'وائل', 'وسام',
+  'سلمان', 'سمير', 'شريف', 'سفيان', 'شادي', 'صابر', 'طلال',
+  'ظافر', 'فادي', 'فلاح', 'مازن', 'وسيم', 'يزيد',
+  'تامر', 'ديما', 'سراج',
+  'غانم', 'مناف', 'هلال',
   // أسماء عراقية محددة
-  'كريم', 'رشيد', 'ماجد', 'نبال', 'باسم', 'طارق', 'ثامر',
-  'حازم', 'دانיאל', 'رفيق', '留学', 'صلاح', 'عادل', 'فارس',
-  'قيس', 'لطيف', 'مازن', 'نبيل', 'هشام', 'وليد', 'ياسر',
+  'رشيد', 'نبال', 'حازم', 'دانיאל', 'رفيق', 'صلاح', 'عادل', 'فارس',
+  'لطيف', 'هشام', 'وليد',
+  'أنس', 'أسامة', 'فراس', 'اشرف', 'منعم', 'وليد', 'بسام',
+  'حليم', 'بسام',
 ];
 
 const FEMALE_NAMES_RAW = [
@@ -204,7 +204,7 @@ const cleanOCRText = (text: string): string => {
   return text
     .replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '')
     .replace(/ا\s+ل([\u0600-\u06FF])/g, 'ال$1')
-    .replace(/(\S)\s+ل([\u0600-\u06FF])/g, (_, b: string, a: string) => `${b} ال${a}`)
+    .replace(/ل\s+ل([\u0600-\u06FF])/g, 'لل$1')
     .replace(/[\d٠-٩]+/g, ' ')
     .replace(/[^\u0600-\u06FF\s]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -213,13 +213,24 @@ const cleanOCRText = (text: string): string => {
 
 /**
  * فحص: هل الكلمة اسم معروف في قاعدة البيانات؟
- * صارم جداً: الكلمة لازم تكون في SINGLE_NAMES_SET
+ * يتعامل مع "ال" المقدمة (OCR يقرأ "الهدى" مو "هدى")
  */
+const stripAl = (word: string): string => {
+  if (word.startsWith('ال') && word.length > 3) return word.substring(2);
+  if (word.startsWith('ل') && word.length > 2) return word.substring(1);
+  return word;
+};
+
 const isKnownName = (word: string): boolean => {
   const norm = normalizeArabic(word);
   if (norm.length < 2) return false;
   if (NON_NAME_WORDS.has(norm)) return false;
-  return SINGLE_NAMES_SET.has(norm);
+  if (SINGLE_NAMES_SET.has(norm)) return true;
+  const stripped = stripAl(norm);
+  if (stripped.length >= 2 && SINGLE_NAMES_SET.has(stripped)) return true;
+  if (ALL_COMPOUND_PARTS_SET.has(norm)) return true;
+  if (ALL_COMPOUND_PARTS_SET.has(stripped)) return true;
+  return false;
 };
 
 /**
