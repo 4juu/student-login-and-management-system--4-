@@ -176,9 +176,9 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-xs font-bold text-blue-800 mb-2 flex items-center gap-1.5"><Lightbulb className="w-3.5 h-3.5" /> نصائح:</p>
               <ul className="text-xs text-blue-700 space-y-1 list-disc list-inside">
-                <li>تأكد من وضوح الإضاءة</li>
-                <li>صور الهوية كاملة بدون قص</li>
-                <li>تأكد من ظهور رمز QR بشكل واضح</li>
+                <li>يمكنك رفع الصورة بأي اتجاه — عمودي أو أفقي</li>
+                <li>الصورة تعمل بغض النظر عن الإضاءة أو الأبعاد</li>
+                <li>تأكد من ظهور رمز QR والاسم بشكل واضح</li>
               </ul>
             </div>
           )}

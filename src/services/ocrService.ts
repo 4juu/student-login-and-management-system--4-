@@ -24,11 +24,6 @@ const getWorker = async (): Promise<Tesseract.Worker> => {
       },
     });
 
-    await worker.setParameters({
-      tessedit_pageseg_mode: '6' as any,
-      preserve_interword_spaces: '1',
-    });
-
     ocrWorker = worker;
     workerLoading = null;
     console.log('✅ OCR جاهز');
@@ -47,73 +42,222 @@ export const terminateOCR = async (): Promise<void> => {
   }
 };
 
+// ============================================================
+// 🖼️ معالجة الصورة — مستويات متعددة
+// ============================================================
+
 /**
- * 🖼️ تحسين الصورة قبل OCR
+ * تحميل الصورة من File إلى HTMLImageElement
  */
-const preprocessImage = (file: File): Promise<Blob> => {
-  return new Promise((resolve, reject) => {
+const loadImageFromFile = (file: File): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
     const img = new Image();
     const reader = new FileReader();
-
     reader.onload = (e) => {
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          reject(new Error('فشل إنشاء canvas'));
-          return;
-        }
-
-        const minWidth = 2000;
-        let scale = 1;
-        if (img.width < minWidth) {
-          scale = minWidth / img.width;
-        }
-
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
-
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-
-        for (let i = 0; i < data.length; i += 4) {
-          const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-          const contrast = 1.5;
-          let adjusted = ((gray - 128) * contrast) + 128;
-
-          if (adjusted > 180) adjusted = 255;
-          else if (adjusted < 80) adjusted = 0;
-
-          const final = Math.max(0, Math.min(255, adjusted));
-          data[i] = final;
-          data[i + 1] = final;
-          data[i + 2] = final;
-        }
-
-        ctx.putImageData(imageData, 0, 0);
-
-        canvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error('فشل تحويل الصورة'));
-        }, 'image/jpeg', 0.98);
-      };
-
+      img.onload = () => resolve(img);
       img.onerror = () => reject(new Error('فشل تحميل الصورة'));
       img.src = e.target?.result as string;
     };
-
     reader.onerror = () => reject(new Error('فشل قراءة الملف'));
     reader.readAsDataURL(file);
   });
+
+/**
+ * تكبير الصورة إذا كانت صغيرة
+ */
+const upscaleIfNeeded = (
+  img: HTMLImageElement,
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  minWidth = 1800
+) => {
+  let scale = 1;
+  if (img.width < minWidth) {
+    scale = minWidth / img.width;
+  }
+  canvas.width = Math.round(img.width * scale);
+  canvas.height = Math.round(img.height * scale);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 };
 
 /**
- * 🔧 إصلاح أخطاء OCR الشائعة في العربي
+ * 🟢 خفيفة — grayscale + تباين بسيط (للصور النظيفة)
  */
+const preprocessLight = async (file: File): Promise<Blob> => {
+  const img = await loadImageFromFile(file);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  upscaleIfNeeded(img, ctx, canvas);
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imageData.data;
+
+  let sum = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    sum += d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+  }
+  const mean = sum / (d.length / 4);
+
+  for (let i = 0; i < d.length; i += 4) {
+    const gray = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+    const factor = 1.2;
+    let adj = ((gray - mean) * factor) + mean;
+    adj = Math.max(0, Math.min(255, adj));
+    d[i] = d[i + 1] = d[i + 2] = adj;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return blobFromCanvas(canvas);
+};
+
+/**
+ * 🟡 متوسطة — grayscale + تباين ذكي + حدة (للصور العادية)
+ */
+const preprocessMedium = async (file: File): Promise<Blob> => {
+  const img = await loadImageFromFile(file);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  upscaleIfNeeded(img, ctx, canvas);
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imageData.data;
+  const w = canvas.width;
+  const h = canvas.height;
+
+  const gray = new Float32Array(w * h);
+  for (let i = 0; i < d.length; i += 4) {
+    gray[i / 4] = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+  }
+
+  let sum = 0, sumSq = 0;
+  for (let i = 0; i < gray.length; i++) {
+    sum += gray[i];
+    sumSq += gray[i] * gray[i];
+  }
+  const mean = sum / gray.length;
+  const std = Math.sqrt(sumSq / gray.length - mean * mean) || 1;
+
+  const low = Math.max(0, mean - 2 * std);
+  const high = Math.min(255, mean + 2 * std);
+  const range = high - low || 1;
+
+  for (let i = 0; i < gray.length; i++) {
+    let adj = ((gray[i] - low) / range) * 255;
+    adj = Math.max(0, Math.min(255, adj));
+    gray[i] = adj;
+  }
+
+  const sharpened = new Float32Array(w * h);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const idx = y * w + x;
+      const center = gray[idx] * 5;
+      const neighbors = gray[(y - 1) * w + x] + gray[(y + 1) * w + x]
+        + gray[y * w + x - 1] + gray[y * w + x + 1];
+      sharpened[idx] = Math.max(0, Math.min(255, center - neighbors));
+    }
+  }
+  sharpened[0] = gray[0];
+
+  for (let i = 0; i < sharpened.length; i++) {
+    const px = i * 4;
+    d[px] = d[px + 1] = d[px + 2] = sharpened[i];
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return blobFromCanvas(canvas);
+};
+
+/**
+ * 🔴 قوية — percentile stretching + حدة أقوى (للصور السيئة/الإضاءة الضعيفة)
+ */
+const preprocessStrong = async (file: File): Promise<Blob> => {
+  const img = await loadImageFromFile(file);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  upscaleIfNeeded(img, ctx, canvas);
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imageData.data;
+  const w = canvas.width;
+  const h = canvas.height;
+
+  const gray = new Float32Array(w * h);
+  for (let i = 0; i < d.length; i += 4) {
+    gray[i / 4] = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+  }
+
+  const sorted = Array.from(gray).sort((a, b) => a - b);
+  const p5 = sorted[Math.floor(sorted.length * 0.05)];
+  const p95 = sorted[Math.floor(sorted.length * 0.95)];
+  const range = p95 - p5 || 1;
+
+  for (let i = 0; i < gray.length; i++) {
+    let adj = ((gray[i] - p5) / range) * 255;
+    adj = Math.max(0, Math.min(255, adj));
+    gray[i] = adj;
+  }
+
+  const sharpened = new Float32Array(w * h);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const idx = y * w + x;
+      const center = gray[idx] * 6;
+      const neighbors = gray[(y - 1) * w + x] + gray[(y + 1) * w + x]
+        + gray[y * w + x - 1] + gray[y * w + x + 1];
+      sharpened[idx] = Math.max(0, Math.min(255, center - neighbors * 1.5));
+    }
+  }
+  sharpened[0] = gray[0];
+
+  for (let i = 0; i < sharpened.length; i++) {
+    const px = i * 4;
+    d[px] = d[px + 1] = d[px + 2] = sharpened[i];
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return blobFromCanvas(canvas);
+};
+
+/**
+ * تحويل Canvas إلى Blob
+ */
+const blobFromCanvas = (canvas: HTMLCanvasElement): Promise<Blob> =>
+  new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('فشل تحويل الصورة'));
+    }, 'image/jpeg', 0.95);
+  });
+
+/**
+ * تحسين الصورة للاستخراج QR (تباين عالي + تكبير)
+ */
+export const preprocessForQR = async (file: File): Promise<Blob> => {
+  const img = await loadImageFromFile(file);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  upscaleIfNeeded(img, ctx, canvas, 2000);
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imageData.data;
+
+  for (let i = 0; i < d.length; i += 4) {
+    const gray = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+    let adj = gray > 140 ? 255 : 0;
+    d[i] = d[i + 1] = d[i + 2] = adj;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return blobFromCanvas(canvas);
+};
+
+// ============================================================
+// 🔧 إصلاح أخطاء OCR الشائعة في العربي
+// ============================================================
+
 const fixCommonOCRErrors = (text: string): string => {
   return text
     .replace(/ا\s+ل([\u0600-\u06FF])/g, 'ال$1')
@@ -125,9 +269,6 @@ const fixCommonOCRErrors = (text: string): string => {
     .trim();
 };
 
-/**
- * 🧹 تنظيف الاسم المستخرج
- */
 const cleanExtractedName = (text: string): string => {
   return text
     .split(/[:|]/)[0]
@@ -138,28 +279,15 @@ const cleanExtractedName = (text: string): string => {
     .trim();
 };
 
-/**
- * ✅ التحقق من أن الاسم منطقي
- */
 const isValidName = (name: string): boolean => {
   if (!name) return false;
-  // ✅ السماح بكلمات من حرفين (مثل "نور")
   const words = name.split(/\s+/).filter(w => w.length >= 2);
   return words.length >= 2 && words.every(w => /^[\u0600-\u06FF]+$/.test(w));
 };
 
-/**
- * 🔗 دمج الأسماء المركبة
- *
- * أمثلة:
- * "عبد الله احمد محمد"  → "عبد الله احمد محمد"
- * "صلاح الدين خالد"     → "صلاح الدين خالد"
- * "نور الهدى مؤيد سالم" → "نور الهدى مؤيد سالم"
- */
 const mergeArabicCompoundNames = (name: string): string => {
   if (!name) return name;
 
-  // الجزء الثاني من الأسماء المركبة المعروفة
   const compoundSecondParts = new Set([
     'الله', 'الرحمن', 'الرحيم', 'الكريم', 'الامير', 'الحسين', 'الحسن',
     'العزيز', 'الواحد', 'الجبار', 'الرزاق', 'الستار', 'السلام', 'القادر',
@@ -169,7 +297,6 @@ const mergeArabicCompoundNames = (name: string): string => {
     'العابدين', 'العالي',
   ]);
 
-  // الجزء الأول من الأسماء المركبة المعروفة
   const compoundFirstParts = new Set([
     'عبد', 'ابو', 'ام', 'زين', 'صلاح', 'علاء', 'عماد', 'سيف', 'حسام',
     'بهاء', 'شمس', 'محي', 'تاج', 'فخر', 'شرف', 'جمال', 'كمال', 'بدر',
@@ -184,14 +311,12 @@ const mergeArabicCompoundNames = (name: string): string => {
     const current = words[i];
     const next = words[i + 1];
 
-    // الجزء الأول معروف + التالي يبدأ بـ "ال"
     if (next && next.startsWith('ال') && compoundFirstParts.has(current)) {
       result.push(current + ' ' + next);
       i += 2;
       continue;
     }
 
-    // التالي موجود في قائمة الأجزاء الثانية المعروفة
     if (next && compoundSecondParts.has(next)) {
       result.push(current + ' ' + next);
       i += 2;
@@ -206,7 +331,7 @@ const mergeArabicCompoundNames = (name: string): string => {
 };
 
 /**
- * 🎯 استخراج الاسم من نص OCR - نسخة محسّنة
+ * 🎯 استخراج الاسم من نص OCR
  */
 export const extractArabicName = (rawText: string): string | null => {
   if (!rawText) return null;
@@ -216,9 +341,7 @@ export const extractArabicName = (rawText: string): string | null => {
 
   console.log('📋 أسطر OCR:', lines);
 
-  // ============================================================
   // الاستراتيجية 1: البحث عن "الاسم" + ما بعدها
-  // ============================================================
   const arabicNamePatterns = [
     /الاسم\s*[:\-]?\s*(.+)/,
     /الأسم\s*[:\-]?\s*(.+)/,
@@ -239,9 +362,7 @@ export const extractArabicName = (rawText: string): string | null => {
     }
   }
 
-  // ============================================================
   // الاستراتيجية 2: السطر اللي بعد سطر يحوي "الاسم"
-  // ============================================================
   for (let i = 0; i < lines.length; i++) {
     if (/^(الاسم|الأسم|الإسم|اسم)\s*[:\-]?\s*$/.test(lines[i])) {
       if (i + 1 < lines.length) {
@@ -254,9 +375,7 @@ export const extractArabicName = (rawText: string): string | null => {
     }
   }
 
-  // ============================================================
   // الاستراتيجية 3: البحث في كل سطر عن اسم محتمل
-  // ============================================================
   const ignoreWords = new Set([
     'الاسم', 'اسم', 'الأسم', 'الإسم',
     'الطالب', 'الطالبة',
@@ -277,7 +396,6 @@ export const extractArabicName = (rawText: string): string | null => {
     'المرحله', 'النفاذ', 'الانتهاء',
   ]);
 
-  // ✅ السماح بأسماء من 2 أحرف (مثل "نور")
   const isArabicWord = (w: string) => /^[\u0600-\u06FF]+$/.test(w) && w.length >= 2;
   const isLikelyNamePart = (w: string) => isArabicWord(w) && !ignoreWords.has(w);
 
@@ -325,7 +443,6 @@ export const extractArabicName = (rawText: string): string | null => {
   const best = candidates[0];
   if (best.wordCount < 2) return null;
 
-  // ✅ دمج الأسماء المركبة (عبد الله، نور الهدى، صلاح الدين...)
   const processed = mergeArabicCompoundNames(best.text);
 
   console.log('✅ أفضل مرشح:', best.text);
@@ -333,9 +450,29 @@ export const extractArabicName = (rawText: string): string | null => {
   return processed;
 };
 
+// ============================================================
+// 🎯 الدالة الرئيسية: استخراج كل البيانات (multi-pass)
+// ============================================================
+
 /**
- * 🎯 الدالة الرئيسية: استخراج كل البيانات
+ * تجربة OCR على صورة معينة مع إعدادات معينة
  */
+const tryOCR = async (
+  worker: Tesseract.Worker,
+  image: Blob,
+  psm: string,
+  label: string
+): Promise<string> => {
+  await worker.setParameters({
+    tessedit_pageseg_mode: psm as any,
+    preserve_interword_spaces: '1',
+  });
+  const result = await worker.recognize(image);
+  const text = result.data.text;
+  console.log(`📋 OCR (${label}, PSM ${psm}):`, text.substring(0, 200));
+  return text;
+};
+
 export const extractIDData = async (
   imageFile: File,
   onProgress?: (status: string, percent: number) => void
@@ -343,33 +480,68 @@ export const extractIDData = async (
   try {
     onProgress?.('🔍 جاري تحليل الصورة...', 5);
 
-    onProgress?.('📷 جاري قراءة رمز QR...', 15);
+    // ── QR: محاولات متعددة ──
+    onProgress?.('🔳 جاري قراءة رمز QR...', 10);
     const qrPromise = extractQRFromImageFile(imageFile).catch(() => null);
 
-    onProgress?.('✨ جاري تحسين جودة الصورة...', 25);
-    const enhanced = await preprocessImage(imageFile);
+    // ── OCR: معالجة متعددة المحاولات ──
+    onProgress?.('✨ جاري تحسين جودة الصورة...', 20);
+    const [lightBlob, mediumBlob, strongBlob] = await Promise.all([
+      preprocessLight(imageFile),
+      preprocessMedium(imageFile),
+      preprocessStrong(imageFile),
+    ]);
 
     onProgress?.('📖 جاري قراءة النص العربي...', 40);
     const worker = await getWorker();
 
-    const ocrResult = await worker.recognize(enhanced);
-    const rawText = ocrResult.data.text;
+    // تجربة على الصور المحسّنة مع PSM 3 (أوتوماتيكي) أولاً
+    const attempts: { text: string; label: string }[] = [];
 
-    console.log('📜 النص الخام من OCR:\n', rawText);
+    const texts = await Promise.all([
+      tryOCR(worker, mediumBlob, '3', 'متوسطة+PSM3'),
+      tryOCR(worker, lightBlob, '3', 'خفيفة+PSM3'),
+      tryOCR(worker, strongBlob, '3', 'قوية+PSM3'),
+      tryOCR(worker, mediumBlob, '6', 'متوسطة+PSM6'),
+    ]);
 
-    onProgress?.('🔤 جاري استخراج الاسم...', 75);
-    const extractedName = extractArabicName(rawText);
+    attempts.push(
+      { text: texts[0], label: 'متوسطة+PSM3' },
+      { text: texts[1], label: 'خفيفة+PSM3' },
+      { text: texts[2], label: 'قوية+PSM3' },
+      { text: texts[3], label: 'متوسطة+PSM6' },
+    );
 
-    console.log('🎯 الاسم المستخرج:', extractedName);
+    // اختيار أفضل نتيجة: الأكثر طولاً الذي يحتوي على كلمات عربية
+    let bestText = '';
+    let bestName: string | null = null;
 
-    onProgress?.('🔳 جاري معالجة رمز QR...', 90);
+    for (const attempt of attempts) {
+      const name = extractArabicName(attempt.text);
+      if (name && name.length > (bestName?.length || 0)) {
+        bestName = name;
+        bestText = attempt.text;
+        console.log(`🎯 أفضل نتيجة من ${attempt.label}:`, name);
+      }
+    }
+
+    // إذا لم نجد اسماً، جرّب النص الأطول
+    if (!bestName) {
+      bestText = attempts.sort((a, b) => b.text.length - a.text.length)[0].text;
+      bestName = extractArabicName(bestText);
+    }
+
+    console.log('📜 أفضل نص OCR:', bestText.substring(0, 300));
+    console.log('🎯 الاسم المستخرج:', bestName);
+
+    onProgress?.('🔳 جاري معالجة رمز QR...', 85);
     const qrText = await qrPromise;
 
     if (!qrText) {
       return {
         success: false,
-        name: extractedName || undefined,
-        rawText,
+        name: bestName || undefined,
+        rawText: bestText,
         error: 'لم يتم العثور على رمز QR في الصورة. تأكد من وضوح صورة الهوية.',
       };
     }
@@ -379,19 +551,19 @@ export const extractIDData = async (
     if (!qrInfo.id) {
       return {
         success: false,
-        name: extractedName || undefined,
+        name: bestName || undefined,
         qrUrl: qrText,
-        rawText,
+        rawText: bestText,
         error: 'رمز QR غير صالح. تأكد من أن الصورة لهوية وزارة التعليم الرسمية.',
       };
     }
 
-    if (!extractedName) {
+    if (!bestName) {
       return {
         success: false,
         qrUrl: qrText,
         qrId: qrInfo.id,
-        rawText,
+        rawText: bestText,
         error: 'لم نتمكن من قراءة الاسم من الهوية. حاول رفع صورة أوضح.',
       };
     }
@@ -400,10 +572,10 @@ export const extractIDData = async (
 
     return {
       success: true,
-      name: extractedName,
+      name: bestName,
       qrUrl: qrText,
       qrId: qrInfo.id,
-      rawText,
+      rawText: bestText,
     };
 
   } catch (error: any) {
