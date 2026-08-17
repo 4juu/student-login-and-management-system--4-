@@ -310,8 +310,11 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                       <p className="text-[10px] text-blue-400 mt-0.5">الرمز: {req.studentCode}</p>
                     </div>
                     <div className="bg-slate-800 rounded-lg p-3 border border-purple-500/30">
-                      <p className="text-xs text-purple-400 font-bold mb-1 flex items-center gap-1"><Camera className="w-3.5 h-3.5" /> رقم الهوية:</p>
-                      <p className="font-bold text-purple-200 text-sm font-mono">{req.nationalId || '—'}</p>
+                      <p className="text-xs text-purple-400 font-bold mb-1 flex items-center gap-1"><Camera className="w-3.5 h-3.5" /> من البطاقة:</p>
+                      <p className="font-bold text-purple-200 text-sm">{req.nameFromCard || '—'}</p>
+                      {req.nationalId && (
+                        <p className="text-[10px] text-purple-400 mt-0.5">هوية: {req.nationalId}</p>
+                      )}
                       {req.qrCodeId && (
                         <p className="text-[10px] text-purple-400 mt-0.5">QR: {req.qrCodeId.slice(0, 20)}...</p>
                       )}
@@ -325,6 +328,13 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                         : 'bg-slate-800 border-slate-600'
                     }`}>
                       <QrCode className="w-3 h-3" /> {req.qrVerified ? 'QR متحقق' : 'QR غير متحقق'}
+                    </span>
+                    <span className={`text-[10px] border rounded-full px-2 py-1 flex items-center gap-1 ${
+                      req.nameMatched
+                        ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                        : 'bg-slate-800 border-slate-600'
+                    }`}>
+                      <ClipboardList className="w-3 h-3" /> {req.nameMatched ? 'الاسم متطابق' : 'الاسم غير متطابق'}
                     </span>
                     <span className={`text-[10px] border rounded-full px-2 py-1 flex items-center gap-1 ${
                       req.faceDescriptor

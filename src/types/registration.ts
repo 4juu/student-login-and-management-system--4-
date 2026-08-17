@@ -25,10 +25,12 @@ export interface PendingRegistration {
   studentCode: string;
   nameInSystem: string;
 
+  nameFromCard?: string;
   nationalId?: string;
   qrCodeUrl?: string;
   qrCodeId?: string;
   qrVerified: boolean;
+  nameMatched: boolean;
 
   faceDescriptor: any;
 
@@ -43,17 +45,12 @@ export interface PendingRegistration {
   hasExistingFace?: boolean;
 }
 
-export interface RegistrationProgress {
-  step: 'code' | 'id-upload' | 'id-processing' | 'face' | 'submitting' | 'success' | 'error' | 'attendance-report';
-  message?: string;
-}
-
 export interface IDExtractionResult {
   success: boolean;
-  name?: string;
   qrUrl?: string;
   qrId?: string;
   nationalId?: string;
+  ocrText?: string;
+  nameFromCard?: string;
   error?: string;
-  rawText?: string;
 }

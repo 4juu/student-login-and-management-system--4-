@@ -3,10 +3,8 @@ import { ref, set } from 'firebase/database';
 import { database, dbURL } from '../../firebase/config';
 import { Student, AttendanceRecord } from '../../types/student';
 import { RegistrationLink, IDExtractionResult } from '../../types/registration';
-import {
-  getRegistrationLink,
-  validateLink,
-} from '../../services/tokenService';
+import { getRegistrationLink, validateLink } from '../../services/tokenService';
+import { findNameInOCRText } from '../../services/nameMatching';
 import { IDCardUpload } from './IDCardUpload';
 import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear, loadAttendanceRecords, loadSessions } from '../../firebase/dataService';
@@ -23,6 +21,7 @@ type Step =
   | 'loading'
   | 'invalid-link'
   | 'upload-id'
+  | 'name-mismatch'
   | 'capture-face'
   | 'submitting'
   | 'success'
@@ -41,16 +40,13 @@ const deepSanitize = (obj: any): any => {
   if (obj instanceof Float32Array) return Array.from(obj);
   if (obj instanceof Set) return Array.from(obj);
   if (obj instanceof Map) return Object.fromEntries(obj);
-  if (Array.isArray(obj)) {
-    return obj.map(deepSanitize).filter(v => v !== undefined && v !== null);
-  }
+  if (Array.isArray(obj)) return obj.map(deepSanitize).filter(v => v != null);
   if (typeof obj === 'object') {
     const cleaned: any = {};
     for (const key in obj) {
-      const val = obj[key];
-      if (val === undefined) continue;
-      const sanitized = deepSanitize(val);
-      if (sanitized !== undefined) cleaned[key] = sanitized;
+      if (obj[key] === undefined) continue;
+      const s = deepSanitize(obj[key]);
+      if (s !== undefined) cleaned[key] = s;
     }
     return cleaned;
   }
@@ -60,29 +56,19 @@ const deepSanitize = (obj: any): any => {
 const dbFetch = async <T,>(path: string, signal?: AbortSignal): Promise<T | null> => {
   const url = `${dbURL}/${path}.json`;
   const res = await fetch(url, { signal });
-  if (!res.ok) {
-    console.warn('⚠️ dbFetch فشل:', url, res.status);
-    return null;
-  }
+  if (!res.ok) return null;
   return res.json() as Promise<T | null>;
 };
 
 const normalizeDate = (dateStr: string): string => {
   if (!dateStr) return '';
-  const arabicNumbers = '٠١٢٣٤٥٦٧٨٩';
-  const englishNumbers = '0123456789';
-  let normalized = dateStr.replace(/[٠-٩]/g, (d) => englishNumbers[arabicNumbers.indexOf(d)]);
-  normalized = normalized.replace(/[‏‎\u200E\u200F]/g, '').trim();
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
-
-  const slashMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (slashMatch) {
-    const [, day, month, year] = slashMatch;
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-  }
-
-  return normalized;
+  const arabicNums = '٠١٢٣٤٥٦٧٨٩';
+  const engNums = '0123456789';
+  let n = dateStr.replace(/[٠-٩]/g, d => engNums[arabicNums.indexOf(d)]).replace(/[‏‎\u200E\u200F]/g, '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(n)) return n;
+  const m = n.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return n;
 };
 
 export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExit }) => {
@@ -100,86 +86,60 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   const loadAllStudentsForStage = async (adminUid: string, stageId: string, signal: AbortSignal, linkYear?: string): Promise<Student[] | null> => {
     let year = linkYear || '';
-    if (!year) {
-      try { year = await getActiveAcademicYear(); } catch { year = ''; }
-    }
+    if (!year) { try { year = await getActiveAcademicYear(); } catch { year = ''; } }
     if (!year) { setErrorMsg('تعذر تحميل السنة الدراسية'); goTo('invalid-link'); return null; }
-
-    const studentPath = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}/students`;
-    const data = await dbFetch<Record<string, Student> | Student[]>(studentPath, signal);
+    const data = await dbFetch<Record<string, Student> | Student[]>(`academicYears/${year}/userData/${adminUid}/stageData/${stageId}/students`, signal);
     if (!data) { setErrorMsg('لم نجد بيانات الطلاب'); goTo('invalid-link'); return null; }
-
-    const studentsArr: Student[] = Array.isArray(data) ? data : Object.values(data);
-    return studentsArr;
+    return Array.isArray(data) ? data : Object.values(data);
   };
 
   const loadStageRecordsForStudent = async (
-    link: RegistrationLink,
-    studentId: string,
-    signal?: AbortSignal,
+    lnk: RegistrationLink, studentId: string, signal?: AbortSignal,
   ): Promise<{ records: AttendanceRecord[]; sessionNameMap: Record<string, string> }> => {
-    let year = link.academicYear || '';
-    if (!year) {
-      try { year = await getActiveAcademicYear(); } catch { year = ''; }
-    }
+    let year = lnk.academicYear || '';
+    if (!year) { try { year = await getActiveAcademicYear(); } catch { year = ''; } }
     if (!year) return { records: [], sessionNameMap: {} };
 
-    const adminUid = link.adminUid;
-    const stageId = link.stageId;
-    const teacherId = link.teacherId || link.adminUid;
-
+    const teacherId = lnk.teacherId || lnk.adminUid;
     const [teacherRecords, teacherSessions] = await Promise.all([
-      loadAttendanceRecords(adminUid, stageId, teacherId),
-      loadSessions(adminUid, stageId, teacherId),
+      loadAttendanceRecords(lnk.adminUid, lnk.stageId, teacherId),
+      loadSessions(lnk.adminUid, lnk.stageId, teacherId),
     ]);
 
-    const sessionNameMap: Record<string, string> = {};
-    for (const s of teacherSessions) {
-      if (s && s.id && s.name) sessionNameMap[s.id] = s.name;
-    }
+    const sNameMap: Record<string, string> = {};
+    for (const s of teacherSessions) { if (s?.id && s.name) sNameMap[s.id] = s.name; }
+    let records = teacherRecords.filter(r => r?.studentId === studentId);
 
-    let records = teacherRecords.filter(r => r && r.studentId === studentId);
-
-    if (records.length === 0 && link.subjectName) {
-      const base = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}`;
+    if (records.length === 0 && lnk.subjectName) {
+      const base = `academicYears/${year}/userData/${lnk.adminUid}/stageData/${lnk.stageId}`;
       const teachersData = await dbFetch<any>(`${base}/teacherRecords`, signal);
       if (teachersData) {
         const teachers: any[] = Array.isArray(teachersData) ? teachersData : Object.values(teachersData);
         const all: AttendanceRecord[] = [];
         for (const t of teachers) {
           if (!t || typeof t !== 'object') continue;
-
-          const arr: any[] = t.recordsCompressed
-            ? (Array.isArray(t.recordsCompressed) ? t.recordsCompressed : Object.values(t.recordsCompressed))
-            : [];
+          const arr: any[] = t.recordsCompressed ? (Array.isArray(t.recordsCompressed) ? t.recordsCompressed : Object.values(t.recordsCompressed)) : [];
           for (const c of arr) {
             if (!c || typeof c !== 'object') continue;
             if (c.id) { all.push(c as AttendanceRecord); continue; }
-            try {
-              const rec = decompressRecord(c);
-              if (rec && rec.id) all.push(rec);
-            } catch { }
+            try { const rec = decompressRecord(c); if (rec?.id) all.push(rec); } catch {}
           }
-
           if (t.records) {
             const raw: any[] = Array.isArray(t.records) ? t.records : Object.values(t.records);
             all.push(...raw.filter(r => r && typeof r === 'object' && r.id));
           }
         }
-        records = all.filter(r => r.studentId === studentId && r.subjectName === link.subjectName);
+        records = all.filter(r => r.studentId === studentId && r.subjectName === lnk.subjectName);
       }
     }
-
-    return { records, sessionNameMap };
+    return { records, sessionNameMap: sNameMap };
   };
 
   useEffect(() => {
     let mounted = true;
     const TIMEOUT = 20000;
-
     const globalTimeout = setTimeout(() => {
       if (!mounted) return;
-      console.warn('⏱️ انتهى الوقت الكلي');
       setErrorMsg('تعذر الاتصال بقاعدة البيانات');
       goTo('invalid-link');
     }, TIMEOUT);
@@ -188,85 +148,42 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       try {
         const linkData = await getRegistrationLink(token);
         if (!mounted) return;
-
         const validation = validateLink(linkData);
-        if (!validation.valid) {
-          setErrorMsg(validation.reason || 'الرابط غير صالح');
-          goTo('invalid-link');
-          return;
-        }
-        if (!linkData) {
-          setErrorMsg('الرابط غير موجود');
-          goTo('invalid-link');
-          return;
-        }
+        if (!validation.valid) { setErrorMsg(validation.reason || 'الرابط غير صالح'); goTo('invalid-link'); return; }
+        if (!linkData) { setErrorMsg('الرابط غير موجود'); goTo('invalid-link'); return; }
 
         setLink(linkData);
 
         if (linkData.type === 'attendance') {
           const ac = new AbortController();
-          const studentTimeout = setTimeout(() => ac.abort(), TIMEOUT);
+          const st = setTimeout(() => ac.abort(), TIMEOUT);
           try {
             const students = await loadAllStudentsForStage(linkData.adminUid, linkData.stageId, ac.signal, linkData.academicYear);
-            if (mounted && students) {
-              setAllStudents(students);
-              goTo('upload-id');
-            }
-          } finally {
-            clearTimeout(studentTimeout);
-          }
+            if (mounted && students) { setAllStudents(students); goTo('upload-id'); }
+          } finally { clearTimeout(st); }
         } else if (linkData.studentId) {
           const ac = new AbortController();
-          const studentTimeout = setTimeout(() => ac.abort(), TIMEOUT);
+          const st = setTimeout(() => ac.abort(), TIMEOUT);
           try {
             const s = await loadAllStudentsForStage(linkData.adminUid, linkData.stageId, ac.signal, linkData.academicYear);
             if (mounted && s) {
-              const found = s.find((stu) => stu.id === linkData.studentId);
-              if (found) {
-                setStudent(found);
-                setAllStudents(s);
-                goTo('upload-id');
-              } else {
-                setErrorMsg('لم نجد بياناتك في النظام');
-                goTo('invalid-link');
-              }
+              const found = s.find(stu => stu.id === linkData.studentId);
+              if (found) { setStudent(found); setAllStudents(s); goTo('upload-id'); }
+              else { setErrorMsg('لم نجد بياناتك في النظام'); goTo('invalid-link'); }
             }
-          } finally {
-            clearTimeout(studentTimeout);
-          }
+          } finally { clearTimeout(st); }
         } else {
           setErrorMsg('هذا الرابط غير مرتبط بطالب محدد');
           goTo('invalid-link');
         }
       } catch (e: any) {
-        if (e?.name === 'AbortError') {
-          console.warn('⏱️ طلب Firebase انقطع');
-          setErrorMsg('تعذر الاتصال بقاعدة البيانات');
-        } else {
-          console.error(e);
-          setErrorMsg('فشل تحميل بيانات الرابط');
-        }
+        setErrorMsg(e?.name === 'AbortError' ? 'تعذر الاتصال بقاعدة البيانات' : 'فشل تحميل بيانات الرابط');
         goTo('invalid-link');
-      } finally {
-        clearTimeout(globalTimeout);
-      }
+      } finally { clearTimeout(globalTimeout); }
     })();
 
-    return () => {
-      mounted = false;
-      clearTimeout(globalTimeout);
-    };
+    return () => { mounted = false; clearTimeout(globalTimeout); };
   }, [token, goTo]);
-
-  const findStudentByName = (name: string, students: Student[]): Student | null => {
-    const normalizedTarget = name.replace(/\s+/g, '').toLowerCase();
-    for (const s of students) {
-      const normalizedStudent = s.name.replace(/\s+/g, '').toLowerCase();
-      if (normalizedStudent === normalizedTarget) return s;
-      if (normalizedTarget.includes(normalizedStudent) || normalizedStudent.includes(normalizedTarget)) return s;
-    }
-    return null;
-  };
 
   const handleIdExtracted = async (result: IDExtractionResult) => {
     try {
@@ -274,30 +191,39 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       if (!link) return;
 
       if (link.type === 'attendance') {
-        const extractedName = result.name || '';
-        const matched = extractedName ? findStudentByName(extractedName, allStudents) : null;
-        if (!matched) {
-          if (allStudents.length === 1) {
-            setMatchedStudent(allStudents[0]);
-            const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link, allStudents[0].id);
-            setAttendanceRecords(records);
-            setSessionNameMap(namesMap);
-            goTo('attendance-report');
-          } else {
-            goTo('capture-face');
-          }
+        if (student) {
+          const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link, student.id);
+          setAttendanceRecords(records);
+          setSessionNameMap(namesMap);
+          setMatchedStudent(student);
+          goTo('attendance-report');
+        } else if (allStudents.length === 1) {
+          setMatchedStudent(allStudents[0]);
+          const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link, allStudents[0].id);
+          setAttendanceRecords(records);
+          setSessionNameMap(namesMap);
+          goTo('attendance-report');
+        } else {
+          goTo('upload-id');
+        }
+        return;
+      }
+
+      if (!student) return;
+
+      if (result.ocrText) {
+        const nameCheck = findNameInOCRText(student.name, result.ocrText);
+        if (!nameCheck.matched) {
+          goTo('name-mismatch');
           return;
         }
-        setMatchedStudent(matched);
-        const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link, matched.id);
-        setAttendanceRecords(records);
-        setSessionNameMap(namesMap);
-        goTo('attendance-report');
+      } else if (!result.qrId) {
+        goTo('name-mismatch');
         return;
       }
 
       if (result.qrId) {
-        saveQRAsync(result).catch(e => console.warn('⚠️ فشل حفظ QR:', e));
+        saveQRAsync(result).catch(() => {});
       }
       goTo('capture-face');
     } catch (e) {
@@ -315,45 +241,39 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       if (data) {
         const entries = Object.entries(data as Record<string, Student>);
         const found = entries.find(([, s]) => s.id === student.id);
-        if (found) {
-          await set(ref(database, `${path}/${found[0]}/qrCodeId`), result.qrId);
-        }
+        if (found) await set(ref(database, `${path}/${found[0]}/qrCodeId`), result.qrId);
       }
-    } catch (e) {
-      console.warn('⚠️ فشل حفظ QR:', e);
-    }
+    } catch {}
   };
 
   const handleFaceCaptured = async (descriptor: MultiDescriptor) => {
     if (!link || !student) return;
     goTo('submitting');
-    const cleanFaceDescriptor = deepSanitize(descriptor);
+    const cleanFD = deepSanitize(descriptor);
     try {
       const requestId = `${student.id}_${Date.now()}`;
-      const pendingRef = ref(database, `registrationSystem/pending/${link.adminUid}/${requestId}`);
-      await set(pendingRef, {
+      await set(ref(database, `registrationSystem/pending/${link.adminUid}/${requestId}`), {
         id: requestId,
         adminUid: link.adminUid,
         stageId: link.stageId,
         studentId: student.id,
         studentCode: student.code,
         nameInSystem: student.name,
+        nameFromCard: idData?.nameFromCard || '',
         nationalId: idData?.nationalId || '',
         qrCodeUrl: idData?.qrUrl || '',
         qrCodeId: idData?.qrId || '',
-        qrVerified: !!idData?.success,
-        faceDescriptor: cleanFaceDescriptor,
+        qrVerified: !!idData?.qrId,
+        nameMatched: !!(idData?.nameFromCard),
+        faceDescriptor: cleanFD,
         status: 'pending',
         createdAt: new Date().toISOString(),
         hasExistingQr: !!student.qrCodeId,
         hasExistingFace: !!student.faceDescriptor,
       });
-      set(ref(database, `registrationSystem/links/${token}/used`), true).catch((e) =>
-        console.warn('⚠️ فشل تعليم الرابط كمستخدم:', e)
-      );
+      set(ref(database, `registrationSystem/links/${token}/used`), true).catch(() => {});
       goTo('success');
     } catch (e: any) {
-      console.error('❌ فشل حفظ:', e);
       setErrorMsg(e.code === 'PERMISSION_DENIED' ? 'لا توجد صلاحية' : e.message || 'فشل الحفظ');
       goTo('error');
     }
@@ -361,25 +281,16 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   const getAttendanceStats = () => {
     if (!matchedStudent) return { present: 0, absent: 0, total: 0, records: [] as any[] };
-
     const present = attendanceRecords.filter(r => r.status === 'present').length;
     const absent = attendanceRecords.filter(r => r.status === 'absent').length;
-
-    const sortedRecords = [...attendanceRecords].sort((a, b) =>
-      normalizeDate(b.date).localeCompare(normalizeDate(a.date))
-    );
-
+    const sortedRecords = [...attendanceRecords].sort((a, b) => normalizeDate(b.date).localeCompare(normalizeDate(a.date)));
     return { present, absent, total: present + absent, records: sortedRecords };
   };
 
   const subjectName = link?.subjectName || link?.adminUid || 'المادة';
 
   if (step === 'loading') {
-    return (
-      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
-        <div className="w-full max-w-md"><SkeletonCard /></div>
-      </div>
-    );
+    return <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl"><div className="w-full max-w-md"><SkeletonCard /></div></div>;
   }
 
   if (step === 'invalid-link') {
@@ -391,9 +302,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
           </div>
           <h2 className="text-2xl font-bold text-red-400 mb-2">رابط غير صالح</h2>
           <p className="text-white/60 mb-6">{errorMsg}</p>
-          <button onClick={onExit} className="btn-base btn-primary w-full py-3">
-            العودة للرئيسية
-          </button>
+          <button onClick={onExit} className="btn-base btn-primary w-full py-3">العودة للرئيسية</button>
         </div>
       </div>
     );
@@ -403,23 +312,43 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     return (
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
         <div className="w-full max-w-md">
-          <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
-            {link?.type === 'attendance' && (
-              <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="bg-emerald-500/20 p-3 rounded-xl">
-                    <BookOpen className="w-6 h-6 text-emerald-400" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-emerald-300">المادة</p>
-                    <p className="text-lg font-bold text-emerald-300">{subjectName}</p>
-                  </div>
+          {link?.type === 'attendance' && (
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-4 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-emerald-500/20 p-3 rounded-xl"><BookOpen className="w-5 h-5 text-emerald-400" /></div>
+                <div>
+                  <p className="text-xs text-emerald-300">المادة</p>
+                  <p className="text-lg font-bold text-emerald-300">{subjectName}</p>
                 </div>
-                <p className="text-sm text-emerald-300/80">ارفع هويتك الجامعية لعرض تقرير الحضور والغياب</p>
               </div>
-            )}
-            <IDCardUpload student={student || { id: '', name: '', code: '' } as Student} onExtracted={handleIdExtracted} onCancel={onExit} />
+            </div>
+          )}
+          <IDCardUpload student={student || { id: '', name: '', code: '' } as Student} onExtracted={handleIdExtracted} onCancel={onExit} />
+        </div>
+      </div>
+    );
+  }
+
+  if (step === 'name-mismatch' && idData) {
+    return (
+      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
+        <div className="glass-card p-8 max-w-md w-full text-center">
+          <div className="mx-auto w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4">
+            <AlertTriangle className="w-8 h-8 text-amber-400" />
           </div>
+          <h2 className="text-2xl font-bold text-white mb-2">الاسم غير متطابق</h2>
+          <div className="glass-card-sm p-4 mb-4 text-right space-y-2">
+            {student && (
+              <p className="text-sm text-white/50">الاسم في النظام: <span className="text-white font-bold">{student.name}</span></p>
+            )}
+            {idData.ocrText && (
+              <p className="text-sm text-white/50">النصوص المستخرجة: <span className="text-white/80 font-mono text-xs break-all">{idData.ocrText.slice(0, 200)}</span></p>
+            )}
+          </div>
+          <p className="text-sm text-white/60 mb-6">الاسم المستخرج من البطاقة لا يتطابق مع اسمك في النظام. حاول التصوير بشكل أوضح.</p>
+          <button onClick={() => goTo('upload-id')} className="btn-base btn-secondary w-full py-3">
+            <XCircle className="w-4 h-4" /> إعادة التصوير
+          </button>
         </div>
       </div>
     );
@@ -427,17 +356,8 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   if (step === 'capture-face' && student) {
     return (
-      <Suspense fallback={
-        <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
-          <div className="w-full max-w-md"><SkeletonCard /></div>
-        </div>
-      }>
-        <LazyFaceCaptureStep
-          student={student}
-          allStudents={allStudents}
-          onCaptured={handleFaceCaptured}
-          onCancel={() => goTo('upload-id')}
-        />
+      <Suspense fallback={<div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl"><div className="w-full max-w-md"><SkeletonCard /></div></div>}>
+        <LazyFaceCaptureStep student={student} allStudents={allStudents} onCaptured={handleFaceCaptured} onCancel={() => goTo('upload-id')} />
       </Suspense>
     );
   }
@@ -455,7 +375,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   }
 
   if (step === 'success' && student) {
-    return <RegistrationSuccess student={student} qrVerified={!!idData?.success} onExit={onExit} />;
+    return <RegistrationSuccess student={student} qrVerified={!!idData?.qrId} onExit={onExit} />;
   }
 
   if (step === 'error') {
@@ -478,16 +398,13 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
   if (step === 'attendance-report' && matchedStudent) {
     const { present, absent, total, records } = getAttendanceStats();
-
     return (
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
         <div className="w-full max-w-2xl">
           <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 overflow-hidden">
             <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-6">
               <div className="flex items-center gap-3 mb-2">
-                <div className="bg-white/20 p-3 rounded-xl">
-                  <BookOpen className="w-7 h-7 text-white" />
-                </div>
+                <div className="bg-white/20 p-3 rounded-xl"><BookOpen className="w-7 h-7 text-white" /></div>
                 <div>
                   <p className="text-sm text-emerald-100">مادة</p>
                   <h1 className="text-2xl font-bold text-white">{subjectName}</h1>
@@ -495,12 +412,9 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
               </div>
               <p className="text-emerald-100/80">تقرير الحضور والغياب للطالب</p>
             </div>
-
             <div className="p-6 border-b border-white/10">
               <div className="flex items-center gap-4 bg-white/5 rounded-xl p-4">
-                <div className="bg-emerald-500/20 p-4 rounded-xl">
-                  <Users className="w-8 h-8 text-emerald-400" />
-                </div>
+                <div className="bg-emerald-500/20 p-4 rounded-xl"><Users className="w-8 h-8 text-emerald-400" /></div>
                 <div>
                   <p className="text-sm text-white/50">اسم الطالب</p>
                   <h2 className="text-2xl font-bold text-white">{matchedStudent.name}</h2>
@@ -508,67 +422,36 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
                 </div>
               </div>
             </div>
-
             <div className="p-6 grid grid-cols-3 gap-3">
               <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-center">
-                <div className="flex items-center justify-center gap-2 mb-1">
-                  <CheckCircle className="w-5 h-5 text-green-400" />
-                  <span className="text-sm font-medium text-green-300">حضور</span>
-                </div>
+                <div className="flex items-center justify-center gap-2 mb-1"><CheckCircle className="w-5 h-5 text-green-400" /><span className="text-sm font-medium text-green-300">حضور</span></div>
                 <div className="text-3xl font-bold text-green-300">{present}</div>
-                <div className="text-xs text-green-500/70">يوم</div>
               </div>
               <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center">
-                <div className="flex items-center justify-center gap-2 mb-1">
-                  <XCircleIcon className="w-5 h-5 text-red-400" />
-                  <span className="text-sm font-medium text-red-300">غياب</span>
-                </div>
+                <div className="flex items-center justify-center gap-2 mb-1"><XCircleIcon className="w-5 h-5 text-red-400" /><span className="text-sm font-medium text-red-300">غياب</span></div>
                 <div className="text-3xl font-bold text-red-300">{absent}</div>
-                <div className="text-xs text-red-500/70">يوم</div>
               </div>
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-center">
-                <div className="flex items-center justify-center gap-2 mb-1">
-                  <CalendarDays className="w-5 h-5 text-blue-400" />
-                  <span className="text-sm font-medium text-blue-300">المجموع</span>
-                </div>
+                <div className="flex items-center justify-center gap-2 mb-1"><CalendarDays className="w-5 h-5 text-blue-400" /><span className="text-sm font-medium text-blue-300">المجموع</span></div>
                 <div className="text-3xl font-bold text-blue-300">{total}</div>
-                <div className="text-xs text-blue-500/70">جلسة</div>
               </div>
             </div>
-
             {records.length > 0 && (
               <div className="px-6 pb-6">
-                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                  <CalendarDays className="w-5 h-5 text-emerald-400" /> تفاصيل الجلسات
-                </h3>
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><CalendarDays className="w-5 h-5 text-emerald-400" /> تفاصيل الجلسات</h3>
                 <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {records.map((record) => (
-                    <div
-                      key={record.id}
-                      className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center justify-between"
-                    >
+                  {records.map(record => (
+                    <div key={record.id} className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          record.status === 'present' ? 'bg-green-500/20' : 'bg-red-500/20'
-                        }`}>
-                          {record.status === 'present' ? (
-                            <CheckCircle className="w-5 h-5 text-green-400" />
-                          ) : (
-                            <XCircleIcon className="w-5 h-5 text-red-400" />
-                          )}
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${record.status === 'present' ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+                          {record.status === 'present' ? <CheckCircle className="w-5 h-5 text-green-400" /> : <XCircleIcon className="w-5 h-5 text-red-400" />}
                         </div>
                         <div className="text-right">
                           <p className="font-medium text-white">{record.sessionName || sessionNameMap[record.sessionId] || 'جلسة'}</p>
-                          <p className="text-xs text-white/50 font-mono">
-                            {normalizeDate(record.date)} {record.time && `• ${record.time}`}
-                          </p>
+                          <p className="text-xs text-white/50 font-mono">{normalizeDate(record.date)} {record.time && `• ${record.time}`}</p>
                         </div>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        record.status === 'present'
-                          ? 'bg-green-500/20 text-green-300'
-                          : 'bg-red-500/20 text-red-300'
-                      }`}>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${record.status === 'present' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
                         {record.status === 'present' ? 'حاضر' : 'غائب'}
                       </span>
                     </div>
@@ -576,7 +459,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
                 </div>
               </div>
             )}
-
             {records.length === 0 && (
               <div className="px-6 pb-6 text-center">
                 <div className="bg-white/5 border border-white/10 rounded-xl p-8">
@@ -585,7 +467,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
                 </div>
               </div>
             )}
-
             <div className="px-6 pb-6">
               <button onClick={onExit} className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
                 <ArrowLeft className="w-5 h-5" /> العودة للرئيسية
