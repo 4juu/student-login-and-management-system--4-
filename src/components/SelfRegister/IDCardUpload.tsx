@@ -1,15 +1,31 @@
 // src/components/SelfRegister/IDCardUpload.tsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Student } from '../../types/student';
 import { IDExtractionResult } from '../../types/registration';
 import { extractIDData } from '../../services/ocrService';
-import { Camera, Check, CircleX, IdCard, Image, Lightbulb, Lock, RefreshCw } from 'lucide-react';
+import { useImageTransform } from '../../hooks/useImageTransform';
+import { useImageTilt } from '../../hooks/useImageTilt';
+import {
+  Camera,
+  Check,
+  CircleX,
+  IdCard,
+  Image,
+  Lightbulb,
+  Lock,
+  RefreshCw,
+  RotateCcw,
+  RotateCw,
+  Move,
+} from 'lucide-react';
 
 interface IDCardUploadProps {
   student: Student;
   onExtracted: (result: IDExtractionResult) => void;
   onCancel: () => void;
 }
+
+const CARD_RATIO = 85.6 / 53.98;
 
 export const IDCardUpload: React.FC<IDCardUploadProps> = ({
   student,
@@ -24,12 +40,33 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const {
+    transform,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+    rotate90,
+    resetTransform,
+    getTransformStyle,
+  } = useImageTransform();
+
+  const {
+    isLevel,
+    level,
+    updateUserRotation,
+  } = useImageTilt(preview);
 
   useEffect(() => {
     return () => {
       if (preview) URL.revokeObjectURL(preview);
     };
   }, [preview]);
+
+  useEffect(() => {
+    updateUserRotation(transform.rotation);
+  }, [transform.rotation, updateUserRotation]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
@@ -81,13 +118,47 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
     setFile(null);
     setError('');
     setProgress(0);
+    resetTransform();
   };
 
+  const proximity = useMemo(() => {
+    if (!containerRef.current || !preview) return { ratio: 0, level: 'red' as const };
+    const container = containerRef.current;
+    const cw = container.clientWidth;
+    const frameW = cw * 0.82;
+    const frameH = frameW / CARD_RATIO;
+
+    const imgEl = container.querySelector<HTMLImageElement>('.adjust-image');
+    if (!imgEl) return { ratio: 0, level: 'red' as const };
+
+    const renderedW = imgEl.offsetWidth * transform.scale;
+    const renderedH = imgEl.offsetHeight * transform.scale;
+
+    const fillX = renderedW / frameW;
+    const fillY = renderedH / frameH;
+    const ratio = Math.min(fillX, fillY);
+
+    const level: 'green' | 'yellow' | 'red' =
+      ratio >= 0.6 && ratio <= 1.0
+        ? 'green'
+        : ratio >= 0.4 && ratio < 0.6
+          ? 'yellow'
+          : 'red';
+    return { ratio, level };
+  }, [preview, transform.scale]);
+
+  const isAdjustReady = preview && (isLevel || proximity.level === 'green' || proximity.level === 'yellow');
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50 flex items-center justify-center p-4" dir="rtl">
+    <div
+      className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50 flex items-center justify-center p-4"
+      dir="rtl"
+    >
       <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 max-w-lg w-full">
         <div className="text-center mb-6">
-          <div className="mx-auto w-16 h-16 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-3"><IdCard className="w-8 h-8 text-purple-600" /></div>
+          <div className="mx-auto w-16 h-16 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-3">
+            <IdCard className="w-8 h-8 text-purple-600" />
+          </div>
           <h2 className="text-2xl font-bold text-gray-800 mb-1">رفع صورة الهوية</h2>
           <p className="text-sm text-gray-600">
             مرحباً <span className="font-bold text-purple-700">{student.name}</span>
@@ -103,22 +174,8 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
           </div>
         </div>
 
-        <>
-          {preview && !processing && (
-            <div className="mb-4">
-              <div className="relative rounded-xl overflow-hidden border-2 border-purple-200 bg-gray-100">
-                <img src={preview} alt="الهوية" className="w-full max-h-64 object-contain" />
-                <button
-                  onClick={handleReset}
-                  className="absolute top-2 left-2 bg-red-600 hover:bg-red-700 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-          )}
-
-          {!preview && !processing && (
+        {!preview && !processing && (
+          <>
             <div className="space-y-3 mb-4">
               <button
                 onClick={() => cameraInputRef.current?.click()}
@@ -135,68 +192,235 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
                 <span>اختيار من المعرض</span>
               </button>
             </div>
-          )}
 
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handleFileSelect}
-            className="hidden"
-          />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFileSelect}
-            className="hidden"
-          />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
 
-          {processing && (
-            <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-xl">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-8 h-8 border-3 border-purple-600 border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm font-bold text-purple-800 flex-1">جاري التحليل...</p>
-              </div>
-              <div className="w-full bg-white rounded-full h-3 overflow-hidden border border-purple-200">
-                <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500" style={{ width: `${progress}%` }} />
-              </div>
-              <p className="text-xs text-purple-500 mt-2 text-center">{Math.round(progress)}%</p>
-            </div>
-          )}
-
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-1.5"><CircleX className="w-4 h-4 shrink-0" /> {error}</div>
-          )}
-
-          {!preview && !processing && !error && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-xs font-bold text-blue-800 mb-2 flex items-center gap-1.5"><Lightbulb className="w-3.5 h-3.5" /> نصائح:</p>
+              <p className="text-xs font-bold text-blue-800 mb-2 flex items-center gap-1.5">
+                <Lightbulb className="w-3.5 h-3.5" /> نصائح:
+              </p>
               <ul className="text-xs text-blue-700 space-y-1 list-disc list-inside">
                 <li>ضع الهوية بإضاءة واضحة</li>
                 <li>تجنب انعكاسات الإضاءة على البلاستيك</li>
               </ul>
             </div>
-          )}
+          </>
+        )}
 
-          {preview && !processing && (
+        {preview && !processing && (
+          <div className="space-y-3">
+            <div
+              ref={containerRef}
+              className="relative w-full overflow-hidden rounded-xl bg-gray-900 touch-none select-none"
+              style={{ aspectRatio: `${CARD_RATIO} / 1`, touchAction: 'none' }}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div
+                  className="border-2 border-dashed rounded-lg flex items-center justify-center"
+                  style={{
+                    width: '82%',
+                    height: `${82 / CARD_RATIO}%`,
+                    borderColor:
+                      isLevel && proximity.level === 'green'
+                        ? '#22c55e'
+                        : isLevel || proximity.level !== 'red'
+                          ? '#eab308'
+                          : '#ef4444',
+                  }}
+                >
+                  <span className="text-white/40 text-xs font-medium">ضع الهوية هنا</span>
+                </div>
+              </div>
+
+              <img
+                src={preview}
+                alt="الهوية"
+                className="adjust-image w-full h-full object-contain"
+                style={{
+                  transform: getTransformStyle(),
+                  willChange: 'transform',
+                }}
+                draggable={false}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-gray-600 w-16 shrink-0">الميلان</span>
+                <div className="flex-1 h-5 bg-gray-200 rounded-full overflow-hidden relative">
+                  <div
+                    className="absolute inset-y-0 w-3 rounded-full transition-all duration-300"
+                    style={{
+                      left: `${50 + Math.max(-20, Math.min(20, transform.rotation)) * 2.5}%`,
+                      transform: 'translateX(-50%)',
+                      backgroundColor:
+                        level === 'green' ? '#22c55e' : level === 'yellow' ? '#eab308' : '#ef4444',
+                    }}
+                  />
+                  <div
+                    className="absolute inset-y-0 w-0.5 bg-green-500/50"
+                    style={{ left: '50%', transform: 'translateX(-50%)' }}
+                  />
+                </div>
+                <span
+                  className="text-xs font-bold w-14 text-center"
+                  style={{
+                    color:
+                      level === 'green' ? '#16a34a' : level === 'yellow' ? '#ca8a04' : '#dc2626',
+                  }}
+                >
+                  {isLevel ? 'مساوي' : `${Math.round(transform.rotation)}°`}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-gray-600 w-16 shrink-0">القُرب</span>
+                <div className="flex-1 h-5 bg-gray-200 rounded-full overflow-hidden relative">
+                  <div
+                    className="absolute inset-y-0 rounded-full transition-all duration-300"
+                    style={{
+                      width: `${Math.min(100, proximity.ratio * 100)}%`,
+                      backgroundColor:
+                        proximity.level === 'green'
+                          ? '#22c55e'
+                          : proximity.level === 'yellow'
+                            ? '#eab308'
+                            : '#ef4444',
+                    }}
+                  />
+                </div>
+                <span
+                  className="text-xs font-bold w-14 text-center"
+                  style={{
+                    color:
+                      proximity.level === 'green'
+                        ? '#16a34a'
+                        : proximity.level === 'yellow'
+                          ? '#ca8a04'
+                          : '#dc2626',
+                  }}
+                >
+                  {proximity.level === 'green'
+                    ? 'جيدة'
+                    : proximity.level === 'yellow'
+                      ? 'قريبة'
+                      : 'بعيدة'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={() => rotate90(-1)}
+                className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl transition active:scale-95"
+                title="دوران يسار 90°"
+              >
+                <RotateCcw className="w-5 h-5 text-gray-700" />
+              </button>
+              <button
+                onClick={resetTransform}
+                className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl transition active:scale-95"
+                title="إعادة ضبط"
+              >
+                <RefreshCw className="w-5 h-5 text-gray-700" />
+              </button>
+              <button
+                onClick={() => rotate90(1)}
+                className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl transition active:scale-95"
+                title="دوران يمين 90°"
+              >
+                <RotateCw className="w-5 h-5 text-gray-700" />
+              </button>
+            </div>
+
+            <div className="p-2 bg-purple-50 border border-purple-200 rounded-lg">
+              <p className="text-xs text-purple-700 text-center flex items-center justify-center gap-1.5">
+                <Move className="w-3.5 h-3.5" />
+                اسحب للتحريك • إصبعين للتكبير والدوران • اضغط مرتين للإعادة
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={handleReset} className="py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg flex items-center justify-center gap-1.5">
+              <button
+                onClick={handleReset}
+                className="py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg flex items-center justify-center gap-1.5"
+              >
                 <RefreshCw className="w-4 h-4" /> صورة أخرى
               </button>
-              <button onClick={handleProcess} className="py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-lg flex items-center justify-center gap-1.5">
+              <button
+                onClick={handleProcess}
+                disabled={!isAdjustReady}
+                className={`py-3 font-bold rounded-lg flex items-center justify-center gap-1.5 transition ${
+                  isAdjustReady
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
                 <Check className="w-4 h-4" /> تحليل الهوية
               </button>
             </div>
-          )}
+          </div>
+        )}
 
-          {!processing && (
-            <button onClick={onCancel} className="w-full mt-3 py-2 text-gray-500 hover:text-gray-700 text-sm">
-              إلغاء والعودة
-            </button>
-          )}
-        </>
+        {processing && (
+          <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-xl">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 border-3 border-purple-600 border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm font-bold text-purple-800 flex-1">جاري التحليل...</p>
+            </div>
+            <div className="w-full bg-white rounded-full h-3 overflow-hidden border border-purple-200">
+              <div
+                className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <p className="text-xs text-purple-500 mt-2 text-center">{Math.round(progress)}%</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-1.5">
+            <CircleX className="w-4 h-4 shrink-0" /> {error}
+          </div>
+        )}
+
+        {!preview && !processing && !error && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs font-bold text-blue-800 mb-2 flex items-center gap-1.5">
+              <Lightbulb className="w-3.5 h-3.5" /> نصائح:
+            </p>
+            <ul className="text-xs text-blue-700 space-y-1 list-disc list-inside">
+              <li>ضع الهوية بإضاءة واضحة</li>
+              <li>تجنب انعكاسات الإضاءة على البلاستيك</li>
+            </ul>
+          </div>
+        )}
+
+        {!processing && (
+          <button
+            onClick={onCancel}
+            className="w-full mt-3 py-2 text-gray-500 hover:text-gray-700 text-sm"
+          >
+            إلغاء والعودة
+          </button>
+        )}
       </div>
     </div>
   );
