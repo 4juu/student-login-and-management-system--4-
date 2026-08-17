@@ -40,7 +40,6 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const {
     transform,
@@ -52,11 +51,7 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
     getTransformStyle,
   } = useImageTransform();
 
-  const {
-    isLevel,
-    level,
-    updateUserRotation,
-  } = useImageTilt(preview);
+  const { isLevel, level, updateUserRotation } = useImageTilt(preview);
 
   useEffect(() => {
     return () => {
@@ -89,18 +84,13 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
     if (!file) return;
     setProcessing(true);
     setError('');
-
     try {
-      const result = await extractIDData(file, (_status, pct) => {
-        setProgress(pct);
-      });
-
+      const result = await extractIDData(file, (_s, pct) => setProgress(pct));
       if (!result.success) {
         setError(result.error || 'فشل قراءة الهوية');
         setProcessing(false);
         return;
       }
-
       if (preview) URL.revokeObjectURL(preview);
       setPreview(null);
       setFile(null);
@@ -121,33 +111,11 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
     resetTransform();
   };
 
-  const proximity = useMemo(() => {
-    if (!containerRef.current || !preview) return { ratio: 0, level: 'red' as const };
-    const container = containerRef.current;
-    const cw = container.clientWidth;
-    const frameW = cw * 0.82;
-    const frameH = frameW / CARD_RATIO;
-
-    const imgEl = container.querySelector<HTMLImageElement>('.adjust-image');
-    if (!imgEl) return { ratio: 0, level: 'red' as const };
-
-    const renderedW = imgEl.offsetWidth * transform.scale;
-    const renderedH = imgEl.offsetHeight * transform.scale;
-
-    const fillX = renderedW / frameW;
-    const fillY = renderedH / frameH;
-    const ratio = Math.min(fillX, fillY);
-
-    const level: 'green' | 'yellow' | 'red' =
-      ratio >= 0.6 && ratio <= 1.0
-        ? 'green'
-        : ratio >= 0.4 && ratio < 0.6
-          ? 'yellow'
-          : 'red';
-    return { ratio, level };
-  }, [preview, transform.scale]);
-
-  const isAdjustReady = preview && (isLevel || proximity.level === 'green' || proximity.level === 'yellow');
+  const frameColor = useMemo(() => {
+    if (isLevel) return '#22c55e';
+    if (level === 'yellow') return '#eab308';
+    return '#ef4444';
+  }, [isLevel, level]);
 
   return (
     <div
@@ -174,6 +142,7 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
           </div>
         </div>
 
+        {/* ─── حالة الاختيار ─── */}
         {!preview && !processing && (
           <>
             <div className="space-y-3 mb-4">
@@ -193,21 +162,8 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
               </button>
             </div>
 
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
+            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleFileSelect} className="hidden" />
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
 
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-xs font-bold text-blue-800 mb-2 flex items-center gap-1.5">
@@ -221,131 +177,69 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
           </>
         )}
 
+        {/* ─── حالة التعديل ─── */}
         {preview && !processing && (
           <div className="space-y-3">
+            {/* حاوية الصورة + المستطيل */}
             <div
-              ref={containerRef}
-              className="relative w-full overflow-hidden rounded-xl bg-gray-900 touch-none select-none"
+              className="relative w-full bg-gray-900 rounded-xl overflow-hidden touch-none select-none"
               style={{ aspectRatio: `${CARD_RATIO} / 1`, touchAction: 'none' }}
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
             >
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div
-                  className="border-2 border-dashed rounded-lg flex items-center justify-center"
-                  style={{
-                    width: '82%',
-                    height: `${82 / CARD_RATIO}%`,
-                    borderColor:
-                      isLevel && proximity.level === 'green'
-                        ? '#22c55e'
-                        : isLevel || proximity.level !== 'red'
-                          ? '#eab308'
-                          : '#ef4444',
-                  }}
-                >
-                  <span className="text-white/40 text-xs font-medium">ضع الهوية هنا</span>
-                </div>
-              </div>
-
+              {/* الصورة */}
               <img
                 src={preview}
                 alt="الهوية"
-                className="adjust-image w-full h-full object-contain"
-                style={{
-                  transform: getTransformStyle(),
-                  willChange: 'transform',
-                }}
+                className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                style={{ transform: getTransformStyle(), willChange: 'transform' }}
                 draggable={false}
               />
-            </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-gray-600 w-16 shrink-0">الميلان</span>
-                <div className="flex-1 h-5 bg-gray-200 rounded-full overflow-hidden relative">
-                  <div
-                    className="absolute inset-y-0 w-3 rounded-full transition-all duration-300"
-                    style={{
-                      left: `${50 + Math.max(-20, Math.min(20, transform.rotation)) * 2.5}%`,
-                      transform: 'translateX(-50%)',
-                      backgroundColor:
-                        level === 'green' ? '#22c55e' : level === 'yellow' ? '#eab308' : '#ef4444',
-                    }}
-                  />
-                  <div
-                    className="absolute inset-y-0 w-0.5 bg-green-500/50"
-                    style={{ left: '50%', transform: 'translateX(-50%)' }}
-                  />
-                </div>
-                <span
-                  className="text-xs font-bold w-14 text-center"
+              {/* المستطيل فوق الصورة */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                <div
+                  className="w-[82%] border-2 border-dashed rounded-lg"
                   style={{
-                    color:
-                      level === 'green' ? '#16a34a' : level === 'yellow' ? '#ca8a04' : '#dc2626',
+                    aspectRatio: `${CARD_RATIO}`,
+                    borderColor: frameColor,
                   }}
-                >
-                  {isLevel ? 'مساوي' : `${Math.round(transform.rotation)}°`}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-gray-600 w-16 shrink-0">القُرب</span>
-                <div className="flex-1 h-5 bg-gray-200 rounded-full overflow-hidden relative">
-                  <div
-                    className="absolute inset-y-0 rounded-full transition-all duration-300"
-                    style={{
-                      width: `${Math.min(100, proximity.ratio * 100)}%`,
-                      backgroundColor:
-                        proximity.level === 'green'
-                          ? '#22c55e'
-                          : proximity.level === 'yellow'
-                            ? '#eab308'
-                            : '#ef4444',
-                    }}
-                  />
-                </div>
-                <span
-                  className="text-xs font-bold w-14 text-center"
-                  style={{
-                    color:
-                      proximity.level === 'green'
-                        ? '#16a34a'
-                        : proximity.level === 'yellow'
-                          ? '#ca8a04'
-                          : '#dc2626',
-                  }}
-                >
-                  {proximity.level === 'green'
-                    ? 'جيدة'
-                    : proximity.level === 'yellow'
-                      ? 'قريبة'
-                      : 'بعيدة'}
-                </span>
+                />
               </div>
             </div>
 
-            <div className="flex items-center justify-center gap-3">
-              <button
-                onClick={() => rotate90(-1)}
-                className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl transition active:scale-95"
-                title="دوران يسار 90°"
+            {/* شريط الميلان */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-gray-600 w-16 shrink-0">الميلان</span>
+              <div className="flex-1 h-5 bg-gray-200 rounded-full overflow-hidden relative">
+                <div className="absolute inset-y-0 w-0.5 bg-gray-400" style={{ left: '50%' }} />
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-white shadow transition-all duration-200"
+                  style={{
+                    left: `${50 + Math.max(-20, Math.min(20, transform.rotation)) * 2.5}%`,
+                    transform: 'translate(-50%, -50%)',
+                    backgroundColor: frameColor,
+                  }}
+                />
+              </div>
+              <span
+                className="text-xs font-bold w-14 text-center"
+                style={{ color: frameColor }}
               >
+                {isLevel ? 'مساوي' : `${Math.round(transform.rotation)}°`}
+              </span>
+            </div>
+
+            {/* أزرار الدوران */}
+            <div className="flex items-center justify-center gap-3">
+              <button onClick={() => rotate90(-1)} className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl transition active:scale-95">
                 <RotateCcw className="w-5 h-5 text-gray-700" />
               </button>
-              <button
-                onClick={resetTransform}
-                className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl transition active:scale-95"
-                title="إعادة ضبط"
-              >
+              <button onClick={resetTransform} className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl transition active:scale-95">
                 <RefreshCw className="w-5 h-5 text-gray-700" />
               </button>
-              <button
-                onClick={() => rotate90(1)}
-                className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl transition active:scale-95"
-                title="دوران يمين 90°"
-              >
+              <button onClick={() => rotate90(1)} className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl transition active:scale-95">
                 <RotateCw className="w-5 h-5 text-gray-700" />
               </button>
             </div>
@@ -357,21 +251,14 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
               </p>
             </div>
 
+            {/* أزرار الإجراء */}
             <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={handleReset}
-                className="py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg flex items-center justify-center gap-1.5"
-              >
+              <button onClick={handleReset} className="py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg flex items-center justify-center gap-1.5">
                 <RefreshCw className="w-4 h-4" /> صورة أخرى
               </button>
               <button
                 onClick={handleProcess}
-                disabled={!isAdjustReady}
-                className={`py-3 font-bold rounded-lg flex items-center justify-center gap-1.5 transition ${
-                  isAdjustReady
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
+                className="py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-lg flex items-center justify-center gap-1.5"
               >
                 <Check className="w-4 h-4" /> تحليل الهوية
               </button>
@@ -379,6 +266,7 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
           </div>
         )}
 
+        {/* ─── حالة المعالجة ─── */}
         {processing && (
           <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-xl">
             <div className="flex items-center gap-3 mb-3">
@@ -386,10 +274,7 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
               <p className="text-sm font-bold text-purple-800 flex-1">جاري التحليل...</p>
             </div>
             <div className="w-full bg-white rounded-full h-3 overflow-hidden border border-purple-200">
-              <div
-                className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500"
-                style={{ width: `${progress}%` }}
-              />
+              <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500" style={{ width: `${progress}%` }} />
             </div>
             <p className="text-xs text-purple-500 mt-2 text-center">{Math.round(progress)}%</p>
           </div>
@@ -401,23 +286,8 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
           </div>
         )}
 
-        {!preview && !processing && !error && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-xs font-bold text-blue-800 mb-2 flex items-center gap-1.5">
-              <Lightbulb className="w-3.5 h-3.5" /> نصائح:
-            </p>
-            <ul className="text-xs text-blue-700 space-y-1 list-disc list-inside">
-              <li>ضع الهوية بإضاءة واضحة</li>
-              <li>تجنب انعكاسات الإضاءة على البلاستيك</li>
-            </ul>
-          </div>
-        )}
-
         {!processing && (
-          <button
-            onClick={onCancel}
-            className="w-full mt-3 py-2 text-gray-500 hover:text-gray-700 text-sm"
-          >
+          <button onClick={onCancel} className="w-full mt-3 py-2 text-gray-500 hover:text-gray-700 text-sm">
             إلغاء والعودة
           </button>
         )}

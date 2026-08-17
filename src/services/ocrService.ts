@@ -372,58 +372,6 @@ const isValidName = (name: string): boolean => {
   );
 };
 
-const COMPOUND_SECOND_PARTS = new Set([
-  'الله', 'الرحمن', 'الرحيم', 'الكريم', 'الامير', 'الحسين', 'الحسن',
-  'العزيز', 'الواحد', 'الجبار', 'الرزاق', 'الستار', 'السلام', 'القادر',
-  'اللطيف', 'المجيد', 'المحسن', 'الهادي', 'الباقي', 'الخالق', 'الصمد',
-  'العظيم', 'الغفور', 'الغني', 'الفتاح', 'المنعم', 'الوهاب',
-  'الهدى', 'الهدي', 'الدين', 'الاسلام',
-  'العابدين', 'العالي', 'السميع', 'البصير', 'الودود', 'التواب',
-  'الحفيظ', 'المنصور', 'المتعال', 'الوارث', 'الخبير',
-]);
-
-const COMPOUND_FIRST_PARTS = new Set([
-  'عبد', 'ابو', 'ام', 'نور', 'زين', 'صلاح', 'علاء', 'عماد', 'سيف',
-  'حسام', 'بهاء', 'شمس', 'محي', 'تاج', 'فخر', 'شرف', 'جمال', 'كمال',
-  'بدر', 'ضياء', 'ركن', 'عز', 'معين', 'ناصر', 'قمر', 'ضوء', 'سراج',
-  'منصور', 'فؤاد', 'حيدر', 'ماجد', 'وليد', 'عادل', 'هشام', 'اياد',
-]);
-
-/**
- * دمج الأسماء المركبة العربية — فقط للأزواج المعروفة
- */
-const mergeArabicCompoundNames = (name: string): string => {
-  if (!name) return name;
-
-  const words = name.split(/\s+/).filter(Boolean);
-  const result: string[] = [];
-
-  let i = 0;
-  while (i < words.length) {
-    const current = words[i];
-    const next = words[i + 1];
-
-    // دمج فقط إذا:
-    // 1. الكلمة الأولى من compoundFirstParts
-    // 2. الكلمة الثانية تبدأ بـ "ال" وتكون من compoundSecondParts
-    if (
-      next &&
-      COMPOUND_FIRST_PARTS.has(current) &&
-      next.startsWith('ال') &&
-      COMPOUND_SECOND_PARTS.has(next)
-    ) {
-      result.push(current + ' ' + next);
-      i += 2;
-      continue;
-    }
-
-    result.push(current);
-    i++;
-  }
-
-  return result.join(' ');
-};
-
 /**
  * 🎯 استخراج الاسم من نص OCR
  */
@@ -547,11 +495,8 @@ export const extractArabicName = (rawText: string): string | null => {
   const best = candidates[0];
   if (best.wordCount < 2) return null;
 
-  const processed = mergeArabicCompoundNames(best.text);
-
   console.log('✅ أفضل مرشح:', best.text);
-  console.log('✅ بعد دمج الأسماء المركبة:', processed);
-  return processed;
+  return best.text;
 };
 
 // ============================================================

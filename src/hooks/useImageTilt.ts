@@ -1,15 +1,12 @@
 // src/hooks/useImageTilt.ts
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-interface TiltResult {
-  detectedAngle: number;
-  isLevel: boolean;
-  level: 'green' | 'yellow' | 'red';
-}
-
-const SIZE = 120;
-
+/**
+ * كشف ميل الصورة باستخدام Projection Profile
+ * (مستوحى من arabic-ocr — horizontal projection variance)
+ */
 const detectTiltFromImage = (img: HTMLImageElement): number => {
+  const SIZE = 120;
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d')!;
   canvas.width = SIZE;
@@ -18,53 +15,36 @@ const detectTiltFromImage = (img: HTMLImageElement): number => {
 
   const imageData = ctx.getImageData(0, 0, SIZE, SIZE);
   const d = imageData.data;
-  const gray = new Uint8Array(SIZE * SIZE);
-  for (let i = 0; i < gray.length; i++) {
-    gray[i] = d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114;
+
+  // تحويل لرمادي + threshold
+  const binary = new Uint8Array(SIZE * SIZE);
+  let sumGray = 0;
+  for (let i = 0; i < SIZE * SIZE; i++) {
+    const gray = d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114;
+    binary[i] = gray;
+    sumGray += gray;
   }
 
-  const edges = new Float32Array(SIZE * SIZE);
-  for (let y = 1; y < SIZE - 1; y++) {
-    for (let x = 1; x < SIZE - 1; x++) {
-      const gx =
-        -gray[(y - 1) * SIZE + (x - 1)] +
-        gray[(y - 1) * SIZE + (x + 1)] +
-        -2 * gray[y * SIZE + (x - 1)] +
-        2 * gray[y * SIZE + (x + 1)] +
-        -gray[(y + 1) * SIZE + (x - 1)] +
-        gray[(y + 1) * SIZE + (x + 1)];
-      const gy =
-        -gray[(y - 1) * SIZE + (x - 1)] +
-        -2 * gray[(y - 1) * SIZE + x] +
-        -gray[(y - 1) * SIZE + (x + 1)] +
-        gray[(y + 1) * SIZE + (x - 1)] +
-        2 * gray[(y + 1) * SIZE + x] +
-        gray[(y + 1) * SIZE + (x + 1)];
-      edges[y * SIZE + x] = Math.sqrt(gx * gx + gy * gy);
-    }
+  const threshold = sumGray / (SIZE * SIZE);
+  for (let i = 0; i < SIZE * SIZE; i++) {
+    binary[i] = binary[i] < threshold ? 1 : 0;
   }
 
   let bestAngle = 0;
   let bestVariance = 0;
 
-  for (let angle = -15; angle <= 15; angle += 1) {
+  for (let angle = -15; angle <= 15; angle += 0.5) {
     const rad = (angle * Math.PI) / 180;
-    const cos = Math.cos(rad);
-    const sin = Math.sin(rad);
+    const cosA = Math.cos(rad);
+    const sinA = Math.sin(rad);
     const projection = new Float32Array(SIZE);
-    let count = 0;
 
     for (let y = 0; y < SIZE; y++) {
       for (let x = 0; x < SIZE; x++) {
-        const srcX = Math.round(
-          cos * (x - SIZE / 2) + sin * (y - SIZE / 2) + SIZE / 2
-        );
-        const srcY = Math.round(
-          -sin * (x - SIZE / 2) + cos * (y - SIZE / 2) + SIZE / 2
-        );
-        if (srcX >= 0 && srcX < SIZE && srcY >= 0 && srcY < SIZE) {
-          projection[y] += edges[srcY * SIZE + srcX];
-          count++;
+        if (binary[y * SIZE + x] === 0) continue;
+        const srcY = Math.round(-sinA * (x - SIZE / 2) + cosA * (y - SIZE / 2) + SIZE / 2);
+        if (srcY >= 0 && srcY < SIZE) {
+          projection[srcY]++;
         }
       }
     }
@@ -90,7 +70,6 @@ const detectTiltFromImage = (img: HTMLImageElement): number => {
 export const useImageTilt = (imageUrl: string | null) => {
   const [detectedAngle, setDetectedAngle] = useState(0);
   const [userRotation, setUserRotation] = useState(0);
-  const imgRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
     if (!imageUrl) {
@@ -102,7 +81,6 @@ export const useImageTilt = (imageUrl: string | null) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
-      imgRef.current = img;
       const angle = detectTiltFromImage(img);
       setDetectedAngle(angle);
       setUserRotation(0);
@@ -125,10 +103,10 @@ export const useImageTilt = (imageUrl: string | null) => {
       ? 'yellow'
       : 'red';
 
-  const result: TiltResult = { detectedAngle, isLevel, level };
-
   return {
-    ...result,
+    detectedAngle,
+    isLevel,
+    level,
     adjustedAngle,
     userRotation,
     updateUserRotation,
