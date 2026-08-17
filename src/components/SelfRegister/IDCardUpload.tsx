@@ -1,4 +1,3 @@
-// src/components/SelfRegister/IDCardUpload.tsx
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Student } from '../../types/student';
 import { IDExtractionResult } from '../../types/registration';
@@ -44,7 +43,7 @@ const rasterizeTransform = async (
   containerW: number,
   containerH: number
 ): Promise<Blob> => {
-  const img = new Image();
+  const img = new HTMLImageElement();
   img.crossOrigin = 'anonymous';
   await new Promise<void>((res, rej) => {
     img.onload = () => res();
@@ -141,7 +140,6 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
     setError('');
     try {
       let imageToSend: File | Blob = file;
-      let skipDeskew = false;
 
       const isTransformed =
         transform.rotation !== 0 ||
@@ -161,8 +159,6 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
           rect.height
         );
         imageToSend = blob;
-        skipDeskew = true;
-        console.log('🖼️ الصورة بعد التعديل اليدوي');
       }
 
       const result = await extractIDData(
@@ -170,7 +166,6 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
           ? new File([imageToSend], 'adjusted.jpg', { type: 'image/jpeg' })
           : imageToSend,
         (_s, pct) => setProgress(pct),
-        skipDeskew
       );
       if (!result.success) {
         setError(result.error || 'فشل قراءة الهوية');
@@ -228,7 +223,6 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
           </div>
         </div>
 
-        {/* ─── حالة الاختيار ─── */}
         {!preview && !processing && (
           <>
             <div className="space-y-3 mb-4">
@@ -257,16 +251,15 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
               </p>
               <ul className="text-xs text-blue-700 space-y-1 list-disc list-inside">
                 <li>ضع الهوية بإضاءة واضحة</li>
+                <li>تأكد أن رمز QR ظاهر وواضح</li>
                 <li>تجنب انعكاسات الإضاءة على البلاستيك</li>
               </ul>
             </div>
           </>
         )}
 
-        {/* ─── حالة التعديل ─── */}
         {preview && !processing && (
           <div className="space-y-3">
-            {/* حاوية الصورة + المستطيل */}
             <div
               ref={containerRef}
               className="relative w-full bg-gray-900 rounded-xl overflow-hidden touch-none select-none"
@@ -275,7 +268,6 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
             >
-              {/* الصورة */}
               <img
                 src={preview}
                 alt="الهوية"
@@ -284,7 +276,6 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
                 draggable={false}
               />
 
-              {/* المستطيل فوق الصورة */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                 <div
                   className="w-[82%] border-2 border-dashed rounded-lg"
@@ -296,7 +287,6 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
               </div>
             </div>
 
-            {/* شريط الميلان */}
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-gray-600 w-16 shrink-0">الميلان</span>
               <div className="flex-1 h-5 bg-gray-200 rounded-full overflow-hidden relative">
@@ -318,7 +308,6 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
               </span>
             </div>
 
-            {/* أزرار الدوران */}
             <div className="flex items-center justify-center gap-3">
               <button onClick={() => rotate90(-1)} className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl transition active:scale-95">
                 <RotateCcw className="w-5 h-5 text-gray-700" />
@@ -338,7 +327,6 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
               </p>
             </div>
 
-            {/* أزرار الإجراء */}
             <div className="grid grid-cols-2 gap-2">
               <button onClick={handleReset} className="py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg flex items-center justify-center gap-1.5">
                 <RefreshCw className="w-4 h-4" /> صورة أخرى
@@ -347,18 +335,17 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
                 onClick={handleProcess}
                 className="py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-lg flex items-center justify-center gap-1.5"
               >
-                <Check className="w-4 h-4" /> تحليل الهوية
+                <Check className="w-4 h-4" /> استخراج QR
               </button>
             </div>
           </div>
         )}
 
-        {/* ─── حالة المعالجة ─── */}
         {processing && (
           <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-xl">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-8 h-8 border-3 border-purple-600 border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm font-bold text-purple-800 flex-1">جاري التحليل...</p>
+              <p className="text-sm font-bold text-purple-800 flex-1">جاري استخراج QR...</p>
             </div>
             <div className="w-full bg-white rounded-full h-3 overflow-hidden border border-purple-200">
               <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500" style={{ width: `${progress}%` }} />

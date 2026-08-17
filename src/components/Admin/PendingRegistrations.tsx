@@ -1,23 +1,21 @@
-// src/components/Admin/PendingRegistrations.tsx
 import React, { useEffect, useState, useMemo } from 'react';
 import { ref, onValue, off, update, set, get } from 'firebase/database';
 import { database } from '../../firebase/config';
 import { Student } from '../../types/student';
 import { PendingRegistration } from '../../types/registration';
-import { getMatchDescription, AUTO_APPROVE_THRESHOLD, MIN_ACCEPTABLE_THRESHOLD } from '../../services/nameMatching';
 import { getActiveAcademicYear } from '../../firebase/dataService';
 import { SkeletonTable } from '../Skeleton';
 import { checkForTamperingAsync, normalizeDescriptor } from '../../services/faceRecognition';
 import { ensureDecompressed } from '../../services/faceCompression';
-import { BadgeCheck, Camera, Check, CircleCheck, CircleX, ClipboardList, LoaderCircle, Mail, QrCode, Save, Smile, Trash2, TriangleAlert } from 'lucide-react';
+import { Camera, Check, CircleCheck, CircleX, ClipboardList, LoaderCircle, Mail, QrCode, Save, Smile, Trash2, TriangleAlert } from 'lucide-react';
 
 interface PendingRegistrationsProps {
   adminUid: string;
-  dataAdminUid?: string; // للأدمن الرئيسي المسؤول عن تخزين بيانات الطلاب
+  dataAdminUid?: string;
   onClose: () => void;
 }
 
-type FilterStatus = 'all' | 'pending' | 'approved' | 'rejected' | 'auto-approved';
+type FilterStatus = 'all' | 'pending' | 'approved' | 'rejected';
 
 export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
   adminUid,
@@ -31,81 +29,69 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [rejectReason, setRejectReason] = useState('');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
-  
-  // ──────────────────────────────────────────
-  // 📡 الاستماع المباشر لطلبات التسجيل
-  // ──────────────────────────────────────────
+
   useEffect(() => {
     const path = `registrationSystem/pending/${adminUid}`;
     const requestsRef = ref(database, path);
-    
+
     const unsubscribe = onValue(requestsRef, (snapshot) => {
       if (!snapshot.exists()) {
         setRequests([]);
         setLoading(false);
         return;
       }
-      
+
       const data = snapshot.val();
       const arr: PendingRegistration[] = Object.values(data);
       arr.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      
+
       setRequests(arr);
       setLoading(false);
     }, (error) => {
       console.error('❌ خطأ في جلب الطلبات:', error);
       setLoading(false);
     });
-    
+
     return () => {
       off(requestsRef);
       unsubscribe();
     };
   }, [adminUid]);
-  
-  // ──────────────────────────────────────────
-  // 🔍 فلترة الطلبات
-  // ──────────────────────────────────────────
+
   const filteredRequests = useMemo(() => {
     return requests.filter(r => {
       if (filter !== 'all' && r.status !== filter) return false;
-      
+
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         return (
           r.nameInSystem.toLowerCase().includes(q) ||
-          r.nameFromID.toLowerCase().includes(q) ||
-          r.studentCode.toLowerCase().includes(q)
+          r.studentCode.toLowerCase().includes(q) ||
+          (r.nationalId && r.nationalId.toLowerCase().includes(q))
         );
       }
-      
+
       return true;
     });
   }, [requests, filter, searchQuery]);
-  
-  // ──────────────────────────────────────────
-  // ✅ موافقة على طلب
-  // ──────────────────────────────────────────
+
   const handleApprove = async (req: PendingRegistration) => {
-    if (!window.confirm(`الموافقة على تسجيل ${req.nameInSystem}؟`)) return;
-    
     setProcessing(req.id);
-    
+
     try {
-      // 1️⃣ تطبيق التغييرات على الطالب
       const year = await getActiveAcademicYear();
       const storageUid = dataAdminUid || adminUid;
       if (!req.studentId) {
-        throw new Error('بيانات الطالب ناقصة (studentId) - الرجاء التحقق من الطلب');
+        throw new Error('بيانات الطالب ناقصة (studentId)');
       }
 
       const studentsPath = `academicYears/${year}/userData/${storageUid}/stageData/${req.stageId}/students`;
       const snap = await get(ref(database, studentsPath));
-      
+
       if (!snap.exists()) {
         throw new Error('لم نجد بيانات الطلاب');
       }
-      
+
       const data = snap.val();
       const studentsArr: Student[] = Array.isArray(data) ? data : Object.values(data);
       const idx = studentsArr.findIndex(s => s.id === req.studentId);
@@ -114,7 +100,6 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         throw new Error(`لم نجد الطالب بالمعرف: ${req.studentId}`);
       }
 
-      // 🛡️ فحص عدم تطابق البصمة مع طالب آخر
       if (req.faceDescriptor) {
         const descArray = ensureDecompressed(req.faceDescriptor);
         if (descArray.length === 128) {
@@ -136,17 +121,15 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         faceRegisteredAt: new Date().toISOString(),
         faceCompressed: true,
       } as Student;
-      
+
       await set(ref(database, studentsPath), studentsArr);
-      
-      // 2️⃣ تحديث حالة الطلب
+
       await update(ref(database, `registrationSystem/pending/${adminUid}/${req.id}`), {
         status: 'approved',
         reviewedAt: new Date().toISOString(),
         reviewedBy: adminUid,
       });
-      
-      // إشعار صغير
+
       console.log('✅ تمت الموافقة');
     } catch (e: any) {
       console.error(e);
@@ -155,13 +138,10 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       setProcessing(null);
     }
   };
-  
-  // ──────────────────────────────────────────
-  // ❌ رفض طلب
-  // ──────────────────────────────────────────
+
   const handleReject = async (req: PendingRegistration, reason: string) => {
     setProcessing(req.id);
-    
+
     try {
       await update(ref(database, `registrationSystem/pending/${adminUid}/${req.id}`), {
         status: 'rejected',
@@ -169,7 +149,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         reviewedAt: new Date().toISOString(),
         reviewedBy: adminUid,
       });
-      
+
       setRejectingId(null);
       setRejectReason('');
     } catch (e: any) {
@@ -179,13 +159,8 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       setProcessing(null);
     }
   };
-  
-  // ──────────────────────────────────────────
-  // 🗑️ حذف طلب
-  // ──────────────────────────────────────────
+
   const handleDelete = async (req: PendingRegistration) => {
-    if (!window.confirm('حذف هذا الطلب نهائياً؟')) return;
-    
     try {
       await set(ref(database, `registrationSystem/pending/${adminUid}/${req.id}`), null);
     } catch (e) {
@@ -193,27 +168,18 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       alert('فشل الحذف');
     }
   };
-  
-  // ──────────────────────────────────────────
-  // 📊 إحصائيات
-  // ──────────────────────────────────────────
+
   const stats = useMemo(() => ({
     total: requests.length,
     pending: requests.filter(r => r.status === 'pending').length,
     approved: requests.filter(r => r.status === 'approved').length,
-    autoApproved: requests.filter(r => r.status === 'auto-approved').length,
     rejected: requests.filter(r => r.status === 'rejected').length,
   }), [requests]);
-  
-  // ──────────────────────────────────────────
-  // 🎨 RENDER
-  // ──────────────────────────────────────────
-  
+
   return (
     <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
       <div className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[95vh] flex flex-col">
-        
-        {/* Header */}
+
         <div className="p-5 border-b border-white/10 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -233,10 +199,9 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
             ✕ إغلاق
           </button>
         </div>
-        
-        {/* الإحصائيات */}
+
         <div className="px-5 py-3 border-b border-white/10 bg-white/5">
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             <button
               onClick={() => setFilter('all')}
               className={`p-2 rounded-lg text-center transition ${
@@ -265,15 +230,6 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
               <div className="text-[10px] text-emerald-400">موافق عليها</div>
             </button>
             <button
-              onClick={() => setFilter('auto-approved')}
-              className={`p-2 rounded-lg text-center transition ${
-                filter === 'auto-approved' ? 'bg-teal-500/15 border-2 border-teal-500/50' : 'bg-white/5 border border-white/10'
-              }`}
-            >
-              <div className="text-lg font-bold text-teal-300">{stats.autoApproved}</div>
-              <div className="text-[10px] text-teal-400">تلقائي</div>
-            </button>
-            <button
               onClick={() => setFilter('rejected')}
               className={`p-2 rounded-lg text-center transition ${
                 filter === 'rejected' ? 'bg-red-500/15 border-2 border-red-500/50' : 'bg-white/5 border border-white/10'
@@ -284,19 +240,17 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
             </button>
           </div>
         </div>
-        
-        {/* البحث */}
+
         <div className="px-5 py-3 border-b border-white/10">
           <input
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="بحث بالاسم أو الكود..."
+            placeholder="بحث بالاسم أو الكود أو رقم الهوية..."
             className="w-full px-3 py-2 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-500 rounded-lg text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
           />
         </div>
-        
-        {/* قائمة الطلبات */}
+
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {loading ? (
             <div className="p-4">
@@ -311,35 +265,29 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
             </div>
           ) : (
             filteredRequests.map(req => {
-              const desc = getMatchDescription(req.matchPercentage);
               const isProcessing = processing === req.id;
               const isPending = req.status === 'pending';
-              const isAutoApproved = req.status === 'auto-approved';
               const isApproved = req.status === 'approved';
               const isRejected = req.status === 'rejected';
               const isRejecting = rejectingId === req.id;
-              
+
               return (
                 <div
                   key={req.id}
                   className={`border-2 rounded-xl p-4 transition ${
                     isPending ? 'border-amber-500/40 bg-amber-500/10' :
-                    isAutoApproved ? 'border-teal-500/40 bg-teal-500/10' :
                     isApproved ? 'border-emerald-500/40 bg-emerald-500/10' :
                     'border-red-500/40 bg-red-500/10'
                   }`}
                 >
-                  {/* الحالة */}
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <span className={`text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 ${
                         isPending ? 'bg-amber-500/20 text-amber-300' :
-                        isAutoApproved ? 'bg-teal-500/20 text-teal-300' :
                         isApproved ? 'bg-emerald-500/20 text-emerald-300' :
                         'bg-red-500/20 text-red-300'
                       }`}>
                         {isPending ? <><LoaderCircle className="w-3 h-3 animate-spin" /> قيد المراجعة</> :
-                         isAutoApproved ? <><BadgeCheck className="w-3 h-3" /> موافقة تلقائية</> :
                          isApproved ? <><CircleCheck className="w-3 h-3" /> تمت الموافقة</> :
                          <><CircleX className="w-3 h-3" /> مرفوض</>}
                       </span>
@@ -347,36 +295,43 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                         {new Date(req.createdAt).toLocaleString('ar-EG')}
                       </span>
                     </div>
-                    
-                    <div className={`text-sm font-bold px-3 py-1 rounded-full ${
-                      req.matchPercentage >= AUTO_APPROVE_THRESHOLD ? 'bg-green-500 text-white' :
-                      req.matchPercentage >= MIN_ACCEPTABLE_THRESHOLD ? 'bg-amber-500 text-white' :
-                      'bg-red-500 text-white'
+
+                    <div className={`text-xs font-bold px-3 py-1 rounded-full ${
+                      req.qrVerified ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'
                     }`}>
-                      {desc.emoji} {req.matchPercentage} أسماء متطابقة
+                      {req.qrVerified ? '✅ QR متحقق' : '⚠️ بدون QR'}
                     </div>
                   </div>
-                  
-                  {/* مقارنة الأسماء */}
+
                   <div className="grid grid-cols-2 gap-3 mb-3">
                     <div className="bg-slate-800 rounded-lg p-3 border border-blue-500/30">
-                      <p className="text-xs text-blue-400 font-bold mb-1 flex items-center gap-1"><Camera className="w-3.5 h-3.5" /> من الهوية:</p>
-                      <p className="font-bold text-blue-200 text-sm">{req.nameFromID}</p>
+                      <p className="text-xs text-blue-400 font-bold mb-1 flex items-center gap-1"><Save className="w-3.5 h-3.5" /> من النظام:</p>
+                      <p className="font-bold text-blue-200 text-sm">{req.nameInSystem}</p>
+                      <p className="text-[10px] text-blue-400 mt-0.5">الرمز: {req.studentCode}</p>
                     </div>
                     <div className="bg-slate-800 rounded-lg p-3 border border-purple-500/30">
-                      <p className="text-xs text-purple-400 font-bold mb-1 flex items-center gap-1"><Save className="w-3.5 h-3.5" /> من النظام:</p>
-                      <p className="font-bold text-purple-200 text-sm">{req.nameInSystem}</p>
-                      <p className="text-[10px] text-purple-400 mt-0.5">الرمز: {req.studentCode}</p>
+                      <p className="text-xs text-purple-400 font-bold mb-1 flex items-center gap-1"><Camera className="w-3.5 h-3.5" /> رقم الهوية:</p>
+                      <p className="font-bold text-purple-200 text-sm font-mono">{req.nationalId || '—'}</p>
+                      {req.qrCodeId && (
+                        <p className="text-[10px] text-purple-400 mt-0.5">QR: {req.qrCodeId.slice(0, 20)}...</p>
+                      )}
                     </div>
                   </div>
-                  
-                  {/* معلومات إضافية */}
+
                   <div className="flex gap-2 flex-wrap mb-3">
-                    <span className="text-[10px] bg-slate-800 border border-slate-600 rounded-full px-2 py-1 flex items-center gap-1">
-                      <QrCode className="w-3 h-3" /> QR: <code className="font-mono">{req.qrCodeId ? `${req.qrCodeId.slice(0, 16)}...` : '—'}</code>
+                    <span className={`text-[10px] border rounded-full px-2 py-1 flex items-center gap-1 ${
+                      req.qrVerified
+                        ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                        : 'bg-slate-800 border-slate-600'
+                    }`}>
+                      <QrCode className="w-3 h-3" /> {req.qrVerified ? 'QR متحقق' : 'QR غير متحقق'}
                     </span>
-                    <span className="text-[10px] bg-slate-800 border border-slate-600 rounded-full px-2 py-1 flex items-center gap-1">
-                      <Smile className="w-3 h-3" /> بصمة وجه مسجلة
+                    <span className={`text-[10px] border rounded-full px-2 py-1 flex items-center gap-1 ${
+                      req.faceDescriptor
+                        ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                        : 'bg-slate-800 border-slate-600'
+                    }`}>
+                      <Smile className="w-3 h-3" /> {req.faceDescriptor ? 'بصمة وجه مسجلة' : 'بدون بصمة'}
                     </span>
                     {req.hasExistingQr && (
                       <span className="text-[10px] bg-amber-500/15 border border-amber-500/30 text-amber-300 rounded-full px-2 py-1 flex items-center gap-1">
@@ -389,15 +344,13 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                       </span>
                     )}
                   </div>
-                  
-                  {/* سبب الرفض */}
+
                   {isRejected && req.rejectionReason && (
                     <div className="mb-3 p-2 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-300">
                       <strong>سبب الرفض:</strong> {req.rejectionReason}
                     </div>
                   )}
-                  
-                  {/* نموذج الرفض */}
+
                   {isRejecting && (
                     <div className="mb-3 p-3 bg-slate-800 border-2 border-red-500/40 rounded-lg">
                       <textarea
@@ -427,8 +380,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                       </div>
                     </div>
                   )}
-                  
-                  {/* أزرار الإجراءات */}
+
                   {!isRejecting && (
                     <div className="flex gap-2">
                       {isPending && (
@@ -452,8 +404,8 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                           </button>
                         </>
                       )}
-                      
-                      {(isApproved || isAutoApproved || isRejected) && (
+
+                      {(isApproved || isRejected) && (
                         <button
                           onClick={() => handleDelete(req)}
                           className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-1.5"

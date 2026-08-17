@@ -1,24 +1,20 @@
-// ============================================================
-// 🔑 أنواع البيانات لنظام التسجيل الذاتي
-// ============================================================
-
 export type RegistrationLinkType = 'single' | 'bulk' | 'attendance';
 
 export interface RegistrationLink {
   token: string;
   adminUid: string;
   stageId: string;
-  studentId?: string | null;  // null = رابط جماعي للمرحلة / رابط الحضور
+  studentId?: string | null;
   type: RegistrationLinkType;
   createdBy: string;
   createdAt: string;
-  expiresAt: number;          // timestamp بالـ ms
+  expiresAt: number;
   used: boolean;
   usedAt?: string;
   usedByStudentId?: string;
-  academicYear?: string;      // السنة الدراسية عند إنشاء الرابط
-  subjectName?: string;       // اسم المادة (من بايو التدريسي) - لروابط الحضور
-  teacherId?: string;         // هوية التدريسي المُرسِل - لتحديد سجلاته في تقرير الحضور
+  academicYear?: string;
+  subjectName?: string;
+  teacherId?: string;
 }
 
 export interface PendingRegistration {
@@ -27,44 +23,37 @@ export interface PendingRegistration {
   stageId: string;
   studentId: string;
   studentCode: string;
-  
-  // البيانات المستخرجة من الهوية
-  nameFromID: string;
   nameInSystem: string;
-  matchPercentage: number;
-  
-  // QR من الهوية
-  qrCodeUrl: string;            // الرابط الكامل
-  qrCodeId: string;             // الـ ID المستخرج فقط
-  
-  // بصمة الوجه (مضغوطة)
-  faceDescriptor: any;          // MultiDescriptor مضغوطة
-  
-  // الحالة
-  status: 'pending' | 'auto-approved' | 'approved' | 'rejected';
+
+  nationalId?: string;
+  qrCodeUrl?: string;
+  qrCodeId?: string;
+  qrVerified: boolean;
+
+  faceDescriptor: any;
+
+  status: 'pending' | 'approved' | 'rejected';
   rejectionReason?: string;
-  
-  // التواريخ
+
   createdAt: string;
   reviewedAt?: string;
   reviewedBy?: string;
-  
-  // معلومات إضافية
-  hasExistingQr?: boolean;      // الطالب عنده QR محفوظ مسبقاً
-  hasExistingFace?: boolean;    // الطالب عنده بصمة محفوظة مسبقاً
+
+  hasExistingQr?: boolean;
+  hasExistingFace?: boolean;
 }
 
 export interface RegistrationProgress {
-  step: 'code' | 'id-upload' | 'id-processing' | 'name-mismatch' | 'face' | 'submitting' | 'success' | 'error';
+  step: 'code' | 'id-upload' | 'id-processing' | 'face' | 'submitting' | 'success' | 'error' | 'attendance-report';
   message?: string;
 }
 
 export interface IDExtractionResult {
   success: boolean;
   name?: string;
-  fullName?: string;
   qrUrl?: string;
   qrId?: string;
+  nationalId?: string;
   error?: string;
   rawText?: string;
 }

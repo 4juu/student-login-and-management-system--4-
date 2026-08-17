@@ -7,18 +7,13 @@ import {
   getRegistrationLink,
   validateLink,
 } from '../../services/tokenService';
-import {
-  matchArabicNames,
-  MatchResult,
-  MIN_CONSECUTIVE_MATCHES,
-} from '../../services/nameMatching';
 import { IDCardUpload } from './IDCardUpload';
 import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear, loadAttendanceRecords, loadSessions } from '../../firebase/dataService';
 import { decompressRecord } from '../../firebase/dataServiceCompressed';
 import { SkeletonCard } from '../Skeleton';
 import type { MultiDescriptor } from '../../services/faceRecognition';
-import { AlertTriangle, XCircle, RotateCcw, CalendarDays, CheckCircle, XCircle as XCircleIcon, Users, BookOpen, ArrowLeft } from 'lucide-react';
+import { AlertTriangle, XCircle, CalendarDays, CheckCircle, XCircle as XCircleIcon, Users, BookOpen, ArrowLeft } from 'lucide-react';
 
 const LazyFaceCaptureStep = lazy(() =>
   import('./FaceCaptureStep').then(m => ({ default: m.FaceCaptureStep }))
@@ -28,7 +23,6 @@ type Step =
   | 'loading'
   | 'invalid-link'
   | 'upload-id'
-  | 'name-mismatch'
   | 'capture-face'
   | 'submitting'
   | 'success'
@@ -97,7 +91,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   const [student, setStudent] = useState<Student | null>(null);
   const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [idData, setIdData] = useState<IDExtractionResult | null>(null);
-  const [matchResult, setMatchResult] = useState<MatchResult>({ isMatch: false, consecutiveMatches: 0, totalMatches: 0 });
   const [errorMsg, setErrorMsg] = useState('');
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [matchedStudent, setMatchedStudent] = useState<Student | null>(null);
@@ -135,7 +128,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     const stageId = link.stageId;
     const teacherId = link.teacherId || link.adminUid;
 
-    // ✅ النطاق الأساسي: سجلات التدريسي المُرسِل فقط (SDK — يدعم المضغوط والقديم)
     const [teacherRecords, teacherSessions] = await Promise.all([
       loadAttendanceRecords(adminUid, stageId, teacherId),
       loadSessions(adminUid, stageId, teacherId),
@@ -148,7 +140,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
 
     let records = teacherRecords.filter(r => r && r.studentId === studentId);
 
-    // 🛡️ شبكة الأمان: لو السجلات فارغة، امسح كل التدريسيين وفلتر بالمادة (subjectName)
     if (records.length === 0 && link.subjectName) {
       const base = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}`;
       const teachersData = await dbFetch<any>(`${base}/teacherRecords`, signal);
@@ -163,13 +154,11 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
             : [];
           for (const c of arr) {
             if (!c || typeof c !== 'object') continue;
-            // صيغة خام (يحمل id مباشرة)
             if (c.id) { all.push(c as AttendanceRecord); continue; }
-            // صيغة مضغوطة
             try {
               const rec = decompressRecord(c);
               if (rec && rec.id) all.push(rec);
-            } catch { /* تجاهل سجل تالف */ }
+            } catch { }
           }
 
           if (t.records) {
@@ -182,17 +171,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     }
 
     return { records, sessionNameMap };
-  };
-
-  const findMatchingStudent = (extractedName: string, students: Student[]): { student: Student; result: MatchResult } | null => {
-    let bestMatch: { student: Student; result: MatchResult } | null = null;
-    for (const s of students) {
-      const result = matchArabicNames(s.name, extractedName);
-      if (result.isMatch && (!bestMatch || result.consecutiveMatches > bestMatch.result.consecutiveMatches)) {
-        bestMatch = { student: s, result };
-      }
-    }
-    return bestMatch;
   };
 
   useEffect(() => {
@@ -280,48 +258,51 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     };
   }, [token, goTo]);
 
+  const findStudentByName = (name: string, students: Student[]): Student | null => {
+    const normalizedTarget = name.replace(/\s+/g, '').toLowerCase();
+    for (const s of students) {
+      const normalizedStudent = s.name.replace(/\s+/g, '').toLowerCase();
+      if (normalizedStudent === normalizedTarget) return s;
+      if (normalizedTarget.includes(normalizedStudent) || normalizedStudent.includes(normalizedTarget)) return s;
+    }
+    return null;
+  };
+
   const handleIdExtracted = async (result: IDExtractionResult) => {
     try {
       setIdData(result);
       if (!link) return;
 
-      const extractedName = result.name || result.fullName || '';
-
       if (link.type === 'attendance') {
-        const match = findMatchingStudent(extractedName, allStudents);
-        if (!match) {
-          setMatchResult({ isMatch: false, consecutiveMatches: 0, totalMatches: 0 });
-          goTo('name-mismatch');
+        const extractedName = result.name || '';
+        const matched = extractedName ? findStudentByName(extractedName, allStudents) : null;
+        if (!matched) {
+          if (allStudents.length === 1) {
+            setMatchedStudent(allStudents[0]);
+            const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link, allStudents[0].id);
+            setAttendanceRecords(records);
+            setSessionNameMap(namesMap);
+            goTo('attendance-report');
+          } else {
+            goTo('capture-face');
+          }
           return;
         }
-        setMatchResult(match.result);
-        setMatchedStudent(match.student);
-
-        const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link, match.student.id);
+        setMatchedStudent(matched);
+        const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link, matched.id);
         setAttendanceRecords(records);
         setSessionNameMap(namesMap);
         goTo('attendance-report');
         return;
       }
 
-      if (!student) return;
-      const result2 = matchArabicNames(student.name, extractedName);
-      setMatchResult(result2);
-
-      if (!result2.isMatch) {
-        goTo('name-mismatch');
-        return;
+      if (result.qrId) {
+        saveQRAsync(result).catch(e => console.warn('⚠️ فشل حفظ QR:', e));
       }
-
-      saveQRAsync(result).catch(e => console.warn('⚠️ فشل حفظ QR:', e));
       goTo('capture-face');
     } catch (e) {
       console.error('❌ خطأ في معالجة الهوية:', e);
-      if (link?.type === 'attendance') {
-        goTo('name-mismatch');
-      } else {
-        goTo('capture-face');
-      }
+      goTo('capture-face');
     }
   };
 
@@ -335,7 +316,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
         const entries = Object.entries(data as Record<string, Student>);
         const found = entries.find(([, s]) => s.id === student.id);
         if (found) {
-          // ✅ كتابة موجهة لحقل qrCodeId فقط (متوافقة مع قواعد الأمان الجديدة)
           await set(ref(database, `${path}/${found[0]}/qrCodeId`), result.qrId);
         }
       }
@@ -357,11 +337,11 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
         stageId: link.stageId,
         studentId: student.id,
         studentCode: student.code,
-        nameFromID: idData?.name || '',
         nameInSystem: student.name,
-        matchPercentage: matchResult.consecutiveMatches,
+        nationalId: idData?.nationalId || '',
         qrCodeUrl: idData?.qrUrl || '',
         qrCodeId: idData?.qrId || '',
+        qrVerified: !!idData?.success,
         faceDescriptor: cleanFaceDescriptor,
         status: 'pending',
         createdAt: new Date().toISOString(),
@@ -378,8 +358,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       goTo('error');
     }
   };
-
-  const handleRetryId = () => goTo('upload-id');
 
   const getAttendanceStats = () => {
     if (!matchedStudent) return { present: 0, absent: 0, total: 0, records: [] as any[] };
@@ -447,33 +425,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     );
   }
 
-  if (step === 'name-mismatch' && idData) {
-    return (
-      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
-        <div className="glass-card p-8 max-w-md w-full text-center">
-          <div className="mx-auto w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4">
-            <AlertTriangle className="w-8 h-8 text-amber-400" />
-          </div>
-          <h2 className="text-2xl font-bold text-white mb-2">الاسم غير متطابق</h2>
-          <p className="text-sm text-white/50 mb-4">عدد الأسماء المتطابقة: {matchResult.consecutiveMatches} (المطلوب {MIN_CONSECUTIVE_MATCHES} فأكثر)</p>
-          <div className="glass-card-sm p-4 mb-4 text-right">
-            {matchedStudent ? (
-              <p className="text-sm text-white/50">أقرب تطابق: <span className="text-white font-bold">{matchedStudent.name}</span></p>
-            ) : (
-              <>
-                <p className="text-sm text-white/50">المستخرج من الهوية: <span className="text-white font-bold">{idData.name || idData.fullName}</span></p>
-              </>
-            )}
-          </div>
-          <p className="text-sm text-white/60 mb-6">الاسم في الهوية لا يتطابق مع أي طالب في هذه المرحلة. حاول تصوير الهوية بشكل أوضح أو تأكد من استخدام الهوية الصحيحة.</p>
-          <button onClick={handleRetryId} className="btn-base btn-secondary w-full py-3">
-            <RotateCcw className="w-4 h-4" /> إعادة التصوير
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   if (step === 'capture-face' && student) {
     return (
       <Suspense fallback={
@@ -483,7 +434,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       }>
         <LazyFaceCaptureStep
           student={student}
-          matchPercentage={matchResult.consecutiveMatches}
           allStudents={allStudents}
           onCaptured={handleFaceCaptured}
           onCancel={() => goTo('upload-id')}
@@ -505,7 +455,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   }
 
   if (step === 'success' && student) {
-    return <RegistrationSuccess student={student} matchPercentage={matchResult.consecutiveMatches} autoApproved={matchResult.isMatch} onExit={onExit} />;
+    return <RegistrationSuccess student={student} qrVerified={!!idData?.success} onExit={onExit} />;
   }
 
   if (step === 'error') {
@@ -533,7 +483,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
         <div className="w-full max-w-2xl">
           <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 overflow-hidden">
-            {/* Header with Subject Name */}
             <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-6">
               <div className="flex items-center gap-3 mb-2">
                 <div className="bg-white/20 p-3 rounded-xl">
@@ -547,7 +496,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
               <p className="text-emerald-100/80">تقرير الحضور والغياب للطالب</p>
             </div>
 
-            {/* Student Name Card */}
             <div className="p-6 border-b border-white/10">
               <div className="flex items-center gap-4 bg-white/5 rounded-xl p-4">
                 <div className="bg-emerald-500/20 p-4 rounded-xl">
@@ -561,7 +509,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
               </div>
             </div>
 
-            {/* Stats Cards */}
             <div className="p-6 grid grid-cols-3 gap-3">
               <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-center">
                 <div className="flex items-center justify-center gap-2 mb-1">
@@ -589,7 +536,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
               </div>
             </div>
 
-            {/* Records List */}
             {records.length > 0 && (
               <div className="px-6 pb-6">
                 <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
@@ -640,7 +586,6 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
               </div>
             )}
 
-            {/* Exit Button */}
             <div className="px-6 pb-6">
               <button onClick={onExit} className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
                 <ArrowLeft className="w-5 h-5" /> العودة للرئيسية

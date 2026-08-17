@@ -5,15 +5,13 @@ import { Check, CircleCheck, ClipboardList, IdCard, LoaderCircle, Lock, PartyPop
 
 interface RegistrationSuccessProps {
   student: Student;
-  matchPercentage: number;
-  autoApproved: boolean;
+  qrVerified: boolean;
   onExit: () => void;
 }
 
 export const RegistrationSuccess: React.FC<RegistrationSuccessProps> = ({
   student,
-  matchPercentage,
-  autoApproved,
+  qrVerified,
   onExit,
 }) => {
   const [showConfetti, setShowConfetti] = useState(true);
@@ -59,12 +57,12 @@ export const RegistrationSuccess: React.FC<RegistrationSuccessProps> = ({
         <h2 className="text-3xl font-bold text-gray-800 mb-2 flex items-center justify-center gap-2"><PartyPopper className="w-8 h-8 text-emerald-500" /> تم بنجاح!</h2>
         <p className="text-gray-600 mb-1">مرحباً <span className="font-bold text-emerald-700">{student.name}</span></p>
         
-        {autoApproved ? (
+        {qrVerified ? (
           <div className="mt-4 p-4 bg-emerald-50 border-2 border-emerald-200 rounded-xl mb-4">
             <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-4"><CircleCheck className="w-8 h-8 text-emerald-500" /></div>
-            <p className="font-bold text-emerald-800 mb-1">تم تفعيل حسابك تلقائياً</p>
+            <p className="font-bold text-emerald-800 mb-1">تم تسجيلك بنجاح</p>
             <p className="text-sm text-emerald-700">
-              تطابق الاسم: <strong>{matchPercentage} أسماء متطابقة</strong>
+              تم التحقق من رمز QR في البطاقة
             </p>
             <p className="text-xs text-emerald-600 mt-2">
               يمكنك الآن تسجيل حضورك في الكلية باستخدام:
@@ -80,7 +78,7 @@ export const RegistrationSuccess: React.FC<RegistrationSuccessProps> = ({
             <div className="mx-auto w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4"><LoaderCircle className="w-8 h-8 text-amber-500 animate-spin" /></div>
             <p className="font-bold text-amber-800 mb-1">في انتظار موافقة المشرف</p>
             <p className="text-sm text-amber-700">
-              تطابق الاسم: <strong>{matchPercentage} أسماء متطابقة</strong>
+              لم يتم التحقق من رمز QR — يحتاج مراجعة يدوية
             </p>
             <p className="text-xs text-amber-600 mt-2">
               تم إرسال طلبك للمراجعة. سيتم تفعيل حسابك قريباً بعد موافقة الأدمن.
