@@ -2,6 +2,7 @@
 import Tesseract from 'tesseract.js';
 import { extractQRFromImageFile, analyzeQR } from './qrExtractor';
 import { IDExtractionResult } from '../types/registration';
+import { extractNameFromOCR } from './arabicNames';
 
 // ============================================================
 // 📷 استخراج البيانات من صورة الهوية - نسخة محسّنة
@@ -543,259 +544,6 @@ export const preprocessForQR = async (file: File): Promise<Blob> => {
 };
 
 // ============================================================
-// 🔧 إصلاح أخطاء OCR الشائعة
-// ============================================================
-
-const fixCommonOCRErrors = (text: string): string => {
-  return text
-    .replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '')
-    .replace(/ا\s+ل([\u0600-\u06FF])/g, 'ال$1')
-    .replace(/(\S)\s+ل([\u0600-\u06FF])/g, (_, before, after) => {
-      return `${before} ال${after}`;
-    })
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n\s*\n/g, '\n')
-    .trim();
-};
-
-const cleanExtractedName = (text: string): string => {
-  return text
-    .split(/[:|]/)[0]
-    .replace(/[\d٠-٩]+/g, '')
-    .replace(/[a-zA-Z]/g, '')
-    .replace(/[^\u0600-\u06FF\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-};
-
-const isValidName = (name: string): boolean => {
-  if (!name) return false;
-  const words = name.split(/\s+/).filter((w) => w.length >= 2);
-  return (
-    words.length >= 2 &&
-    words.length <= 8 &&
-    words.every((w) => /^[\u0600-\u06FF]+$/.test(w))
-  );
-};
-
-// ── قائمة أسماء معروفة للكلمات المركبة ──
-const KNOWN_COMPOUND_FIRST = new Set([
-  'نور', 'عبد', 'ابو', 'ام', 'زين', 'صلاح', 'علاء', 'عماد', 'سيف',
-  'حسام', 'بهاء', 'شمس', 'محي', 'تاج', 'فخر', 'شرف', 'جمال', 'كمال',
-  'بدر', 'ضياء', 'ركن', 'عز', 'معين', 'ناصر', 'قمر', 'ضوء', 'سراج',
-  'منصور', 'فؤاد', 'حيدر', 'ماجد', 'وليد', 'عادل', 'هشام', 'اياد',
-]);
-
-const KNOWN_COMPOUND_SECOND = new Set([
-  'الله', 'الرحمن', 'الرحيم', 'الكريم', 'الدين', 'الاسلام', 'الهدي',
-  'العابدين', 'العالي', 'السميع', 'البصير', 'المنصور', 'المجيد',
-]);
-
-/**
- * محاولة فصل كلمات مدمجة — "سالمجاسم" → "سالم جاسم"
- * يحاول كل نقطة فصل ممكنة ويرجع أفضل خيار
- */
-const trySplitMergedWord = (word: string): string[] => {
-  if (word.length < 5) return [word];
-
-  // حاول الفصل عند نقاط ممكنة
-  for (let i = 2; i < word.length - 1; i++) {
-    const left = word.substring(0, i);
-    const right = word.substring(i);
-
-    // إذا الطرفين كلمات عربية صالحة
-    if (
-      /^[\u0600-\u06FF]+$/.test(left) && left.length >= 2 &&
-      /^[\u0600-\u06FF]+$/.test(right) && right.length >= 2
-    ) {
-      // تحقق إذا أحد الطرفين اسم معروف
-      if (KNOWN_COMPOUND_FIRST.has(left) || KNOWN_COMPOUND_SECOND.has(right)) {
-        return [left, right];
-      }
-    }
-  }
-
-  // حاول فصل ثلاثي
-  if (word.length >= 8) {
-    for (let i = 2; i < word.length - 3; i++) {
-      for (let j = i + 2; j < word.length - 1; j++) {
-        const a = word.substring(0, i);
-        const b = word.substring(i, j);
-        const c = word.substring(j);
-
-        if (
-          /^[\u0600-\u06FF]+$/.test(a) && a.length >= 2 &&
-          /^[\u0600-\u06FF]+$/.test(b) && b.length >= 2 &&
-          /^[\u0600-\u06FF]+$/.test(c) && c.length >= 2
-        ) {
-          if (
-            KNOWN_COMPOUND_FIRST.has(a) ||
-            KNOWN_COMPOUND_SECOND.has(b) ||
-            KNOWN_COMPOUND_FIRST.has(b)
-          ) {
-            return [a, b, c];
-          }
-        }
-      }
-    }
-  }
-
-  return [word];
-};
-
-/**
- * فصل الكلمات المدمجة في اسم كامل
- */
-const splitMergedWords = (name: string): string => {
-  const words = name.split(/\s+/);
-  const result: string[] = [];
-
-  for (const word of words) {
-    result.push(...trySplitMergedWord(word));
-  }
-
-  return result.join(' ');
-};
-
-const ignoreWords = new Set([
-  'الاسم', 'اسم', 'الأسم', 'الإسم',
-  'الطالب', 'الطالبة',
-  'الكلية', 'القسم', 'المرحلة', 'الفرع', 'الجامعة',
-  'وزارة', 'التعليم', 'العالي', 'البحث', 'العلمي',
-  'الجمهورية', 'العراقية', 'العراق', 'جمهورية',
-  'هوية', 'الهوية', 'بطاقة', 'البطاقة',
-  'تاريخ', 'الميلاد', 'المولد', 'التولد', 'تولد',
-  'صادرة', 'الرقم', 'الامتحاني', 'الجامعي',
-  'العام', 'الدراسي', 'الفصل', 'سنة',
-  'مديرية', 'دائرة', 'الوطنية',
-  'بغداد', 'البصرة', 'الموصل', 'النجف', 'كربلاء', 'اربيل',
-  'هندسة', 'طب', 'صيدلة', 'الصيدلة', 'علوم', 'آداب', 'لغات', 'تربية',
-  'حاسوب', 'معلومات', 'كهرباء', 'ميكانيك', 'مدنية',
-  'صباحي', 'مسائي', 'دراسات', 'ذكر', 'انثى', 'انثي', 'أنثى',
-  'ايقاف', 'ايقافه', 'تخرج', 'مستمر',
-  'الاولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة', 'السادسة',
-  'المرحله', 'النفاذ', 'الانتهاء',
-  'المهنة', 'العنوان', 'الديانة', 'الجنس',
-]);
-
-const isArabicWord = (w: string) =>
-  /^[\u0600-\u06FF]+$/.test(w) && w.length >= 2;
-const isLikelyNamePart = (w: string) =>
-  isArabicWord(w) && !ignoreWords.has(w);
-
-/**
- * 🎯 استخراج الاسم من نص OCR — مع إصلاح الكلمات المدمجة
- */
-export const extractArabicName = (rawText: string): string | null => {
-  if (!rawText) return null;
-
-  const fixedText = fixCommonOCRErrors(rawText);
-  const lines = fixedText
-    .split(/[\n\r]+/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  console.log('📋 أسطر OCR:', lines);
-
-  // ── الخطوة 1: البحث عن نمط "الاسم: xxx" ──
-  const arabicNamePatterns = [
-    /الاسم\s*[:\-]?\s*(.+)/,
-    /الأسم\s*[:\-]?\s*(.+)/,
-    /الإسم\s*[:\-]?\s*(.+)/,
-    /اسم\s+الطالب\s*[:\-]?\s*(.+)/,
-  ];
-
-  for (const line of lines) {
-    for (const pattern of arabicNamePatterns) {
-      const match = line.match(pattern);
-      if (match && match[1]) {
-        const cleaned = cleanExtractedName(match[1]);
-        const split = splitMergedWords(cleaned);
-        if (isValidName(split)) {
-          console.log('✅ وجدنا الاسم من نمط "الاسم":', split);
-          return split;
-        }
-        if (isValidName(cleaned)) {
-          console.log('✅ وجدنا الاسم من نمط "الاسم":', cleaned);
-          return cleaned;
-        }
-      }
-    }
-  }
-
-  for (let i = 0; i < lines.length; i++) {
-    if (/^(الاسم|الأسم|الإسم|اسم)\s*[:\-]?\s*$/.test(lines[i])) {
-      if (i + 1 < lines.length) {
-        const cleaned = cleanExtractedName(lines[i + 1]);
-        const split = splitMergedWords(cleaned);
-        if (isValidName(split)) {
-          console.log('✅ وجدنا الاسم من السطر التالي لـ "الاسم":', split);
-          return split;
-        }
-      }
-    }
-  }
-
-  // ── الخطوة 2: البحث عن أطول سلسلة كلمات اسمية ──
-  const candidates: {
-    text: string;
-    lineIndex: number;
-    wordCount: number;
-  }[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const words = line.split(/\s+/);
-
-    let current: string[] = [];
-
-    for (const word of words) {
-      if (isLikelyNamePart(word)) {
-        current.push(word);
-      } else {
-        if (current.length >= 2) {
-          const merged = current.join(' ');
-          const split = splitMergedWords(merged);
-          const splitWords = split.split(/\s+/);
-          candidates.push({
-            text: split,
-            lineIndex: i,
-            wordCount: splitWords.length,
-          });
-        }
-        current = [];
-      }
-    }
-
-    if (current.length >= 2) {
-      const merged = current.join(' ');
-      const split = splitMergedWords(merged);
-      const splitWords = split.split(/\s+/);
-      candidates.push({
-        text: split,
-        lineIndex: i,
-        wordCount: splitWords.length,
-      });
-    }
-  }
-
-  console.log('🔍 المرشحون للاسم:', candidates);
-
-  if (candidates.length === 0) return null;
-
-  candidates.sort((a, b) => {
-    if (a.wordCount !== b.wordCount) return b.wordCount - a.wordCount;
-    return b.text.length - a.text.length;
-  });
-
-  const best = candidates[0];
-  if (best.wordCount < 2) return null;
-
-  console.log('✅ أفضل مرشح:', best.text);
-  return best.text;
-};
-
-// ============================================================
 // 🎯 OCR مع تدوير متعدد الزوايا
 // ============================================================
 
@@ -938,7 +686,7 @@ export const extractIDData = async (
     let bestRotationScore = 0;
 
     for (const attempt of rotationAttempts) {
-      const name = extractArabicName(attempt.text);
+      const name = extractNameFromOCR(attempt.text);
       if (name) {
         const score =
           attempt.confidence * Math.min(name.length / 10, 1);
@@ -1005,7 +753,7 @@ export const extractIDData = async (
     let bestScore = 0;
 
     for (const attempt of allAttempts) {
-      const name = extractArabicName(attempt.text);
+      const name = extractNameFromOCR(attempt.text);
       if (name) {
         const score =
           attempt.confidence * Math.min(name.length / 10, 1);
@@ -1026,7 +774,7 @@ export const extractIDData = async (
       bestText =
         allAttempts.sort((a, b) => b.text.length - a.text.length)[0]
           ?.text || '';
-      bestName = extractArabicName(bestText);
+      bestName = extractNameFromOCR(bestText);
     }
 
     console.log('📜 أفضل نص OCR:', bestText.substring(0, 300));
