@@ -400,6 +400,89 @@ const preprocessBinaryDilated = (img: HTMLImageElement): Promise<Blob> => {
 };
 
 /**
+ * إضافة إطار أبيض حول الصورة (Tesseract docs: يحسن OCR للنصوص المحصورة)
+ */
+const addWhiteBorder = (img: HTMLImageElement, borderPx = 20): Promise<Blob> => {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  canvas.width = img.width + borderPx * 2;
+  canvas.height = img.height + borderPx * 2;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, borderPx, borderPx);
+  return blobFromCanvas(canvas);
+};
+
+/**
+ * معالجة تكيفية (Sauvola-inspired) — أفضل من العتبة الثابتة للإضاءة غير المتجانسة
+ * مستوحاة من Tesseract 5 Adaptive Otsu / Sauvola binarization
+ */
+const preprocessAdaptive = (img: HTMLImageElement): Promise<Blob> => {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  upscaleIfNeeded(img, ctx, canvas, 2000);
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imageData.data;
+  const w = canvas.width;
+  const h = canvas.height;
+
+  const gray = new Float32Array(w * h);
+  for (let i = 0; i < d.length; i += 4) {
+    gray[i / 4] = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+  }
+
+  const blockSize = 31;
+  const k = 0.15;
+  const R = 128;
+  const integral = new Float64Array((w + 1) * (h + 1));
+  const integralSq = new Float64Array((w + 1) * (h + 1));
+
+  for (let y = 0; y < h; y++) {
+    let rowSum = 0;
+    let rowSumSq = 0;
+    for (let x = 0; x < w; x++) {
+      const v = gray[y * w + x];
+      rowSum += v;
+      rowSumSq += v * v;
+      integral[(y + 1) * (w + 1) + (x + 1)] = rowSum + integral[y * (w + 1) + (x + 1)];
+      integralSq[(y + 1) * (w + 1) + (x + 1)] = rowSumSq + integralSq[y * (w + 1) + (x + 1)];
+    }
+  }
+
+  const half = Math.floor(blockSize / 2);
+  for (let i = 0; i < gray.length; i++) {
+    const x = i % w;
+    const y = Math.floor(i / w);
+    const x1 = Math.max(0, x - half);
+    const y1 = Math.max(0, y - half);
+    const x2 = Math.min(w - 1, x + half);
+    const y2 = Math.min(h - 1, y + half);
+    const count = (x2 - x1 + 1) * (y2 - y1 + 1);
+
+    const sum = integral[(y2 + 1) * (w + 1) + (x2 + 1)]
+      - integral[y1 * (w + 1) + (x2 + 1)]
+      - integral[(y2 + 1) * (w + 1) + x1]
+      + integral[y1 * (w + 1) + x1];
+    const sumSq = integralSq[(y2 + 1) * (w + 1) + (x2 + 1)]
+      - integralSq[y1 * (w + 1) + (x2 + 1)]
+      - integralSq[(y2 + 1) * (w + 1) + x1]
+      + integralSq[y1 * (w + 1) + x1];
+
+    const mean = sum / count;
+    const std = Math.sqrt(Math.max(0, sumSq / count - mean * mean));
+    const threshold = mean * (1 + k * (std / R - 1));
+
+    const px = i * 4;
+    const v = gray[i] > threshold ? 255 : 0;
+    d[px] = d[px + 1] = d[px + 2] = v;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return blobFromCanvas(canvas);
+};
+
+/**
  * تصحيح ميل الصورة باستخدام minAreaRect (مستوحى من arabic-ocr deskew)
  */
 const deskewImage = (img: HTMLImageElement): Promise<Blob> => {
@@ -563,6 +646,8 @@ const tryOCR = async (
     tessedit_pageseg_mode: psm as any,
     preserve_interword_spaces: '1',
     user_defined_dpi: '300',
+    textord_script_is_rtl: '1',
+    textord_space_size_is_variable: '1',
   });
   const result = await worker.recognize(image);
   const text = result.data.text;
@@ -708,12 +793,14 @@ export const extractIDData = async (
 
     // ── المرحلة 2: معالجات إضافية على الصورة الأصلية ──
     onProgress?.('', 50);
-    const [lightBlob, mediumBlob, strongBlob, binaryBlob, binaryDilBlob] = await Promise.all([
+    const [lightBlob, mediumBlob, strongBlob, binaryBlob, binaryDilBlob, adaptiveBlob, borderedBlob] = await Promise.all([
       preprocessLight(img),
       preprocessMedium(img),
       preprocessStrong(img),
       preprocessBinary(img),
       preprocessBinaryDilated(img),
+      preprocessAdaptive(img),
+      addWhiteBorder(img),
     ]);
 
     const extraAttempts: OCRAttempt[] = [];
@@ -744,6 +831,29 @@ export const extractIDData = async (
 
     const e9 = await tryOCR(worker, binaryDilBlob, '3', 'ثنائيةموسطة+PSM3');
     extraAttempts.push(e9);
+
+    // ── معالجات إضافية مستوحاة من Tesseract docs ──
+    // PSM 13 (raw line) — يتجاوز تقسيم Tesseract، يعمل جيداً للصور المعالجة مسبقاً
+    const e10 = await tryOCR(worker, mediumBlob, '13', 'متوسطة+PSM13');
+    extraAttempts.push(e10);
+
+    // PSM 7 (single line) — مثالي لحقول الاسم على الهوية
+    const e11 = await tryOCR(worker, mediumBlob, '7', 'متوسطة+PSM7');
+    extraAttempts.push(e11);
+
+    // Adaptive thresholding — أفضل للإضاءة غير المتجانسة
+    const e12 = await tryOCR(worker, adaptiveBlob, '3', 'تكيفية+PSM3');
+    extraAttempts.push(e12);
+
+    const e13 = await tryOCR(worker, adaptiveBlob, '6', 'تكيفية+PSM6');
+    extraAttempts.push(e13);
+
+    // صورة مع إطار أبيض — يحسن OCR للنصوص المحصورة (Tesseract docs)
+    const e14 = await tryOCR(worker, borderedBlob, '3', 'إطار+PSM3');
+    extraAttempts.push(e14);
+
+    const e15 = await tryOCR(worker, borderedBlob, '13', 'إطار+PSM13');
+    extraAttempts.push(e15);
 
     // ── الجمع والتقييم ──
     const allAttempts = [...rotationAttempts, ...extraAttempts];
