@@ -43,7 +43,7 @@ const rasterizeTransform = async (
   containerW: number,
   containerH: number
 ): Promise<Blob> => {
-  const img = new HTMLImageElement();
+  const img = document.createElement('img') as HTMLImageElement;
   img.crossOrigin = 'anonymous';
   await new Promise<void>((res, rej) => {
     img.onload = () => res();
