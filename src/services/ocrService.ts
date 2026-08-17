@@ -316,6 +316,212 @@ const preprocessStrong = (img: HTMLImageElement): Promise<Blob> => {
 };
 
 /**
+ * معالجة ثنائية — تباين عالي + عكس (مستوحاة من arabic-ocr)
+ * تحوّل الصورة إلى أسود/أبيض فقط ثم تعكسها
+ */
+const preprocessBinary = (img: HTMLImageElement): Promise<Blob> => {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  upscaleIfNeeded(img, ctx, canvas, 2000);
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imageData.data;
+  const w = canvas.width;
+  const h = canvas.height;
+
+  const gray = new Float32Array(w * h);
+  for (let i = 0; i < d.length; i += 4) {
+    gray[i / 4] = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+  }
+
+  const sorted = Array.from(gray).sort((a, b) => a - b);
+  const p30 = sorted[Math.floor(sorted.length * 0.3)];
+  const p85 = sorted[Math.floor(sorted.length * 0.85)];
+  const threshold = (p30 + p85) / 2;
+
+  for (let i = 0; i < gray.length; i++) {
+    const px = i * 4;
+    const v = gray[i] < threshold ? 0 : 255;
+    d[px] = d[px + 1] = d[px + 2] = v;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return blobFromCanvas(canvas);
+};
+
+/**
+ * معالجة ثنائية + تكبير + تمويه خفيف (لتحسين فصل النص)
+ */
+const preprocessBinaryDilated = (img: HTMLImageElement): Promise<Blob> => {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  upscaleIfNeeded(img, ctx, canvas, 2000);
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imageData.data;
+  const w = canvas.width;
+  const h = canvas.height;
+
+  const gray = new Float32Array(w * h);
+  for (let i = 0; i < d.length; i += 4) {
+    gray[i / 4] = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+  }
+
+  const sorted = Array.from(gray).sort((a, b) => a - b);
+  const p30 = sorted[Math.floor(sorted.length * 0.3)];
+  const p85 = sorted[Math.floor(sorted.length * 0.85)];
+  const threshold = (p30 + p85) / 2;
+
+  const binary = new Uint8Array(w * h);
+  for (let i = 0; i < gray.length; i++) {
+    binary[i] = gray[i] < threshold ? 1 : 0;
+  }
+
+  const dilated = new Uint8Array(w * h);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const idx = y * w + x;
+      if (binary[idx] === 1 || binary[idx - 1] === 1 || binary[idx + 1] === 1 ||
+          binary[(y - 1) * w + x] === 1 || binary[(y + 1) * w + x] === 1) {
+        dilated[idx] = 1;
+      }
+    }
+  }
+
+  for (let i = 0; i < w * h; i++) {
+    const px = i * 4;
+    const v = dilated[i] === 1 ? 0 : 255;
+    d[px] = d[px + 1] = d[px + 2] = v;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return blobFromCanvas(canvas);
+};
+
+/**
+ * تصحيح ميل الصورة باستخدام minAreaRect (مستوحى من arabic-ocr deskew)
+ */
+const deskewImage = (img: HTMLImageElement): Promise<Blob> => {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  const w = img.width;
+  const h = img.height;
+  canvas.width = w;
+  canvas.height = h;
+  ctx.drawImage(img, 0, 0);
+
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const d = imageData.data;
+
+  const gray = new Float32Array(w * h);
+  for (let i = 0; i < d.length; i += 4) {
+    gray[i / 4] = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+  }
+
+  let sum = 0;
+  for (let i = 0; i < gray.length; i++) sum += gray[i];
+  const mean = sum / gray.length;
+  const threshold = mean * 0.8;
+
+  const foregroundX: number[] = [];
+  const foregroundY: number[] = [];
+  for (let y = 0; y < h; y += 2) {
+    for (let x = 0; x < w; x += 2) {
+      if (gray[y * w + x] < threshold) {
+        foregroundX.push(x);
+        foregroundY.push(y);
+      }
+    }
+  }
+
+  if (foregroundX.length < 50) {
+    return blobFromCanvas(canvas);
+  }
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (let i = 0; i < foregroundX.length; i++) {
+    if (foregroundX[i] < minX) minX = foregroundX[i];
+    if (foregroundX[i] > maxX) maxX = foregroundX[i];
+    if (foregroundY[i] < minY) minY = foregroundY[i];
+    if (foregroundY[i] > maxY) maxY = foregroundY[i];
+  }
+
+  const size = 8;
+  const gridW = Math.ceil((maxX - minX) / size) + 1;
+  const gridH = Math.ceil((maxY - minY) / size) + 1;
+  const grid = new Uint8Array(gridW * gridH);
+
+  for (let i = 0; i < foregroundX.length; i++) {
+    const gx = Math.floor((foregroundX[i] - minX) / size);
+    const gy = Math.floor((foregroundY[i] - minY) / size);
+    if (gx >= 0 && gx < gridW && gy >= 0 && gy < gridH) {
+      grid[gy * gridW + gx] = 1;
+    }
+  }
+
+  let bestAngle = 0;
+  let bestVariance = 0;
+
+  for (let angle = -8; angle <= 8; angle += 0.5) {
+    const rad = (angle * Math.PI) / 180;
+    const cosA = Math.cos(rad);
+    const sinA = Math.sin(rad);
+    const projection = new Float32Array(gridW + gridH);
+
+    for (let gy = 0; gy < gridH; gy++) {
+      for (let gx = 0; gx < gridW; gx++) {
+        if (grid[gy * gridW + gx] === 0) continue;
+        const ry = -sinA * (gx - gridW / 2) + cosA * (gy - gridH / 2) + gridH / 2;
+        const iy = Math.round(ry);
+        if (iy >= 0 && iy < projection.length) {
+          projection[iy]++;
+        }
+      }
+    }
+
+    let s = 0, s2 = 0, count = 0;
+    for (let i = 0; i < projection.length; i++) {
+      if (projection[i] > 0) {
+        s += projection[i];
+        s2 += projection[i] * projection[i];
+        count++;
+      }
+    }
+    if (count === 0) continue;
+    const mean2 = s / count;
+    const variance = s2 / count - mean2 * mean2;
+
+    if (variance > bestVariance) {
+      bestVariance = variance;
+      bestAngle = angle;
+    }
+  }
+
+  if (Math.abs(bestAngle) < 0.3) {
+    return blobFromCanvas(canvas);
+  }
+
+  console.log(`📐 تصحيح الميل: ${bestAngle}°`);
+
+  const rad = (bestAngle * Math.PI) / 180;
+  const cos = Math.abs(Math.cos(rad));
+  const sin = Math.abs(Math.sin(rad));
+  const newW = Math.round(w * cos + h * sin);
+  const newH = Math.round(w * sin + h * cos);
+
+  const outCanvas = document.createElement('canvas');
+  const outCtx = outCanvas.getContext('2d')!;
+  outCanvas.width = newW;
+  outCanvas.height = newH;
+
+  outCtx.translate(newW / 2, newH / 2);
+  outCtx.rotate(rad);
+  outCtx.drawImage(img, -w / 2, -h / 2);
+
+  return blobFromCanvas(outCanvas);
+};
+
+/**
  * تحسين الصورة للاستخراج QR (تباين عالي + تكبير)
  */
 export const preprocessForQR = async (file: File): Promise<Blob> => {
@@ -372,8 +578,113 @@ const isValidName = (name: string): boolean => {
   );
 };
 
+// ── قائمة أسماء معروفة للكلمات المركبة ──
+const KNOWN_COMPOUND_FIRST = new Set([
+  'نور', 'عبد', 'ابو', 'ام', 'زين', 'صلاح', 'علاء', 'عماد', 'سيف',
+  'حسام', 'بهاء', 'شمس', 'محي', 'تاج', 'فخر', 'شرف', 'جمال', 'كمال',
+  'بدر', 'ضياء', 'ركن', 'عز', 'معين', 'ناصر', 'قمر', 'ضوء', 'سراج',
+  'منصور', 'فؤاد', 'حيدر', 'ماجد', 'وليد', 'عادل', 'هشام', 'اياد',
+]);
+
+const KNOWN_COMPOUND_SECOND = new Set([
+  'الله', 'الرحمن', 'الرحيم', 'الكريم', 'الدين', 'الاسلام', 'الهدي',
+  'العابدين', 'العالي', 'السميع', 'البصير', 'المنصور', 'المجيد',
+]);
+
 /**
- * 🎯 استخراج الاسم من نص OCR
+ * محاولة فصل كلمات مدمجة — "سالمجاسم" → "سالم جاسم"
+ * يحاول كل نقطة فصل ممكنة ويرجع أفضل خيار
+ */
+const trySplitMergedWord = (word: string): string[] => {
+  if (word.length < 5) return [word];
+
+  // حاول الفصل عند نقاط ممكنة
+  for (let i = 2; i < word.length - 1; i++) {
+    const left = word.substring(0, i);
+    const right = word.substring(i);
+
+    // إذا الطرفين كلمات عربية صالحة
+    if (
+      /^[\u0600-\u06FF]+$/.test(left) && left.length >= 2 &&
+      /^[\u0600-\u06FF]+$/.test(right) && right.length >= 2
+    ) {
+      // تحقق إذا أحد الطرفين اسم معروف
+      if (KNOWN_COMPOUND_FIRST.has(left) || KNOWN_COMPOUND_SECOND.has(right)) {
+        return [left, right];
+      }
+    }
+  }
+
+  // حاول فصل ثلاثي
+  if (word.length >= 8) {
+    for (let i = 2; i < word.length - 3; i++) {
+      for (let j = i + 2; j < word.length - 1; j++) {
+        const a = word.substring(0, i);
+        const b = word.substring(i, j);
+        const c = word.substring(j);
+
+        if (
+          /^[\u0600-\u06FF]+$/.test(a) && a.length >= 2 &&
+          /^[\u0600-\u06FF]+$/.test(b) && b.length >= 2 &&
+          /^[\u0600-\u06FF]+$/.test(c) && c.length >= 2
+        ) {
+          if (
+            KNOWN_COMPOUND_FIRST.has(a) ||
+            KNOWN_COMPOUND_SECOND.has(b) ||
+            KNOWN_COMPOUND_FIRST.has(b)
+          ) {
+            return [a, b, c];
+          }
+        }
+      }
+    }
+  }
+
+  return [word];
+};
+
+/**
+ * فصل الكلمات المدمجة في اسم كامل
+ */
+const splitMergedWords = (name: string): string => {
+  const words = name.split(/\s+/);
+  const result: string[] = [];
+
+  for (const word of words) {
+    result.push(...trySplitMergedWord(word));
+  }
+
+  return result.join(' ');
+};
+
+const ignoreWords = new Set([
+  'الاسم', 'اسم', 'الأسم', 'الإسم',
+  'الطالب', 'الطالبة',
+  'الكلية', 'القسم', 'المرحلة', 'الفرع', 'الجامعة',
+  'وزارة', 'التعليم', 'العالي', 'البحث', 'العلمي',
+  'الجمهورية', 'العراقية', 'العراق', 'جمهورية',
+  'هوية', 'الهوية', 'بطاقة', 'البطاقة',
+  'تاريخ', 'الميلاد', 'المولد', 'التولد', 'تولد',
+  'صادرة', 'الرقم', 'الامتحاني', 'الجامعي',
+  'العام', 'الدراسي', 'الفصل', 'سنة',
+  'مديرية', 'دائرة', 'الوطنية',
+  'بغداد', 'البصرة', 'الموصل', 'النجف', 'كربلاء', 'اربيل',
+  'هندسة', 'طب', 'صيدلة', 'الصيدلة', 'علوم', 'آداب', 'لغات', 'تربية',
+  'حاسوب', 'معلومات', 'كهرباء', 'ميكانيك', 'مدنية',
+  'صباحي', 'مسائي', 'دراسات', 'ذكر', 'انثى', 'انثي', 'أنثى',
+  'ايقاف', 'ايقافه', 'تخرج', 'مستمر',
+  'الاولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة', 'السادسة',
+  'المرحله', 'النفاذ', 'الانتهاء',
+  'المهنة', 'العنوان', 'الديانة', 'الجنس',
+]);
+
+const isArabicWord = (w: string) =>
+  /^[\u0600-\u06FF]+$/.test(w) && w.length >= 2;
+const isLikelyNamePart = (w: string) =>
+  isArabicWord(w) && !ignoreWords.has(w);
+
+/**
+ * 🎯 استخراج الاسم من نص OCR — مع إصلاح الكلمات المدمجة
  */
 export const extractArabicName = (rawText: string): string | null => {
   if (!rawText) return null;
@@ -386,6 +697,7 @@ export const extractArabicName = (rawText: string): string | null => {
 
   console.log('📋 أسطر OCR:', lines);
 
+  // ── الخطوة 1: البحث عن نمط "الاسم: xxx" ──
   const arabicNamePatterns = [
     /الاسم\s*[:\-]?\s*(.+)/,
     /الأسم\s*[:\-]?\s*(.+)/,
@@ -398,6 +710,11 @@ export const extractArabicName = (rawText: string): string | null => {
       const match = line.match(pattern);
       if (match && match[1]) {
         const cleaned = cleanExtractedName(match[1]);
+        const split = splitMergedWords(cleaned);
+        if (isValidName(split)) {
+          console.log('✅ وجدنا الاسم من نمط "الاسم":', split);
+          return split;
+        }
         if (isValidName(cleaned)) {
           console.log('✅ وجدنا الاسم من نمط "الاسم":', cleaned);
           return cleaned;
@@ -410,43 +727,16 @@ export const extractArabicName = (rawText: string): string | null => {
     if (/^(الاسم|الأسم|الإسم|اسم)\s*[:\-]?\s*$/.test(lines[i])) {
       if (i + 1 < lines.length) {
         const cleaned = cleanExtractedName(lines[i + 1]);
-        if (isValidName(cleaned)) {
-          console.log(
-            '✅ وجدنا الاسم من السطر التالي لـ "الاسم":',
-            cleaned
-          );
-          return cleaned;
+        const split = splitMergedWords(cleaned);
+        if (isValidName(split)) {
+          console.log('✅ وجدنا الاسم من السطر التالي لـ "الاسم":', split);
+          return split;
         }
       }
     }
   }
 
-  const ignoreWords = new Set([
-    'الاسم', 'اسم', 'الأسم', 'الإسم',
-    'الطالب', 'الطالبة',
-    'الكلية', 'القسم', 'المرحلة', 'الفرع', 'الجامعة',
-    'وزارة', 'التعليم', 'العالي', 'البحث', 'العلمي',
-    'الجمهورية', 'العراقية', 'العراق', 'جمهورية',
-    'هوية', 'الهوية', 'بطاقة', 'البطاقة',
-    'تاريخ', 'الميلاد', 'المولد', 'التولد', 'تولد',
-    'صادرة', 'الرقم', 'الامتحاني', 'الجامعي',
-    'العام', 'الدراسي', 'الفصل', 'سنة',
-    'مديرية', 'دائرة', 'الوطنية',
-    'بغداد', 'البصرة', 'الموصل', 'النجف', 'كربلاء', 'اربيل',
-    'هندسة', 'طب', 'صيدلة', 'الصيدلة', 'علوم', 'آداب', 'لغات', 'تربية',
-    'حاسوب', 'معلومات', 'كهرباء', 'ميكانيك', 'مدنية',
-    'صباحي', 'مسائي', 'دراسات', 'ذكر', 'انثى', 'انثي', 'أنثى',
-    'ايقاف', 'ايقافه', 'تخرج', 'مستمر',
-    'الاولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة', 'السادسة',
-    'المرحله', 'النفاذ', 'الانتهاء',
-    'المهنة', 'العنوان', 'الديانة', 'الجنس',
-  ]);
-
-  const isArabicWord = (w: string) =>
-    /^[\u0600-\u06FF]+$/.test(w) && w.length >= 2;
-  const isLikelyNamePart = (w: string) =>
-    isArabicWord(w) && !ignoreWords.has(w);
-
+  // ── الخطوة 2: البحث عن أطول سلسلة كلمات اسمية ──
   const candidates: {
     text: string;
     lineIndex: number;
@@ -464,10 +754,13 @@ export const extractArabicName = (rawText: string): string | null => {
         current.push(word);
       } else {
         if (current.length >= 2) {
+          const merged = current.join(' ');
+          const split = splitMergedWords(merged);
+          const splitWords = split.split(/\s+/);
           candidates.push({
-            text: current.join(' '),
+            text: split,
             lineIndex: i,
-            wordCount: current.length,
+            wordCount: splitWords.length,
           });
         }
         current = [];
@@ -475,10 +768,13 @@ export const extractArabicName = (rawText: string): string | null => {
     }
 
     if (current.length >= 2) {
+      const merged = current.join(' ');
+      const split = splitMergedWords(merged);
+      const splitWords = split.split(/\s+/);
       candidates.push({
-        text: current.join(' '),
+        text: split,
         lineIndex: i,
-        wordCount: current.length,
+        wordCount: splitWords.length,
       });
     }
   }
@@ -608,18 +904,31 @@ export const extractIDData = async (
     onProgress?.('', 15);
     const qrPromise = extractQRFromImageFile(imageFile).catch(() => null);
 
-    // ── المرحلة 1: تدوير متعدد الزوايا (للصور المائلة) ──
+    // ── المرحلة 1: تصحيح الميل + تدوير متعدد الزوايا ──
     onProgress?.('', 25);
     const worker = await getWorker();
+
+    // محاولة تصحيح الميل أولاً
+    let deskewedImg: HTMLImageElement | null = null;
+    try {
+      const deskewedBlob = await deskewImage(img);
+      deskewedImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const url = URL.createObjectURL(deskewedBlob);
+        const im = new Image();
+        im.onload = () => { URL.revokeObjectURL(url); resolve(im); };
+        im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('')); };
+        im.src = url;
+      });
+    } catch { deskewedImg = null; }
 
     const ROTATION_ANGLES = [0, 90, 180, 270, 5, -5, 10, -10];
     const rotationAttempts: OCRAttempt[] = [];
 
     console.log(`🔄 تجربة ${ROTATION_ANGLES.length} زوايا تدوير...`);
 
-    // تجربة كل زاوية بالتوازي
+    const sourceImg = deskewedImg || img;
     const rotationPromises = ROTATION_ANGLES.map((angle) =>
-      tryOCRWithRotation(worker, img, angle, `rotation-${angle}°`)
+      tryOCRWithRotation(worker, sourceImg, angle, `rotation-${angle}°`)
     );
     const rotationResults = await Promise.all(rotationPromises);
     rotationAttempts.push(...rotationResults);
@@ -651,10 +960,12 @@ export const extractIDData = async (
 
     // ── المرحلة 2: معالجات إضافية على الصورة الأصلية ──
     onProgress?.('', 50);
-    const [lightBlob, mediumBlob, strongBlob] = await Promise.all([
+    const [lightBlob, mediumBlob, strongBlob, binaryBlob, binaryDilBlob] = await Promise.all([
       preprocessLight(img),
       preprocessMedium(img),
       preprocessStrong(img),
+      preprocessBinary(img),
+      preprocessBinaryDilated(img),
     ]);
 
     const extraAttempts: OCRAttempt[] = [];
@@ -676,6 +987,15 @@ export const extractIDData = async (
 
     const e6 = await tryOCR(worker, strongBlob, '6', 'قوية+PSM6');
     extraAttempts.push(e6);
+
+    const e7 = await tryOCR(worker, binaryBlob, '3', 'ثنائية+PSM3');
+    extraAttempts.push(e7);
+
+    const e8 = await tryOCR(worker, binaryBlob, '4', 'ثنائية+PSM4');
+    extraAttempts.push(e8);
+
+    const e9 = await tryOCR(worker, binaryDilBlob, '3', 'ثنائيةموسطة+PSM3');
+    extraAttempts.push(e9);
 
     // ── الجمع والتقييم ──
     const allAttempts = [...rotationAttempts, ...extraAttempts];
