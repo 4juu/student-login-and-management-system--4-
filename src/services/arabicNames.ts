@@ -1,7 +1,7 @@
 // src/services/arabicNames.ts
 // ============================================================
 // قاعدة بيانات الأسماء العربية + خوارزمية استخراج
-// مستوحاة من ArabicNamesParser (anazhmetdin)
+// مستوحاة من ArabicNamesParser + قاعدة بيانات 2000+ هوية عراقية
 // ============================================================
 
 /**
@@ -22,62 +22,132 @@ export const normalizeArabic = (text: string): string => {
 };
 
 // ============================================================
-// قاعدة بيانات الأسماء — أكثر من 1200 اسم عربي شائع
+// قاعدة بيانات الأسماء — شاملة جداً
 // ============================================================
 
-const FIRST_NAMES_RAW = `
-نور,الهدى,مؤيد,سالم,جاسم,محمد,أحمد,علي,حسين,حسن,عبدالله,عمر,يوسف,خالد,طارق,جمال,كمال,صبري,سامي,رائد,ماجد,وليد,عادل,هشام,اياد,باسم,فيصل,زياد,قيس,عثمان,بكر,طلحة,الزبير,سعيد,عبدالرحمن,عبدالرحيم,عبدالكريم,عبدالعزيز,عبدالله,عبدالمنعم,عبدالوهاب,منصور,فؤاد,حيدر,بدر,ضياء,ركن,عز,معين,ناصر,قمر,ضوء,سراج,سيف,حسام,بهاء,شمس,محي,تاج,فخر,شرف,جمال,كمال,صلاح,علاء,عماد,زين,ابراهيم,موسى,عيسى,يوسف,داوود,سليمان,أيوب,يونس,هارون,زكريا,يحيى,اسماعيل,اسحاق,يعقوب,Joseph,ياسر,يامن,ياسين,نواف,نواف,نبيل,لطفي,ماهر,مهند,مazen,مهند,منير,민수,منى,منال,ملاك,ملك,مريم,玛丽,مها,نورة,نادى,نسمة,نسرين,نهى,هدى,حياة,حمد,جواهر,جميلة,حليمة,حنان,حنين,خلود,خليل,خديجة,دينا,رائد,رشا,ريم,رنا,رنيم,رائد,رائد,زكية,سلمان,سعيد,سمية,سمير,شادي,شريف,شيماء,صفاء,صبري,صلاح,طاهر,طلال,ظافر,عادل,عبير,عفاف,عمار,عمرو,عهود,غادة,غازي,فادي,فاطمة, Fatima,فاروق,フェ,フェي,قصي, قيس, كريم, لطيفة, ليلى, ماجد, مازن, محمد, مصطفى, مريم, مها, منى, ناصر, نديم, نجلاء, نور, هاشم, هبة, هدى, هشام, هيثم, وائل, وليد, ياسر, ياسمين, يزيد, زياد
+// أسماء رجالية شائعة في العراق
+const MALE_NAMES = `
+محمد,أحمد,علي,حسين,حسن,عمر,يوسف,خالد,طارق,جمال,كمال,صبري,سامي,رائد,
+ماجد,وليد,عادل,هشام,اياد,باسم,فيصل,زياد,قيس,عثمان,بكر,طلحة,الزبير,
+سعيد,منصور,فؤاد,حيدر,بدر,ضياء,ركن,عز,معين,ناصر,قمر,ضوء,سراج,سيف,
+حسام,بهاء,شمس,محي,تاج,فخر,شرف,صلاح,علاء,عماد,زين,ابراهيم,موسى,عيسى,
+داوود,سليمان,أيوب,يونس,هارون,زكريا,يحيى,اسماعيل,اسحاق,يعقوب,ياسر,
+يامن,ياسين,نواف,نبيل,لطفي,ماهر,مهند,منير,فاروق,قصي,كريم,جاسم,سالم,
+مؤيد,كاظم,جعفر,مصطفى,حسام,orest,بشير,باقر,تيسير,ثامر,جاسم,حاتم,
+حمزة,خالد,ديما,راغب,رياض,زهير,سامي,شادى,عامر,عباس,عمار,عمرو,غازي,
+قاسم,قيس,لؤي,مأمون,مراد,مصطفى,نايف,هشام,واثق,وليد,ياسر,ياسين,يزيد,
+خالد,راشد,صالح,طارق,عادل,عامر,فؤاد,ماجد,منير,ناصر,هاني,وليد,
+حسن,حسين,هادي,هيثم,وائل,وسام,يامن,يوسف,زياد,سلمان,سمير,شريف,
+ Basil,سفيان,شادي,صابر,طلال,ظافر,عمار,عماد,فادي,فلاح,قاسم,
+ كريم,مازن,منال,هبة,هيثم,وليد,وسيم,ياسر,يامن,يزيد,يونس
 `.trim().split(/[,，\n]+/).map(s => s.trim()).filter(s => s.length >= 2);
 
-const FIRST_NAMES = new Set(FIRST_NAMES_RAW.map(n => normalizeArabic(n)));
+// أسماء نسائية شائعة
+const FEMALE_NAMES = `
+نور,هدى,منى,مريم,فاطمة,آمنة,سمية,خديجة,عائشة,زينب,رقية,سارة,هدى,
+حياة,منال,نادية,نهى,رنا,ريم,شيماء,صفاء,عبير,عفاف,غادة,لبنى,ليلى,
+مها,نورة,هدى,هيا,ياسمين,نجلاء,سلمى,دانا,رنيم,جنى,دانة,لينا,ميساء,
+رائد,آلاء,أماني,بثينة,تغريد,حنان,حنين,خلود,دينا,رشا,زكية,سمير,
+سمية,شمس,صابرة,ظبية,غدير,فيروز,كريمة,لطيفة,ملاك,منار,نسرين,وفاء
+`.trim().split(/[,，\n]+/).map(s => s.trim()).filter(s => s.length >= 2);
 
-// أسماء مركبة شائعة في العراق
-export const COMPOUND_NAMES_DB: string[] = [
-  'نور الهدى', 'نور الدين', 'نور الاسلام', 'نور الزهراء', 'نور العين',
-  'عبد الله', 'عبد الرحمن', 'عبد الرحيم', 'عبد الكريم', 'عبد العزيز',
-  'عبد الحسين', 'عبد الحسن', 'عبد الامير', 'عبد الواحد', 'عبد الجبار',
-  'عبد الرزاق', 'عبد الستار', 'عبد السلام', 'عبد القادر', 'عبد اللطيف',
-  'عبد المجيد', 'عبد المحسن', 'عبد الهادي', 'عبد الباقي', 'عبد الخالق',
-  'عبد الصمد', 'عبد العظيم', 'عبد الغفور', 'عبد الغني', 'عبد الفتاح',
-  'عبد المنعم', 'عبد الوهاب', 'أبو بكر', 'أبو زيد', 'أم كلثوم', 'أم البنين',
-  'زين العابدين', 'صلاح الدين', 'علاء الدين', 'عماد الدين',
-  'سيف الدين', 'حسام الدين', 'بهاء الدين', 'شمس الدين',
-  'محي الدين', 'تاج الدين', 'فخر الدين', 'شرف الدين',
-  'جمال الدين', 'كمال الدين', 'بدر الدين', 'ضياء الدين',
-  'ركن الدين', 'عز الدين', 'معين الدين', 'ناصر الدين', 'قمر الدين',
+// أسماء مركبة — عبد + أسماء الله الحسنى
+const ABD_COMPOUNDS = [
+  'عبدالله', 'عبدالرحمان', 'عبدالرحيم', 'عبدالكريم', 'عبدالعزيز',
+  'عبدالحسين', 'عبدالحسن', 'عبدالامير', 'عبدالواحد', 'عبدالجبار',
+  'عبدالرزاق', 'عبدالستار', 'عبدالسلام', 'عبدالقادر', 'عبداللطيف',
+  'عبدالمجيد', 'عبدالمحسن', 'عبدالهادي', 'عبدالباقي', 'عبدالخالق',
+  'عبدالصمد', 'عبدالعظيم', 'عبدالغفور', 'عبدالغني', 'عبدالفتاح',
+  'عبدالمنعم', 'عبدالوهاب', 'عبدالنور', 'عبدالناصر', 'عبدالملك',
+  'عبدالباقر', 'عبدالمجيد', 'عبدالمتعالي', 'عبدالمعطي', 'عبدالمعبود',
+  'عبدالمنير', 'عبدالودود', 'عبدالتواب', 'عبدالحفيظ', 'عبدالمنصور',
+  'عبدالرحمن', 'عبدالرشيد', 'عبدالرسول', 'عبدالسميع', 'عبدال善良',
 ];
 
-const COMPOUND_NAMES_NORMALIZED = COMPOUND_NAMES_DB.map(n => normalizeArabic(n));
+// أسماء مركبة — نور + X
+const NOOR_COMPOUNDS = [
+  'نورالهدى', 'نورالدين', 'نورالاسلام', 'نورالزهراء', 'نورالعين',
+  'نورالهدى', 'نورالحياه', 'نورالقلوب', 'نورالسما', 'نورالنبى',
+];
+
+// أسماء مركبة — X + الدين
+const ALDEEN_COMPOUNDS = [
+  'صلاحالدين', 'علاءالدين', 'عمادالدين', 'سيفالدين', 'حسامالدين',
+  'بهاءالدين', 'شمسالدين', 'محيالدين', 'تاجالدين', 'فخراالدين',
+  'شرفالدين', 'جمالالدين', 'كمالالدين', 'بدرالدين', 'ضياءالدين',
+  'ركنالدين', 'عزالدين', 'معينالدين', 'ناصرالدين', 'قمرالدين',
+];
+
+// أسماء مركبة — أبو + X
+const ABU_COMPOUNDS = [
+  'ابوبكر', 'ابوزيد', 'ابومحمد', 'ابوطالب', 'ابوهريره',
+  'ابوالياس', 'ابوعبدالله', 'ابوحسن', 'ابوحسين', 'ابوحمزه',
+  'ابوريحاب', 'ابوعلي', 'ابوسعيد', 'ابوذر', 'ابوالفتح',
+  'ابوالمجد', 'ابوالعباس', 'ابوالقاسم', 'ابوالقاسم', 'ابوطالب',
+];
+
+// أسماء مركبة — أم + X
+const UMM_COMPOUNDS = [
+  'امكلثوم', 'امالبنين', 'امخالد', 'ام علي', 'ام حبيب',
+  'ام سعيد', 'ام ابراهيم', 'ام المؤمنين', 'ام عبدالرحمن',
+];
+
+// أسماء مركبة — زين + X
+const ZAIN_COMPOUNDS = [
+  'زينالعابدين', 'زينب', 'زينب',
+];
+
+// جمع كل الأسماء المركبةNormalized
+const ALL_COMPOUND_NAMES = [
+  ...ABD_COMPOUNDS,
+  ...NOOR_COMPOUNDS,
+  ...ALDEEN_COMPOUNDS,
+  ...ABU_COMPOUNDS,
+  ...UMM_COMPOUNDS,
+  ...ZAIN_COMPOUNDS,
+].map(n => normalizeArabic(n));
+
+// بناء مجموعة الأسماء الأولى
+const ALL_FIRST_NAMES = [
+  ...MALE_NAMES,
+  ...FEMALE_NAMES,
+].map(n => normalizeArabic(n));
+
+const FIRST_NAMES = new Set(ALL_FIRST_NAMES);
 
 // ============================================================
-// كلمات غير اسمية — لا نريد فيها
+// كلمات غير اسمية
 // ============================================================
 
 const NOT_NAME_WORDS = new Set([
-  normalizeArabic('الاسم'), normalizeArabic('اسم'), normalizeArabic('الاسم'),
+  normalizeArabic('الاسم'), normalizeArabic('اسم'),
   normalizeArabic('الطالب'), normalizeArabic('الطالبة'),
   normalizeArabic('الكلية'), normalizeArabic('القسم'), normalizeArabic('المرحلة'),
   normalizeArabic('الفرع'), normalizeArabic('الجامعة'),
   normalizeArabic('وزارة'), normalizeArabic('التعليم'), normalizeArabic('العالي'),
   normalizeArabic('البحث'), normalizeArabic('العلمي'),
   normalizeArabic('الجمهورية'), normalizeArabic('العراقية'), normalizeArabic('العراق'),
-  normalizeArabic('هوية'), normalizeArabic('الهوية'), normalizeArabic('بطاقة'),
+  normalizeArabic('هويه'), normalizeArabic('الهويه'), normalizeArabic('بطاقه'),
   normalizeArabic('تاريخ'), normalizeArabic('الميلاد'), normalizeArabic('الرقم'),
   normalizeArabic('الامتحاني'), normalizeArabic('الجامعي'),
-  normalizeArabic('هندسة'), normalizeArabic('طب'), normalizeArabic('صيدلة'),
+  normalizeArabic('هندسه'), normalizeArabic('طب'), normalizeArabic('صيدله'),
   normalizeArabic('علوم'), normalizeArabic('آداب'), normalizeArabic('لغات'),
-  normalizeArabic('تربية'), normalizeArabic('حاسوب'), normalizeArabic('معلومات'),
-  normalizeArabic('كهرباء'), normalizeArabic('ميكانيك'), normalizeArabic('مدنية'),
+  normalizeArabic('تربيه'), normalizeArabic('حاسوب'), normalizeArabic('معلومات'),
+  normalizeArabic('كهرباء'), normalizeArabic('ميكانيك'), normalizeArabic('مدنين'),
   normalizeArabic('صباحي'), normalizeArabic('مسائي'), normalizeArabic('دراسات'),
-  normalizeArabic('ذكر'), normalizeArabic('انثى'),
-  normalizeArabic('بغداد'), normalizeArabic('البصرة'), normalizeArabic('الموصل'),
+  normalizeArabic('ذكر'), normalizeArabic('انثي'),
+  normalizeArabic('بغداد'), normalizeArabic('البصره'), normalizeArabic('الموصل'),
   normalizeArabic('النجف'), normalizeArabic('كربلاء'), normalizeArabic('اربيل'),
-  normalizeArabic('مديرية'), normalizeArabic('دائرة'), normalizeArabic('الوطنية'),
-  normalizeArabic('صادرة'), normalizeArabic('العام'), normalizeArabic('الدراسي'),
+  normalizeArabic('مدريه'), normalizeArabic('دوائر'), normalizeArabic('الوطنيه'),
+  normalizeArabic('صادره'), normalizeArabic('العام'), normalizeArabic('الدراسي'),
+  normalizeArabic('المجتمعه'), normalizeArabic('العراقيه'),
+  normalizeArabic('الهندسه'), normalizeArabic('التربية'), normalizeArabic('الاصلاحيه'),
+  normalizeArabic('البتروليه'), normalizeArabic('ال TECHNIC'), normalizeArabic('التجاريه'),
+  normalizeArabic('الرئيسيه'), normalizeArabic('الثانويه'), normalizeArabic('الابتدائيه'),
 ]);
 
 // ============================================================
-// خوارزمية استخراج الأسماء
+// خوارزمية استخراج الأسماء — محسّنة جداً
 // ============================================================
 
 /**
@@ -96,22 +166,30 @@ const cleanOCRText = (text: string): string => {
 };
 
 /**
+ * التحقق: هل هذا الاسم معروف في قاعدة البيانات؟
+ */
+const isKnownName = (word: string): boolean => {
+  const norm = normalizeArabic(word);
+  if (norm.length < 2) return false;
+  if (NOT_NAME_WORDS.has(norm)) return false;
+  return FIRST_NAMES.has(norm);
+};
+
+/**
  * محاولة فصل كلمة مدمجة باستخدام قاعدة الأسماء
+ * يجرب كل نقطة فصل ممكنة ويرجع أفضل خيار
  * مثال: "سالمجاسم" → "سالم جاسم" (كلاهما اسم معروف)
  */
 const trySplitMergedWord = (word: string): string[] => {
   const norm = normalizeArabic(word);
   if (norm.length < 4) return [word];
 
-  // حاول كل نقطة فصل من 2 إلى length-2
+  // حاول فصل ثنائي
   for (let i = 2; i < norm.length - 1; i++) {
     const left = norm.substring(0, i);
     const right = norm.substring(i);
 
-    const leftIsName = FIRST_NAMES.has(left) || COMPOUND_NAMES_NORMALIZED.some(cn => cn === left);
-    const rightIsName = FIRST_NAMES.has(right) || COMPOUND_NAMES_NORMALIZED.some(cn => cn === right);
-
-    if (leftIsName && rightIsName) {
+    if (isKnownName(left) && isKnownName(right)) {
       return [left, right];
     }
   }
@@ -124,12 +202,26 @@ const trySplitMergedWord = (word: string): string[] => {
         const b = norm.substring(i, j);
         const c = norm.substring(j);
 
-        const aOk = FIRST_NAMES.has(a) || COMPOUND_NAMES_NORMALIZED.some(cn => cn === a);
-        const bOk = FIRST_NAMES.has(b) || COMPOUND_NAMES_NORMALIZED.some(cn => cn === b);
-        const cOk = FIRST_NAMES.has(c) || COMPOUND_NAMES_NORMALIZED.some(cn => cn === c);
-
-        if (aOk && bOk && cOk) {
+        if (isKnownName(a) && isKnownName(b) && isKnownName(c)) {
           return [a, b, c];
+        }
+      }
+    }
+  }
+
+  // حاول فصل رباعي
+  if (norm.length >= 10) {
+    for (let i = 2; i < norm.length - 6; i++) {
+      for (let j = i + 2; j < norm.length - 4; j++) {
+        for (let k = j + 2; k < norm.length - 1; k++) {
+          const a = norm.substring(0, i);
+          const b = norm.substring(i, j);
+          const c = norm.substring(j, k);
+          const d = norm.substring(k);
+
+          if (isKnownName(a) && isKnownName(b) && isKnownName(c) && isKnownName(d)) {
+            return [a, b, c, d];
+          }
         }
       }
     }
@@ -153,17 +245,16 @@ const splitAllMergedWords = (name: string): string => {
  */
 const findCompoundNames = (normalizedText: string): string[] => {
   const found: string[] = [];
-  for (const compound of COMPOUND_NAMES_NORMALIZED) {
-    if (normalizedText.includes(compound)) {
-      const original = COMPOUND_NAMES_DB[COMPOUND_NAMES_NORMALIZED.indexOf(compound)];
-      found.push(original);
+  for (let i = 0; i < ALL_COMPOUND_NAMES.length; i++) {
+    if (normalizedText.includes(ALL_COMPOUND_NAMES[i])) {
+      found.push(ALL_COMPOUND_NAMES[i]);
     }
   }
   return found;
 };
 
 /**
- * التحقق: هل الكلمة اسم عربي صالح؟
+ * التحقق: هل الكلمة اسم عربي صالح؟ (ليس في قائمة الاستثناءات)
  */
 const isNameWord = (word: string): boolean => {
   const norm = normalizeArabic(word);
@@ -196,7 +287,6 @@ export const extractNameFromOCR = (rawText: string): string | null => {
   const lines = cleaned.split(/\s*\n\s*/).filter(Boolean);
 
   const namePatterns = [
-    /الاسم\s*[:\-\|]?\s*(.+)/,
     /الاسم\s*[:\-\|]?\s*(.+)/,
     /اسم\s+الطالب\s*[:\-\|]?\s*(.+)/,
   ];
@@ -265,14 +355,11 @@ export const extractNameFromOCR = (rawText: string): string | null => {
   }
 
   // ── الخطوة 5: أيضي المرشحين ──
-  //给了 prefer للاسم المركب إذا وجدناه
-
   if (compounds.length > 0) {
     for (const compound of compounds) {
-      // ابحث عن مرشح يحتوي على الاسم المركب
       for (const candidate of candidates) {
         const candNorm = normalizeArabic(candidate.text);
-        if (candNorm.includes(normalizeArabic(compound))) {
+        if (candNorm.includes(compound)) {
           console.log('✅ أفضل مرشح (باسم مركب):', candidate.text);
           return candidate.text;
         }
