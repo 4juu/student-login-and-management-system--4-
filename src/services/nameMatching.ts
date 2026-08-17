@@ -200,8 +200,8 @@ export const matchArabicNames = (name1: string, name2: string): number => {
   return computeMatchScore(name1, name2);
 };
 
-export const AUTO_APPROVE_THRESHOLD = 90;
-export const MIN_ACCEPTABLE_THRESHOLD = 80;
+export const AUTO_APPROVE_THRESHOLD = 80;
+export const MIN_ACCEPTABLE_THRESHOLD = 70;
 
 export type MatchLevel = 'auto-approve' | 'review-needed' | 'rejected';
 
@@ -212,10 +212,9 @@ export const classifyMatch = (percentage: number): MatchLevel => {
 };
 
 export const getMatchDescription = (percentage: number): { emoji: string; text: string; color: string } => {
-  if (percentage >= 95) return { emoji: '✅', text: 'تطابق ممتاز', color: 'green' };
-  if (percentage >= AUTO_APPROVE_THRESHOLD) return { emoji: '✅', text: 'تطابق جيد جداً', color: 'green' };
-  if (percentage >= 75) return { emoji: '🟡', text: 'تطابق جيد - يحتاج مراجعة', color: 'amber' };
-  if (percentage >= MIN_ACCEPTABLE_THRESHOLD) return { emoji: '⚠️', text: 'تطابق ضعيف - يحتاج مراجعة', color: 'orange' };
+  if (percentage >= 90) return { emoji: '✅', text: 'تطابق ممتاز', color: 'green' };
+  if (percentage >= AUTO_APPROVE_THRESHOLD) return { emoji: '✅', text: 'تطابق جيد', color: 'green' };
+  if (percentage >= MIN_ACCEPTABLE_THRESHOLD) return { emoji: '🟡', text: 'تطابق مقبول - يحتاج مراجعة', color: 'amber' };
   return { emoji: '❌', text: 'لا يوجد تطابق', color: 'red' };
 };
 

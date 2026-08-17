@@ -22,7 +22,7 @@ const LazyFaceCaptureStep = lazy(() =>
   import('./FaceCaptureStep').then(m => ({ default: m.FaceCaptureStep }))
 );
 
-const MIN_MATCH = 90;
+const MIN_MATCH = 80;
 
 type Step =
   | 'loading'
