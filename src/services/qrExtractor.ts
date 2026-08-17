@@ -1,5 +1,5 @@
 // src/services/qrExtractor.ts
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { preprocessForQR } from './ocrService';
 
 // ============================================================
@@ -7,7 +7,7 @@ import { preprocessForQR } from './ocrService';
 // ============================================================
 
 /**
- * مسح QR من Blob باستخدام Html5Qrcode
+ * مسح QR من Blob باستخدام Html5Qrcode (QR_CODE فقط)
  */
 const scanQRFromBlob = async (blob: Blob): Promise<string | null> => {
   const tempId = `temp-qr-scanner-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -19,8 +19,10 @@ const scanQRFromBlob = async (blob: Blob): Promise<string | null> => {
   let scanner: Html5Qrcode | null = null;
 
   try {
-    scanner = new Html5Qrcode(tempId, { verbose: false } as any);
-    // scanFile يتطلب File وليس Blob — نحول Blob إلى File
+    scanner = new Html5Qrcode(tempId, {
+      verbose: false,
+      formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+    } as any);
     const file = new File([blob], 'qr-image.png', { type: blob.type || 'image/png' });
     const result = await scanner.scanFile(file, false);
     return result;
@@ -37,8 +39,41 @@ const scanQRFromBlob = async (blob: Blob): Promise<string | null> => {
 };
 
 /**
+ * تحويل صورة إلى رمادي (grayscale) لتحسين قراءة QR
+ */
+const toGrayscale = (file: File): Promise<Blob> =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const d = imageData.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const gray = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+        d[i] = d[i + 1] = d[i + 2] = gray;
+      }
+      ctx.putImageData(imageData, 0, 0);
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error('فشل التحويل'));
+      }, 'image/jpeg', 0.95);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('فشل تحميل الصورة'));
+    };
+    img.src = url;
+  });
+
+/**
  * 📸 استخراج QR من ملف صورة - نسخة محسّنة
- * يحاول الصورة الأصلية أولاً، ثم الصورة المحسّنة
+ * يحاول الصورة الأصلية أولاً، ثم الرمادي، ثم المحسّن
  */
 export const extractQRFromImageFile = async (file: File): Promise<string | null> => {
   // المحاولة 1: الصورة الأصلية
@@ -49,14 +84,27 @@ export const extractQRFromImageFile = async (file: File): Promise<string | null>
     return result1;
   }
 
-  // المحاولة 2: الصورة المحسّنة (تباين عالي + تكبير)
+  // المحاولة 2: الصورة الرمادية (grayscale)
+  console.log('🔳 محاولة QR: الصورة الرمادية...');
+  try {
+    const gray = await toGrayscale(file);
+    const result2 = await scanQRFromBlob(gray);
+    if (result2) {
+      console.log('✅ QR وجد من الصورة الرمادية:', result2);
+      return result2;
+    }
+  } catch (e) {
+    console.warn('⚠️ فشل التحويل الرمادي:', e);
+  }
+
+  // المحاولة 3: الصورة المحسّنة (تباين عالي + تكبير)
   console.log('🔳 محاولة QR: الصورة المحسّنة...');
   try {
     const enhanced = await preprocessForQR(file);
-    const result2 = await scanQRFromBlob(enhanced);
-    if (result2) {
-      console.log('✅ QR وجد من الصورة المحسّنة:', result2);
-      return result2;
+    const result3 = await scanQRFromBlob(enhanced);
+    if (result3) {
+      console.log('✅ QR وجد من الصورة المحسّنة:', result3);
+      return result3;
     }
   } catch (e) {
     console.warn('⚠️ فشل تحسين الصورة لـ QR:', e);

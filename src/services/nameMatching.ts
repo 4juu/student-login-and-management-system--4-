@@ -110,10 +110,10 @@ const hasSequentialMatch = (parts1: string[], parts2: string[]): boolean => {
     if (bestScore >= MIN_SEQUENTIAL_SCORE && bestJ !== -1) {
       matches++;
       longerIdx = bestJ + 1;
-      if (matches >= 3) return true;
+      if (matches >= shorter.length) return true;
     }
   }
-  return matches >= 3;
+  return matches >= shorter.length;
 };
 
 export const matchArabicNames = (name1: string, name2: string): number => {

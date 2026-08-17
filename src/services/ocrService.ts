@@ -43,23 +43,25 @@ export const terminateOCR = async (): Promise<void> => {
 };
 
 // ============================================================
-// 🖼️ معالجة الصورة — مستويات متعددة
+// 🖼️ تحميل الصورة وفحص الجودة
 // ============================================================
 
 /**
- * تحميل الصورة من File إلى HTMLImageElement
+ * تحميل الصورة من File إلى HTMLImageElement (باستخدام createObjectURL — أسرع)
  */
 const loadImageFromFile = (file: File): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
     const img = new Image();
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('فشل تحميل الصورة'));
-      img.src = e.target?.result as string;
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
     };
-    reader.onerror = () => reject(new Error('فشل قراءة الملف'));
-    reader.readAsDataURL(file);
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('فشل تحميل الصورة'));
+    };
+    img.src = url;
   });
 
 /**
@@ -83,10 +85,91 @@ const upscaleIfNeeded = (
 };
 
 /**
+ * 🔍 كشف تشويش الصورة (Laplacian variance)
+ * القيمة < 100 تعني الصورة مشوشة
+ */
+const detectBlur = (img: HTMLImageElement): number => {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  const maxDim = 400;
+  const scale = Math.min(maxDim / img.width, maxDim / img.height, 1);
+  canvas.width = Math.round(img.width * scale);
+  canvas.height = Math.round(img.height * scale);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imageData.data;
+  const w = canvas.width;
+  const h = canvas.height;
+
+  const gray = new Float32Array(w * h);
+  for (let i = 0; i < d.length; i += 4) {
+    gray[i / 4] = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+  }
+
+  let sum = 0;
+  let count = 0;
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const center = gray[y * w + x] * 4;
+      const neighbors =
+        gray[(y - 1) * w + x] +
+        gray[(y + 1) * w + x] +
+        gray[y * w + x - 1] +
+        gray[y * w + x + 1];
+      const laplacian = center - neighbors;
+      sum += laplacian * laplacian;
+      count++;
+    }
+  }
+
+  return count > 0 ? sum / count : 0;
+};
+
+/**
+ * فحص سطوع الصورة
+ */
+const detectBrightness = (
+  img: HTMLImageElement
+): { mean: number; isDark: boolean; isBright: boolean } => {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  const maxDim = 200;
+  const scale = Math.min(maxDim / img.width, maxDim / img.height, 1);
+  canvas.width = Math.round(img.width * scale);
+  canvas.height = Math.round(img.height * scale);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imageData.data;
+  let sum = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    sum += d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+  }
+  const mean = sum / (d.length / 4);
+
+  return { mean, isDark: mean < 40, isBright: mean > 230 };
+};
+
+// ============================================================
+// 🖼️ معالجة الصورة — مستويات متعددة
+// ============================================================
+
+/**
+ * تحويل Canvas إلى Blob
+ */
+const blobFromCanvas = (canvas: HTMLCanvasElement): Promise<Blob> =>
+  new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('فشل تحويل الصورة'));
+    }, 'image/jpeg', 0.95);
+  });
+
+/**
  * 🟢 خفيفة — grayscale + تباين بسيط (للصور النظيفة)
  */
-const preprocessLight = async (file: File): Promise<Blob> => {
-  const img = await loadImageFromFile(file);
+const preprocessLight = (img: HTMLImageElement): Promise<Blob> => {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d')!;
   upscaleIfNeeded(img, ctx, canvas);
@@ -102,8 +185,7 @@ const preprocessLight = async (file: File): Promise<Blob> => {
 
   for (let i = 0; i < d.length; i += 4) {
     const gray = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
-    const factor = 1.2;
-    let adj = ((gray - mean) * factor) + mean;
+    let adj = (gray - mean) * 1.2 + mean;
     adj = Math.max(0, Math.min(255, adj));
     d[i] = d[i + 1] = d[i + 2] = adj;
   }
@@ -115,8 +197,7 @@ const preprocessLight = async (file: File): Promise<Blob> => {
 /**
  * 🟡 متوسطة — grayscale + تباين ذكي + حدة (للصور العادية)
  */
-const preprocessMedium = async (file: File): Promise<Blob> => {
-  const img = await loadImageFromFile(file);
+const preprocessMedium = (img: HTMLImageElement): Promise<Blob> => {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d')!;
   upscaleIfNeeded(img, ctx, canvas);
@@ -131,7 +212,8 @@ const preprocessMedium = async (file: File): Promise<Blob> => {
     gray[i / 4] = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
   }
 
-  let sum = 0, sumSq = 0;
+  let sum = 0,
+    sumSq = 0;
   for (let i = 0; i < gray.length; i++) {
     sum += gray[i];
     sumSq += gray[i] * gray[i];
@@ -154,8 +236,11 @@ const preprocessMedium = async (file: File): Promise<Blob> => {
     for (let x = 1; x < w - 1; x++) {
       const idx = y * w + x;
       const center = gray[idx] * 5;
-      const neighbors = gray[(y - 1) * w + x] + gray[(y + 1) * w + x]
-        + gray[y * w + x - 1] + gray[y * w + x + 1];
+      const neighbors =
+        gray[(y - 1) * w + x] +
+        gray[(y + 1) * w + x] +
+        gray[y * w + x - 1] +
+        gray[y * w + x + 1];
       sharpened[idx] = Math.max(0, Math.min(255, center - neighbors));
     }
   }
@@ -173,8 +258,7 @@ const preprocessMedium = async (file: File): Promise<Blob> => {
 /**
  * 🔴 قوية — percentile stretching + حدة أقوى (للصور السيئة/الإضاءة الضعيفة)
  */
-const preprocessStrong = async (file: File): Promise<Blob> => {
-  const img = await loadImageFromFile(file);
+const preprocessStrong = (img: HTMLImageElement): Promise<Blob> => {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d')!;
   upscaleIfNeeded(img, ctx, canvas);
@@ -205,8 +289,11 @@ const preprocessStrong = async (file: File): Promise<Blob> => {
     for (let x = 1; x < w - 1; x++) {
       const idx = y * w + x;
       const center = gray[idx] * 6;
-      const neighbors = gray[(y - 1) * w + x] + gray[(y + 1) * w + x]
-        + gray[y * w + x - 1] + gray[y * w + x + 1];
+      const neighbors =
+        gray[(y - 1) * w + x] +
+        gray[(y + 1) * w + x] +
+        gray[y * w + x - 1] +
+        gray[y * w + x + 1];
       sharpened[idx] = Math.max(0, Math.min(255, center - neighbors * 1.5));
     }
   }
@@ -222,17 +309,6 @@ const preprocessStrong = async (file: File): Promise<Blob> => {
 };
 
 /**
- * تحويل Canvas إلى Blob
- */
-const blobFromCanvas = (canvas: HTMLCanvasElement): Promise<Blob> =>
-  new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) resolve(blob);
-      else reject(new Error('فشل تحويل الصورة'));
-    }, 'image/jpeg', 0.95);
-  });
-
-/**
  * تحسين الصورة للاستخراج QR (تباين عالي + تكبير)
  */
 export const preprocessForQR = async (file: File): Promise<Blob> => {
@@ -246,8 +322,7 @@ export const preprocessForQR = async (file: File): Promise<Blob> => {
 
   for (let i = 0; i < d.length; i += 4) {
     const gray = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
-    let adj = gray > 140 ? 255 : 0;
-    d[i] = d[i + 1] = d[i + 2] = adj;
+    d[i] = d[i + 1] = d[i + 2] = gray > 140 ? 255 : 0;
   }
 
   ctx.putImageData(imageData, 0, 0);
@@ -260,6 +335,7 @@ export const preprocessForQR = async (file: File): Promise<Blob> => {
 
 const fixCommonOCRErrors = (text: string): string => {
   return text
+    .replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '')
     .replace(/ا\s+ل([\u0600-\u06FF])/g, 'ال$1')
     .replace(/(\S)\s+ل([\u0600-\u06FF])/g, (_, before, after) => {
       return `${before} ال${after}`;
@@ -272,7 +348,7 @@ const fixCommonOCRErrors = (text: string): string => {
 const cleanExtractedName = (text: string): string => {
   return text
     .split(/[:|]/)[0]
-    .replace(/\d+/g, '')
+    .replace(/[\d٠-٩]+/g, '')
     .replace(/[a-zA-Z]/g, '')
     .replace(/[^\u0600-\u06FF\s]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -281,8 +357,12 @@ const cleanExtractedName = (text: string): string => {
 
 const isValidName = (name: string): boolean => {
   if (!name) return false;
-  const words = name.split(/\s+/).filter(w => w.length >= 2);
-  return words.length >= 2 && words.every(w => /^[\u0600-\u06FF]+$/.test(w));
+  const words = name.split(/\s+/).filter((w) => w.length >= 2);
+  return (
+    words.length >= 2 &&
+    words.length <= 8 &&
+    words.every((w) => /^[\u0600-\u06FF]+$/.test(w))
+  );
 };
 
 const mergeArabicCompoundNames = (name: string): string => {
@@ -294,13 +374,15 @@ const mergeArabicCompoundNames = (name: string): string => {
     'اللطيف', 'المجيد', 'المحسن', 'الهادي', 'الباقي', 'الخالق', 'الصمد',
     'العظيم', 'الغفور', 'الغني', 'الفتاح', 'المنعم', 'الوهاب',
     'الهدى', 'الهدي', 'الدين', 'الاسلام',
-    'العابدين', 'العالي',
+    'العابدين', 'العالي', 'السميع', 'البصير', 'الودود', 'التواب',
+    'الحفيظ', 'المنصور', 'المتعال', 'الوارث', 'الخبير',
   ]);
 
   const compoundFirstParts = new Set([
     'عبد', 'ابو', 'ام', 'زين', 'صلاح', 'علاء', 'عماد', 'سيف', 'حسام',
     'بهاء', 'شمس', 'محي', 'تاج', 'فخر', 'شرف', 'جمال', 'كمال', 'بدر',
     'ضياء', 'ركن', 'عز', 'معين', 'ناصر', 'قمر', 'نور', 'ضوء', 'سراج',
+    'منصور', 'فؤاد', 'حيدر', 'ماجد', 'وليد', 'عادل', 'هشام', 'اياد',
   ]);
 
   const words = name.split(/\s+/).filter(Boolean);
@@ -337,11 +419,13 @@ export const extractArabicName = (rawText: string): string | null => {
   if (!rawText) return null;
 
   const fixedText = fixCommonOCRErrors(rawText);
-  const lines = fixedText.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean);
+  const lines = fixedText
+    .split(/[\n\r]+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
 
   console.log('📋 أسطر OCR:', lines);
 
-  // الاستراتيجية 1: البحث عن "الاسم" + ما بعدها
   const arabicNamePatterns = [
     /الاسم\s*[:\-]?\s*(.+)/,
     /الأسم\s*[:\-]?\s*(.+)/,
@@ -362,20 +446,21 @@ export const extractArabicName = (rawText: string): string | null => {
     }
   }
 
-  // الاستراتيجية 2: السطر اللي بعد سطر يحوي "الاسم"
   for (let i = 0; i < lines.length; i++) {
     if (/^(الاسم|الأسم|الإسم|اسم)\s*[:\-]?\s*$/.test(lines[i])) {
       if (i + 1 < lines.length) {
         const cleaned = cleanExtractedName(lines[i + 1]);
         if (isValidName(cleaned)) {
-          console.log('✅ وجدنا الاسم من السطر التالي لـ "الاسم":', cleaned);
+          console.log(
+            '✅ وجدنا الاسم من السطر التالي لـ "الاسم":',
+            cleaned
+          );
           return cleaned;
         }
       }
     }
   }
 
-  // الاستراتيجية 3: البحث في كل سطر عن اسم محتمل
   const ignoreWords = new Set([
     'الاسم', 'اسم', 'الأسم', 'الإسم',
     'الطالب', 'الطالبة',
@@ -390,16 +475,23 @@ export const extractArabicName = (rawText: string): string | null => {
     'بغداد', 'البصرة', 'الموصل', 'النجف', 'كربلاء', 'اربيل',
     'هندسة', 'طب', 'صيدلة', 'الصيدلة', 'علوم', 'آداب', 'لغات', 'تربية',
     'حاسوب', 'معلومات', 'كهرباء', 'ميكانيك', 'مدنية',
-    'صباحي', 'مسائي', 'دراسات', 'ذكر', 'انثى', 'انثي',
+    'صباحي', 'مسائي', 'دراسات', 'ذكر', 'انثى', 'انثي', 'أنثى',
     'ايقاف', 'ايقافه', 'تخرج', 'مستمر',
     'الاولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة', 'السادسة',
     'المرحله', 'النفاذ', 'الانتهاء',
+    'المهنة', 'العنوان', 'الديانة', 'الجنس',
   ]);
 
-  const isArabicWord = (w: string) => /^[\u0600-\u06FF]+$/.test(w) && w.length >= 2;
-  const isLikelyNamePart = (w: string) => isArabicWord(w) && !ignoreWords.has(w);
+  const isArabicWord = (w: string) =>
+    /^[\u0600-\u06FF]+$/.test(w) && w.length >= 2;
+  const isLikelyNamePart = (w: string) =>
+    isArabicWord(w) && !ignoreWords.has(w);
 
-  const candidates: { text: string; lineIndex: number; wordCount: number }[] = [];
+  const candidates: {
+    text: string;
+    lineIndex: number;
+    wordCount: number;
+  }[] = [];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -455,6 +547,15 @@ export const extractArabicName = (rawText: string): string | null => {
 // ============================================================
 
 /**
+ * نتيجة محاولة OCR مع درجة الثقة
+ */
+interface OCRAttempt {
+  text: string;
+  confidence: number;
+  label: string;
+}
+
+/**
  * تجربة OCR على صورة معينة مع إعدادات معينة
  */
 const tryOCR = async (
@@ -462,15 +563,20 @@ const tryOCR = async (
   image: Blob,
   psm: string,
   label: string
-): Promise<string> => {
+): Promise<OCRAttempt> => {
   await worker.setParameters({
     tessedit_pageseg_mode: psm as any,
     preserve_interword_spaces: '1',
+    user_defined_dpi: '300',
   });
   const result = await worker.recognize(image);
   const text = result.data.text;
-  console.log(`📋 OCR (${label}, PSM ${psm}):`, text.substring(0, 200));
-  return text;
+  const confidence = result.data.confidence;
+  console.log(
+    `📋 OCR (${label}, PSM ${psm}, ثقة: ${confidence.toFixed(1)}%):`,
+    text.substring(0, 200)
+  );
+  return { text, confidence, label };
 };
 
 export const extractIDData = async (
@@ -480,53 +586,110 @@ export const extractIDData = async (
   try {
     onProgress?.('', 5);
 
+    // ── تحميل الصورة مرة واحدة ──
+    const img = await loadImageFromFile(imageFile);
+
+    // ── فحص جودة الصورة ──
+    const blurScore = detectBlur(img);
+    const brightness = detectBrightness(img);
+    console.log(
+      `🔍 درجة التشويش: ${blurScore.toFixed(1)} (أعلى = أوضح)`
+    );
+    console.log(
+      `☀️ السطوع: ${brightness.mean.toFixed(1)} (داكن: ${brightness.isDark}, مشع: ${brightness.isBright})`
+    );
+
+    if (blurScore < 50) {
+      onProgress?.('⚠️ الصورة مشوشة جداً', 100);
+      return {
+        success: false,
+        error: 'الصورة مشوشة جداً. أعد التصوير بشكل أوضح.',
+      };
+    }
+
+    if (brightness.isDark) {
+      onProgress?.('⚠️ الصورة مظلمة جداً', 100);
+      return {
+        success: false,
+        error: 'الصورة مظلمة جداً. ضع الهوية بإضاءة واضحة.',
+      };
+    }
+
     // ── QR: محاولات متعددة ──
+    onProgress?.('', 15);
     const qrPromise = extractQRFromImageFile(imageFile).catch(() => null);
 
     // ── OCR: معالجة متعددة المحاولات ──
-    onProgress?.('', 20);
+    onProgress?.('', 25);
     const [lightBlob, mediumBlob, strongBlob] = await Promise.all([
-      preprocessLight(imageFile),
-      preprocessMedium(imageFile),
-      preprocessStrong(imageFile),
+      preprocessLight(img),
+      preprocessMedium(img),
+      preprocessStrong(img),
     ]);
 
-    onProgress?.('', 40);
+    onProgress?.('', 45);
     const worker = await getWorker();
 
-    // تجربة على الصور المحسّنة مع PSM 3 (أوتوماتيكي) أولاً
-    const attempts: { text: string; label: string }[] = [];
+    // تجربة على الصور المحسّنة مع PSMات مختلفة
+    const attempts: OCRAttempt[] = [];
 
-    const texts = await Promise.all([
-      tryOCR(worker, mediumBlob, '3', 'متوسطة+PSM3'),
-      tryOCR(worker, lightBlob, '3', 'خفيفة+PSM3'),
-      tryOCR(worker, strongBlob, '3', 'قوية+PSM3'),
-      tryOCR(worker, mediumBlob, '6', 'متوسطة+PSM6'),
-    ]);
+    const a1 = await tryOCR(worker, mediumBlob, '3', 'متوسطة+PSM3');
+    attempts.push(a1);
 
-    attempts.push(
-      { text: texts[0], label: 'متوسطة+PSM3' },
-      { text: texts[1], label: 'خفيفة+PSM3' },
-      { text: texts[2], label: 'قوية+PSM3' },
-      { text: texts[3], label: 'متوسطة+PSM6' },
-    );
+    // ⚡ إنهاء مبكر: إذا الثقة > 80% ووجدنا اسماً صالحاً
+    const name1 = extractArabicName(a1.text);
+    if (!(a1.confidence > 80 && name1)) {
+      const a2 = await tryOCR(worker, lightBlob, '3', 'خفيفة+PSM3');
+      attempts.push(a2);
 
-    // اختيار أفضل نتيجة: الأكثر طولاً الذي يحتوي على كلمات عربية
+      const name2 = extractArabicName(a2.text);
+      if (!(a2.confidence > 80 && name2)) {
+        const a3 = await tryOCR(worker, strongBlob, '3', 'قوية+PSM3');
+        attempts.push(a3);
+
+        const a4 = await tryOCR(worker, mediumBlob, '6', 'متوسطة+PSM6');
+        attempts.push(a4);
+
+        const a5 = await tryOCR(worker, mediumBlob, '4', 'متوسطة+PSM4');
+        attempts.push(a5);
+
+        const a6 = await tryOCR(
+          worker,
+          mediumBlob,
+          '11',
+          'متوسطة+PSM11'
+        );
+        attempts.push(a6);
+      }
+    }
+
+    // اختيار أفضل نتيجة: وزن = ثقة × طول الاسم
     let bestText = '';
     let bestName: string | null = null;
+    let bestScore = 0;
 
     for (const attempt of attempts) {
       const name = extractArabicName(attempt.text);
-      if (name && name.length > (bestName?.length || 0)) {
-        bestName = name;
-        bestText = attempt.text;
-        console.log(`🎯 أفضل نتيجة من ${attempt.label}:`, name);
+      if (name) {
+        const score =
+          attempt.confidence * Math.min(name.length / 10, 1);
+        if (score > bestScore) {
+          bestScore = score;
+          bestName = name;
+          bestText = attempt.text;
+          console.log(
+            `🎯 أفضل نتيجة من ${attempt.label} (نقطة: ${score.toFixed(1)}):`,
+            name
+          );
+        }
       }
     }
 
     // إذا لم نجد اسماً، جرّب النص الأطول
     if (!bestName) {
-      bestText = attempts.sort((a, b) => b.text.length - a.text.length)[0].text;
+      bestText =
+        attempts.sort((a, b) => b.text.length - a.text.length)[0]
+          ?.text || '';
       bestName = extractArabicName(bestText);
     }
 
@@ -541,7 +704,8 @@ export const extractIDData = async (
         success: false,
         name: bestName || undefined,
         rawText: bestText,
-        error: 'لم يتم العثور على رمز QR في الصورة. تأكد من وضوح صورة الهوية.',
+        error:
+          'لم يتم العثور على رمز QR في الصورة. تأكد من وضوح صورة الهوية.',
       };
     }
 
@@ -553,7 +717,8 @@ export const extractIDData = async (
         name: bestName || undefined,
         qrUrl: qrText,
         rawText: bestText,
-        error: 'رمز QR غير صالح. تأكد من أن الصورة لهوية وزارة التعليم الرسمية.',
+        error:
+          'رمز QR غير صالح. تأكد من أن الصورة لهوية وزارة التعليم الرسمية.',
       };
     }
 
@@ -563,7 +728,8 @@ export const extractIDData = async (
         qrUrl: qrText,
         qrId: qrInfo.id,
         rawText: bestText,
-        error: 'لم نتمكن من قراءة الاسم من الهوية. حاول رفع صورة أوضح.',
+        error:
+          'لم نتمكن من قراءة الاسم من الهوية. حاول رفع صورة أوضح.',
       };
     }
 
@@ -576,7 +742,6 @@ export const extractIDData = async (
       qrId: qrInfo.id,
       rawText: bestText,
     };
-
   } catch (error: any) {
     console.error('❌ فشل استخراج بيانات الهوية:', error);
     return {
