@@ -1,0 +1,35 @@
+{
+  "name": "اسم التطبيق",
+  "short_name": "الاسم المختصر",
+  "icons": [
+    {
+      "src": "./maskable-icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./maskable-icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./maskable-icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./maskable-icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "theme_color": "#0c1742",
+  "background_color": "#0c1742",
+  "display": "standalone",
+  "start_url": "/",
+  "scope": "./"
+}
