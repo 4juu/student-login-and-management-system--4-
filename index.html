@@ -2,30 +2,54 @@
 <html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="icon" href="/favicon.ico" sizes="any" />
-    <link rel="icon" type="image/jpeg" href="/pwa.jpeg" />
-    <link rel="apple-touch-icon" href="/pwa.jpeg" />
-    <meta name="msapplication-TileImage" content="/pwa.jpeg" />
-    <meta name="msapplication-TileColor" content="#0B1220" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#0B1220" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/icons/favicon-48x48.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/icons/icon-96x96.png" />
+
+    <!-- Apple -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="الحضور" />
+
+    <!-- Windows -->
+    <meta name="msapplication-TileImage" content="/icons/icon-144x144.png" />
+    <meta name="msapplication-TileColor" content="#0B1220" />
+
+    <!-- Android -->
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <!-- Misc -->
     <meta name="format-detection" content="telephone=no" />
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@100;200;300;400;500;600;700&display=swap" rel="stylesheet" />
+
+    <!-- Open Graph -->
     <meta property="og:title" content="نظام إدارة الحضور" />
     <meta property="og:description" content="سجّل بصمة وجهك ورمز QR" />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="/pwa.jpeg" />
+    <meta property="og:image" content="/icons/icon-512x512.png" />
+
+    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="/pwa.jpeg" />
+    <meta name="twitter:image" content="/icons/icon-512x512.png" />
+
     <title>نظام إدارة الحضور</title>
   </head>
   <body>
