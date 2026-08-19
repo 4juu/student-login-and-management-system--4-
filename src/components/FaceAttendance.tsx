@@ -139,11 +139,9 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   useEffect(() => {
     mountedRef.current = true;
     suspendAurora();
-    const prevBodyOverflow = document.body.style.overflow;
     const prevHtmlOverflow = document.documentElement.style.overflow;
     const prevScroll = document.documentElement.style.overscrollBehavior;
     const prevBodyScroll = document.body.style.overscrollBehavior;
-    document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
     document.documentElement.style.overscrollBehavior = 'contain';
     document.body.style.overscrollBehavior = 'contain';
@@ -160,7 +158,6 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     setTimeout(() => clearInterval(interval), 60000);
     return () => {
       mountedRef.current = false;
-      document.body.style.overflow = prevBodyOverflow;
       document.documentElement.style.overflow = prevHtmlOverflow;
       document.documentElement.style.overscrollBehavior = prevScroll;
       document.body.style.overscrollBehavior = prevBodyScroll;
@@ -170,9 +167,9 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     };
   }, []);
 
-  // 🎯 فتح الكاميرا فور اكتمال تحميل الموديلات (بدون تجميد)
+  // 🎯 فتح الكاميرا فور اكتمال تحميل الموديلات + جاهزية الكاشف
   useEffect(() => {
-    if (modelsLoaded && mountedRef.current) {
+    if (modelsLoaded && isDetectorReady() && mountedRef.current) {
       initCamera();
     }
   }, [modelsLoaded]);

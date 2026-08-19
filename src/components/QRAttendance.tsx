@@ -346,18 +346,15 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   useEffect(() => {
     mountedRef.current = true;
     suspendAurora();
-    const prevBodyOverflow = document.body.style.overflow;
     const prevHtmlOverflow = document.documentElement.style.overflow;
     const prevScroll = document.documentElement.style.overscrollBehavior;
     const prevBodyScroll = document.body.style.overscrollBehavior;
-    document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
     document.documentElement.style.overscrollBehavior = 'contain';
     document.body.style.overscrollBehavior = 'contain';
     const t = setTimeout(() => { if (mountedRef.current) startCamera('environment'); }, 250);
     return () => {
       mountedRef.current = false;
-      document.body.style.overflow = prevBodyOverflow;
       document.documentElement.style.overflow = prevHtmlOverflow;
       document.documentElement.style.overscrollBehavior = prevScroll;
       document.body.style.overscrollBehavior = prevBodyScroll;
