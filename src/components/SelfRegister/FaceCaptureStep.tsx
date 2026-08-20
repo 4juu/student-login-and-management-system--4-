@@ -15,7 +15,7 @@ import {
   MultiDescriptor,
 } from '../../services/faceRecognition';
 import { useCameraReady } from '../../hooks/useCameraReady';
-import * as faceapi from 'face-api.js';
+import * as faceapi from '@vladmandic/face-api';
 import { Camera, CircleCheck, LoaderCircle, Smile } from 'lucide-react';
 
 interface FaceCaptureStepProps {

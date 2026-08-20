@@ -1,4 +1,4 @@
-const CACHE_NAME = 'app-v1';
+const CACHE_NAME = 'app-v2';
 
 const PRECACHE_URLS = [
   '/',
@@ -16,6 +16,10 @@ const PRECACHE_URLS = [
   '/favicon-16x16.png',
   '/favicon-32x32.png',
   '/favicon-48x48.png',
+  '/models/face-detect/tiny_face_detector_model-weights_manifest.json',
+  '/models/face-detect/tiny_face_detector_model-shard1',
+  '/models/mobilefacenet/model.json',
+  '/models/mobilefacenet/weights.bin',
 ];
 
 self.addEventListener('install', (event) => {
@@ -43,7 +47,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== location.origin) return;
 
-  const isAsset = /\.(js|css|woff2?|png|jpe?g|ico|webmanifest|svg|webp|avif|mp4)$/i.test(url.pathname);
+  const isAsset = /\.(js|css|woff2?|png|jpe?g|ico|webmanifest|svg|webp|avif|mp4|json|bin)$/i.test(url.pathname);
   const isNavigation = request.mode === 'navigate';
 
   if (isAsset) {

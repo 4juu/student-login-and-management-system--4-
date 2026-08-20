@@ -4,21 +4,20 @@ import type { LoadProgressInfo } from '../services/faceRecognition';
 interface FaceModelLoadingOverlayProps {
   progress: LoadProgressInfo;
   onCancel?: () => void;
+  onRetry?: () => void;
 }
 
 const STAGE_LABELS: Record<string, string> = {
   detector: 'كشف الوجوه',
-  landmarks: 'نقاط الوجه',
   recognition: 'التعرف على الهوية',
 };
 
 const STAGE_ICONS: Record<string, string> = {
   detector: '🔍',
-  landmarks: '📍',
   recognition: '🧠',
 };
 
-export const FaceModelLoadingOverlay: React.FC<FaceModelLoadingOverlayProps> = ({ progress, onCancel }) => {
+export const FaceModelLoadingOverlay: React.FC<FaceModelLoadingOverlayProps> = ({ progress, onCancel, onRetry }) => {
   const pct = Math.min(100, Math.max(0, Math.round(progress.percent)));
   const isDone = progress.stage === 'done';
   const isError = progress.stage === 'error';
@@ -29,7 +28,6 @@ export const FaceModelLoadingOverlay: React.FC<FaceModelLoadingOverlayProps> = (
       className="fixed inset-0 z-[10000] flex items-center justify-center"
       style={{ backgroundColor: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(16px)' }}
     >
-      {/* Floating close button — always responsive */}
       {onCancel && (
         <button
           onClick={onCancel}
@@ -41,7 +39,6 @@ export const FaceModelLoadingOverlay: React.FC<FaceModelLoadingOverlayProps> = (
       )}
 
       <div className="w-full max-w-sm mx-4 text-center">
-        {/* Face icon with pulse animation */}
         <div className="relative w-24 h-24 mx-auto mb-8">
           <div
             className={`absolute inset-0 rounded-full ${
@@ -60,7 +57,6 @@ export const FaceModelLoadingOverlay: React.FC<FaceModelLoadingOverlayProps> = (
           </div>
         </div>
 
-        {/* Title */}
         <h2 className="text-white text-xl font-extrabold mb-2">
           {isDone ? 'الموديلات جاهزة!' : isError ? 'فشل التحميل' : 'جاري تحميل نظام التعرف'}
         </h2>
@@ -72,7 +68,6 @@ export const FaceModelLoadingOverlay: React.FC<FaceModelLoadingOverlayProps> = (
             : 'يرجى الانتظار حتى اكتمال التحميل...'}
         </p>
 
-        {/* Progress bar */}
         <div className="mb-6">
           <div className="h-3 bg-white/10 rounded-full overflow-hidden">
             <div
@@ -94,14 +89,13 @@ export const FaceModelLoadingOverlay: React.FC<FaceModelLoadingOverlayProps> = (
           </div>
         </div>
 
-        {/* Per-stage checklist */}
         <div className="space-y-2 mb-8">
-          {(['detector', 'landmarks', 'recognition'] as const).map((stage) => {
+          {(['detector', 'recognition'] as const).map((stage) => {
             const stageProgress = progress.stage === stage;
             const stageDone =
-              progress.stageIndex > ['detector', 'landmarks', 'recognition'].indexOf(stage) ||
+              progress.stageIndex > ['detector', 'recognition'].indexOf(stage) ||
               (progress.stage === 'done');
-            const stageError = progress.stage === 'error' && progress.stageIndex === ['detector', 'landmarks', 'recognition'].indexOf(stage);
+            const stageError = progress.stage === 'error' && progress.stageIndex === ['detector', 'recognition'].indexOf(stage);
 
             return (
               <div
@@ -126,15 +120,24 @@ export const FaceModelLoadingOverlay: React.FC<FaceModelLoadingOverlayProps> = (
           })}
         </div>
 
-        {/* Cancel button */}
-        {onCancel && !isDone && (
-          <button
-            onClick={onCancel}
-            className="bg-white/10 hover:bg-white/20 text-slate-300 px-6 py-2.5 rounded-xl text-sm font-bold transition active:scale-95"
-          >
-            إلغاء
-          </button>
-        )}
+        <div className="flex items-center justify-center gap-3">
+          {onRetry && isError && (
+            <button
+              onClick={onRetry}
+              className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 px-6 py-2.5 rounded-xl text-sm font-bold transition active:scale-95 border border-blue-500/30"
+            >
+              🔄 إعادة المحاولة
+            </button>
+          )}
+          {onCancel && !isDone && (
+            <button
+              onClick={onCancel}
+              className="bg-white/10 hover:bg-white/20 text-slate-300 px-6 py-2.5 rounded-xl text-sm font-bold transition active:scale-95"
+            >
+              إلغاء
+            </button>
+          )}
+        </div>
       </div>
 
       <style>{`

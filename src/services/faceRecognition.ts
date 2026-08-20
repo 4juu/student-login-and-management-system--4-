@@ -1,18 +1,19 @@
-import * as faceapi from 'face-api.js';
+import * as faceapi from '@vladmandic/face-api';
 import { compressFaceDescriptor, ensureDecompressed } from './faceCompression';
 import { getWorker, workerFindBestMatch, workerBatchMatchAll } from './faceWorker';
+import { loadMobileFaceNet, isMobileFaceNetReady, extractEmbedding, cosineSimilarity, getEmbeddingDim } from './mobileFaceNet';
 
-// ── Shared loading state ──
+const DESC_DIM = 512;
+
 let modelsLoaded = false;
 let loadingPromise: Promise<void> | null = null;
 let preloadStarted = false;
 
-// ── Progress-aware loading ──
 export interface LoadProgressInfo {
-  stage: 'detector' | 'landmarks' | 'recognition' | 'done' | 'error';
-  stageIndex: number; // 0,1,2,3
-  percent: number;    // 0-100
-  detail: string;     // Arabic label
+  stage: 'detector' | 'recognition' | 'done' | 'error';
+  stageIndex: number;
+  percent: number;
+  detail: string;
   error?: string;
 }
 type ProgressListener = (info: LoadProgressInfo) => void;
@@ -29,10 +30,8 @@ function _emitProgress(info: LoadProgressInfo) {
   _progressListeners.forEach(cb => cb(info));
 }
 
-// ── Yield to main thread ──
 const yieldToMain = () => new Promise<void>(r => setTimeout(r, 0));
 
-// ── Performance metrics ──
 export interface FacePerfMetrics {
   modelDownloadMs: number;
   modelInitMs: number;
@@ -44,13 +43,8 @@ export interface FacePerfMetrics {
 }
 
 let _perf: FacePerfMetrics = {
-  modelDownloadMs: 0,
-  modelInitMs: 0,
-  cameraStartMs: 0,
-  firstDetectionMs: 0,
-  matchMs: 0,
-  totalStartupMs: 0,
-  preloadCompleted: false,
+  modelDownloadMs: 0, modelInitMs: 0, cameraStartMs: 0,
+  firstDetectionMs: 0, matchMs: 0, totalStartupMs: 0, preloadCompleted: false,
 };
 const _perfTimers: Record<string, number> = {};
 
@@ -71,7 +65,6 @@ export function resetPerfMetrics() {
   _perf = { modelDownloadMs: 0, modelInitMs: 0, cameraStartMs: 0, firstDetectionMs: 0, matchMs: 0, totalStartupMs: 0, preloadCompleted: false };
 }
 
-// ── Canvas pool ──
 const _cvs: HTMLCanvasElement[] = [];
 let _cvsIdx = 0;
 function allocCanvas(w: number, h: number): HTMLCanvasElement {
@@ -84,21 +77,20 @@ function allocCanvas(w: number, h: number): HTMLCanvasElement {
   return nc;
 }
 
-// ── Descriptor cache ──
 interface DescCacheEntry { id: string; desc: Float32Array }
 let _descCache: DescCacheEntry[] | null = null;
-let _cacheThreshold = 0.6;
+let _cacheThreshold = 0.4;
 
 export function buildDescriptorCache(
   students: Array<{ id: string; faceDescriptor?: any }>,
-  threshold = 0.6
+  threshold = 0.4
 ): void {
   _cacheThreshold = threshold;
   _descCache = [];
   for (const s of students) {
     if (!s.faceDescriptor) continue;
     const arr = toFloat32(s.faceDescriptor);
-    if (arr.length >= 128) {
+    if (arr.length >= DESC_DIM) {
       _descCache.push({ id: s.id, desc: normalizeDescriptor(arr) });
     }
   }
@@ -107,150 +99,63 @@ export function getDescriptorCache(): DescCacheEntry[] | null { return _descCach
 export function clearDescriptorCache(): void { _descCache = null; }
 export function getCacheThreshold(): number { return _cacheThreshold; }
 
-// ── Model URLs ──
-const MODEL_URLS = [
-  'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights',
-  'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights',
-];
-
-// ── Priority-based progressive loading ──
-// Stage 1: TinyFaceDetector (lightest, fastest)
-// Stage 2: FaceLandmark68TinyNet (medium)
-// Stage 3: FaceRecognitionNet (heaviest)
-// Stage 4: (future) Anti-spoofing
-
 let _loadProgress = 0;
 let _detectorReady = false;
-let _landmarksReady = false;
 export function getLoadProgress(): number { return _loadProgress; }
 export function isDetectorReady(): boolean { return _detectorReady; }
-export function isLandmarksReady(): boolean { return _landmarksReady; }
+export function isLandmarksReady(): boolean { return false; }
+
+const DETECTOR_MODEL_PATH = '/models/face-detect';
+
+const loadModelsInternal = async (): Promise<void> => {
+  startPerfTimer('modelDownload');
+
+  _emitProgress({ stage: 'detector', stageIndex: 0, percent: 0, detail: 'جاري تحميل كاشف الوجوه...' });
+  await faceapi.nets.tinyFaceDetector.loadFromUri(DETECTOR_MODEL_PATH);
+  _detectorReady = true;
+  _emitProgress({ stage: 'detector', stageIndex: 0, percent: 50, detail: '✓ كاشف الوجوه جاهز' });
+  await yieldToMain();
+
+  _emitProgress({ stage: 'recognition', stageIndex: 1, percent: 50, detail: 'جاري تحميل موديل التعرف...' });
+  await loadMobileFaceNet();
+  _emitProgress({ stage: 'recognition', stageIndex: 1, percent: 100, detail: '✓ موديل التعرف جاهز' });
+
+  const dummyCanvas = document.createElement('canvas');
+  dummyCanvas.width = 160;
+  dummyCanvas.height = 120;
+  try { faceapi.detectAllFaces(dummyCanvas, getDetectorOptions()); } catch {}
+
+  endPerfTimer('modelDownload');
+};
 
 export const loadFaceModels = async (): Promise<void> => {
   if (modelsLoaded) return;
   if (loadingPromise) return loadingPromise;
-
-  loadingPromise = (async () => {
-    startPerfTimer('modelDownload');
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const baseUrl = MODEL_URLS[attempt % MODEL_URLS.length];
-      try {
-        // Stage 1: FaceDetector (highest priority)
-        await faceapi.nets.tinyFaceDetector.loadFromUri(baseUrl);
-        _detectorReady = true;
-        _loadProgress = 33;
-        // Stage 2: Landmarks
-        await faceapi.nets.faceLandmark68TinyNet.loadFromUri(baseUrl);
-        _landmarksReady = true;
-        _loadProgress = 66;
-        // Stage 3: Recognition (heaviest)
-        await faceapi.nets.faceRecognitionNet.loadFromUri(baseUrl);
-        _loadProgress = 100;
-        endPerfTimer('modelDownload');
-        modelsLoaded = true;
-        _perf.preloadCompleted = true;
-        _perf.totalStartupMs = performance.now() - (_perfTimers['totalStartup'] || performance.now());
-        loadingPromise = null;
-        return;
-      } catch (e) {
-        console.warn(`Model load attempt ${attempt + 1} from ${baseUrl} failed:`, e);
-        _loadProgress = 0;
-        if (attempt < 2) await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
-      }
-    }
+  loadingPromise = loadModelsInternal().then(() => {
+    modelsLoaded = true;
+    _loadProgress = 100;
+    _perf.preloadCompleted = true;
+    _perf.totalStartupMs = performance.now() - (_perfTimers['totalStartup'] || performance.now());
+    _emitProgress({ stage: 'done', stageIndex: 2, percent: 100, detail: 'الموديلات جاهزة!' });
     loadingPromise = null;
-    throw new Error('فشل تحميل موديلات التعرف على الوجه');
-  })();
-
+  }).catch((e) => {
+    loadingPromise = null;
+    _emitProgress({ stage: 'error', stageIndex: 0, percent: 0, detail: '', error: e.message || 'فشل التحميل' });
+    throw e;
+  });
   return loadingPromise;
 };
 
-// ── Progress-aware model loading (using loadFromUri with yields between models) ──
-interface ModelStageDef {
-  net: 'tinyFaceDetector' | 'faceLandmark68TinyNet' | 'faceRecognitionNet';
-  label: string;
-  stage: LoadProgressInfo['stage'];
-  stageIndex: number;
-}
-const MODEL_STAGES: ModelStageDef[] = [
-  { net: 'tinyFaceDetector',     label: 'كشف الوجوه',        stage: 'detector',    stageIndex: 0 },
-  { net: 'faceLandmark68TinyNet', label: 'نقاط الوجه',        stage: 'landmarks',   stageIndex: 1 },
-  { net: 'faceRecognitionNet',    label: 'التعرف على الهوية', stage: 'recognition', stageIndex: 2 },
-];
+export const loadModelsWithProgress = loadFaceModels;
 
-export const loadModelsWithProgress = async (onProgress?: ProgressListener): Promise<void> => {
-  if (modelsLoaded) return;
-  if (loadingPromise) return loadingPromise;
-
-  loadingPromise = (async () => {
-    startPerfTimer('modelDownload');
-
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const baseUrl = MODEL_URLS[attempt % MODEL_URLS.length];
-      try {
-        for (let i = 0; i < MODEL_STAGES.length; i++) {
-          const { net, label, stage, stageIndex } = MODEL_STAGES[i];
-          const basePercent = (i / MODEL_STAGES.length) * 100;
-          const stageWeight = 100 / MODEL_STAGES.length;
-
-          _emitProgress({ stage, stageIndex, percent: basePercent, detail: `جاري تحميل ${label}...` });
-          if (onProgress) onProgress({ stage, stageIndex, percent: basePercent, detail: `جاري تحميل ${label}...` });
-
-          // Use face-api.js loadFromUri (handles correct file names internally)
-          await faceapi.nets[net].loadFromUri(baseUrl);
-
-          const donePct = basePercent + stageWeight;
-          _emitProgress({ stage, stageIndex, percent: donePct, detail: `✓ ${label} جاهز` });
-          if (onProgress) onProgress({ stage, stageIndex, percent: donePct, detail: `✓ ${label} جاهز` });
-
-          if (i === 0) { _detectorReady = true; }
-          if (i === 1) { _landmarksReady = true; }
-
-          // Yield to main thread between models to prevent freeze
-          await yieldToMain();
-        }
-
-        _loadProgress = 100;
-        endPerfTimer('modelDownload');
-        modelsLoaded = true;
-        _perf.preloadCompleted = true;
-        _perf.totalStartupMs = performance.now() - (_perfTimers['totalStartup'] || performance.now());
-
-        _emitProgress({ stage: 'done', stageIndex: 3, percent: 100, detail: 'الموديلات جاهزة!' });
-        if (onProgress) onProgress({ stage: 'done', stageIndex: 3, percent: 100, detail: 'الموديلات جاهزة!' });
-
-        loadingPromise = null;
-        return;
-      } catch (e: any) {
-        console.warn(`Model load attempt ${attempt + 1} from ${baseUrl} failed:`, e);
-        _loadProgress = 0;
-        _emitProgress({ stage: 'error', stageIndex: 0, percent: 0, detail: '', error: e.message || 'فشل التحميل' });
-        if (onProgress) onProgress({ stage: 'error', stageIndex: 0, percent: 0, detail: '', error: e.message || 'فشل التحميل' });
-        if (attempt < 2) await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
-      }
-    }
-    loadingPromise = null;
-    throw new Error('فشل تحميل موديلات التعرف على الوجه');
-  })();
-
-  return loadingPromise;
-};
-
-// ── Preload in background using requestIdleCallback ──
 export function startBackgroundPreload(): void {
   if (preloadStarted || modelsLoaded) return;
   preloadStarted = true;
-
   startPerfTimer('totalStartup');
-
-  const doLoad = () => {
-    loadModelsWithProgress().catch((err) => {
-      console.warn('Background preload failed, will retry on demand:', err);
-      preloadStarted = false;
-    });
-  };
-
-  setTimeout(doLoad, 0);
+  loadFaceModels().catch((err) => {
+    console.warn('Background preload failed:', err);
+    preloadStarted = false;
+  });
 }
 
 let _detectorPreloadStarted = false;
@@ -261,12 +166,11 @@ export function startDetectorPreload(): void {
 
   const doLoad = async () => {
     try {
-      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URLS[0]);
+      await faceapi.nets.tinyFaceDetector.loadFromUri(DETECTOR_MODEL_PATH);
       _detectorReady = true;
       try {
         const c = document.createElement('canvas');
-        c.width = 160;
-        c.height = 120;
+        c.width = 160; c.height = 120;
         faceapi.detectAllFaces(c, getDetectorOptions());
       } catch {}
     } catch {
@@ -282,19 +186,13 @@ export function startDetectorPreload(): void {
 }
 
 export function isPreloadStarted(): boolean { return preloadStarted; }
-export const resetModels = () => { modelsLoaded = false; loadingPromise = null; _loadProgress = 0; _detectorReady = false; _landmarksReady = false; preloadStarted = false; _detectorPreloadStarted = false; _lastProgress = { stage: 'detector', stageIndex: 0, percent: 0, detail: 'جاري تحميل الموديلات...' }; };
+export const resetModels = () => { modelsLoaded = false; loadingPromise = null; _loadProgress = 0; _detectorReady = false; preloadStarted = false; _detectorPreloadStarted = false; _lastProgress = { stage: 'detector', stageIndex: 0, percent: 0, detail: 'جاري تحميل الموديلات...' }; };
 export const areModelsLoaded = () => modelsLoaded;
 export const getLastModelProgress = (): LoadProgressInfo => _lastProgress;
 
-// ── Detector options ──
-// inputSize قابل للتمرير: 160/224 للكشف المباشر الخفيف، و320 فقط للالتقاط النهائي
 const getDetectorOptions = (inputSize = 320) =>
-  new faceapi.TinyFaceDetectorOptions({
-    inputSize,
-    scoreThreshold: 0.3,
-  });
+  new faceapi.TinyFaceDetectorOptions({ inputSize, scoreThreshold: 0.3 });
 
-// ── Frame preprocessing ──
 export const preprocessFrame = (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
   targetWidth = 480
@@ -302,42 +200,35 @@ export const preprocessFrame = (
   const vw = 'videoWidth' in input ? input.videoWidth : input.width;
   const vh = 'videoHeight' in input ? input.videoHeight : input.height;
   if (!vw || !vh) { const c = allocCanvas(1, 1); return c; }
-
   const scale = Math.min(1, targetWidth / vw);
   const w = Math.round(vw * scale);
   const h = Math.round(vh * scale);
   const canvas = allocCanvas(w, h);
   const ctx = canvas.getContext('2d');
   if (!ctx) return canvas;
-
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(input, 0, 0, w, h);
   return canvas;
 };
 
-// ── Normalization ──
 export const normalizeDescriptor = (d: Float32Array): Float32Array => {
   const out = new Float32Array(d);
   let norm = 0;
-  for (let i = 0; i < 128; i++) norm += out[i] * out[i];
+  for (let i = 0; i < out.length; i++) norm += out[i] * out[i];
   norm = Math.sqrt(norm) || 1;
-  for (let i = 0; i < 128; i++) out[i] /= norm;
+  for (let i = 0; i < out.length; i++) out[i] /= norm;
   return out;
 };
 
 const meanDescriptor = (descs: Float32Array[]): Float32Array => {
-  const merged = new Float32Array(128);
+  const merged = new Float32Array(DESC_DIM);
   for (const d of descs) {
-    for (let i = 0; i < 128; i++) merged[i] += d[i];
+    for (let i = 0; i < DESC_DIM; i++) merged[i] += d[i];
   }
-  for (let i = 0; i < 128; i++) merged[i] /= descs.length;
+  for (let i = 0; i < DESC_DIM; i++) merged[i] /= descs.length;
   return normalizeDescriptor(merged);
 };
 
-// ── Face landmarks drawing ──
-
-// إحداثيات الوجوه تعود بأبعاد إطار المعالجة (بعد preprocessFrame) وليس بأبعاد الفيديو الأصلية.
-// هذه الدالة تحسب أبعاد إطار الكشف الفعلي لضبط الرسم فوق الفيديو المعروض.
 export const getDetectionFrameDims = (
   videoWidth: number,
   videoHeight: number,
@@ -348,70 +239,7 @@ export const getDetectionFrameDims = (
   return { width: targetWidth, height };
 };
 
-export const drawFaceLandmarks = (
-  ctx: CanvasRenderingContext2D,
-  landmarks: faceapi.FaceLandmarks68,
-  box: { x: number; y: number; width: number; height: number },
-  displayWidth: number,
-  displayHeight: number,
-  frameWidth: number,
-  frameHeight: number,
-  mirrored: boolean
-) => {
-  ctx.clearRect(0, 0, displayWidth, displayHeight);
-
-  const scaleX = displayWidth / frameWidth;
-  const scaleY = displayHeight / frameHeight;
-  const s = Math.max(scaleX, scaleY);
-  const ox = (displayWidth - frameWidth * s) / 2;
-  const oy = (displayHeight - frameHeight * s) / 2;
-
-  const mapX = (x: number) => (mirrored ? displayWidth - (x * s + ox) : x * s + ox);
-  const mapY = (y: number) => y * s + oy;
-  const mapW = (w: number) => w * s;
-
-  // Bounding box
-  ctx.strokeStyle = '#8b5cf6';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(mirrored ? mapX(box.x + box.width) : mapX(box.x), mapY(box.y), mapW(box.width), mapW(box.height));
-
-  // Face features
-  const pos = landmarks.positions;
-  const features = {
-    jaw: pos.slice(0, 17),
-    eyebrowLeft: pos.slice(17, 22),
-    eyebrowRight: pos.slice(22, 27),
-    noseBridge: pos.slice(27, 31),
-    nose: pos.slice(31, 36),
-    eyeLeft: pos.slice(36, 42),
-    eyeRight: pos.slice(42, 48),
-    lipOuter: pos.slice(48, 60),
-    lipInner: pos.slice(60),
-  };
-
-  const drawPoints = (pts: faceapi.Point[], color: string, close = true) => {
-    if (pts.length === 0) return;
-    ctx.fillStyle = color;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(mapX(pts[0].x), mapY(pts[0].y));
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(mapX(pts[i].x), mapY(pts[i].y));
-    if (close) ctx.closePath();
-    ctx.stroke();
-    for (const p of pts) { ctx.beginPath(); ctx.arc(mapX(p.x), mapY(p.y), 2, 0, Math.PI * 2); ctx.fill(); }
-  };
-
-  drawPoints(features.jaw, 'rgba(156,163,175,0.4)', false);
-  drawPoints(features.eyebrowLeft, '#3b82f6');
-  drawPoints(features.eyebrowRight, '#3b82f6');
-  drawPoints(features.noseBridge, '#ef4444', false);
-  drawPoints(features.nose, '#ef4444');
-  drawPoints(features.eyeLeft, '#3b82f6');
-  drawPoints(features.eyeRight, '#3b82f6');
-  drawPoints(features.lipOuter, '#10b981');
-  drawPoints(features.lipInner, '#10b981');
-};
+export const drawFaceLandmarks = () => {};
 
 // ── MultiDescriptor ──
 export interface MultiDescriptor {
@@ -420,6 +248,7 @@ export interface MultiDescriptor {
   quality?: number;
   directions?: string;
   version?: number;
+  descriptorVersion?: number;
 }
 
 const TOP_DIMS = 32;
@@ -434,11 +263,11 @@ const compressAngleDescriptor = (desc: Float32Array): number[] => {
 };
 
 const decompressAngleDescriptor = (compressed: number[]): Float32Array => {
-  const desc = new Float32Array(128);
+  const desc = new Float32Array(DESC_DIM);
   for (let i = 0; i < compressed.length; i += 2) {
     const idx = compressed[i];
     const val = compressed[i + 1];
-    if (idx >= 0 && idx < 128) desc[idx] = val;
+    if (idx >= 0 && idx < DESC_DIM) desc[idx] = val;
   }
   return normalizeDescriptor(desc);
 };
@@ -463,6 +292,7 @@ export const buildMultiDescriptor = (
     quality: Math.round(overallQuality * 100) / 100,
     directions: [...capturedDirs].join(','),
     version: 2,
+    descriptorVersion: 2,
   };
 };
 
@@ -475,6 +305,7 @@ const toFloat32 = (input: any): Float32Array => {
     return new Float32Array(ensureDecompressed(input));
   }
   if (Array.isArray(input)) {
+    if (input.length === DESC_DIM) return new Float32Array(input);
     if (input.length === 128) return new Float32Array(input);
     if (input.length > 0 && input.length < 128) {
       const looksCompressed =
@@ -497,7 +328,8 @@ const toFloat32 = (input: any): Float32Array => {
 export const compareMultiDescriptor = (query: Float32Array, stored: MultiDescriptor): number => {
   const mainDesc = normalizeDescriptor(toFloat32(stored.main));
   const qNorm = normalizeDescriptor(new Float32Array(query));
-  const mainDist = faceapi.euclideanDistance(qNorm, mainDesc);
+  const mainSim = cosineSimilarity(qNorm, mainDesc);
+  const mainDist = 1 - mainSim;
   if (!stored.angles || stored.angles.length === 0) return mainDist;
 
   const chunkSize = TOP_DIMS * 2;
@@ -507,7 +339,8 @@ export const compareMultiDescriptor = (query: Float32Array, stored: MultiDescrip
   for (let i = 0; i < angleCount; i++) {
     const chunk = stored.angles.slice(i * chunkSize, (i + 1) * chunkSize);
     const angleDesc = decompressAngleDescriptor(chunk);
-    const dist = faceapi.euclideanDistance(qNorm, angleDesc);
+    const sim = cosineSimilarity(qNorm, angleDesc);
+    const dist = 1 - sim;
     if (dist < bestAngleDist) bestAngleDist = dist;
   }
 
@@ -518,7 +351,6 @@ const isMultiDescriptor = (d: any): d is MultiDescriptor => {
   return d !== null && typeof d === 'object' && !Array.isArray(d) && 'main' in d;
 };
 
-// ── Tamper detection ──
 export interface TamperResult {
   isTamper: boolean;
   matchedStudents: Array<{ id: string; name: string; distance: number }>;
@@ -530,7 +362,7 @@ export const checkForTampering = <
   descriptor: Float32Array,
   allStudents: T[],
   excludeId: string,
-  threshold = 0.35
+  threshold = 0.4
 ): TamperResult => {
   const query = normalizeDescriptor(new Float32Array(descriptor));
   const matches: Array<{ id: string; name: string; distance: number }> = [];
@@ -544,59 +376,7 @@ export const checkForTampering = <
   return { isTamper: matches.length > 0, matchedStudents: matches };
 };
 
-export const checkForTamperingAsync = async <
-  T extends { id: string; name: string; faceDescriptor?: number[] | string | MultiDescriptor }
->(
-  descriptor: Float32Array,
-  allStudents: T[],
-  excludeId: string,
-  threshold = 0.35
-): Promise<TamperResult> => {
-  const query = normalizeDescriptor(new Float32Array(descriptor));
-  const matches: Array<{ id: string; name: string; distance: number }> = [];
-  const storedSimple: Array<{ id: string; name: string; desc: number[] }> = [];
-
-  for (const s of allStudents) {
-    if (s.id === excludeId || !s.faceDescriptor) continue;
-    if (isMultiDescriptor(s.faceDescriptor)) {
-      const dist = compareMultiDescriptor(query, s.faceDescriptor);
-      if (dist < threshold) matches.push({ id: s.id, name: s.name, distance: dist });
-    } else {
-      const arr = toFloat32(s.faceDescriptor as any);
-      const normArr = normalizeDescriptor(new Float32Array(arr));
-      storedSimple.push({ id: s.id, name: s.name, desc: Array.from(normArr) });
-    }
-  }
-
-  if (storedSimple.length === 0) {
-    return { isTamper: matches.length > 0, matchedStudents: matches };
-  }
-
-  const w = getWorker();
-  if (!w) {
-    for (const s of storedSimple) {
-      const d = faceapi.euclideanDistance(query, new Float32Array(s.desc));
-      if (d < threshold) matches.push({ id: s.id, name: s.name, distance: d });
-    }
-    return { isTamper: matches.length > 0, matchedStudents: matches };
-  }
-
-  return new Promise(resolve => {
-    const handler = (e: MessageEvent) => {
-      if (e.data.type === 'tamperResult') {
-        w.removeEventListener('message', handler);
-        const wMatches = (e.data.data || []) as Array<{ id: string; name: string; distance: number }>;
-        resolve({
-          isTamper: matches.length + wMatches.length > 0,
-          matchedStudents: [...matches, ...wMatches],
-        });
-      }
-    };
-    w.addEventListener('message', handler);
-    w.postMessage({ type: 'tamper', data: { query: Array.from(query), storedDescriptors: storedSimple, threshold } });
-    setTimeout(() => { w.removeEventListener('message', handler); resolve({ isTamper: matches.length > 0, matchedStudents: matches }); }, 15000);
-  });
-};
+export const checkForTamperingAsync = checkForTampering;
 
 // ── IOU Tracker ──
 export interface TrackedFace {
@@ -650,17 +430,38 @@ export class IOUTracker {
   }
 }
 
-// ── Face detection ──
+// ── Face detection + recognition ──
+export const detectFaces = async (
+  input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
+  inputSize = 320
+) => {
+  const processed = preprocessFrame(input, inputSize);
+  return faceapi.detectAllFaces(processed, getDetectorOptions(inputSize));
+};
+
 export const extractFaceDescriptor = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ): Promise<Float32Array | null> => {
   if (!modelsLoaded) await loadFaceModels();
+  if (!isMobileFaceNetReady()) return null;
+
+  const vw = 'videoWidth' in input ? input.videoWidth : input.width;
+  const vh = 'videoHeight' in input ? input.videoHeight : input.height;
+
   const processed = preprocessFrame(input, 640);
-  const result = await faceapi
-    .detectSingleFace(processed, getDetectorOptions())
-    .withFaceLandmarks(true)
-    .withFaceDescriptor();
-  return result?.descriptor || null;
+  const detections = await faceapi.detectAllFaces(processed, getDetectorOptions(320));
+  if (detections.length === 0) return null;
+
+  const scale = vw / processed.width;
+  const best = detections[0];
+  const box = {
+    x: best.box.x * scale,
+    y: best.box.y * scale,
+    width: best.box.width * scale,
+    height: best.box.height * scale,
+  };
+
+  return extractEmbedding(input, box, vw, vh);
 };
 
 export const extractAllFaceDescriptors = async (
@@ -669,11 +470,36 @@ export const extractAllFaceDescriptors = async (
   inputSize = 320
 ) => {
   if (!modelsLoaded) await loadFaceModels();
+  if (!isMobileFaceNetReady()) return [];
+
+  const vw = 'videoWidth' in input ? input.videoWidth : input.width;
+  const vh = 'videoHeight' in input ? input.videoHeight : input.height;
+
   const processed = preprocessFrame(input, targetWidth);
-  return faceapi
-    .detectAllFaces(processed, getDetectorOptions(inputSize))
-    .withFaceLandmarks(true)
-    .withFaceDescriptors();
+  const detections = await faceapi.detectAllFaces(processed, getDetectorOptions(inputSize));
+
+  if (detections.length === 0) return [];
+
+  const scale = vw / processed.width;
+  const results: Array<{ detection: { box: { x: number; y: number; width: number; height: number }; score: number }; descriptor: Float32Array }> = [];
+
+  for (const det of detections) {
+    const box = {
+      x: det.box.x * scale,
+      y: det.box.y * scale,
+      width: det.box.width * scale,
+      height: det.box.height * scale,
+    };
+    const descriptor = await extractEmbedding(input, box, vw, vh);
+    if (descriptor) {
+      results.push({
+        detection: { box: det.box, score: det.score },
+        descriptor,
+      });
+    }
+  }
+
+  return results;
 };
 
 export const detectAllFacesOnly = async (
@@ -692,12 +518,10 @@ export const detectSingleFace = async (
 ) => {
   if (!modelsLoaded) await loadFaceModels();
   const processed = preprocessFrame(input, targetWidth);
-  return faceapi
-    .detectSingleFace(processed, getDetectorOptions(inputSize))
-    .withFaceLandmarks(true);
+  return faceapi.detectSingleFace(processed, getDetectorOptions(inputSize));
 };
 
-// ── Comparison ──
+// ── Comparison (cosine similarity) ──
 export const compareFaces = (
   desc1: Float32Array | number[],
   desc2: Float32Array | number[] | string | MultiDescriptor
@@ -708,18 +532,21 @@ export const compareFaces = (
   let b: Float32Array;
   if (typeof desc2 === 'string') { b = new Float32Array(ensureDecompressed(desc2)); }
   else if (Array.isArray(desc2)) {
-    if (desc2.length < 128) { b = new Float32Array(ensureDecompressed(desc2)); }
+    if (desc2.length < DESC_DIM) { b = new Float32Array(ensureDecompressed(desc2)); }
     else { b = new Float32Array(desc2); }
   } else { b = toFloat32(desc2 as any); }
 
-  if (a.length !== b.length) {
-    const maxLen = Math.max(a.length, b.length);
+  const aNorm = normalizeDescriptor(new Float32Array(a));
+  const bNorm = normalizeDescriptor(new Float32Array(b));
+
+  if (aNorm.length !== bNorm.length) {
+    const maxLen = Math.max(aNorm.length, bNorm.length);
     const paddedA = new Float32Array(maxLen);
     const paddedB = new Float32Array(maxLen);
-    paddedA.set(a); paddedB.set(b);
-    return faceapi.euclideanDistance(paddedA, paddedB);
+    paddedA.set(aNorm); paddedB.set(bNorm);
+    return 1 - cosineSimilarity(paddedA, paddedB);
   }
-  return faceapi.euclideanDistance(a, b);
+  return 1 - cosineSimilarity(aNorm, bNorm);
 };
 
 export interface FaceMatchResult<T> {
@@ -731,7 +558,7 @@ export interface FaceMatchResult<T> {
 export const findBestMatch = <T extends { faceDescriptor?: number[] | string | MultiDescriptor }>(
   queryDescriptor: Float32Array,
   items: T[],
-  threshold = 0.6
+  threshold = 0.5
 ): FaceMatchResult<T> | null => {
   let best: FaceMatchResult<T> | null = null;
   for (const item of items) {
@@ -746,7 +573,7 @@ export const findBestMatch = <T extends { faceDescriptor?: number[] | string | M
 
 export const findBestMatchFromCache = async (
   queryDescriptor: Float32Array,
-  threshold = 0.6
+  threshold = 0.5
 ): Promise<{ id: string; distance: number } | null> => {
   const cache = getDescriptorCache();
   if (!cache || cache.length === 0) return null;
@@ -758,7 +585,7 @@ export const findBestMatchFromCache = async (
 
 export const findBestMatchBatchFromCache = async (
   queryDescriptors: Float32Array[],
-  threshold = 0.6
+  threshold = 0.5
 ): Promise<Array<{ id: string; distance: number } | null>> => {
   const cache = getDescriptorCache();
   if (!cache || cache.length === 0) return queryDescriptors.map(() => null);
@@ -787,15 +614,15 @@ export const autoImproveDescriptor = (
   else {
     const currentArray = toFloat32(currentStored as any);
     const normalized = normalizeDescriptor(new Float32Array(currentArray));
-    return { main: Array.from(normalized), quality: newQuality, directions: newDirection, version: 2 };
+    return { main: Array.from(normalized), quality: newQuality, directions: newDirection, version: 2, descriptorVersion: 2 };
   }
 
   if ((md.quality || 0) >= 0.85 && (md.directions || '').split(',').length >= 5) return null;
   if (newQuality < (md.quality || 0) * 0.9) return null;
 
   const currentMain = toFloat32(md.main);
-  const blended = new Float32Array(128);
-  for (let i = 0; i < 128; i++) blended[i] = currentMain[i] * 0.7 + newDescriptor[i] * 0.3;
+  const blended = new Float32Array(DESC_DIM);
+  for (let i = 0; i < DESC_DIM; i++) blended[i] = currentMain[i] * 0.7 + newDescriptor[i] * 0.3;
   const normalized = normalizeDescriptor(blended);
 
   const existingDirs = new Set((md.directions || '').split(',').filter(Boolean));
@@ -807,6 +634,7 @@ export const autoImproveDescriptor = (
     quality: Math.max(md.quality || 0, newQuality),
     directions: [...existingDirs].join(','),
     version: 2,
+    descriptorVersion: 2,
   };
 };
 

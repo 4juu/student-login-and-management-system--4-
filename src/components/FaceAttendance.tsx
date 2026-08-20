@@ -102,6 +102,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
   const lastFaceTimeRef = useRef(0);
   const hiddenRef = useRef(false);
   const facingRef = useRef<CameraFacing>('user');
+  const cameraGenRef = useRef(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const studentsWithFace = useMemo(() =>
     students.filter(s => s.faceDescriptor && (
@@ -153,11 +155,13 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     const interval = setInterval(() => {
       if (!mountedRef.current) return;
       setWarmup(areModelsLoaded() ? 2 : isDetectorReady() ? 1 : 0);
-      if (isDetectorReady() && !faceLoopStartedRef.current) startFaceLoop();
+      if (areModelsLoaded() && !faceLoopStartedRef.current) startFaceLoop();
     }, 200);
-    setTimeout(() => clearInterval(interval), 60000);
+    intervalRef.current = interval;
+    setTimeout(() => { clearInterval(interval); intervalRef.current = null; }, 60000);
     return () => {
       mountedRef.current = false;
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
       document.documentElement.style.overflow = prevHtmlOverflow;
       document.documentElement.style.overscrollBehavior = prevScroll;
       document.body.style.overscrollBehavior = prevBodyScroll;
@@ -326,6 +330,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     if (!mountedRef.current) return;
     setCameraReady(false);
     resetVideoReady();
+    const gen = ++cameraGenRef.current;
     try {
       await cleanup();
 
@@ -333,7 +338,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
         video: { facingMode: facingRef.current, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 20, max: 24 } },
         audio: false,
       });
-      if (!mountedRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
+      if (!mountedRef.current || gen !== cameraGenRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
 
       streamRef.current = stream;
       const track = stream.getVideoTracks()[0];

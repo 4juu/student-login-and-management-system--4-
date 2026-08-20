@@ -12,7 +12,7 @@ import {
 import { useCameraReady } from '../hooks/useCameraReady';
 import { useFaceModels } from '../hooks/useFaceModels';
 import { FaceModelLoadingOverlay } from './FaceModelLoadingOverlay';
-import * as faceapi from 'face-api.js';
+import * as faceapi from '@vladmandic/face-api';
 import { createPortal } from 'react-dom';
 
 interface FaceRegisterProps {
