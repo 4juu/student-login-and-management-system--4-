@@ -11,7 +11,6 @@
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
     "@tensorflow/tfjs": "^4.22.0",
-    "@vladmandic/face-api": "^1.7.15",
     "class-variance-authority": "^0.7.1",
     "clsx": "2.1.1",
     "file-saver": "^2.0.5",

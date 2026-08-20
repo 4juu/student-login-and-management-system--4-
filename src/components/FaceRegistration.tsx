@@ -3,12 +3,11 @@ import { Student } from '../types/student';
 import {
   extractFaceDescriptor, detectSingleFace,
   buildMultiDescriptor, checkForTamperingAsync,
-  normalizeDescriptor, drawFaceLandmarks, getDetectionFrameDims,
+  normalizeDescriptor,
 } from '../services/faceRecognition';
 import { useCameraReady } from '../hooks/useCameraReady';
 import { useFaceModels } from '../hooks/useFaceModels';
 import { FaceModelLoadingOverlay } from './FaceModelLoadingOverlay';
-import * as faceapi from '@vladmandic/face-api';
 import { createPortal } from 'react-dom';
 import { useModalBehavior } from '../hooks/useModalBehavior';
 
@@ -32,10 +31,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   const [faceDetected, setFaceDetected] = useState(false);
 
   // بيانات الكشف للرسم
-  const [detLandmarks, setDetLandmarks] = useState<faceapi.FaceLandmarks68 | null>(null);
   const [detBox, setDetBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
-  const [detFrameW, setDetFrameW] = useState(0);
-  const [detFrameH, setDetFrameH] = useState(0);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -43,7 +39,6 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   const { loaded: modelsLoaded, progress: modelProgress } = useFaceModels();
   const streamRef = useRef<MediaStream | null>(null);
   const mountedRef = useRef(true);
-  const landmarkCanvasRef = useRef<HTMLCanvasElement>(null);
   const detectIntervalRef = useRef<number | null>(null);
 
   const filtered = search.trim()
@@ -81,7 +76,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
   };
 
   const handleCameraChoice = (f: 'user' | 'environment') => {
-    setFacing(f); setFaceDetected(false); setDetLandmarks(null); setDetBox(null);
+    setFacing(f); setFaceDetected(false); setDetBox(null);
     setStep('capture'); openCamera(f);
   };
 
@@ -95,10 +90,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
         if (!mountedRef.current) return;
         if (det) {
           setFaceDetected(true);
-          setDetLandmarks(det.landmarks);
-          setDetBox({ x: det.detection.box.x, y: det.detection.box.y, width: det.detection.box.width, height: det.detection.box.height });
-          setDetFrameW(det.detection.box.width > 0 ? (() => { const v = videoRef.current; return v ? v.videoWidth : 640; })() : 640);
-          setDetFrameH(det.detection.box.height > 0 ? (() => { const v = videoRef.current; return v ? v.videoHeight : 480; })() : 480);
+          setDetBox(det.box);
         } else {
           setFaceDetected(false);
         }
@@ -106,27 +98,6 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
     }, 250);
     return () => { if (detectIntervalRef.current) { clearInterval(detectIntervalRef.current); detectIntervalRef.current = null; } };
   }, [cameraReady, videoReady, capturing]);
-
-  // draw landmarks — article pattern
-  useEffect(() => {
-    const canvas = landmarkCanvasRef.current;
-    const container = canvas?.parentElement;
-    if (!canvas || !container || !detLandmarks || !detBox) {
-      if (canvas) { const ctx = canvas.getContext('2d'); if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height); }
-      return;
-    }
-    const rect = container.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const v = videoRef.current;
-    const vw = v ? v.videoWidth : detFrameW;
-    const vh = v ? v.videoHeight : detFrameH;
-    const det = getDetectionFrameDims(vw, vh, 320);
-    drawFaceLandmarks(ctx, detLandmarks, detBox, canvas.width, canvas.height, det.width, det.height, facing === 'user');
-  }, [detLandmarks, detBox, facing]);
 
   const handleCapture = async () => {
     if (!videoRef.current || capturing) return;
@@ -164,7 +135,7 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
 
   const handleBackToSearch = () => {
     cleanupCamera(); setSelectedStudent(null); setSearch(''); setStep('search'); setError(''); setCapturing(false);
-    setFaceDetected(false); setDetLandmarks(null); setDetBox(null);
+    setFaceDetected(false); setDetBox(null);
     setTimeout(() => searchRef.current?.focus(), 100);
   };
 
@@ -257,7 +228,6 @@ export const FaceRegistration: React.FC<FaceRegistrationProps> = ({ students, on
                   onLoadedMetadata={handleVideoReady}
                   className={`w-full h-full object-cover transition-opacity duration-300 ${videoReady ? 'opacity-100' : 'invisible'}`}
                   style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }} />
-                <canvas ref={landmarkCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
                 {(!cameraReady || !videoReady) && !error && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-900">

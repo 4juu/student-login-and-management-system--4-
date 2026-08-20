@@ -27,7 +27,6 @@ export default defineConfig({
           if (id.includes('node_modules')) {
             if (id.includes('react') || id.includes('react-dom')) return 'react-vendor';
             if (id.includes('firebase')) return 'firebase-vendor';
-            if (id.includes('face-api')) return 'face-api';
             if (id.includes('xlsx') || id.includes('xlsx-js-style')) return 'xlsx';
             if (id.includes('lucide-react')) return 'icons';
           }

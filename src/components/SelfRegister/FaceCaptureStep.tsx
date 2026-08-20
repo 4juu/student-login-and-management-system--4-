@@ -10,12 +10,9 @@ import {
   normalizeDescriptor,
   checkForTamperingAsync,
   buildMultiDescriptor,
-  drawFaceLandmarks,
-  getDetectionFrameDims,
   MultiDescriptor,
 } from '../../services/faceRecognition';
 import { useCameraReady } from '../../hooks/useCameraReady';
-import * as faceapi from '@vladmandic/face-api';
 import { Camera, CircleCheck, LoaderCircle, Smile } from 'lucide-react';
 
 interface FaceCaptureStepProps {
@@ -35,7 +32,6 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
   const { videoReady, handleVideoReady, resetVideoReady, armForceReady } = useCameraReady(videoRef);
   const streamRef = useRef<MediaStream | null>(null);
   const mountedRef = useRef(true);
-  const landmarkCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const [modelsReady, setModelsReady] = useState(areModelsLoaded());
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -43,7 +39,6 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
   const [error, setError] = useState('');
   const [capturing, setCapturing] = useState(false);
   const [faceDetected, setFaceDetected] = useState(false);
-  const [detLandmarks, setDetLandmarks] = useState<faceapi.FaceLandmarks68 | null>(null);
   const [detBox, setDetBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
   // تحميل النماذج
@@ -134,16 +129,9 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
         
         if (det) {
           setFaceDetected(true);
-          setDetLandmarks(det.landmarks);
-          setDetBox({
-            x: det.detection.box.x,
-            y: det.detection.box.y,
-            width: det.detection.box.width,
-            height: det.detection.box.height,
-          });
+          setDetBox(det.box);
         } else {
           setFaceDetected(false);
-          setDetLandmarks(null);
           setDetBox(null);
         }
       } catch {}
@@ -151,34 +139,6 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
     
     return () => clearInterval(iv);
   }, [cameraReady, videoReady, capturing]);
-
-  // رسم معالم الوجه
-  useEffect(() => {
-    const canvas = landmarkCanvasRef.current;
-    const container = canvas?.parentElement;
-    
-    if (!canvas || !container || !detLandmarks || !detBox) {
-      if (canvas) {
-        const ctx = canvas.getContext('2d');
-        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
-      return;
-    }
-    
-    const rect = container.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-    
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    const v = videoRef.current;
-    const vw = v ? v.videoWidth : 640;
-    const vh = v ? v.videoHeight : 480;
-    const det = getDetectionFrameDims(vw, vh, 320);
-
-    drawFaceLandmarks(ctx, detLandmarks, detBox, canvas.width, canvas.height, det.width, det.height, true);
-  }, [detLandmarks, detBox]);
 
   const handleCapture = async () => {
     if (!videoRef.current || capturing) return;
@@ -228,7 +188,6 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
     setError('');
     setCapturing(false);
     setFaceDetected(false);
-    setDetLandmarks(null);
     setDetBox(null);
     
     if (streamRef.current) {
@@ -316,7 +275,6 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
                 className={`w-full h-full object-cover transition-opacity duration-300 ${videoReady ? 'opacity-100' : 'invisible'}`}
                 style={{ transform: 'scaleX(-1)' }}
               />
-              <canvas ref={landmarkCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
               {(!cameraReady || !videoReady) && !error && (
                 <div className="absolute inset-0 flex items-center justify-center bg-gray-900">

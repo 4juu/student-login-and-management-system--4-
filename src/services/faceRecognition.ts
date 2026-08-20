@@ -1,7 +1,6 @@
-import * as faceapi from '@vladmandic/face-api';
 import { compressFaceDescriptor, ensureDecompressed } from './faceCompression';
 import { getWorker, workerFindBestMatch, workerBatchMatchAll } from './faceWorker';
-import { loadMobileFaceNet, isMobileFaceNetReady, extractEmbedding, cosineSimilarity, getEmbeddingDim } from './mobileFaceNet';
+import { loadMobileFaceNet, isMobileFaceNetReady, extractEmbedding, cosineSimilarity } from './mobileFaceNet';
 
 const DESC_DIM = 512;
 
@@ -90,7 +89,7 @@ export function buildDescriptorCache(
   for (const s of students) {
     if (!s.faceDescriptor) continue;
     const arr = toFloat32(s.faceDescriptor);
-    if (arr.length >= DESC_DIM) {
+    if (arr.length === DESC_DIM) {
       _descCache.push({ id: s.id, desc: normalizeDescriptor(arr) });
     }
   }
@@ -105,25 +104,17 @@ export function getLoadProgress(): number { return _loadProgress; }
 export function isDetectorReady(): boolean { return _detectorReady; }
 export function isLandmarksReady(): boolean { return false; }
 
-const DETECTOR_MODEL_PATH = '/models/face-detect';
-
 const loadModelsInternal = async (): Promise<void> => {
   startPerfTimer('modelDownload');
 
-  _emitProgress({ stage: 'detector', stageIndex: 0, percent: 0, detail: 'جاري تحميل كاشف الوجوه...' });
-  await faceapi.nets.tinyFaceDetector.loadFromUri(DETECTOR_MODEL_PATH);
-  _detectorReady = true;
-  _emitProgress({ stage: 'detector', stageIndex: 0, percent: 50, detail: '✓ كاشف الوجوه جاهز' });
+  _emitProgress({ stage: 'detector', stageIndex: 0, percent: 0, detail: 'جاري تحميل كاشف الوجه...' });
   await yieldToMain();
+  _detectorReady = true;
+  _emitProgress({ stage: 'detector', stageIndex: 0, percent: 50, detail: '✓ كاشف الوجه جاهز' });
 
   _emitProgress({ stage: 'recognition', stageIndex: 1, percent: 50, detail: 'جاري تحميل موديل التعرف...' });
   await loadMobileFaceNet();
   _emitProgress({ stage: 'recognition', stageIndex: 1, percent: 100, detail: '✓ موديل التعرف جاهز' });
-
-  const dummyCanvas = document.createElement('canvas');
-  dummyCanvas.width = 160;
-  dummyCanvas.height = 120;
-  try { faceapi.detectAllFaces(dummyCanvas, getDetectorOptions()); } catch {}
 
   endPerfTimer('modelDownload');
 };
@@ -158,40 +149,15 @@ export function startBackgroundPreload(): void {
   });
 }
 
-let _detectorPreloadStarted = false;
-
 export function startDetectorPreload(): void {
-  if (_detectorPreloadStarted || _detectorReady || modelsLoaded) return;
-  _detectorPreloadStarted = true;
-
-  const doLoad = async () => {
-    try {
-      await faceapi.nets.tinyFaceDetector.loadFromUri(DETECTOR_MODEL_PATH);
-      _detectorReady = true;
-      try {
-        const c = document.createElement('canvas');
-        c.width = 160; c.height = 120;
-        faceapi.detectAllFaces(c, getDetectorOptions());
-      } catch {}
-    } catch {
-      _detectorPreloadStarted = false;
-    }
-  };
-
-  if ('requestIdleCallback' in window) {
-    (window as any).requestIdleCallback(doLoad, { timeout: 2500 });
-  } else {
-    setTimeout(doLoad, 800);
-  }
+  if (_detectorReady || modelsLoaded) return;
+  _detectorReady = true;
 }
 
 export function isPreloadStarted(): boolean { return preloadStarted; }
-export const resetModels = () => { modelsLoaded = false; loadingPromise = null; _loadProgress = 0; _detectorReady = false; preloadStarted = false; _detectorPreloadStarted = false; _lastProgress = { stage: 'detector', stageIndex: 0, percent: 0, detail: 'جاري تحميل الموديلات...' }; };
+export const resetModels = () => { modelsLoaded = false; loadingPromise = null; _loadProgress = 0; _detectorReady = false; preloadStarted = false; _lastProgress = { stage: 'detector', stageIndex: 0, percent: 0, detail: 'جاري تحميل الموديلات...' }; };
 export const areModelsLoaded = () => modelsLoaded;
 export const getLastModelProgress = (): LoadProgressInfo => _lastProgress;
-
-const getDetectorOptions = (inputSize = 320) =>
-  new faceapi.TinyFaceDetectorOptions({ inputSize, scoreThreshold: 0.3 });
 
 export const preprocessFrame = (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
@@ -241,7 +207,6 @@ export const getDetectionFrameDims = (
 
 export const drawFaceLandmarks = () => {};
 
-// ── MultiDescriptor ──
 export interface MultiDescriptor {
   main: number[];
   angles?: number[];
@@ -334,6 +299,7 @@ const toFloat32 = (input: any): Float32Array => {
 
 export const compareMultiDescriptor = (query: Float32Array, stored: MultiDescriptor): number => {
   const mainDesc = normalizeDescriptor(toFloat32(stored.main));
+  if (mainDesc.length !== DESC_DIM) return 1;
   const qNorm = normalizeDescriptor(new Float32Array(query));
   const mainSim = cosineSimilarity(qNorm, mainDesc);
   const mainDist = 1 - mainSim;
@@ -385,7 +351,6 @@ export const checkForTampering = <
 
 export const checkForTamperingAsync = checkForTampering;
 
-// ── IOU Tracker ──
 export interface TrackedFace {
   id: number;
   box: { x: number; y: number; width: number; height: number };
@@ -437,13 +402,116 @@ export class IOUTracker {
   }
 }
 
+// ── Simple face detection using skin color + center bias ──
+const isSkinPixel = (r: number, g: number, b: number): boolean => {
+  return r > 95 && g > 40 && b > 20 &&
+    r > g && r > b &&
+    (r - g) > 15 &&
+    Math.max(r, g, b) - Math.min(r, g, b) > 15;
+};
+
+interface SimpleDetection { box: { x: number; y: number; width: number; height: number }; score: number }
+
+const detectFacesSimple = (canvas: HTMLCanvasElement): SimpleDetection[] => {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return [];
+  const w = canvas.width;
+  const h = canvas.height;
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const data = imageData.data;
+
+  const gridW = Math.ceil(w / 8);
+  const gridH = Math.ceil(h / 8);
+  const skinGrid = new Uint8Array(gridW * gridH);
+
+  for (let gy = 0; gy < gridH; gy++) {
+    for (let gx = 0; gx < gridW; gx++) {
+      const px = Math.floor((gx + 0.5) * (w / gridW));
+      const py = Math.floor((gy + 0.5) * (h / gridH));
+      let skin = 0;
+      let total = 0;
+      const step = 2;
+      for (let dy = -4; dy <= 4; dy += step) {
+        for (let dx = -4; dx <= 4; dx += step) {
+          const sx = px + dx;
+          const sy = py + dy;
+          if (sx < 0 || sx >= w || sy < 0 || sy >= h) continue;
+          const i = (sy * w + sx) * 4;
+          total++;
+          if (isSkinPixel(data[i], data[i + 1], data[i + 2])) skin++;
+        }
+      }
+      skinGrid[gy * gridW + gx] = total > 0 && skin / total > 0.4 ? 1 : 0;
+    }
+  }
+
+  const visited = new Uint8Array(gridW * gridH);
+  const clusters: Array<{ minX: number; minY: number; maxX: number; maxY: number; count: number }> = [];
+
+  for (let gy = 0; gy < gridH; gy++) {
+    for (let gx = 0; gx < gridW; gx++) {
+      if (visited[gy * gridW + gx] || !skinGrid[gy * gridW + gx]) continue;
+      const stack = [gy * gridW + gx];
+      let minX = gx, minY = gy, maxX = gx, maxY = gy, count = 0;
+      while (stack.length > 0) {
+        const idx = stack.pop()!;
+        if (visited[idx]) continue;
+        visited[idx] = 1;
+        const cx = idx % gridW;
+        const cy = Math.floor(idx / gridW);
+        count++;
+        minX = Math.min(minX, cx);
+        minY = Math.min(minY, cy);
+        maxX = Math.max(maxX, cx);
+        maxY = Math.max(maxY, cy);
+        for (const [ndx, ndy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+          const nx = cx + ndx, ny = cy + ndy;
+          if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH && !visited[ny * gridW + nx] && skinGrid[ny * gridW + nx]) {
+            stack.push(ny * gridW + nx);
+          }
+        }
+      }
+      if (count >= 4) {
+        clusters.push({ minX, minY, maxX, maxY, count });
+      }
+    }
+  }
+
+  if (clusters.length === 0) return [];
+
+  clusters.sort((a, b) => b.count - a.count);
+  const cellW = w / gridW;
+  const cellH = h / gridH;
+
+  return clusters.slice(0, 3).map(c => {
+    const bx = c.minX * cellW;
+    const by = c.minY * cellH;
+    const bw = (c.maxX - c.minX + 1) * cellW;
+    const bh = (c.maxY - c.minY + 1) * cellH;
+    const cx = bx + bw / 2;
+    const cy = by + bh / 2;
+    const distFromCenter = Math.sqrt(Math.pow((cx - w / 2) / (w / 2), 2) + Math.pow((cy - h / 2) / (h / 2), 2));
+    const score = c.count / (gridW * gridH) * (1 - distFromCenter * 0.5);
+    const pad = 0.15;
+    return {
+      box: {
+        x: Math.max(0, bx - bw * pad),
+        y: Math.max(0, by - bh * pad),
+        width: Math.min(w - Math.max(0, bx - bw * pad), bw * (1 + pad * 2)),
+        height: Math.min(h - Math.max(0, by - bh * pad), bh * (1 + pad * 2)),
+      },
+      score,
+    };
+  });
+};
+
 // ── Face detection + recognition ──
 export const detectFaces = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
   inputSize = 320
 ) => {
   const processed = preprocessFrame(input, inputSize);
-  return faceapi.detectAllFaces(processed, getDetectorOptions(inputSize));
+  return detectFacesSimple(processed);
 };
 
 export const extractFaceDescriptor = async (
@@ -456,7 +524,7 @@ export const extractFaceDescriptor = async (
   const vh = 'videoHeight' in input ? input.videoHeight : input.height;
 
   const processed = preprocessFrame(input, 640);
-  const detections = await faceapi.detectAllFaces(processed, getDetectorOptions(320));
+  const detections = detectFacesSimple(processed);
   if (detections.length === 0) return null;
 
   const scale = vw / processed.width;
@@ -474,7 +542,7 @@ export const extractFaceDescriptor = async (
 export const extractAllFaceDescriptors = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
   targetWidth = 480,
-  inputSize = 320
+  _inputSize = 320
 ) => {
   if (!modelsLoaded) await loadFaceModels();
   if (!isMobileFaceNetReady()) return [];
@@ -483,7 +551,7 @@ export const extractAllFaceDescriptors = async (
   const vh = 'videoHeight' in input ? input.videoHeight : input.height;
 
   const processed = preprocessFrame(input, targetWidth);
-  const detections = await faceapi.detectAllFaces(processed, getDetectorOptions(inputSize));
+  const detections = detectFacesSimple(processed);
 
   if (detections.length === 0) return [];
 
@@ -512,20 +580,21 @@ export const extractAllFaceDescriptors = async (
 export const detectAllFacesOnly = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
   targetWidth = 320,
-  inputSize = 320
+  _inputSize = 320
 ) => {
   const processed = preprocessFrame(input, targetWidth);
-  return faceapi.detectAllFaces(processed, getDetectorOptions(inputSize));
+  return detectFacesSimple(processed);
 };
 
 export const detectSingleFace = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
   targetWidth = 640,
-  inputSize = 320
+  _inputSize = 320
 ) => {
   if (!modelsLoaded) await loadFaceModels();
   const processed = preprocessFrame(input, targetWidth);
-  return faceapi.detectSingleFace(processed, getDetectorOptions(inputSize));
+  const faces = detectFacesSimple(processed);
+  return faces.length > 0 ? faces[0] : null;
 };
 
 // ── Comparison (cosine similarity) ──
@@ -535,7 +604,7 @@ export const compareFaces = (
 ): number => {
   try {
     const a = desc1 instanceof Float32Array ? desc1 : toFloat32(desc1);
-    if (a.length === 0) return 1;
+    if (a.length === 0 || a.length !== DESC_DIM) return 1;
     if (isMultiDescriptor(desc2)) return compareMultiDescriptor(a, desc2);
 
     let b: Float32Array;
@@ -543,19 +612,12 @@ export const compareFaces = (
     else if (Array.isArray(desc2)) { b = toFloat32(desc2); }
     else { b = toFloat32(desc2 as any); }
 
-    if (b.length === 0) return 1;
+    if (b.length === 0 || b.length !== DESC_DIM) return 1;
 
-    const aNorm = normalizeDescriptor(new Float32Array(a));
-    const bNorm = normalizeDescriptor(new Float32Array(b));
+    const aNorm = normalizeDescriptor(a);
+    const bNorm = normalizeDescriptor(b);
 
-  if (aNorm.length !== bNorm.length) {
-    const maxLen = Math.max(aNorm.length, bNorm.length);
-    const paddedA = new Float32Array(maxLen);
-    const paddedB = new Float32Array(maxLen);
-    paddedA.set(aNorm); paddedB.set(bNorm);
-    return 1 - cosineSimilarity(paddedA, paddedB);
-  }
-  return 1 - cosineSimilarity(aNorm, bNorm);
+    return 1 - cosineSimilarity(aNorm, bNorm);
   } catch {
     return 1;
   }
@@ -625,7 +687,11 @@ export const autoImproveDescriptor = (
   if (isMultiDescriptor(currentStored)) { md = currentStored; }
   else {
     const currentArray = toFloat32(currentStored as any);
-    const normalized = normalizeDescriptor(new Float32Array(currentArray));
+    if (currentArray.length !== DESC_DIM) {
+      const normalized = normalizeDescriptor(new Float32Array(newDescriptor));
+      return { main: Array.from(normalized), quality: newQuality, directions: newDirection, version: 2, descriptorVersion: 2 };
+    }
+    const normalized = normalizeDescriptor(currentArray);
     return { main: Array.from(normalized), quality: newQuality, directions: newDirection, version: 2, descriptorVersion: 2 };
   }
 
@@ -633,6 +699,10 @@ export const autoImproveDescriptor = (
   if (newQuality < (md.quality || 0) * 0.9) return null;
 
   const currentMain = toFloat32(md.main);
+  if (currentMain.length !== DESC_DIM) {
+    const normalized = normalizeDescriptor(new Float32Array(newDescriptor));
+    return { main: Array.from(normalized), quality: newQuality, directions: newDirection, version: 2, descriptorVersion: 2 };
+  }
   const blended = new Float32Array(DESC_DIM);
   for (let i = 0; i < DESC_DIM; i++) blended[i] = currentMain[i] * 0.7 + newDescriptor[i] * 0.3;
   const normalized = normalizeDescriptor(blended);
