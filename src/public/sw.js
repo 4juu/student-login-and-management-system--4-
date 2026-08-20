@@ -16,8 +16,8 @@ const PRECACHE_URLS = [
   '/favicon-16x16.png',
   '/favicon-32x32.png',
   '/favicon-48x48.png',
-  '/models/face-detect/tiny_face_detector_model-weights_manifest.json',
-  '/models/face-detect/tiny_face_detector_model-shard1',
+  '/models/blazeface/model.json',
+  '/models/blazeface/group1-shard1of1.bin',
   '/models/mobilefacenet/model.json',
   '/models/mobilefacenet/mobilefacenet.bin',
 ];

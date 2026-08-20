@@ -1,6 +1,7 @@
 import { compressFaceDescriptor, ensureDecompressed } from './faceCompression';
 import { getWorker, workerFindBestMatch, workerBatchMatchAll } from './faceWorker';
 import { loadMobileFaceNet, isMobileFaceNetReady, extractEmbedding, cosineSimilarity } from './mobileFaceNet';
+import { loadBlazeFace, isBlazeFaceReady, detectFacesBlaze } from './blazeFace';
 
 const DESC_DIM = 512;
 
@@ -104,19 +105,33 @@ export function getLoadProgress(): number { return _loadProgress; }
 export function isDetectorReady(): boolean { return _detectorReady; }
 export function isLandmarksReady(): boolean { return false; }
 
+const MIN_LOAD_MS = 5000;
+
 const loadModelsInternal = async (): Promise<void> => {
+  const t0 = performance.now();
   startPerfTimer('modelDownload');
 
-  _emitProgress({ stage: 'detector', stageIndex: 0, percent: 0, detail: 'جاري تحميل كاشف الوجه...' });
+  _emitProgress({ stage: 'detector', stageIndex: 0, percent: 0, detail: 'جاري تحميل كاشف الوجوه...' });
   await yieldToMain();
-  _detectorReady = true;
-  _emitProgress({ stage: 'detector', stageIndex: 0, percent: 50, detail: '✓ كاشف الوجه جاهز' });
+  try {
+    await loadBlazeFace();
+    _detectorReady = true;
+    _emitProgress({ stage: 'detector', stageIndex: 0, percent: 50, detail: '✓ كاشف الوجوه جاهز' });
+  } catch (e: any) {
+    _emitProgress({ stage: 'detector', stageIndex: 0, percent: 50, detail: '⚠ كاشف الوجوه - دولار ك FALLBACK' });
+    _detectorReady = true;
+  }
 
   _emitProgress({ stage: 'recognition', stageIndex: 1, percent: 50, detail: 'جاري تحميل موديل التعرف...' });
   await loadMobileFaceNet();
   _emitProgress({ stage: 'recognition', stageIndex: 1, percent: 100, detail: '✓ موديل التعرف جاهز' });
 
   endPerfTimer('modelDownload');
+
+  const elapsed = performance.now() - t0;
+  if (elapsed < MIN_LOAD_MS) {
+    await new Promise<void>(r => setTimeout(r, MIN_LOAD_MS - elapsed));
+  }
 };
 
 export const loadFaceModels = async (): Promise<void> => {
@@ -402,141 +417,34 @@ export class IOUTracker {
   }
 }
 
-// ── Simple face detection using skin color + center bias ──
-const isSkinPixel = (r: number, g: number, b: number): boolean => {
-  return r > 95 && g > 40 && b > 20 &&
-    r > g && r > b &&
-    (r - g) > 15 &&
-    Math.max(r, g, b) - Math.min(r, g, b) > 15;
-};
-
+// ── Face detection via BlazeFace ──
 interface SimpleDetection { box: { x: number; y: number; width: number; height: number }; score: number }
 
-const detectFacesSimple = (canvas: HTMLCanvasElement): SimpleDetection[] => {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return [];
-  const w = canvas.width;
-  const h = canvas.height;
-  const imageData = ctx.getImageData(0, 0, w, h);
-  const data = imageData.data;
-
-  const gridW = Math.ceil(w / 8);
-  const gridH = Math.ceil(h / 8);
-  const skinGrid = new Uint8Array(gridW * gridH);
-
-  for (let gy = 0; gy < gridH; gy++) {
-    for (let gx = 0; gx < gridW; gx++) {
-      const px = Math.floor((gx + 0.5) * (w / gridW));
-      const py = Math.floor((gy + 0.5) * (h / gridH));
-      let skin = 0;
-      let total = 0;
-      const step = 2;
-      for (let dy = -4; dy <= 4; dy += step) {
-        for (let dx = -4; dx <= 4; dx += step) {
-          const sx = px + dx;
-          const sy = py + dy;
-          if (sx < 0 || sx >= w || sy < 0 || sy >= h) continue;
-          const i = (sy * w + sx) * 4;
-          total++;
-          if (isSkinPixel(data[i], data[i + 1], data[i + 2])) skin++;
-        }
-      }
-      skinGrid[gy * gridW + gx] = total > 0 && skin / total > 0.4 ? 1 : 0;
-    }
-  }
-
-  const visited = new Uint8Array(gridW * gridH);
-  const clusters: Array<{ minX: number; minY: number; maxX: number; maxY: number; count: number }> = [];
-
-  for (let gy = 0; gy < gridH; gy++) {
-    for (let gx = 0; gx < gridW; gx++) {
-      if (visited[gy * gridW + gx] || !skinGrid[gy * gridW + gx]) continue;
-      const stack = [gy * gridW + gx];
-      let minX = gx, minY = gy, maxX = gx, maxY = gy, count = 0;
-      while (stack.length > 0) {
-        const idx = stack.pop()!;
-        if (visited[idx]) continue;
-        visited[idx] = 1;
-        const cx = idx % gridW;
-        const cy = Math.floor(idx / gridW);
-        count++;
-        minX = Math.min(minX, cx);
-        minY = Math.min(minY, cy);
-        maxX = Math.max(maxX, cx);
-        maxY = Math.max(maxY, cy);
-        for (const [ndx, ndy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-          const nx = cx + ndx, ny = cy + ndy;
-          if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH && !visited[ny * gridW + nx] && skinGrid[ny * gridW + nx]) {
-            stack.push(ny * gridW + nx);
-          }
-        }
-      }
-      if (count >= 4) {
-        clusters.push({ minX, minY, maxX, maxY, count });
-      }
-    }
-  }
-
-  if (clusters.length === 0) return [];
-
-  clusters.sort((a, b) => b.count - a.count);
-  const cellW = w / gridW;
-  const cellH = h / gridH;
-
-  return clusters.slice(0, 3).map(c => {
-    const bx = c.minX * cellW;
-    const by = c.minY * cellH;
-    const bw = (c.maxX - c.minX + 1) * cellW;
-    const bh = (c.maxY - c.minY + 1) * cellH;
-    const cx = bx + bw / 2;
-    const cy = by + bh / 2;
-    const distFromCenter = Math.sqrt(Math.pow((cx - w / 2) / (w / 2), 2) + Math.pow((cy - h / 2) / (h / 2), 2));
-    const score = c.count / (gridW * gridH) * (1 - distFromCenter * 0.5);
-    const pad = 0.15;
-    return {
-      box: {
-        x: Math.max(0, bx - bw * pad),
-        y: Math.max(0, by - bh * pad),
-        width: Math.min(w - Math.max(0, bx - bw * pad), bw * (1 + pad * 2)),
-        height: Math.min(h - Math.max(0, by - bh * pad), bh * (1 + pad * 2)),
-      },
-      score,
-    };
-  });
-};
-
-// ── Face detection + recognition ──
 export const detectFaces = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
   inputSize = 320
-) => {
-  const processed = preprocessFrame(input, inputSize);
-  return detectFacesSimple(processed);
+): Promise<SimpleDetection[]> => {
+  if (!isBlazeFaceReady()) return [];
+  const flip = 'videoWidth' in input;
+  const detections = await detectFacesBlaze(input, flip);
+  return detections;
 };
 
 export const extractFaceDescriptor = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ): Promise<Float32Array | null> => {
   if (!modelsLoaded) await loadFaceModels();
-  if (!isMobileFaceNetReady()) return null;
+  if (!isMobileFaceNetReady() || !isBlazeFaceReady()) return null;
 
   const vw = 'videoWidth' in input ? input.videoWidth : input.width;
   const vh = 'videoHeight' in input ? input.videoHeight : input.height;
 
-  const processed = preprocessFrame(input, 640);
-  const detections = detectFacesSimple(processed);
+  const flip = 'videoWidth' in input;
+  const detections = await detectFacesBlaze(input, flip);
   if (detections.length === 0) return null;
 
-  const scale = vw / processed.width;
   const best = detections[0];
-  const box = {
-    x: best.box.x * scale,
-    y: best.box.y * scale,
-    width: best.box.width * scale,
-    height: best.box.height * scale,
-  };
-
-  return extractEmbedding(input, box, vw, vh);
+  return extractEmbedding(input, best.box, vw, vh);
 };
 
 export const extractAllFaceDescriptors = async (
@@ -545,27 +453,20 @@ export const extractAllFaceDescriptors = async (
   _inputSize = 320
 ) => {
   if (!modelsLoaded) await loadFaceModels();
-  if (!isMobileFaceNetReady()) return [];
+  if (!isMobileFaceNetReady() || !isBlazeFaceReady()) return [];
 
   const vw = 'videoWidth' in input ? input.videoWidth : input.width;
   const vh = 'videoHeight' in input ? input.videoHeight : input.height;
 
-  const processed = preprocessFrame(input, targetWidth);
-  const detections = detectFacesSimple(processed);
+  const flip = 'videoWidth' in input;
+  const detections = await detectFacesBlaze(input, flip);
 
   if (detections.length === 0) return [];
 
-  const scale = vw / processed.width;
   const results: Array<{ detection: { box: { x: number; y: number; width: number; height: number }; score: number }; descriptor: Float32Array }> = [];
 
   for (const det of detections) {
-    const box = {
-      x: det.box.x * scale,
-      y: det.box.y * scale,
-      width: det.box.width * scale,
-      height: det.box.height * scale,
-    };
-    const descriptor = await extractEmbedding(input, box, vw, vh);
+    const descriptor = await extractEmbedding(input, det.box, vw, vh);
     if (descriptor) {
       results.push({
         detection: { box: det.box, score: det.score },
@@ -582,8 +483,9 @@ export const detectAllFacesOnly = async (
   targetWidth = 320,
   _inputSize = 320
 ) => {
-  const processed = preprocessFrame(input, targetWidth);
-  return detectFacesSimple(processed);
+  if (!isBlazeFaceReady()) return [];
+  const flip = 'videoWidth' in input;
+  return detectFacesBlaze(input, flip);
 };
 
 export const detectSingleFace = async (
@@ -591,9 +493,9 @@ export const detectSingleFace = async (
   targetWidth = 640,
   _inputSize = 320
 ) => {
-  if (!modelsLoaded) await loadFaceModels();
-  const processed = preprocessFrame(input, targetWidth);
-  const faces = detectFacesSimple(processed);
+  if (!isBlazeFaceReady()) return null;
+  const flip = 'videoWidth' in input;
+  const faces = await detectFacesBlaze(input, flip);
   return faces.length > 0 ? faces[0] : null;
 };
 
