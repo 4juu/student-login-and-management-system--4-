@@ -23,12 +23,14 @@ export default defineConfig({
     target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
-          'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/database'],
-          'face-api': ['face-api.js'],
-          'xlsx': ['xlsx-js-style'],
-          'icons': ['lucide-react'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) return 'react-vendor';
+            if (id.includes('firebase')) return 'firebase-vendor';
+            if (id.includes('face-api')) return 'face-api';
+            if (id.includes('xlsx') || id.includes('xlsx-js-style')) return 'xlsx';
+            if (id.includes('lucide-react')) return 'icons';
+          }
         },
       },
     },

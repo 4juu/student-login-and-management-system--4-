@@ -493,13 +493,8 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
       let detections: any[] = [];
       try {
         if (recognitionReady) {
-          // المرحلة 1: بحث رخيص عن الوجه بدقة منخفضة
-          const facesOnly = await detectAllFacesOnly(video, 320, 160);
-          if (!faceRunningRef.current || !mountedRef.current) return;
-          if (facesOnly.length > 0) {
-            // المرحلة 2: فقط عند وجود وجوه — استخراج البصمات الكاملة
-            detections = await extractAllFaceDescriptors(video, 320, 160);
-          }
+          // فريم واحد: كشف + استخراج البصمات في خطوة واحدة
+          detections = await extractAllFaceDescriptors(video, 320, 160);
         } else if (isDetectorReady()) {
           detections = await detectAllFacesOnly(video, 320, 160);
         } else {
@@ -532,7 +527,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
             const det = detections[fi];
             const box = det.detection.box;
             const qScore = det.detection.score;
-            if (qScore < 0.65 || box.width < 30 || box.height < 30) continue;
+            if (qScore < 0.45 || box.width < 20 || box.height < 20) continue;
 
             const boxKey = `${Math.round(box.x / 40)}_${Math.round(box.y / 40)}`;
 
@@ -615,7 +610,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           for (const det of detections) {
             const box = det.detection.box;
             const qScore = det.detection.score;
-            if (qScore < 0.65 || box.width < 30 || box.height < 30) continue;
+            if (qScore < 0.45 || box.width < 20 || box.height < 20) continue;
             const track = tracked.find((t: any) => calculateIoU(t.box, box) > 0.3);
             let matchDesc = normalizeDescriptor(new Float32Array(det.descriptor));
 
@@ -734,7 +729,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
         currentIntervalRef.current = 120;
         lastFaceTimeRef.current = performance.now();
       } else if (performance.now() - lastFaceTimeRef.current > 4000) {
-        currentIntervalRef.current = 500;
+        currentIntervalRef.current = 350;
       } else {
         currentIntervalRef.current = 250;
       }
