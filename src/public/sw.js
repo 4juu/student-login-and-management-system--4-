@@ -19,7 +19,7 @@ const PRECACHE_URLS = [
   '/models/face-detect/tiny_face_detector_model-weights_manifest.json',
   '/models/face-detect/tiny_face_detector_model-shard1',
   '/models/mobilefacenet/model.json',
-  '/models/mobilefacenet/weights.bin',
+  '/models/mobilefacenet/mobilefacenet.bin',
 ];
 
 self.addEventListener('install', (event) => {

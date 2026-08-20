@@ -91,8 +91,10 @@ export const decompressFaceDescriptor = (compressed: number[] | string | any): n
   if (typeof compressed === 'string') {
     try {
       const decoded = atob(compressed);
-      const buffer = new Uint8Array(decoded.length);
-      for (let i = 0; i < decoded.length; i++) {
+      const byteLen = decoded.length;
+      if (byteLen === 0 || byteLen % 4 !== 0) return [];
+      const buffer = new Uint8Array(byteLen);
+      for (let i = 0; i < byteLen; i++) {
         buffer[i] = decoded.charCodeAt(i);
       }
       const float32 = new Float32Array(buffer.buffer);

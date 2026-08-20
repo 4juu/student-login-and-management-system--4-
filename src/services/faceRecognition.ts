@@ -297,32 +297,39 @@ export const buildMultiDescriptor = (
 };
 
 const toFloat32 = (input: any): Float32Array => {
-  if (input instanceof Float32Array) return input;
-  if (input && typeof input === 'object' && !Array.isArray(input) && 'main' in input) {
-    return toFloat32(input.main);
-  }
-  if (typeof input === 'string') {
-    return new Float32Array(ensureDecompressed(input));
-  }
-  if (Array.isArray(input)) {
-    if (input.length === DESC_DIM) return new Float32Array(input);
-    if (input.length === 128) return new Float32Array(input);
-    if (input.length > 0 && input.length < 128) {
-      const looksCompressed =
-        input.length % 2 === 0 &&
-        Number.isInteger(input[0]) && input[0] >= 0 && input[0] < 128 &&
-        input.length >= 4 &&
-        Number.isInteger(input[2]) && input[2] >= 0 && input[2] < 128;
-      if (looksCompressed) {
-        return new Float32Array(ensureDecompressed(input));
+  try {
+    if (input instanceof Float32Array) return input;
+    if (input && typeof input === 'object' && !Array.isArray(input) && 'main' in input) {
+      return toFloat32(input.main);
+    }
+    if (typeof input === 'string') {
+      const arr = ensureDecompressed(input);
+      return arr.length > 0 ? new Float32Array(arr) : new Float32Array(0);
+    }
+    if (Array.isArray(input)) {
+      if (input.length === DESC_DIM) return new Float32Array(input);
+      if (input.length === 128) return new Float32Array(input);
+      if (input.length > 0 && input.length < 128) {
+        const looksCompressed =
+          input.length % 2 === 0 &&
+          Number.isInteger(input[0]) && input[0] >= 0 && input[0] < 128 &&
+          input.length >= 4 &&
+          Number.isInteger(input[2]) && input[2] >= 0 && input[2] < 128;
+        if (looksCompressed) {
+          const arr = ensureDecompressed(input);
+          return arr.length > 0 ? new Float32Array(arr) : new Float32Array(0);
+        }
       }
+      if (input.length > 0 && input.every(v => Number.isInteger(v))) {
+        const arr = ensureDecompressed(input);
+        return arr.length > 0 ? new Float32Array(arr) : new Float32Array(0);
+      }
+      return new Float32Array(input);
     }
-    if (input.length > 0 && input.every(v => Number.isInteger(v))) {
-      return new Float32Array(ensureDecompressed(input));
-    }
-    return new Float32Array(input);
+    return new Float32Array(0);
+  } catch {
+    return new Float32Array(0);
   }
-  return new Float32Array(input);
 };
 
 export const compareMultiDescriptor = (query: Float32Array, stored: MultiDescriptor): number => {
@@ -526,18 +533,20 @@ export const compareFaces = (
   desc1: Float32Array | number[],
   desc2: Float32Array | number[] | string | MultiDescriptor
 ): number => {
-  const a = desc1 instanceof Float32Array ? desc1 : new Float32Array(desc1);
-  if (isMultiDescriptor(desc2)) return compareMultiDescriptor(a, desc2);
+  try {
+    const a = desc1 instanceof Float32Array ? desc1 : toFloat32(desc1);
+    if (a.length === 0) return 1;
+    if (isMultiDescriptor(desc2)) return compareMultiDescriptor(a, desc2);
 
-  let b: Float32Array;
-  if (typeof desc2 === 'string') { b = new Float32Array(ensureDecompressed(desc2)); }
-  else if (Array.isArray(desc2)) {
-    if (desc2.length < DESC_DIM) { b = new Float32Array(ensureDecompressed(desc2)); }
-    else { b = new Float32Array(desc2); }
-  } else { b = toFloat32(desc2 as any); }
+    let b: Float32Array;
+    if (typeof desc2 === 'string') { b = toFloat32(desc2); }
+    else if (Array.isArray(desc2)) { b = toFloat32(desc2); }
+    else { b = toFloat32(desc2 as any); }
 
-  const aNorm = normalizeDescriptor(new Float32Array(a));
-  const bNorm = normalizeDescriptor(new Float32Array(b));
+    if (b.length === 0) return 1;
+
+    const aNorm = normalizeDescriptor(new Float32Array(a));
+    const bNorm = normalizeDescriptor(new Float32Array(b));
 
   if (aNorm.length !== bNorm.length) {
     const maxLen = Math.max(aNorm.length, bNorm.length);
@@ -547,6 +556,9 @@ export const compareFaces = (
     return 1 - cosineSimilarity(paddedA, paddedB);
   }
   return 1 - cosineSimilarity(aNorm, bNorm);
+  } catch {
+    return 1;
+  }
 };
 
 export interface FaceMatchResult<T> {
