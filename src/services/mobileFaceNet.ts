@@ -12,6 +12,20 @@ export const getMobileFaceNetModel = (): tf.GraphModel | null => model;
 export const isMobileFaceNetReady = (): boolean => model !== null;
 export const getEmbeddingDim = () => EMBEDDING_DIM;
 
+async function ensureBackend(): Promise<void> {
+  const current = tf.getBackend();
+  if (current && current !== 'cpu') return;
+  try {
+    await tf.setBackend('webgl');
+    await tf.ready();
+  } catch {
+    try {
+      await tf.setBackend('cpu');
+      await tf.ready();
+    } catch {}
+  }
+}
+
 export const loadMobileFaceNet = async (): Promise<tf.GraphModel> => {
   if (model) return model;
   if (loadPromise) return loadPromise;
@@ -19,6 +33,7 @@ export const loadMobileFaceNet = async (): Promise<tf.GraphModel> => {
   loadPromise = (async () => {
     loading = true;
     try {
+      await ensureBackend();
       model = await tf.loadGraphModel(MODEL_URL);
       const dummy = tf.zeros([1, INPUT_SIZE, INPUT_SIZE, 3]);
       const warmup = model.predict(dummy) as tf.Tensor;

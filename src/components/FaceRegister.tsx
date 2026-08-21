@@ -151,18 +151,26 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({ students, onUpdateSt
   // ── حلقة الكشف المستمرة ──
   useEffect(() => {
     if (step !== 'capture' || !cameraReady || !videoReady || capturing || !videoRef.current || !modelsLoaded) return;
+    let errorCount = 0;
     detectIntervalRef.current = window.setInterval(async () => {
       if (!videoRef.current || !mountedRef.current) return;
       try {
         const det = await detectSingleFace(videoRef.current, 320, 224);
         if (!mountedRef.current) return;
+        errorCount = 0;
         if (det) {
           setFaceDetected(true);
           setDetBox(det.box);
         } else {
           setFaceDetected(false);
         }
-      } catch {}
+      } catch (e: any) {
+        errorCount++;
+        if (errorCount >= 3) {
+          setError('خطأ في كشف الوجه — قد لا يدعم جهازك WebGL. جرّب متصفح Chrome.');
+          if (detectIntervalRef.current) { clearInterval(detectIntervalRef.current); detectIntervalRef.current = null; }
+        }
+      }
     }, 250);
     return () => { if (detectIntervalRef.current) { clearInterval(detectIntervalRef.current); detectIntervalRef.current = null; } };
   }, [cameraReady, videoReady, capturing, step, currentIndex]);
