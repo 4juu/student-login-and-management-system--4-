@@ -440,7 +440,12 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   );
 
   return createPortal(
-    <div dir="rtl" className={`fixed inset-0 z-[9999] flex flex-col ${kiosk ? 'bg-black' : 'bg-slate-950/95 backdrop-blur-sm'}`}>
+    <div
+      dir="rtl"
+      className={`fixed inset-0 z-[9999] flex flex-col ${kiosk ? 'bg-black' : 'bg-slate-950/95 backdrop-blur-sm'}`}
+      onTouchMove={(e) => { e.preventDefault(); }}
+      style={{ touchAction: 'none' }}
+    >
       {!engineReady && <EngineOverlay progress={progress} error={error} onRetry={retry} onCancel={onClose} />}
 
       {/* الشريط العلوي */}
@@ -467,7 +472,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
 
       {/* أزرار عائمة داخل الكاميرا — всегда ظاهرة */}
       {engineReady && (
-        <div className="absolute top-3 left-3 right-3 z-30 flex items-center justify-between pointer-events-none">
+        <div className="absolute top-3 left-3 z-30 flex items-center gap-2 pointer-events-none">
           <button
             onClick={onClose}
             aria-label="إغلاق"
