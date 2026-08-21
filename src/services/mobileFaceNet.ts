@@ -132,11 +132,24 @@ export const extractEmbedding = async (
 ): Promise<Float32Array | null> => {
   if (!model) return null;
 
-  const input = cropAndResizeFace(source, box, sourceWidth, sourceHeight);
   try {
-    return await predictAndNormalize(input);
-  } finally {
-    input.dispose();
+    const input = cropAndResizeFace(source, box, sourceWidth, sourceHeight);
+    try {
+      return await predictAndNormalize(input);
+    } finally {
+      input.dispose();
+    }
+  } catch (e: any) {
+    if (e?.message?.includes('shader') || e?.message?.includes('link') || e?.message?.includes('WebGL') || e?.message?.includes('Backend')) {
+      await fallbackToCPU();
+      const input = cropAndResizeFace(source, box, sourceWidth, sourceHeight);
+      try {
+        return await predictAndNormalize(input);
+      } finally {
+        input.dispose();
+      }
+    }
+    throw e;
   }
 };
 

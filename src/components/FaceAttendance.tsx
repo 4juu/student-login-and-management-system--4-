@@ -724,7 +724,10 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
         }
 
         drawBoxes(video, canvas, detectedFaces, facing, recognitionReady);
-      } catch {}
+      } catch (e: any) {
+        console.warn('Face detection frame error:', e?.message);
+        drawBoxes(video, canvas, detectedFaces, facing, recognitionReady);
+      }
       finally {
         processingRef.current = false;
       }
