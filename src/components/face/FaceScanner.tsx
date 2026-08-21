@@ -472,7 +472,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
 
       {/* أزرار عائمة داخل الكاميرا — всегда ظاهرة */}
       {engineReady && (
-        <div className="absolute top-3 left-3 z-30 flex items-center gap-2 pointer-events-none">
+        <div className="absolute left-3 z-30 flex items-center gap-2 pointer-events-none" style={{ top: 'calc(env(safe-area-inset-top, 12px) + 12px)' }}>
           <button
             onClick={onClose}
             aria-label="إغلاق"
@@ -523,7 +523,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
 
         {/* أزرار التقريب — تعمل مع الكاميرا الأمامية والخلفية */}
         {engineReady && cameraReady && (
-          <div className="absolute bottom-4 left-3 flex items-center gap-1 rounded-full bg-black/55 backdrop-blur-md border border-white/10 p-1 shadow-lg pointer-events-auto">
+          <div className="absolute left-3 flex items-center gap-1 rounded-full bg-black/55 backdrop-blur-md border border-white/10 p-1 shadow-lg pointer-events-auto" style={{ bottom: 'calc(env(safe-area-inset-bottom, 16px) + 16px)' }}>
             <button
               onClick={() => setZoom(z => Math.max(1, Math.round((z - ZOOM_STEP) * 100) / 100))}
               disabled={zoom <= 1}
@@ -543,7 +543,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
         )}
 
         {/* شريط الحالة */}
-        <div className="absolute bottom-4 inset-x-0 flex justify-center pointer-events-none px-4">
+        <div className="absolute inset-x-0 flex justify-center pointer-events-none px-4" style={{ bottom: 'calc(env(safe-area-inset-bottom, 16px) + 16px)' }}>
           <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-extrabold backdrop-blur-md transition-all duration-300 ${statusPill.cls}`}>
             <span>{statusPill.icon}</span>
             <span>{statusPill.text}</span>
