@@ -15,6 +15,7 @@ import {
   hasValidDescriptor,
   l2Normalize,
 } from '../../services/faceAI/descriptors';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface FaceEnrollModalProps {
   students: Student[];
@@ -43,19 +44,27 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
 }) => {
   const { ready: engineReady, progress, error, retry } = useFaceAI();
 
-  const [phase, setPhase] = useState<'select' | 'live' | 'summary'>(initialSelectedIds?.length ? 'live' : 'select');
+  // قائمة الانتظار: نحتفظ فقط بالطلاب الموجودين فعلاً في القائمة
+  const validPreset = useMemo(
+    () => (initialSelectedIds ?? []).filter(id => students.some(s => s.id === id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const [phase, setPhase] = useState<'select' | 'live' | 'summary'>(validPreset.length ? 'live' : 'select');
   const [selected, setSelected] = useState<Set<string>>(new Set(initialSelectedIds ?? []));
   const [search, setSearch] = useState('');
-  const [queue] = useState<string[]>(() => {
-    if (initialSelectedIds?.length) return [...initialSelectedIds];
-    return [];
-  });
+  const queueRef = useRef<string[]>(validPreset);
   const [qi, setQi] = useState(0);
   const [samples, setSamples] = useState(0);
   const [feedback, setFeedback] = useState('وجّه الوجه داخل الدائرة');
   const [flash, setFlash] = useState<'ok' | 'fail' | null>(null);
   const [results, setResults] = useState<Result[]>([]);
   const [cameraReady, setCameraReady] = useState(false);
+  const [camError, setCamError] = useState(false);
+
+  // عزل النافذة عن تمرير الصفحة الخلفية
+  useBodyScrollLock(true);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -78,10 +87,10 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
   }, [students, search]);
 
   const currentStudent = useMemo(
-    () => students.find(s => s.id === (queue[qi] ?? '')),
-    [students, queue, qi],
+    () => students.find(s => s.id === queueRef.current[qi]),
+    [students, qi],
   );
-  const total = queue.length;
+  const total = queueRef.current.length;
 
   // ── الكاميرا ──
   useEffect(() => {
@@ -103,6 +112,7 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
         setCameraReady(true);
       } catch (e) {
         console.error('[face-enroll] فشل فتح الكاميرا:', e);
+        if (!cancelled) setCamError(true);
       }
     })();
     return () => {
@@ -110,10 +120,14 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
       localStream?.getTracks().forEach(t => t.stop());
       streamRef.current = null;
       setCameraReady(false);
+      setCamError(false);
     };
   }, [engineReady, phase]);
 
   // ── إنهاء طالب والانتقال للتالي ──
+  const qiRef = useRef(qi);
+  qiRef.current = qi;
+
   const finishStudent = useCallback((studentId: string, name: string, ok: boolean, reason?: string) => {
     setResults(prev => [...prev, { studentId, name, ok, reason }]);
     setFlash(ok ? 'ok' : 'fail');
@@ -124,10 +138,10 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
     setTimeout(() => {
       if (!mountedRef.current) return;
       setFeedback('وجّه الوجه داخل الدائرة');
-      if (qi + 1 >= queue.length) setPhase('summary');
+      if (qiRef.current + 1 >= queueRef.current.length) setPhase('summary');
       else setQi(i => i + 1);
     }, 1000);
-  }, [qi, queue.length]);
+  }, []);
 
   // ── حلقة الالتقاط ──
   useEffect(() => {
@@ -251,13 +265,24 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
 
   const startEnrollment = () => {
     if (selected.size === 0) return;
-    queue.length = 0;
-    queue.push(...selected);
+    queueRef.current = [...selected];
     setResults([]);
     setSamples(0);
     samplesDataRef.current = [];
+    lastSampleAtRef.current = 0;
     setQi(0);
     setPhase('live');
+  };
+
+  /** تخطي الطالب الحالي دون حفظ */
+  const skipStudent = () => {
+    if (!currentStudent) return;
+    setResults(prev => [...prev, { studentId: currentStudent.id, name: currentStudent.name, ok: false, reason: 'تم التخطي' }]);
+    samplesDataRef.current = [];
+    setSamples(0);
+    setFeedback('وجّه الوجه داخل الدائرة');
+    if (qiRef.current + 1 >= queueRef.current.length) setPhase('summary');
+    else setQi(i => i + 1);
   };
 
   const toggleStudent = (id: string) => setSelected(prev => {
@@ -272,7 +297,7 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
     <div dir="rtl" className="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-sm flex items-center justify-center p-3">
       {!engineReady && <EngineOverlay progress={progress} error={error} onRetry={retry} onCancel={onClose} />}
 
-      <div className="bg-slate-900 border border-white/10 rounded-3xl shadow-2xl w-full max-w-lg max-h-[96vh] overflow-y-auto">
+      <div className="bg-slate-900 border border-white/10 rounded-3xl shadow-2xl w-full max-w-lg max-h-[96vh] overflow-y-auto overscroll-contain">
         {/* رأس */}
         <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur px-5 py-4 border-b border-white/8 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shrink-0">
@@ -374,9 +399,18 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
                 </div>
               )}
 
-              {!cameraReady && (
+              {!cameraReady && !camError && (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="inline-block w-9 h-9 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+
+              {camError && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 text-center px-4">
+                  <span className="text-3xl mb-2">🚫</span>
+                  <p className="text-red-300 font-bold text-sm">تعذر فتح الكاميرا</p>
+                  <p className="text-slate-400 text-xs mt-1">تأكد من منح إذن الكاميرا للموقع</p>
+                  <button onClick={onClose} className="mt-3 bg-white/10 hover:bg-white/20 text-white text-xs font-bold px-4 py-2 rounded-lg transition">إغلاق</button>
                 </div>
               )}
             </div>
@@ -395,9 +429,14 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
               ))}
             </div>
 
-            <button onClick={onClose} className="w-full py-2.5 rounded-xl bg-white/6 hover:bg-white/12 text-slate-300 text-sm font-bold transition">
-              إيقاف وإغلاق
-            </button>
+            <div className="flex gap-2">
+              <button onClick={skipStudent} className="flex-1 py-2.5 rounded-xl bg-white/6 hover:bg-white/12 text-slate-300 text-sm font-bold transition">
+                تخطي الطالب
+              </button>
+              <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-white/6 hover:bg-white/12 text-slate-300 text-sm font-bold transition">
+                إيقاف وإغلاق
+              </button>
+            </div>
           </div>
         )}
 

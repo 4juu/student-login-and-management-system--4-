@@ -15,6 +15,7 @@ import {
   hasValidDescriptor,
   MATCH_LOOSE,
 } from '../../services/faceAI/descriptors';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface FaceScannerProps {
   students: Student[];
@@ -39,6 +40,8 @@ interface LogEntry {
 
 const RECOGNITION_COOLDOWN = 30_000;
 const MIN_FACE_PX = 56;
+const MAX_ZOOM = 3;
+const ZOOM_STEP = 0.25;
 
 const AVATAR_COLORS = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-cyan-500', 'bg-violet-500'];
 
@@ -64,9 +67,13 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
   const [groupMode, setGroupMode] = useState(false);
   const [status, setStatus] = useState<ScanStatus>('idle');
-  const [statusName, setStatusName] = useState('');
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [kiosk, setKiosk] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [hasHwZoom, setHasHwZoom] = useState(false);
+
+  // عزل النافذة عن تمرير الصفحة الخلفية
+  useBodyScrollLock(true);
 
   const roster = useMemo(() => students.filter(s => hasValidDescriptor(s.faceDescriptor)), [students]);
   const rosterRef = useRef(roster);
@@ -77,6 +84,22 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   markRef.current = onMarkAttendance;
 
   const cooldowns = useRef(new Map<string, number>());
+  const hwZoomRange = useRef<{ min: number; max: number; step: number } | null>(null);
+  const loggedIdsRef = useRef(new Set<string>());
+
+  // ── تطبيق التقريب العتادي إن كان مدعوماً ──
+  const digitalZoom = hasHwZoom ? 1 : zoom;
+
+  useEffect(() => {
+    if (!cameraReady || !hasHwZoom) return;
+    const range = hwZoomRange.current;
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track || !range) return;
+    const target = range.min + ((range.max - range.min) * (zoom - 1)) / (MAX_ZOOM - 1);
+    track.applyConstraints({
+      advanced: [{ zoom: Math.min(range.max, Math.max(range.min, target)) } as unknown as MediaTrackConstraintSet],
+    }).catch(() => {});
+  }, [zoom, hasHwZoom, cameraReady, facing]);
 
   // ── صوت النجاح + اهتزاز ──
   const celebrate = useCallback(() => {
@@ -109,6 +132,25 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
         localStream = await openCameraStream(facing);
         if (cancelled) { localStream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = localStream;
+
+        // فحص دعم التقريب العتادي في الكاميرا الحالية (أمامية/خلفية)
+        try {
+          const track = localStream.getVideoTracks()[0];
+          const caps = typeof track?.getCapabilities === 'function'
+            ? (track.getCapabilities() as MediaTrackCapabilities & { zoom?: { min: number; max: number; step: number } })
+            : null;
+          if (caps?.zoom && caps.zoom.max > caps.zoom.min) {
+            hwZoomRange.current = caps.zoom;
+            if (!cancelled) setHasHwZoom(true);
+          } else {
+            hwZoomRange.current = null;
+            if (!cancelled) setHasHwZoom(false);
+          }
+        } catch {
+          hwZoomRange.current = null;
+          if (!cancelled) setHasHwZoom(false);
+        }
+
         if (videoRef.current) {
           videoRef.current.srcObject = localStream;
           await videoRef.current.play().catch(() => {});
@@ -116,6 +158,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
           await waitVideoDimensionsStable(videoRef.current);
         }
         if (cancelled) return;
+        setZoom(1);
         setCameraReady(true);
       } catch (e) {
         console.error('[face-scanner] فشل فتح الكاميرا:', e);
@@ -157,6 +200,14 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
       const sxScale = cw / vw, syScale = ch / vh;
       const mirrored = facing === 'user';
 
+      // محاكاة التقريب رقمياً على طبقة الرسم لتطابق ما يراه المستخدم
+      g.save();
+      if (digitalZoom > 1) {
+        g.translate(cw / 2, ch / 2);
+        g.scale(digitalZoom, digitalZoom);
+        g.translate(-cw / 2, -ch / 2);
+      }
+
       for (const f of faces) {
         const bx = mirrored ? (vw - f.box.x - f.box.width) * sxScale : f.box.x * sxScale;
         const by = f.box.y * syScale;
@@ -197,6 +248,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
           g.fillText(text, x1 + (bw + pad * 2) / 2, ly + 14.5);
         }
       }
+      g.restore();
     };
 
     const tick = async () => {
@@ -274,7 +326,9 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                 sub: alreadyMarked ? 'مسجل ✓' : undefined,
                 color: '#34d399',
               });
-              if (alreadyMarked && !logs.some(l => l.id === student.id)) {
+              // سجل واحد فقط لكل طالب طوال الجلسة — لا تكرار
+              if (alreadyMarked && !loggedIdsRef.current.has(student.id)) {
+                loggedIdsRef.current.add(student.id);
                 pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'already', confidence: match.confidence });
               }
               continue;
@@ -283,14 +337,16 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
             cooldowns.current.set(student.id, now);
             markedAny = true;
             liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'حاضر ✓', color: '#34d399' });
-            pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'marked', confidence: match.confidence });
+            if (!loggedIdsRef.current.has(student.id)) {
+              loggedIdsRef.current.add(student.id);
+              pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'marked', confidence: match.confidence });
+            }
 
             Promise.resolve(markRef.current(student)).catch(e => console.error('[face-scanner] فشل تسجيل الحضور:', e));
           }
 
           if (markedAny) {
             setStatus('marked');
-            setStatusName(results.length > 0 ? '' : '');
             celebrate();
             setTimeout(() => { if (mountedRef.current) setStatus('scanning'); }, 1600);
           } else if (anyUnknown) {
@@ -316,7 +372,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
       if (loopTimerRef.current) clearTimeout(loopTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engineReady, cameraReady, groupMode, celebrate, pushLog]);
+  }, [engineReady, cameraReady, groupMode, digitalZoom, celebrate, pushLog]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -397,7 +453,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
           muted
           autoPlay
           className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${cameraReady ? 'opacity-100' : 'opacity-0'}`}
-          style={{ transform: facing === 'user' ? 'scaleX(-1)' : 'none' }}
+          style={{ transform: `${facing === 'user' ? 'scaleX(-1) ' : ''}scale(${digitalZoom})` }}
         />
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
@@ -420,11 +476,32 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
           </div>
         )}
 
+        {/* أزرار التقريب — تعمل مع الكاميرا الأمامية والخلفية */}
+        {engineReady && cameraReady && (
+          <div className="absolute bottom-4 left-3 flex items-center gap-1 rounded-full bg-black/55 backdrop-blur-md border border-white/10 p-1 shadow-lg pointer-events-auto">
+            <button
+              onClick={() => setZoom(z => Math.max(1, Math.round((z - ZOOM_STEP) * 100) / 100))}
+              disabled={zoom <= 1}
+              aria-label="تصغير"
+              className="w-8 h-8 rounded-full text-white text-lg font-bold leading-none disabled:opacity-30 hover:bg-white/10 active:scale-90 flex items-center justify-center transition"
+            >−</button>
+            <span className="text-white text-[11px] font-extrabold w-10 text-center tabular-nums">
+              {zoom.toFixed(2).replace(/\.?0+$/, '')}×{hasHwZoom ? '' : ''}
+            </span>
+            <button
+              onClick={() => setZoom(z => Math.min(MAX_ZOOM, Math.round((z + ZOOM_STEP) * 100) / 100))}
+              disabled={zoom >= MAX_ZOOM}
+              aria-label="تكبير"
+              className="w-8 h-8 rounded-full text-white text-lg font-bold leading-none disabled:opacity-30 hover:bg-white/10 active:scale-90 flex items-center justify-center transition"
+            >+</button>
+          </div>
+        )}
+
         {/* شريط الحالة */}
         <div className="absolute bottom-4 inset-x-0 flex justify-center pointer-events-none px-4">
           <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-extrabold backdrop-blur-md transition-all duration-300 ${statusPill.cls}`}>
             <span>{statusPill.icon}</span>
-            <span>{statusName || statusPill.text}</span>
+            <span>{statusPill.text}</span>
           </div>
         </div>
 
@@ -444,7 +521,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
 
       {/* قائمة السجل */}
       {!kiosk && (
-        <aside className="shrink-0 h-36 sm:h-44 bg-slate-900/85 border-t border-white/8 overflow-y-auto">
+        <aside className="shrink-0 h-36 sm:h-44 bg-slate-900/85 border-t border-white/8 overflow-y-auto overscroll-contain">
           {logs.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-1">
               <span className="text-2xl opacity-50">📋</span>

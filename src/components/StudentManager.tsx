@@ -1330,7 +1330,14 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
       )}
 
       {showFaceRegister && onUpdateStudent && (
-        <Suspense fallback={null}>
+        <Suspense fallback={
+          <div className="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-sm flex items-center justify-center">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-10 h-10 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" />
+              <p className="text-slate-300 text-sm font-bold">جاري تحضير أداة التسجيل...</p>
+            </div>
+          </div>
+        }>
           <LazyFaceEnroll
             students={students}
             onUpdateStudent={onUpdateStudent}
