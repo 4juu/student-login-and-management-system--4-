@@ -26,7 +26,6 @@ export default defineConfig({
         manualChunks: {
           'react-vendor': ['react', 'react-dom'],
           'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/database'],
-          'face-api': ['face-api.js'],
           'xlsx': ['xlsx-js-style'],
           'icons': ['lucide-react'],
         },

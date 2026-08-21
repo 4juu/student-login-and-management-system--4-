@@ -12,7 +12,6 @@ import {
 import { useCameraReady } from '../hooks/useCameraReady';
 import { useFaceModels } from '../hooks/useFaceModels';
 import { FaceModelLoadingOverlay } from './FaceModelLoadingOverlay';
-import * as faceapi from 'face-api.js';
 import { createPortal } from 'react-dom';
 
 interface FaceRegisterProps {
@@ -39,7 +38,7 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({ students, onUpdateSt
   const [error, setError] = useState('');
   const [lastCapturedName, setLastCapturedName] = useState('');
 
-  const [detLandmarks, setDetLandmarks] = useState<faceapi.FaceLandmarks68 | null>(null);
+  const [detLandmarks, setDetLandmarks] = useState<any>(null);
   const [detBox, setDetBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [detFrameW, setDetFrameW] = useState(0);
   const [detFrameH, setDetFrameH] = useState(0);
@@ -165,7 +164,7 @@ export const FaceRegister: React.FC<FaceRegisterProps> = ({ students, onUpdateSt
         if (!mountedRef.current) return;
         if (det) {
           setFaceDetected(true);
-          setDetLandmarks(det.landmarks);
+          setDetLandmarks(null);
           setDetBox({ x: det.detection.box.x, y: det.detection.box.y, width: det.detection.box.width, height: det.detection.box.height });
           setDetFrameW(det.detection.box.width > 0 ? (() => { const v = videoRef.current; return v ? v.videoWidth : 640; })() : 640);
           setDetFrameH(det.detection.box.height > 0 ? (() => { const v = videoRef.current; return v ? v.videoHeight : 480; })() : 480);

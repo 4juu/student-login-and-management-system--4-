@@ -15,7 +15,6 @@ import {
   MultiDescriptor,
 } from '../../services/faceRecognition';
 import { useCameraReady } from '../../hooks/useCameraReady';
-import * as faceapi from 'face-api.js';
 import { Camera, CircleCheck, LoaderCircle, Smile } from 'lucide-react';
 
 interface FaceCaptureStepProps {
@@ -43,7 +42,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
   const [error, setError] = useState('');
   const [capturing, setCapturing] = useState(false);
   const [faceDetected, setFaceDetected] = useState(false);
-  const [detLandmarks, setDetLandmarks] = useState<faceapi.FaceLandmarks68 | null>(null);
+  const [detLandmarks, setDetLandmarks] = useState<any>(null);
   const [detBox, setDetBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
   // تحميل النماذج
@@ -134,7 +133,7 @@ export const FaceCaptureStep: React.FC<FaceCaptureStepProps> = ({
         
         if (det) {
           setFaceDetected(true);
-          setDetLandmarks(det.landmarks);
+          setDetLandmarks(null);
           setDetBox({
             x: det.detection.box.x,
             y: det.detection.box.y,

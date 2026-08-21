@@ -10,9 +10,10 @@
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
+    "@tensorflow-models/blazeface": "^0.1.0",
+    "@tensorflow/tfjs": "^4.22.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "2.1.1",
-    "face-api.js": "^0.22.2",
     "file-saver": "^2.0.5",
     "firebase": "^12.12.1",
     "fuse.js": "^7.3.0",

@@ -10,6 +10,7 @@
  * التجارب أثبتت أن 32 بُعد كافية لدقة 98%+
  */
 const TOP_DIMS = 32;
+const DESC_DIM = 192;
 
 /**
  * 🗜️ ضغط بصمة وجه → توفير 70% حجم
@@ -53,17 +54,17 @@ export const compressFaceDescriptor = (
 };
 
 /**
- * 🔧 ضغط array من 128 → 64 رقم
+ * 🔧 ضغط array من DESC_DIM → 64 رقم
  */
 const compressArray = (arr: number[]): number[] => {
   if (!arr || arr.length === 0) return [];
 
-  if (arr.length < 128) {
+  if (arr.length < DESC_DIM) {
     return arr.map(v => Math.round(Number(v) * 10000) / 10000);
   }
 
   // ✅ اختيار أهم 32 قيمة (تحسين من 48)
-  const indexed = arr.slice(0, 128).map((v, i) => ({
+  const indexed = arr.slice(0, DESC_DIM).map((v, i) => ({
     abs: Math.abs(Number(v)),
     i,
     val: Number(v),
@@ -83,7 +84,7 @@ const compressArray = (arr: number[]): number[] => {
 };
 
 /**
- * 📦 فك ضغط → 128 رقم
+ * 📦 فك ضغط → DESC_DIM رقم
  */
 export const decompressFaceDescriptor = (compressed: number[] | string | any): number[] => {
   if (!compressed) return [];
@@ -111,18 +112,18 @@ export const decompressFaceDescriptor = (compressed: number[] | string | any): n
   if (!Array.isArray(compressed)) return [];
   if (compressed.length === 0) return [];
 
-  // ✅ 128 رقم = غير مضغوط
-  if (compressed.length === 128) {
+  // ✅ DESC_DIM رقم = غير مضغوط
+  if (compressed.length === DESC_DIM) {
     return compressed.map(v => Number(v));
   }
 
   // ✅ مضغوط [index, value, index, value, ...]
   if (compressed.length % 2 === 0 && compressed.length <= TOP_DIMS * 2) {
-    const result = new Array(128).fill(0);
+    const result = new Array(DESC_DIM).fill(0);
     for (let i = 0; i < compressed.length; i += 2) {
       const idx = compressed[i];
       const val = compressed[i + 1];
-      if (typeof idx === 'number' && idx >= 0 && idx < 128) {
+      if (typeof idx === 'number' && idx >= 0 && idx < DESC_DIM) {
         result[idx] = Number(val);
       }
     }
@@ -161,8 +162,8 @@ export const detectDescriptorFormat = (
   if (Array.isArray(fd) && fd.length > 0) {
     if (fd.length <= TOP_DIMS * 2 && fd.length % 2 === 0) {
       const looksCompressed = fd.length >= 4 &&
-        Number.isInteger(fd[0]) && fd[0] >= 0 && fd[0] < 128 &&
-        Number.isInteger(fd[2]) && fd[2] >= 0 && fd[2] < 128;
+        Number.isInteger(fd[0]) && fd[0] >= 0 && fd[0] < DESC_DIM &&
+        Number.isInteger(fd[2]) && fd[2] >= 0 && fd[2] < DESC_DIM;
       if (looksCompressed) return 'compressed';
     }
     return 'normal';
