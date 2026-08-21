@@ -9,8 +9,8 @@ export const DESC_VERSION = 4;
 
 /** عتبة المسافة الكوسينية — صارم للمطابقة المؤكدة */
 export const MATCH_STRICT = 0.35;
-/** عتبة متساهلة — تُقبل مع ثقة معروضة أقل */
-export const MATCH_LOOSE = 0.45;
+/** عتبة متساهلة — تُقبل تغيّرات طفيفة في الزاوية والمسافة */
+export const MATCH_LOOSE = 0.55;
 /** إذا تطابق وجه طالب مع بصمة طالب آخر أقل من هذه العتبة → احتيال محتمل */
 export const TAMPER_THRESHOLD = 0.32;
 

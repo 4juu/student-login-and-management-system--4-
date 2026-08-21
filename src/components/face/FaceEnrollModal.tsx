@@ -28,6 +28,13 @@ interface FaceEnrollModalProps {
 const SAMPLES_NEEDED = 3;
 const MIN_REL_SIZE = 0.14;
 
+type CapturePhase = 'front' | 'right' | 'left';
+const CAPTURE_PHASES: { key: CapturePhase; instruction: string; icon: string }[] = [
+  { key: 'front', instruction: 'وجّه وجهك للمام', icon: '👤' },
+  { key: 'right', instruction: 'أمال وجهك لليمين قليلاً', icon: '👉' },
+  { key: 'left', instruction: 'أمال وجهك لليسار قليلاً', icon: '👈' },
+];
+
 interface Result {
   studentId: string;
   name: string;
@@ -63,6 +70,7 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
   const [camError, setCamError] = useState(false);
   const [faceInBoundary, setFaceInBoundary] = useState(false);
   const [canCapture, setCanCapture] = useState(false);
+  const [capturePhase, setCapturePhase] = useState<CapturePhase>('front');
 
   // عزل النافذة عن تمرير الصفحة الخلفية
   useBodyScrollLock(true);
@@ -146,6 +154,8 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
   useEffect(() => {
     setFaceInBoundary(false);
     setCanCapture(false);
+    setCapturePhase('front');
+
     setFeedback('وجّه الوجه داخل الدائرة');
   }, [qi]);
 
@@ -184,6 +194,7 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
         if (!faces[0]) {
           setFaceInBoundary(false);
           setCanCapture(false);
+      
           setFeedback('لا أرى وجهاً — تأكد من الإضاءة');
           return;
         }
@@ -193,12 +204,14 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
         if (relSize < MIN_REL_SIZE) {
           setFaceInBoundary(false);
           setCanCapture(false);
+      
           setFeedback('اقترب من الكاميرا قليلاً');
           return;
         }
         if (relSize > 0.85) {
           setFaceInBoundary(false);
           setCanCapture(false);
+      
           setFeedback('ابتعد قليلاً — الوجه قريب جداً');
           return;
         }
@@ -212,15 +225,32 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
         const fcy = face.box.y + face.box.height / 2;
         const dx = (fcx - ecx) / erx;
         const dy = (fcy - ecy) / ery;
-        const inside = (dx * dx + dy * dy) <= 1;
+        const insideEllipse = (dx * dx + dy * dy) <= 1;
 
-        setFaceInBoundary(inside);
-        setCanCapture(inside);
+        // تحديد موضع الوجه (الأمام / اليمين / اليسار)
+        const offsetRatio = (ecx - fcx) / v.videoWidth; // موجب = يسار في الفيديو (أيمن للطالب)
+        let pos: 'center' | 'left' | 'right' = 'center';
+        if (offsetRatio > 0.06) pos = 'right';       // الوجه يسار الفيديو = طالب يمين
+        else if (offsetRatio < -0.06) pos = 'left';   // الوجه يمين الفيديو = طالب يسار
 
-        if (inside) {
-          setFeedback('تم وضع الوجه ✓');
+        setFaceInBoundary(insideEllipse);
+
+        // فحص: هل الموضع مناسب للمرحلة الحالية؟
+        const phaseMatch =
+          (capturePhase === 'front' && pos === 'center') ||
+          (capturePhase === 'right' && pos === 'right') ||
+          (capturePhase === 'left' && pos === 'left');
+
+        setCanCapture(insideEllipse && phaseMatch);
+
+        // رسالة التغذية الراجعة
+        if (phaseMatch && insideEllipse) {
+          setFeedback('تم ✓ — اضغط التقاط');
+        } else if (!insideEllipse) {
+          setFeedback(CAPTURE_PHASES.find(p => p.key === capturePhase)!.instruction);
         } else {
-          setFeedback('وجّه وجهك داخل الإطار البيضاوي');
+          const expected = capturePhase === 'right' ? 'أمال لليمين' : 'أمال لليسار';
+          setFeedback(`أكمل الزاوية: ${expected}`);
         }
       } catch (e) {
         console.warn('[face-enroll] خطأ في حلقة الكشف:', e);
@@ -258,11 +288,21 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
       }
 
       samplesDataRef.current.push(new Float32Array(res.descriptor));
-      setSamples(samplesDataRef.current.length);
-      setFeedback(`تم التقاط العينة ${samplesDataRef.current.length}/${SAMPLES_NEEDED}`);
+      const sampleCount = samplesDataRef.current.length;
+      setSamples(sampleCount);
       try { navigator.vibrate?.(30); } catch {}
 
-      if (samplesDataRef.current.length >= SAMPLES_NEEDED) {
+      // الانتقال للزاوية التالية
+      if (sampleCount === 1) {
+        setCapturePhase('right');
+        setFeedback('تم — الآن أمال لليمين');
+      } else if (sampleCount === 2) {
+        setCapturePhase('left');
+        setFeedback('تم — الآن أمال لليسار');
+      }
+
+      if (sampleCount >= SAMPLES_NEEDED) {
+        // دمج العينات الثلاث (أمام + يمين + يسار) ثم تطبيع L2
         const dim = samplesDataRef.current[0].length;
         const avg = new Float32Array(dim);
         for (const s of samplesDataRef.current) for (let i = 0; i < dim; i++) avg[i] += s[i];
@@ -325,6 +365,8 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
     samplesDataRef.current = [];
     setFaceInBoundary(false);
     setCanCapture(false);
+    setCapturePhase('front');
+
     setQi(0);
     setPhase('live');
   };
@@ -486,7 +528,27 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
               {feedback}
             </p>
 
-            {/* زر التقاط — يظهر فقط عندما يكون الوجه جاهزاً */}
+            {/* دليل الزوايا الثلاث */}
+            {samples < SAMPLES_NEEDED && (
+              <div className="flex items-center justify-center gap-1.5 mb-3">
+                {CAPTURE_PHASES.map((p, i) => {
+                  const done = i < samples;
+                  const active = i === samples;
+                  return (
+                    <div key={p.key} className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-bold transition-all ${
+                      done ? 'bg-emerald-500/20 text-emerald-300' :
+                      active ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-indigo-400/40' :
+                      'bg-white/5 text-slate-500'
+                    }`}>
+                      <span>{done ? '✓' : p.icon}</span>
+                      <span className="hidden sm:inline">{p.instruction}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* زر التقاط */}
             {samples < SAMPLES_NEEDED && (
               <button
                 onClick={handleCapture}
@@ -497,7 +559,7 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
                     : 'bg-white/5 text-slate-500 cursor-not-allowed border border-white/10'
                 }`}
               >
-                📸 التقاط العينة ({samples + 1}/{SAMPLES_NEEDED})
+                📸 التقاط — {CAPTURE_PHASES[samples].instruction} ({samples + 1}/{SAMPLES_NEEDED})
               </button>
             )}
 
