@@ -21,19 +21,20 @@ export const EngineOverlay: React.FC<EngineOverlayProps> = ({ progress, error, o
   return createPortal(
     <div
       dir="rtl"
-      className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/95 backdrop-blur-xl"
+      className="fixed inset-0 z-[10000] flex items-center justify-center place-content-center bg-slate-950/95 backdrop-blur-xl"
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
     >
       {onCancel && (
         <button
           onClick={onCancel}
           aria-label="إغلاق"
-          className="fixed top-4 left-4 z-10 w-11 h-11 flex items-center justify-center bg-white/5 hover:bg-white/15 text-white rounded-full border border-white/10 transition active:scale-90"
+          className="absolute top-4 left-4 z-10 w-11 h-11 flex items-center justify-center bg-white/5 hover:bg-white/15 text-white rounded-full border border-white/10 transition active:scale-90"
         >
           ✕
         </button>
       )}
 
-      <div className="w-full max-w-xs mx-4 text-center">
+      <div className="w-full max-w-xs mx-auto px-4 text-center">
         {/* حلقة تقدم دائرية */}
         <div className="relative w-28 h-28 mx-auto mb-8">
           <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">

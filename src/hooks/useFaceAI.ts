@@ -21,22 +21,24 @@ function combine(det: DetectorProgress, emb: EngineProgress): { percent: number;
 }
 
 export function useFaceAI(): UseFaceAIResult {
-  const [ready, setReady] = useState(faceDetectorService.ready && faceEmbedder.ready);
+  const [ready, setReady] = useState(false);
   const [detProg, setDetProg] = useState<DetectorProgress>({ stage: 'wasm', percent: 0, detail: '...' });
   const [embProg, setEmbProg] = useState<EngineProgress>({ stage: 'model', percent: 0, detail: '...' });
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (faceDetectorService.ready && faceEmbedder.ready) {
-      setReady(true);
-      return;
-    }
+    // إعادة تحميل كاملة من الصفر كل مرة — تمنع اختفاء المودل بسبب حالة WASM قديمة
+    faceDetectorService.reset();
+    faceEmbedder.dispose();
+    setReady(false);
+    setError(null);
+    setDetProg({ stage: 'wasm', percent: 0, detail: 'تهيئة محرك الوجه...' });
+    setEmbProg({ stage: 'model', percent: 0, detail: '...' });
+
     let cancelled = false;
     const offDet = faceDetectorService.onProgress(setDetProg);
     const offEmb = faceEmbedder.onProgress(setEmbProg);
-    setReady(false);
-    setError(null);
 
     Promise.all([faceDetectorService.ensureReady(), faceEmbedder.ensureReady()])
       .then(() => { if (!cancelled) setReady(true); })
@@ -51,7 +53,6 @@ export function useFaceAI(): UseFaceAIResult {
     };
   }, [attempt]);
 
-  // إعادة تهيئة كاملة — تُستخدم عندما يكتشف المحرك تعطلاً أثناء التشغيل
   const reinit = useCallback(() => {
     faceDetectorService.reset();
     faceEmbedder.dispose();
