@@ -6,6 +6,7 @@ import {
   grabVideoFrame,
 } from '../../services/faceAI/detector';
 import { faceEmbedder } from '../../services/faceAI/embedder';
+import { openCameraStream, waitVideoDimensionsStable } from '../../services/faceAI/camera';
 import {
   checkForTampering,
   descriptorToStorage,
@@ -56,16 +57,16 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
     let cancelled = false;
     (async () => {
       try {
-        localStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false,
-        });
+        localStream = await openCameraStream('user');
         if (cancelled) { localStream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = localStream;
         if (videoRef.current) {
           videoRef.current.srcObject = localStream;
           await videoRef.current.play().catch(() => {});
+          // إخفاء مرحلة تفاوض الدقة حتى تستقر الأبعاد — يمنع قفزة التكبير الأولى
+          await waitVideoDimensionsStable(videoRef.current);
         }
+        if (cancelled) return;
         setCameraReady(true);
       } catch (e) {
         console.error('[self-capture] فشل فتح الكاميرا:', e);

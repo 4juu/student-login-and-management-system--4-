@@ -8,6 +8,7 @@ import {
   grabVideoFrame,
   type DetectedFace,
 } from '../../services/faceAI/detector';
+import { openCameraStream, waitVideoDimensionsStable } from '../../services/faceAI/camera';
 import { faceEmbedder, type Box } from '../../services/faceAI/embedder';
 import {
   findBestMatch,
@@ -105,16 +106,16 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     let cancelled = false;
     (async () => {
       try {
-        localStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false,
-        });
+        localStream = await openCameraStream(facing);
         if (cancelled) { localStream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = localStream;
         if (videoRef.current) {
           videoRef.current.srcObject = localStream;
           await videoRef.current.play().catch(() => {});
+          // إخفاء مرحلة تفاوض الدقة حتى تستقر الأبعاد — يمنع قفزة التكبير الأولى
+          await waitVideoDimensionsStable(videoRef.current);
         }
+        if (cancelled) return;
         setCameraReady(true);
       } catch (e) {
         console.error('[face-scanner] فشل فتح الكاميرا:', e);
