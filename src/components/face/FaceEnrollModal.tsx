@@ -322,7 +322,11 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
         }
 
         onUpdateStudent(currentStudent.id, {
-          faceDescriptor: descriptorToStorage(finalDesc, { samples: SAMPLES_NEEDED, quality }),
+          faceDescriptor: descriptorToStorage(finalDesc, {
+            samples: SAMPLES_NEEDED,
+            quality,
+            alt: samplesDataRef.current.map(s => l2Normalize(s)),
+          }),
           faceRegisteredAt: new Date().toISOString(),
         });
         try {
