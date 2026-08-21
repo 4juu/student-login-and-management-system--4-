@@ -5,7 +5,7 @@ export interface Student {
   group?: string;
   universityId?: string;
   qrCodeId?: string;
-  faceDescriptor?: number[] | any; // 🆕 يدعم Int8 و Float32 و MultiDescriptor
+  faceDescriptor?: number[] | any; // بصمة v4: { main: number[512], samples?, quality?, version: 4 }
   faceRegisteredAt?: string;
   faceCompressed?: boolean;
   createdAt: string;

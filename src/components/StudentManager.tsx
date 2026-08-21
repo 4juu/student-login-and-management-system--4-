@@ -1,16 +1,14 @@
 import React, { useState, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { Student } from '../types/student';
 import {
-  compressFaceDescriptor,
-  detectDescriptorFormat,
-  getCompressionStats,
-  hasFaceDescriptor,
-} from '../services/faceCompression';
-import { Camera, CaseSensitive, ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, ClipboardList, FileArchive, FolderOpen, Hash, IdCard, Lightbulb, LoaderCircle, Pencil, Plus, QrCode, RefreshCw, ScanFace, Smile, SquarePen, Trash2, TriangleAlert, Unlink, Upload, Users, Zap } from 'lucide-react';
+  hasValidDescriptor,
+  hasLegacyDescriptor,
+} from '../services/faceAI/descriptors';
+import { CaseSensitive, ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, ClipboardList, FolderOpen, Hash, IdCard, Lightbulb, LoaderCircle, Pencil, Plus, QrCode, RefreshCw, ScanFace, Smile, SquarePen, Trash2, TriangleAlert, Unlink, Upload, Users, Zap } from 'lucide-react';
 
-// 🚀 نافذة تسجيل الوجه تُحمَّل عند فتحها فقط (مكتبة الوجوه ثقيلة)
-const LazyFaceRegister = lazy(() =>
-  import('./FaceRegister').then(m => ({ default: m.FaceRegister }))
+// 🚀 نافذة تسجيل بصمات الوجه (فردية وجماعية) تُحمَّل عند فتحها فقط
+const LazyFaceEnroll = lazy(() =>
+  import('./face/FaceEnrollModal').then(m => ({ default: m.FaceEnrollModal }))
 );
 
 interface StudentManagerProps {
@@ -75,8 +73,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
   const [transferGroupValue, setTransferGroupValue] = useState('');
 
   const [showFaceRegister, setShowFaceRegister] = useState(false);
-  const [compressing, setCompressing] = useState(false);
-  const [compressionProgress, setCompressionProgress] = useState({ current: 0, total: 0 });
+  const [faceEnrollPreset, setFaceEnrollPreset] = useState<string[] | undefined>(undefined);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [groupFilter, setGroupFilter] = useState<string>('all');
@@ -447,60 +444,19 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
     onUpdateStudent(student.id, { faceDescriptor: undefined, faceRegisteredAt: undefined });
   };
 
-  /* 🆕 ضغط كل البصمات غير المضغوطة */
-  const handleCompressAll = async () => {
-    if (!onUpdateStudent) return;
+  /** فتح أداة تسجيل البصمات — لطالب واحد أو مجموعة */
+  const openFaceEnroll = (presetIds?: string[]) => {
+    setFaceEnrollPreset(presetIds && presetIds.length > 0 ? presetIds : undefined);
+    setShowFaceRegister(true);
+  };
 
-    const uncompressedStudents = students.filter(s => {
-      if (!s.faceDescriptor) return false;
-      const format = detectDescriptorFormat(s.faceDescriptor);
-      return format === 'normal';
-    });
-
-    if (uncompressedStudents.length === 0) {
-      alert('كل البصمات مضغوطة بالفعل!');
-      return;
-    }
-
-    const stats = getCompressionStats(students);
-
-    if (!window.confirm(
-      `سيتم ضغط ${uncompressedStudents.length} بصمة\n\n` +
-      `توفير متوقع: ~${stats.potentialSavingsKB.toFixed(1)} KB\n` +
-      `الدقة: لن تتأثر (أقل من 1%)\n\n` +
-      `هل تريد المتابعة؟`
-    )) return;
-
-    setCompressing(true);
-    setCompressionProgress({ current: 0, total: uncompressedStudents.length });
-
-    try {
-      let count = 0;
-      for (const student of uncompressedStudents) {
-        if (!student.faceDescriptor) continue;
-
-        const compressed = compressFaceDescriptor(student.faceDescriptor);
-        onUpdateStudent(student.id, {
-          faceDescriptor: compressed,
-          faceCompressed: true,
-        });
-
-        count++;
-        setCompressionProgress({ current: count, total: uncompressedStudents.length });
-
-        if (count % 10 === 0) {
-          await new Promise(r => setTimeout(r, 50));
-        }
-      }
-
-      alert(`تم ضغط ${count} بصمة بنجاح!\nتم توفير ~${stats.potentialSavingsKB.toFixed(1)} KB`);
-    } catch (e) {
-      console.error(e);
-      alert('حدث خطأ أثناء الضغط');
-    } finally {
-      setCompressing(false);
-      setCompressionProgress({ current: 0, total: 0 });
-    }
+  /* إعادة تسجيل البصمات القديمة غير المتوافقة مع المحرك الجديد */
+  const reEnrollLegacy = () => {
+    const legacyIds = students
+      .filter(s => hasLegacyDescriptor(s.faceDescriptor))
+      .map(s => s.id);
+    if (legacyIds.length === 0) return;
+    openFaceEnroll(legacyIds);
   };
 
   const uniqueGroups = useMemo(() => {
@@ -541,10 +497,9 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
     setCurrentPage(1);
   }, [searchQuery, groupFilter, pageSize]);
 
-  const studentsWithFace = students.filter(s => hasFaceDescriptor(s.faceDescriptor)).length;
-  const studentsWithoutFace = students.length - studentsWithFace;
-
-  const compressionStats = useMemo(() => getCompressionStats(students), [students]);
+  const studentsWithFace = students.filter(s => hasValidDescriptor(s.faceDescriptor)).length;
+  const studentsWithLegacy = students.filter(s => hasLegacyDescriptor(s.faceDescriptor)).length;
+  const studentsWithoutFace = students.length - studentsWithFace - studentsWithLegacy;
 
   const pageIds = paginatedStudents.map(s => s.id);
   const allInPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id));
@@ -754,8 +709,12 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
             <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
-              <div className="text-2xl font-bold text-purple-300">{studentsWithFace}</div>
-              <div className="text-xs text-purple-400">مسجّلين</div>
+              <div className="text-2xl font-bold text-emerald-300">{studentsWithFace}</div>
+              <div className="text-xs text-emerald-400">بصمة صالحة</div>
+            </div>
+            <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
+              <div className="text-2xl font-bold text-amber-300">{studentsWithLegacy}</div>
+              <div className="text-xs text-amber-400">بصمة قديمة</div>
             </div>
             <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
               <div className="text-2xl font-bold text-slate-500">{studentsWithoutFace}</div>
@@ -767,93 +726,38 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
               </div>
               <div className="text-xs text-pink-400">نسبة الإكمال</div>
             </div>
-            <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
-              <div className="text-2xl font-bold text-emerald-300">
-                {compressionStats.totalSizeKB < 1024
-                  ? `${compressionStats.totalSizeKB.toFixed(1)}`
-                  : `${(compressionStats.totalSizeKB / 1024).toFixed(2)}`
-                }
-              </div>
-              <div className="text-xs text-emerald-400">
-                {compressionStats.totalSizeKB < 1024 ? 'KB' : 'MB'} إجمالي
-              </div>
-            </div>
           </div>
 
-          {studentsWithFace > 0 && (
-            <div className="bg-white/5 rounded-lg p-3 mb-3 border-2 border-purple-500/30 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-sm font-bold text-white flex items-center gap-1">
-                  <FileArchive className="w-4 h-4 text-purple-400" /> حالة الضغط
-                </h4>
-                {compressionStats.uncompressedCount > 0 && (
-                  <button
-                    onClick={handleCompressAll}
-                    disabled={compressing}
-                    className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 text-white text-xs font-bold rounded-md transition shadow-sm"
-                  >
-                    {compressing
-                      ? <><LoaderCircle className="w-4 h-4 animate-spin" /> {compressionProgress.current}/{compressionProgress.total}</>
-                      : <><FileArchive className="w-4 h-4" /> ضغط {compressionStats.uncompressedCount} بصمة</>
-                    }
-                  </button>
-                )}
+          {studentsWithLegacy > 0 && (
+            <div className="mb-3 bg-gradient-to-r from-amber-500/10 to-yellow-500/10 border border-amber-500/30 rounded-lg p-3 flex items-start gap-2">
+              <TriangleAlert className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+              <div className="flex-1 text-xs text-slate-300">
+                <strong className="text-amber-300">{studentsWithLegacy} طالب</strong> لديهم بصمات بنظام قديم غير متوافق — أعد تسجيلها لتعمل مع المحرك الجديد.
+                <button
+                  onClick={reEnrollLegacy}
+                  className="mr-2 px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-amber-950 rounded-md font-bold transition"
+                >
+                  إعادة تسجيل الآن
+                </button>
               </div>
-
-              {compressing && (
-                <div className="mb-2">
-                  <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
-                    <div
-                      className="bg-gradient-to-r from-emerald-500 to-teal-500 h-2 transition-all duration-200"
-                      style={{ width: `${(compressionProgress.current / compressionProgress.total) * 100}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-slate-400 text-center mt-1">
-                    جاري الضغط: {compressionProgress.current} من {compressionProgress.total}
-                  </p>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="flex items-center gap-2 bg-emerald-500/10 p-2 rounded border border-emerald-500/30">
-                  <span className="text-emerald-300 text-xl">✓</span>
-                  <div className="flex-1">
-                    <div className="font-bold text-emerald-300 text-lg leading-none">
-                      {compressionStats.compressedCount}
-                    </div>
-                    <div className="text-emerald-400 text-[10px]">مضغوطة</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 bg-amber-500/10 p-2 rounded border border-amber-500/30">
-                  <TriangleAlert className="w-6 h-6 text-amber-300" />
-                  <div className="flex-1">
-                    <div className="font-bold text-amber-300 text-lg leading-none">
-                      {compressionStats.uncompressedCount}
-                    </div>
-                    <div className="text-amber-400 text-[10px]">غير مضغوطة</div>
-                  </div>
-                </div>
-              </div>
-
-              {compressionStats.uncompressedCount > 0 && (
-                <div className="mt-2 text-[11px] text-slate-300 bg-gradient-to-r from-amber-500/10 to-yellow-500/10 p-2 rounded border border-amber-500/30 flex items-start gap-1">
-                  <Lightbulb className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-400" /> يمكنك توفير <strong className="text-emerald-400">~{compressionStats.potentialSavingsKB.toFixed(1)} KB</strong> بضغط البصمات غير المضغوطة. <strong>الضغط آمن</strong> ولا يؤثر على دقة التعرف (أقل من 1%).
-                </div>
-              )}
-
-
             </div>
           )}
 
           <p className="text-xs text-purple-300 mb-3 bg-white/5 p-2 rounded flex items-start gap-1">
-            <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" /> <strong>كيف يعمل؟</strong> سجّل بصمة وجه كل طالب مرة واحدة (يأخذ ثانيتين فقط)، ثم يستطيع الطلاب تسجيل حضورهم بمجرد المرور قبال الكاميرا تلقائياً، بدون باركود أو كود يدوي.
+            <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" /> <strong>كيف يعمل؟</strong> اختر الطلاب واضغط زر الإضافة — الكاميرا تلتقط 3 عينات لكل طالب تلقائياً خلال ثوانٍ، ثم يُسجّل حضورهم بمجرد المرور أمام الكاميرا.
           </p>
 
           <button
-            onClick={() => setShowFaceRegister(true)}
-            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-3 px-6 rounded-md shadow-md transition duration-200 transform active:scale-95 flex items-center justify-center gap-2"
+            onClick={() => openFaceEnroll()}
+            className="w-full relative overflow-hidden bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 hover:from-violet-500 hover:via-purple-500 hover:to-fuchsia-500 text-white font-extrabold py-3.5 px-6 rounded-xl shadow-lg shadow-purple-900/40 transition duration-200 transform active:scale-[0.98] flex items-center justify-center gap-2.5"
           >
-            <Camera className="w-5 h-5" /> فتح أداة التسجيل الجماعي السريع
+            <ScanFace className="w-6 h-6" />
+            <span className="text-base">إضافة بصمات جديدة</span>
+            {studentsWithLegacy + studentsWithoutFace > 0 && (
+              <span className="absolute top-1 left-2 bg-yellow-400 text-yellow-900 text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow">
+                {studentsWithLegacy + studentsWithoutFace} بانتظار التسجيل
+              </span>
+            )}
           </button>
         </div>
       )}
@@ -1066,10 +970,8 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
               paginatedStudents.map((student, index) => {
                 const globalIndex = (safeCurrentPage - 1) * pageSize + index + 1;
 
-                // ✅ التعديل المهم: استخدام hasFaceDescriptor
-                const hasFace = hasFaceDescriptor(student.faceDescriptor);
-                const faceFormat = hasFace ? detectDescriptorFormat(student.faceDescriptor) : null;
-                const isCompressed = faceFormat === 'compressed' || faceFormat === 'base64' || faceFormat === 'multi';
+                const hasFace = hasValidDescriptor(student.faceDescriptor) || hasLegacyDescriptor(student.faceDescriptor);
+                const isLegacy = !hasValidDescriptor(student.faceDescriptor);
 
                 return (
                   <tr
@@ -1298,20 +1200,18 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
                           <>
                             <span
                                 className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border ${
-                                  isCompressed
-                                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                                    : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                  isLegacy
+                                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                    : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
                                 }`}
                               title={
                                 student.faceRegisteredAt
-                                  ? `سُجلت في: ${new Date(student.faceRegisteredAt).toLocaleDateString('ar-EG')}\n${
-                                      faceFormat === 'multi' ? 'متعدد الزوايا (Multi)' :
-                                      isCompressed ? 'مضغوطة' : 'غير مضغوطة'
-                                    }`
-                                  : 'مسجّلة'
+                                  ? `سُجلت في: ${new Date(student.faceRegisteredAt).toLocaleDateString('ar-EG')}${isLegacy ? '\nنظام قديم — تحتاج إعادة تسجيل' : ''}`
+                                  : isLegacy ? 'نظام قديم — تحتاج إعادة تسجيل' : 'مسجّلة'
                               }
                             >
-                              {faceFormat === 'multi' ? <CircleCheck className="w-3.5 h-3.5" /> : isCompressed ? <><CircleCheck className="w-3.5 h-3.5" /> <FileArchive className="w-3.5 h-3.5" /></> : <><CircleCheck className="w-3.5 h-3.5" /> <TriangleAlert className="w-3.5 h-3.5" /></>}
+                              {isLegacy ? <TriangleAlert className="w-3.5 h-3.5" /> : <CircleCheck className="w-3.5 h-3.5" />}
+                              {isLegacy ? 'قديمة' : 'صالحة'}
                             </span>
                             {onUpdateStudent && (
                               <button
@@ -1331,6 +1231,15 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
 
                     <td className="px-4 py-4 whitespace-nowrap text-right">
                       <div className="flex items-center justify-end gap-3">
+                        {onUpdateStudent && (
+                          <button
+                            onClick={() => openFaceEnroll([student.id])}
+                            className="text-violet-400 hover:text-violet-300 font-medium flex items-center gap-1"
+                            title="تسجيل / إعادة تسجيل بصمة الوجه لهذا الطالب"
+                          >
+                            بصمة <ScanFace className="w-4 h-4" />
+                          </button>
+                        )}
                         {onOpenProfile && (
                           <button
                             onClick={() => onOpenProfile(student)}
@@ -1422,10 +1331,11 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
 
       {showFaceRegister && onUpdateStudent && (
         <Suspense fallback={null}>
-          <LazyFaceRegister
+          <LazyFaceEnroll
             students={students}
             onUpdateStudent={onUpdateStudent}
-            onClose={() => setShowFaceRegister(false)}
+            initialSelectedIds={faceEnrollPreset}
+            onClose={() => { setShowFaceRegister(false); setFaceEnrollPreset(undefined); }}
           />
         </Suspense>
       )}

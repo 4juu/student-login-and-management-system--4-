@@ -4,9 +4,9 @@ import { User } from '../types/user';
 import { QRAttendance } from './QRAttendance';
 import { Camera, Info, TriangleAlert, User as UserIcon, Zap } from 'lucide-react';
 
-// 🚀 شاشة الحضور بالبصمة تُحمَّل عند فتحها فقط (مكتبة الوجوه ثقيلة)
-const LazyFaceAttendance = lazy(() =>
-  import('./FaceAttendance').then(m => ({ default: m.FaceAttendance }))
+// 🚀 ماسح الحضور بالوجه يُحمَّل عند فتحه فقط (محرك الوجه ثقيل)
+const LazyFaceScanner = lazy(() =>
+  import('./face/FaceScanner').then(m => ({ default: m.FaceScanner }))
 );
 
 interface AttendanceLoginProps {
@@ -335,13 +335,11 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
 
       {showFaceAttendance && (
 <Suspense fallback={null}>
-<LazyFaceAttendance
+<LazyFaceScanner
   students={students}
   activeSession={activeSession || null}
   onMarkAttendance={handleQRMarkAttendance}
-  onUpdateStudent={onUpdateStudent}
   alreadyPresentIds={alreadyPresentIds}
-  currentUser={currentUser}
   onClose={() => setShowFaceAttendance(false)}
 />
 </Suspense>

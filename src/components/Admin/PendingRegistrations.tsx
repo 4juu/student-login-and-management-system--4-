@@ -5,8 +5,11 @@ import { Student } from '../../types/student';
 import { PendingRegistration } from '../../types/registration';
 import { getActiveAcademicYear } from '../../firebase/dataService';
 import { SkeletonTable } from '../Skeleton';
-import { checkForTamperingAsync, normalizeDescriptor } from '../../services/faceRecognition';
-import { ensureDecompressed } from '../../services/faceCompression';
+import {
+  parseStoredDescriptor,
+  checkForTampering,
+  hasValidDescriptor,
+} from '../../services/faceAI/descriptors';
 import { Camera, Check, CircleCheck, CircleX, ClipboardList, LoaderCircle, Mail, QrCode, Save, Smile, Trash2, TriangleAlert } from 'lucide-react';
 
 interface PendingRegistrationsProps {
@@ -101,16 +104,17 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       }
 
       if (req.faceDescriptor) {
-        const descArray = ensureDecompressed(req.faceDescriptor);
-        if (descArray.length === 128) {
-          const normalized = normalizeDescriptor(new Float32Array(descArray));
-          const tamper = await checkForTamperingAsync(normalized, studentsArr, req.studentId);
-          if (tamper.isTamper) {
-            setProcessing(null);
-            const names = tamper.matchedStudents.map(m => m.name).join('، ');
-            alert(`لا يمكن الموافقة: هذه البصمة مسجلة أصلاً للطالب:\n${names}\n\nيرجى التحقق من صحة الطلب.`);
-            return;
-          }
+        const query = parseStoredDescriptor(req.faceDescriptor);
+        if (!query) {
+          setProcessing(null);
+          alert('لا يمكن الموافقة: البصمة المرفقة بنظام قديم غير متوافق.\nاطلب من الطالب إعادة تسجيل البصمة بالرابط الجديد.');
+          return;
+        }
+        const tamper = checkForTampering(query, studentsArr, req.studentId);
+        if (tamper.tampered) {
+          setProcessing(null);
+          alert(`لا يمكن الموافقة: هذه البصمة مطابقة لبصمة الطالب:\n${tamper.matchedWith}\n\nيرجى التحقق من صحة الطلب.`);
+          return;
         }
       }
 
@@ -119,7 +123,6 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         qrCodeId: req.qrCodeId,
         faceDescriptor: req.faceDescriptor,
         faceRegisteredAt: new Date().toISOString(),
-        faceCompressed: true,
       } as Student;
 
       await set(ref(database, studentsPath), studentsArr);
@@ -337,11 +340,17 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                       <ClipboardList className="w-3 h-3" /> {req.nameMatched ? 'الاسم متطابق' : 'الاسم غير متطابق'}
                     </span>
                     <span className={`text-[10px] border rounded-full px-2 py-1 flex items-center gap-1 ${
-                      req.faceDescriptor
+                      hasValidDescriptor(req.faceDescriptor)
                         ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                        : req.faceDescriptor
+                        ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
                         : 'bg-slate-800 border-slate-600'
                     }`}>
-                      <Smile className="w-3 h-3" /> {req.faceDescriptor ? 'بصمة وجه مسجلة' : 'بدون بصمة'}
+                      <Smile className="w-3 h-3" /> {
+                        hasValidDescriptor(req.faceDescriptor) ? 'بصمة وجه مسجلة'
+                          : req.faceDescriptor ? 'بصمة قديمة — تحتاج إعادة تسجيل'
+                          : 'بدون بصمة'
+                      }
                     </span>
                     {req.hasExistingQr && (
                       <span className="text-[10px] bg-amber-500/15 border border-amber-500/30 text-amber-300 rounded-full px-2 py-1 flex items-center gap-1">

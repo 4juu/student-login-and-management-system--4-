@@ -1,0 +1,55 @@
+// hook موحد لمحرك الوجه الجديد — كاشف MediaPipe + عامل البصمات معاً
+import { useEffect, useState } from 'react';
+import { faceDetectorService, type DetectorProgress } from '../services/faceAI/detector';
+import { faceEmbedder, type EngineProgress } from '../services/faceAI/embedder';
+
+export interface UseFaceAIResult {
+  ready: boolean;
+  progress: { percent: number; detail: string };
+  error: string | null;
+  retry: () => void;
+}
+
+function combine(det: DetectorProgress, emb: EngineProgress): { percent: number; detail: string } {
+  // الكاشف 0-50%، البصمات 50-100%
+  const detPct = (det.percent / 100) * 50;
+  const embPct = det.stage === 'done' ? (emb.percent / 100) * 50 : 0;
+  return {
+    percent: Math.round(detPct + embPct),
+    detail: det.stage !== 'done' ? det.detail : emb.detail,
+  };
+}
+
+export function useFaceAI(): UseFaceAIResult {
+  const [ready, setReady] = useState(faceDetectorService.ready && faceEmbedder.ready);
+  const [detProg, setDetProg] = useState<DetectorProgress>({ stage: 'wasm', percent: 0, detail: '...' });
+  const [embProg, setEmbProg] = useState<EngineProgress>({ stage: 'model', percent: 0, detail: '...' });
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    if (faceDetectorService.ready && faceEmbedder.ready) {
+      setReady(true);
+      return;
+    }
+    let cancelled = false;
+    const offDet = faceDetectorService.onProgress(setDetProg);
+    const offEmb = faceEmbedder.onProgress(setEmbProg);
+    setReady(false);
+    setError(null);
+
+    Promise.all([faceDetectorService.ensureReady(), faceEmbedder.ensureReady()])
+      .then(() => { if (!cancelled) setReady(true); })
+      .catch(e => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      });
+
+    return () => {
+      cancelled = true;
+      offDet();
+      offEmb();
+    };
+  }, [attempt]);
+
+  return { ready, progress: combine(detProg, embProg), error, retry: () => setAttempt(a => a + 1) };
+}

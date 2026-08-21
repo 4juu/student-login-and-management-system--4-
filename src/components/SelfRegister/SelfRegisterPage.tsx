@@ -10,11 +10,11 @@ import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear, loadAttendanceRecords, loadSessions } from '../../firebase/dataService';
 import { decompressRecord } from '../../firebase/dataServiceCompressed';
 import { SkeletonCard } from '../Skeleton';
-import type { MultiDescriptor } from '../../services/faceRecognition';
+import type { StoredFaceDescriptor } from '../../services/faceAI/descriptors';
 import { AlertTriangle, XCircle, CalendarDays, CheckCircle, XCircle as XCircleIcon, Users, BookOpen, ArrowLeft } from 'lucide-react';
 
-const LazyFaceCaptureStep = lazy(() =>
-  import('./FaceCaptureStep').then(m => ({ default: m.FaceCaptureStep }))
+const LazySelfCapture = lazy(() =>
+  import('../face/SelfCaptureStep').then(m => ({ default: m.SelfCaptureStep }))
 );
 
 type Step =
@@ -272,7 +272,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     } catch {}
   };
 
-  const handleFaceCaptured = async (descriptor: MultiDescriptor) => {
+  const handleFaceCaptured = async (descriptor: StoredFaceDescriptor) => {
     if (!link || !student) return;
     goTo('submitting');
     const cleanFD = deepSanitize(descriptor);
@@ -396,7 +396,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
   if (step === 'capture-face' && student) {
     return (
       <Suspense fallback={<div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl"><div className="w-full max-w-md"><SkeletonCard /></div></div>}>
-        <LazyFaceCaptureStep student={student} allStudents={allStudents} onCaptured={handleFaceCaptured} onCancel={() => goTo('upload-id')} />
+        <LazySelfCapture student={student} allStudents={allStudents} onCaptured={handleFaceCaptured} onCancel={() => goTo('upload-id')} />
       </Suspense>
     );
   }

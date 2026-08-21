@@ -83,24 +83,8 @@ const StudentProfileModal = lazy(() =>
   import('./components/StudentProfile/StudentProfileModal').then(m => ({ default: m.StudentProfileModal }))
 );
 
-// 🚀 تحميل مكتبة الوجوه ديناميكياً (خارج حزمة البداية)
-const preloadDetector = (): void => {
-  import('./services/faceRecognition')
-    .then(m => m.startDetectorPreload())
-    .catch(() => {});
-};
-
-const preloadBackground = (): void => {
-  import('./services/faceRecognition')
-    .then(m => m.startBackgroundPreload())
-    .catch(() => {});
-};
-
-// 🚀 تحميل مسبق لمكونات تسجيل الحضور بالبصمة (حتى تعمل أثناء انقطاع الإنترنت)
-const preloadAttendanceChunks = (): void => {
-  import('./components/FaceAttendance').catch(() => {});
-  import('./components/FaceRegistration').catch(() => {});
-};
+// محرك الوجه الجديد (MediaPipe + عامل البصمات) يُحمَّل تلقائياً عند فتح أي واجهة وجه
+// عبر useFaceAI — لا حاجة لتحميل مسبق هنا
 
 type Tab = 'stage-selector' | 'colleges' | 'login' | 'manage' | 'records' | 'settings' | 'sessions' | 'teachers' | 'profile' | 'system-settings';
 
@@ -268,12 +252,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    // 🚀 تحميل موديل الكشف الخفيف بالخلفية من أول لحظة فتح الموقع (بدون تثبيت)
-    preloadDetector();
-    // (مكونات تسجيل البصمة تُحمَّل بعد تسجيل الدخول فقط لتقليل حمل شاشة الدخول)
-  }, []);
-
-  useEffect(() => {
     const handleBeforeUnload = () => flushAllPendingSaves();
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
@@ -285,8 +263,6 @@ function App() {
   useEffect(() => {
     if (registerToken) {
       setLoading(false);
-      // 🚀 تحميل موديل الكشف الخفيف فوراً
-      setTimeout(() => preloadDetector(), 500);
       return;
     }
 
@@ -315,12 +291,6 @@ function App() {
 
           setCurrentUser(userData);
           await loadInitialData(userData);
-          // 🚀 تحميل موديل الكشف الخفيف فور تحميل الواجهة
-          setTimeout(() => preloadDetector(), 500);
-          // 🚀 تحميل كامل الموديلات فور تسجيل الدخول (حتى تكون جاهزة عند فتح البصمة)
-          setTimeout(preloadBackground, 1000);
-          // 🚀 تحميل مسبق لمكونات تسجيل البصمة بعد الدخول لتعمل حتى عند انقطاع الإنترنت
-          setTimeout(preloadAttendanceChunks, 1500);
         } catch (error) {
           console.error('❌ Error loading user:', error);
           setCurrentUser(null);
@@ -448,7 +418,6 @@ function App() {
   };
 
   const handleSelectStage = useCallback(async (collegeId: string, stageId: string) => {
-    preloadBackground();
     setSelectedCollegeId(collegeId);
     setSelectedStageId(stageId);
     setDataLoaded(false);
