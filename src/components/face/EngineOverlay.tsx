@@ -19,22 +19,41 @@ export const EngineOverlay: React.FC<EngineOverlayProps> = ({ progress, error, o
   const isDone = pct >= 100;
 
   return createPortal(
-    <div
-      dir="rtl"
-      className="fixed inset-0 z-[10000] flex items-center justify-center place-content-center bg-slate-950/95 backdrop-blur-xl"
-      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-    >
+    <div dir="rtl" style={{
+      position: 'fixed',
+      inset: 0,
+      zIndex: 10000,
+      display: 'grid',
+      placeItems: 'center',
+      background: 'rgba(2,6,23,0.95)',
+      backdropFilter: 'blur(24px)',
+    }}>
       {onCancel && (
         <button
           onClick={onCancel}
           aria-label="إغلاق"
-          className="absolute top-4 left-4 z-10 w-11 h-11 flex items-center justify-center bg-white/5 hover:bg-white/15 text-white rounded-full border border-white/10 transition active:scale-90"
+          style={{
+            position: 'absolute',
+            top: 16,
+            left: 16,
+            zIndex: 10,
+            width: 44,
+            height: 44,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(255,255,255,0.05)',
+            color: 'white',
+            borderRadius: '50%',
+            border: '1px solid rgba(255,255,255,0.1)',
+            cursor: 'pointer',
+          }}
         >
           ✕
         </button>
       )}
 
-      <div className="w-full max-w-xs mx-auto px-4 text-center">
+      <div style={{ width: '100%', maxWidth: 320, padding: '0 16px', textAlign: 'center' }}>
         {/* حلقة تقدم دائرية */}
         <div className="relative w-28 h-28 mx-auto mb-8">
           <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
