@@ -6,6 +6,7 @@ import {
   getCompressionStats,
   hasFaceDescriptor,
 } from '../services/faceCompression';
+import ConfirmDialog from './ConfirmDialog';
 import { Camera, CaseSensitive, ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, ClipboardList, FileArchive, FolderOpen, Hash, IdCard, Lightbulb, LoaderCircle, Pencil, Plus, QrCode, RefreshCw, ScanFace, Smile, SquarePen, Trash2, TriangleAlert, Unlink, Upload, Users, Zap } from 'lucide-react';
 
 // 🚀 نافذة تسجيل الوجه تُحمَّل عند فتحها فقط (مكتبة الوجوه ثقيلة)
@@ -81,6 +82,15 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
   const [searchQuery, setSearchQuery] = useState('');
   const [groupFilter, setGroupFilter] = useState<string>('all');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    confirmClassName?: string;
+  }>({ open: false, title: '', message: '', onConfirm: () => {} });
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -379,10 +389,19 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
       ? `سيتم حذف جميع الطلاب (${students.length})!\nهل أنت متأكد؟`
       : `هل أنت متأكد من حذف ${selectedIds.size} طالب؟`;
 
-    if (!window.confirm(message)) return;
+    setConfirmState({
+      open: true,
+      title: 'حذف الطلاب',
+      message,
+      onConfirm: () => {
+        onDeleteSelectedStudents(Array.from(selectedIds));
+        setSelectedIds(new Set());
+      },
+    });
+  };
 
-    onDeleteSelectedStudents(Array.from(selectedIds));
-    setSelectedIds(new Set());
+  const openConfirm = (title: string, message: string, onConfirm: () => void, opts?: { confirmLabel?: string; confirmClassName?: string }) => {
+    setConfirmState({ open: true, title, message, onConfirm, ...opts });
   };
 
   const startEditUniId = (student: Student) => {
@@ -437,14 +456,16 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
 
   const removeQrLink = (student: Student) => {
     if (!onUpdateStudent) return;
-    if (!window.confirm(`هل تريد فك ربط رمز QR من ${student.name}؟`)) return;
-    onUpdateStudent(student.id, { qrCodeId: undefined });
+    openConfirm('فك ربط QR', `هل تريد فك ربط رمز QR من ${student.name}؟`, () => {
+      onUpdateStudent(student.id, { qrCodeId: undefined });
+    });
   };
 
   const removeFaceData = (student: Student) => {
     if (!onUpdateStudent) return;
-    if (!window.confirm(`هل تريد حذف بصمة الوجه من ${student.name}؟`)) return;
-    onUpdateStudent(student.id, { faceDescriptor: undefined, faceRegisteredAt: undefined });
+    openConfirm('حذف بصمة الوجه', `هل تريد حذف بصمة الوجه من ${student.name}؟`, () => {
+      onUpdateStudent(student.id, { faceDescriptor: undefined, faceRegisteredAt: undefined });
+    });
   };
 
   /* 🆕 ضغط كل البصمات غير المضغوطة */
@@ -464,12 +485,13 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
 
     const stats = getCompressionStats(students);
 
-    if (!window.confirm(
+    openConfirm(
+      'ضغط البصمات',
       `سيتم ضغط ${uncompressedStudents.length} بصمة\n\n` +
       `توفير متوقع: ~${stats.potentialSavingsKB.toFixed(1)} KB\n` +
       `الدقة: لن تتأثر (أقل من 1%)\n\n` +
-      `هل تريد المتابعة؟`
-    )) return;
+      `هل تريد المتابعة؟`,
+      async () => {
 
     setCompressing(true);
     setCompressionProgress({ current: 0, total: uncompressedStudents.length });
@@ -501,6 +523,9 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
       setCompressing(false);
       setCompressionProgress({ current: 0, total: 0 });
     }
+    },
+    { confirmLabel: 'ضغط', confirmClassName: 'bg-emerald-600 hover:bg-emerald-700' }
+    );
   };
 
   const uniqueGroups = useMemo(() => {
@@ -867,9 +892,9 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
             {onSortByName && (
               <button
                 onClick={() => {
-                  if (window.confirm('هل تريد ترتيب الطلاب أبجدياً حسب الأسماء؟')) {
+                  openConfirm('ترتيب أبجدي', 'هل تريد ترتيب الطلاب أبجدياً حسب الأسماء؟', () => {
                     onSortByName();
-                  }
+                  }, { confirmLabel: 'ترتيب', confirmClassName: 'bg-purple-600 hover:bg-purple-700' });
                 }}
                 className="flex-1 min-w-[140px] sm:min-w-[200px] px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-medium rounded-md transition duration-200 shadow-md flex items-center justify-center gap-2"
               >
@@ -879,9 +904,9 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
             {onSortByGroup && (
               <button
                 onClick={() => {
-                  if (window.confirm('هل تريد ترتيب الطلاب حسب الكروب ثم الاسم؟')) {
+                  openConfirm('ترتيب حسب الكروب', 'هل تريد ترتيب الطلاب حسب الكروب ثم الاسم؟', () => {
                     onSortByGroup();
-                  }
+                  }, { confirmLabel: 'ترتيب', confirmClassName: 'bg-pink-600 hover:bg-pink-700' });
                 }}
                 className="flex-1 min-w-[140px] sm:min-w-[200px] px-4 py-2 bg-gradient-to-r from-pink-600 to-pink-700 hover:from-pink-700 hover:to-pink-800 text-white font-medium rounded-md transition duration-200 shadow-md flex items-center justify-center gap-2"
               >
@@ -1342,9 +1367,11 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
                         )}
                         <button
                           onClick={() => {
-                            if (window.confirm(`هل أنت متأكد من حذف الطالب ${student.name}؟`)) {
-                              onDeleteStudent(student.id);
-                            }
+                            openConfirm(
+                              'حذف الطالب',
+                              `هل أنت متأكد من حذف الطالب ${student.name}؟`,
+                              () => onDeleteStudent(student.id)
+                            );
                           }}
                           className="text-red-400 hover:text-red-300 font-medium"
                         >
@@ -1419,6 +1446,16 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
           </button>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmLabel={confirmState.confirmLabel || 'تأكيد'}
+        confirmClassName={confirmState.confirmClassName}
+        onConfirm={() => { confirmState.onConfirm(); setConfirmState(s => ({ ...s, open: false })); }}
+        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+      />
 
       {showFaceRegister && onUpdateStudent && (
         <Suspense fallback={null}>

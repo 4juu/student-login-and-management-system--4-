@@ -2,7 +2,7 @@ import * as tf from '@tensorflow/tfjs';
 
 const MODEL_URL = '/models/mobilefacenet/model.json';
 const INPUT_SIZE = 112;
-const EMBEDDING_DIM = 512;
+const EMBEDDING_DIM = 192;
 
 let model: tf.GraphModel | null = null;
 let loading = false;
@@ -84,9 +84,9 @@ export const extractEmbedding = async (
     const embedding = new Float32Array(data);
 
     let norm = 0;
-    for (let i = 0; i < EMBEDDING_DIM; i++) norm += embedding[i] * embedding[i];
+    for (let i = 0; i < embedding.length; i++) norm += embedding[i] * embedding[i];
     norm = Math.sqrt(norm) || 1;
-    for (let i = 0; i < EMBEDDING_DIM; i++) embedding[i] /= norm;
+    for (let i = 0; i < embedding.length; i++) embedding[i] /= norm;
 
     return embedding;
   } finally {

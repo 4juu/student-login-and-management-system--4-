@@ -625,9 +625,9 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
               if (descs.length > 3) descs.shift();
               trackDescriptors.set(track.id, descs);
               if (descs.length >= 2) {
-                const avg = new Float32Array(128);
-                for (const d of descs) for (let i = 0; i < 128; i++) avg[i] += d[i];
-                for (let i = 0; i < 128; i++) avg[i] /= descs.length;
+                const avg = new Float32Array(192);
+                for (const d of descs) for (let i = 0; i < 192; i++) avg[i] += d[i];
+                for (let i = 0; i < 192; i++) avg[i] /= descs.length;
                 matchDesc = normalizeDescriptor(avg);
               }
             }
@@ -770,9 +770,9 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     const vw = video.videoWidth, vh = video.videoHeight;
     if (!vw || !vh) return;
 
-    // إحداثيات الكشف تعود بأبعاد إطار المعالجة (320 عرضاً) وليس بأبعاد الفيديو الأصلية
-    const detW = 320;
-    const detH = Math.max(1, Math.round((detW * vh) / vw));
+    // BlazeFace تُرجع الإحداثيات بأبعاد الفيديو الأصلية (videoWidth × videoHeight)
+    const detW = vw;
+    const detH = vh;
 
     const scale = Math.max(canvas.width / detW, canvas.height / detH);
     const dispW = detW * scale;

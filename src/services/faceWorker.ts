@@ -1,5 +1,5 @@
 const workerCode = `
-  const DESC_DIM = 512;
+  const DESC_DIM = 192;
 
   function cosineSimilarity(a, b) {
     let dot = 0;

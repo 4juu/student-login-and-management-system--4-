@@ -3,7 +3,7 @@ import { getWorker, workerFindBestMatch, workerBatchMatchAll } from './faceWorke
 import { loadMobileFaceNet, isMobileFaceNetReady, extractEmbedding, cosineSimilarity } from './mobileFaceNet';
 import { loadBlazeFace, isBlazeFaceReady, detectFacesBlaze } from './blazeFace';
 
-const DESC_DIM = 512;
+const DESC_DIM = 192;
 
 let modelsLoaded = false;
 let loadingPromise: Promise<void> | null = null;
@@ -105,7 +105,7 @@ export function getLoadProgress(): number { return _loadProgress; }
 export function isDetectorReady(): boolean { return _detectorReady; }
 export function isLandmarksReady(): boolean { return false; }
 
-const MIN_LOAD_MS = 5000;
+const MIN_LOAD_MS = 2000;
 
 const loadModelsInternal = async (): Promise<void> => {
   const t0 = performance.now();
@@ -118,8 +118,7 @@ const loadModelsInternal = async (): Promise<void> => {
     _detectorReady = true;
     _emitProgress({ stage: 'detector', stageIndex: 0, percent: 50, detail: '✓ كاشف الوجوه جاهز' });
   } catch (e: any) {
-    _emitProgress({ stage: 'detector', stageIndex: 0, percent: 50, detail: '⚠ كاشف الوجوه - دولار ك FALLBACK' });
-    _detectorReady = true;
+    _emitProgress({ stage: 'detector', stageIndex: 0, percent: 0, detail: '⚠ فشل تحميل كاشف الوجوه', error: e.message || 'Unknown error' });
   }
 
   _emitProgress({ stage: 'recognition', stageIndex: 1, percent: 50, detail: 'جاري تحميل موديل التعرف...' });
@@ -166,7 +165,7 @@ export function startBackgroundPreload(): void {
 
 export function startDetectorPreload(): void {
   if (_detectorReady || modelsLoaded) return;
-  _detectorReady = true;
+  loadBlazeFace().then(() => { _detectorReady = true; }).catch(() => {});
 }
 
 export function isPreloadStarted(): boolean { return preloadStarted; }
@@ -425,8 +424,7 @@ export const detectFaces = async (
   inputSize = 320
 ): Promise<SimpleDetection[]> => {
   if (!isBlazeFaceReady()) return [];
-  const flip = 'videoWidth' in input;
-  const detections = await detectFacesBlaze(input, flip);
+  const detections = await detectFacesBlaze(input, false);
   return detections;
 };
 
@@ -439,8 +437,7 @@ export const extractFaceDescriptor = async (
   const vw = 'videoWidth' in input ? input.videoWidth : input.width;
   const vh = 'videoHeight' in input ? input.videoHeight : input.height;
 
-  const flip = 'videoWidth' in input;
-  const detections = await detectFacesBlaze(input, flip);
+  const detections = await detectFacesBlaze(input, false);
   if (detections.length === 0) return null;
 
   const best = detections[0];
@@ -458,8 +455,7 @@ export const extractAllFaceDescriptors = async (
   const vw = 'videoWidth' in input ? input.videoWidth : input.width;
   const vh = 'videoHeight' in input ? input.videoHeight : input.height;
 
-  const flip = 'videoWidth' in input;
-  const detections = await detectFacesBlaze(input, flip);
+  const detections = await detectFacesBlaze(input, false);
 
   if (detections.length === 0) return [];
 
@@ -484,8 +480,7 @@ export const detectAllFacesOnly = async (
   _inputSize = 320
 ) => {
   if (!isBlazeFaceReady()) return [];
-  const flip = 'videoWidth' in input;
-  return detectFacesBlaze(input, flip);
+  return detectFacesBlaze(input, false);
 };
 
 export const detectSingleFace = async (
@@ -494,8 +489,7 @@ export const detectSingleFace = async (
   _inputSize = 320
 ) => {
   if (!isBlazeFaceReady()) return null;
-  const flip = 'videoWidth' in input;
-  const faces = await detectFacesBlaze(input, flip);
+  const faces = await detectFacesBlaze(input, false);
   return faces.length > 0 ? faces[0] : null;
 };
 
