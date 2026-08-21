@@ -67,7 +67,6 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
 
   const [cameraReady, setCameraReady] = useState(false);
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
-  const [groupMode, setGroupMode] = useState(false);
   const [status, setStatus] = useState<ScanStatus>('idle');
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [kiosk, setKiosk] = useState(false);
@@ -306,8 +305,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
           return;
         }
 
-        // وضع فردي: الوجه الأكبر فقط — جماعي: كل الوجوه
-        const targets = groupMode ? detections : detections.slice(0, 1);
+        const targets = detections;
         const bigEnough = targets.filter(d => d.box.width >= MIN_FACE_PX && d.box.height >= MIN_FACE_PX);
 
         if (bigEnough.length === 0) {
@@ -403,7 +401,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
       if (loopTimerRef.current) clearTimeout(loopTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engineReady, cameraReady, groupMode, digitalZoom, celebrate, pushLog]);
+  }, [engineReady, cameraReady, digitalZoom, celebrate, pushLog]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -453,15 +451,6 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
             </p>
           </div>
         </div>
-        <button
-          onClick={() => setGroupMode(m => !m)}
-          className={`px-3 py-1.5 rounded-full text-xs font-bold transition active:scale-95 ${
-            groupMode ? 'bg-emerald-500 text-white' : 'bg-white/8 text-slate-300 hover:bg-white/15'
-          }`}
-          title="الوضع الفردي يطابق أكبر وجه فقط، والجماعي يطابق كل الوجوه في الكادر"
-        >
-          {groupMode ? '👥 جماعي' : '👤 فردي'}
-        </button>
         <button
           onClick={() => setFacing(f => (f === 'user' ? 'environment' : 'user'))}
           aria-label="تبديل الكاميرا"
