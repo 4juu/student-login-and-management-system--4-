@@ -230,8 +230,8 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
         // تحديد موضع الوجه (الأمام / اليمين / اليسار)
         const offsetRatio = (ecx - fcx) / v.videoWidth; // موجب = يسار في الفيديو (أيمن للطالب)
         let pos: 'center' | 'left' | 'right' = 'center';
-        if (offsetRatio > 0.06) pos = 'right';       // الوجه يسار الفيديو = طالب يمين
-        else if (offsetRatio < -0.06) pos = 'left';   // الوجه يمين الفيديو = طالب يسار
+        if (offsetRatio > 0.03) pos = 'right';       // ميلان طفيف لليمين يكفي
+        else if (offsetRatio < -0.03) pos = 'left';   // ميلان طفيف لليسار يكفي
 
         setFaceInBoundary(insideEllipse);
 
