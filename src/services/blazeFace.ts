@@ -6,25 +6,19 @@ const MODEL_URL = '/models/blazeface/model.json';
 let model: blazeface.BlazeFaceModel | null = null;
 let loading = false;
 let loadPromise: Promise<blazeface.BlazeFaceModel> | null = null;
-let backendFailed = false;
 
 export const isBlazeFaceReady = (): boolean => model !== null;
 
-async function ensureBackend(): Promise<void> {
-  const current = tf.getBackend();
-  if (current && current !== 'cpu' && !backendFailed) return;
+async function trySetBackend(name: string): Promise<boolean> {
+  try { await tf.setBackend(name); await tf.ready(); return true; } catch { return false; }
+}
 
-  try {
-    await tf.setBackend('webgl');
-    await tf.ready();
-    backendFailed = false;
-  } catch {
-    try {
-      await tf.setBackend('cpu');
-      await tf.ready();
-      backendFailed = true;
-    } catch {}
-  }
+async function ensureBackend(): Promise<void> {
+  const cur = tf.getBackend();
+  if (cur && cur !== 'cpu') return;
+  if (await trySetBackend('webgl')) return;
+  if (await trySetBackend('webgl2')) return;
+  await trySetBackend('cpu');
 }
 
 export const loadBlazeFace = async (): Promise<blazeface.BlazeFaceModel> => {
@@ -55,6 +49,17 @@ export interface BlazeFaceDetection {
   score: number;
 }
 
+const mapPredictions = (predictions: any[]): BlazeFaceDetection[] =>
+  predictions.map(p => {
+    const tl = Array.isArray(p.topLeft) ? p.topLeft : [0, 0];
+    const br = Array.isArray(p.bottomRight) ? p.bottomRight : [0, 0];
+    const prob = Array.isArray(p.probability) ? p.probability[0] : (p.probability ?? 0);
+    return {
+      box: { x: tl[0], y: tl[1], width: br[0] - tl[0], height: br[1] - tl[1] },
+      score: prob,
+    };
+  });
+
 export const detectFacesBlaze = async (
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
   flipHorizontal = false
@@ -63,39 +68,14 @@ export const detectFacesBlaze = async (
 
   try {
     const predictions = await model.estimateFaces(input, false, flipHorizontal);
-
-    return predictions.map(p => {
-      const tl = Array.isArray(p.topLeft) ? p.topLeft : [0, 0];
-      const br = Array.isArray(p.bottomRight) ? p.bottomRight : [0, 0];
-      const prob = Array.isArray(p.probability) ? p.probability[0] : (p.probability ?? 0);
-      return {
-        box: {
-          x: tl[0],
-          y: tl[1],
-          width: br[0] - tl[0],
-          height: br[1] - tl[1],
-        },
-        score: prob,
-      };
-    });
+    return mapPredictions(predictions);
   } catch (e: any) {
-    if (e?.message?.includes('shader') || e?.message?.includes('link')) {
-      console.warn('WebGL shader error, attempting CPU fallback:', e.message);
+    if (e?.message?.includes('shader') || e?.message?.includes('link') || e?.message?.includes('WebGL')) {
       try {
-        await tf.setBackend('cpu');
-        await tf.ready();
-        backendFailed = true;
+        await trySetBackend('cpu');
         if (model) {
           const predictions = await model.estimateFaces(input, false, flipHorizontal);
-          return predictions.map(p => {
-            const tl = Array.isArray(p.topLeft) ? p.topLeft : [0, 0];
-            const br = Array.isArray(p.bottomRight) ? p.bottomRight : [0, 0];
-            const prob = Array.isArray(p.probability) ? p.probability[0] : (p.probability ?? 0);
-            return {
-              box: { x: tl[0], y: tl[1], width: br[0] - tl[0], height: br[1] - tl[1] },
-              score: prob,
-            };
-          });
+          return mapPredictions(predictions);
         }
       } catch {}
     }

@@ -7,23 +7,32 @@ const EMBEDDING_DIM = 192;
 let model: tf.GraphModel | null = null;
 let loading = false;
 let loadPromise: Promise<tf.GraphModel> | null = null;
+let _backendOk = false;
 
 export const getMobileFaceNetModel = (): tf.GraphModel | null => model;
 export const isMobileFaceNetReady = (): boolean => model !== null;
 export const getEmbeddingDim = () => EMBEDDING_DIM;
 
-async function ensureBackend(): Promise<void> {
-  const current = tf.getBackend();
-  if (current && current !== 'cpu') return;
+async function trySetBackend(name: string): Promise<boolean> {
   try {
-    await tf.setBackend('webgl');
+    await tf.setBackend(name);
     await tf.ready();
-  } catch {
-    try {
-      await tf.setBackend('cpu');
-      await tf.ready();
-    } catch {}
-  }
+    return true;
+  } catch { return false; }
+}
+
+async function ensureBackend(): Promise<void> {
+  if (_backendOk && tf.getBackend() !== 'cpu') return;
+  if (await trySetBackend('webgl')) { _backendOk = true; return; }
+  if (await trySetBackend('webgl2')) { _backendOk = true; return; }
+  await trySetBackend('cpu');
+  _backendOk = true;
+}
+
+async function fallbackToCPU(): Promise<void> {
+  _backendOk = false;
+  await trySetBackend('cpu');
+  _backendOk = true;
 }
 
 export const loadMobileFaceNet = async (): Promise<tf.GraphModel> => {
@@ -36,8 +45,14 @@ export const loadMobileFaceNet = async (): Promise<tf.GraphModel> => {
       await ensureBackend();
       model = await tf.loadGraphModel(MODEL_URL);
       const dummy = tf.zeros([1, INPUT_SIZE, INPUT_SIZE, 3]);
-      const warmup = model.predict(dummy) as tf.Tensor;
-      warmup.dispose();
+      try {
+        const warmup = model.predict(dummy) as tf.Tensor;
+        warmup.dispose();
+      } catch {
+        await fallbackToCPU();
+        const warmup = model.predict(dummy) as tf.Tensor;
+        warmup.dispose();
+      }
       dummy.dispose();
       return model;
     } finally {
@@ -64,9 +79,6 @@ export const cropAndResizeFace = (
   const cropW = Math.min(sourceWidth - cropX, box.width + padX * 2);
   const cropH = Math.min(sourceHeight - cropY, box.height + padY * 2);
 
-  const scaleX = cropW / sourceWidth;
-  const scaleY = cropH / sourceHeight;
-
   const imgTensor = tf.browser.fromPixels(source);
   const batched = imgTensor.expandDims(0);
 
@@ -83,6 +95,35 @@ export const cropAndResizeFace = (
   return normalized as tf.Tensor4D;
 };
 
+const predictAndNormalize = async (input: tf.Tensor4D): Promise<Float32Array | null> => {
+  if (!model) return null;
+  try {
+    const output = model.predict(input) as tf.Tensor;
+    const data = await output.data();
+    output.dispose();
+    const embedding = new Float32Array(data);
+    let norm = 0;
+    for (let i = 0; i < embedding.length; i++) norm += embedding[i] * embedding[i];
+    norm = Math.sqrt(norm) || 1;
+    for (let i = 0; i < embedding.length; i++) embedding[i] /= norm;
+    return embedding;
+  } catch (e: any) {
+    if (e?.message?.includes('shader') || e?.message?.includes('link') || e?.message?.includes('WebGL')) {
+      await fallbackToCPU();
+      const output = model.predict(input) as tf.Tensor;
+      const data = await output.data();
+      output.dispose();
+      const embedding = new Float32Array(data);
+      let norm = 0;
+      for (let i = 0; i < embedding.length; i++) norm += embedding[i] * embedding[i];
+      norm = Math.sqrt(norm) || 1;
+      for (let i = 0; i < embedding.length; i++) embedding[i] /= norm;
+      return embedding;
+    }
+    throw e;
+  }
+};
+
 export const extractEmbedding = async (
   source: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
   box: { x: number; y: number; width: number; height: number },
@@ -93,17 +134,7 @@ export const extractEmbedding = async (
 
   const input = cropAndResizeFace(source, box, sourceWidth, sourceHeight);
   try {
-    const output = model.predict(input) as tf.Tensor;
-    const data = await output.data();
-    output.dispose();
-    const embedding = new Float32Array(data);
-
-    let norm = 0;
-    for (let i = 0; i < embedding.length; i++) norm += embedding[i] * embedding[i];
-    norm = Math.sqrt(norm) || 1;
-    for (let i = 0; i < embedding.length; i++) embedding[i] /= norm;
-
-    return embedding;
+    return await predictAndNormalize(input);
   } finally {
     input.dispose();
   }
