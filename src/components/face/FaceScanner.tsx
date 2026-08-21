@@ -457,27 +457,33 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
           </div>
         </div>
         <button
-          onClick={() => setFacing(f => (f === 'user' ? 'environment' : 'user'))}
-          aria-label="تبديل الكاميرا"
-          className="w-9 h-9 rounded-full bg-white/8 hover:bg-white/15 text-white flex items-center justify-center transition active:scale-90"
-        >
-          🔄
-        </button>
-        <button
           onClick={() => setKiosk(k => !k)}
           aria-label="وضع العرض"
           className="hidden sm:flex w-9 h-9 rounded-full bg-white/8 hover:bg-white/15 text-white items-center justify-center transition active:scale-90"
         >
           {kiosk ? '🗗' : '⛶'}
         </button>
-        <button
-          onClick={onClose}
-          aria-label="إغلاق"
-          className="w-9 h-9 rounded-full bg-white/8 hover:bg-red-500/80 text-white flex items-center justify-center transition active:scale-90"
-        >
-          ✕
-        </button>
       </header>
+
+      {/* أزرار عائمة داخل الكاميرا — всегда ظاهرة */}
+      {engineReady && (
+        <div className="absolute top-3 left-3 right-3 z-30 flex items-center justify-between pointer-events-none">
+          <button
+            onClick={onClose}
+            aria-label="إغلاق"
+            className="pointer-events-auto w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-white flex items-center justify-center transition active:scale-90 shadow-lg"
+          >
+            ✕
+          </button>
+          <button
+            onClick={() => setFacing(f => (f === 'user' ? 'environment' : 'user'))}
+            aria-label="تبديل الكاميرا"
+            className="pointer-events-auto w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-white flex items-center justify-center transition active:scale-90 shadow-lg"
+          >
+            🔄
+          </button>
+        </div>
+      )}
 
       {/* منطقة الكاميرا */}
       <div className="relative flex-1 min-h-0 overflow-hidden">
