@@ -54,7 +54,7 @@ interface DetectedFaceBox {
 type CameraFacing = 'user' | 'environment';
 
 const RECOGNITION_COOLDOWN = 10000;
-const MIN_CONFIDENCE = 40;
+const MIN_CONFIDENCE = 60;
 const ZOOM_STEPS = [1, 1.5, 2, 2.5, 3];
 
 export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
@@ -149,7 +149,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
     document.body.style.overscrollBehavior = 'contain';
     setTimeout(() => {
       if (studentsWithFace.length > 0) {
-        buildDescriptorCache(studentsWithFace as any, 0.5);
+        buildDescriptorCache(studentsWithFace as any, 0.38);
       }
     }, 0);
     const interval = setInterval(() => {
@@ -292,7 +292,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
   useEffect(() => {
     if (studentsWithFace.length > 0) {
-      buildDescriptorCache(studentsWithFace as any, 0.5);
+      buildDescriptorCache(studentsWithFace as any, 0.38);
     } else {
       clearDescriptorCache();
     }
@@ -524,7 +524,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
 
         if (recognitionReady && detections.length > 0 && hasCache) {
           const descriptors = detections.map((d: any) => normalizeDescriptor(d.descriptor));
-          const matches = await findBestMatchBatchFromCache(descriptors, 0.5);
+          const matches = await findBestMatchBatchFromCache(descriptors, 0.38);
 
           if (!faceRunningRef.current || !mountedRef.current) return;
 
@@ -632,7 +632,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
               }
             }
 
-            const adaptiveThreshold = qScore < 0.85 ? 0.42 : qScore < 0.92 ? 0.46 : 0.50;
+            const adaptiveThreshold = qScore < 0.85 ? 0.30 : qScore < 0.92 ? 0.34 : 0.38;
             let bestStudent: Student | null = null;
             let bestDist = Infinity;
             let bestConfidence = 0;
