@@ -1,44 +1,25 @@
-import * as tf from '@tensorflow/tfjs';
 import * as blazeface from '@tensorflow-models/blazeface';
+import { initBackend, fallbackToCPU } from './tfBackend';
 
 const MODEL_URL = '/models/blazeface/model.json';
 
 let model: blazeface.BlazeFaceModel | null = null;
-let loading = false;
 let loadPromise: Promise<blazeface.BlazeFaceModel> | null = null;
 
 export const isBlazeFaceReady = (): boolean => model !== null;
-
-async function trySetBackend(name: string): Promise<boolean> {
-  try { await tf.setBackend(name); await tf.ready(); return true; } catch { return false; }
-}
-
-async function ensureBackend(): Promise<void> {
-  const cur = tf.getBackend();
-  if (cur && cur !== 'cpu') return;
-  if (await trySetBackend('webgl')) return;
-  if (await trySetBackend('webgl2')) return;
-  await trySetBackend('cpu');
-}
 
 export const loadBlazeFace = async (): Promise<blazeface.BlazeFaceModel> => {
   if (model) return model;
   if (loadPromise) return loadPromise;
 
   loadPromise = (async () => {
-    loading = true;
-    try {
-      await ensureBackend();
-      model = await blazeface.load({
-        modelUrl: MODEL_URL,
-        maxFaces: 3,
-        scoreThreshold: 0.5,
-      });
-      return model;
-    } finally {
-      loading = false;
-      loadPromise = null;
-    }
+    await initBackend();
+    model = await blazeface.load({
+      modelUrl: MODEL_URL,
+      maxFaces: 3,
+      scoreThreshold: 0.5,
+    });
+    return model;
   })();
 
   return loadPromise;
@@ -72,7 +53,7 @@ export const detectFacesBlaze = async (
   } catch (e: any) {
     if (e?.message?.includes('shader') || e?.message?.includes('link') || e?.message?.includes('WebGL')) {
       try {
-        await trySetBackend('cpu');
+        await fallbackToCPU();
         if (model) {
           const predictions = await model.estimateFaces(input, false, flipHorizontal);
           return mapPredictions(predictions);

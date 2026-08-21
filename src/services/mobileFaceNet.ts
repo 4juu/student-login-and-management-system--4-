@@ -1,64 +1,35 @@
 import * as tf from '@tensorflow/tfjs';
+import { initBackend, ensureBackend, fallbackToCPU } from './tfBackend';
 
 const MODEL_URL = '/models/mobilefacenet/model.json';
 const INPUT_SIZE = 112;
 const EMBEDDING_DIM = 192;
 
 let model: tf.GraphModel | null = null;
-let loading = false;
 let loadPromise: Promise<tf.GraphModel> | null = null;
-let _backendOk = false;
 
 export const getMobileFaceNetModel = (): tf.GraphModel | null => model;
 export const isMobileFaceNetReady = (): boolean => model !== null;
 export const getEmbeddingDim = () => EMBEDDING_DIM;
-
-async function trySetBackend(name: string): Promise<boolean> {
-  try {
-    await tf.setBackend(name);
-    await tf.ready();
-    return true;
-  } catch { return false; }
-}
-
-async function ensureBackend(): Promise<void> {
-  if (_backendOk && tf.getBackend() !== 'cpu') return;
-  if (await trySetBackend('webgl')) { _backendOk = true; return; }
-  if (await trySetBackend('webgl2')) { _backendOk = true; return; }
-  await trySetBackend('cpu');
-  _backendOk = true;
-}
-
-async function fallbackToCPU(): Promise<void> {
-  _backendOk = false;
-  await trySetBackend('cpu');
-  _backendOk = true;
-}
 
 export const loadMobileFaceNet = async (): Promise<tf.GraphModel> => {
   if (model) return model;
   if (loadPromise) return loadPromise;
 
   loadPromise = (async () => {
-    loading = true;
+    await initBackend();
+    model = await tf.loadGraphModel(MODEL_URL);
+    const dummy = tf.zeros([1, INPUT_SIZE, INPUT_SIZE, 3]);
     try {
-      await ensureBackend();
-      model = await tf.loadGraphModel(MODEL_URL);
-      const dummy = tf.zeros([1, INPUT_SIZE, INPUT_SIZE, 3]);
-      try {
-        const warmup = model.predict(dummy) as tf.Tensor;
-        warmup.dispose();
-      } catch {
-        await fallbackToCPU();
-        const warmup = model.predict(dummy) as tf.Tensor;
-        warmup.dispose();
-      }
-      dummy.dispose();
-      return model;
-    } finally {
-      loading = false;
-      loadPromise = null;
+      const warmup = model.predict(dummy) as tf.Tensor;
+      warmup.dispose();
+    } catch {
+      await fallbackToCPU();
+      const warmup = model.predict(dummy) as tf.Tensor;
+      warmup.dispose();
     }
+    dummy.dispose();
+    return model;
   })();
 
   return loadPromise;
@@ -79,28 +50,46 @@ export const cropAndResizeFace = (
   const cropW = Math.min(sourceWidth - cropX, box.width + padX * 2);
   const cropH = Math.min(sourceHeight - cropY, box.height + padY * 2);
 
-  const imgTensor = tf.browser.fromPixels(source);
-  const batched = imgTensor.expandDims(0);
+  if (cropW <= 0 || cropH <= 0) {
+    return tf.zeros([1, INPUT_SIZE, INPUT_SIZE, 3]) as tf.Tensor4D;
+  }
 
-  const boxTensor = tf.tensor2d([[cropY / sourceHeight, cropX / sourceWidth, (cropY + cropH) / sourceHeight, (cropX + cropW) / sourceWidth]]);
-  const cropTensor = tf.image.cropAndResize(batched, boxTensor, [0], [INPUT_SIZE, INPUT_SIZE]);
+  const c = document.createElement('canvas');
+  c.width = INPUT_SIZE;
+  c.height = INPUT_SIZE;
+  const ctx = c.getContext('2d')!;
+  ctx.drawImage(source, cropX, cropY, cropW, cropH, 0, 0, INPUT_SIZE, INPUT_SIZE);
+  const imgData = ctx.getImageData(0, 0, INPUT_SIZE, INPUT_SIZE);
+  const d = imgData.data;
 
-  const normalized = cropTensor.div(255.0);
+  const pixels = new Float32Array(INPUT_SIZE * INPUT_SIZE * 3);
+  const n = INPUT_SIZE * INPUT_SIZE;
+  for (let i = 0; i < n; i++) {
+    const j = i * 4;
+    pixels[i * 3] = d[j] / 255.0;
+    pixels[i * 3 + 1] = d[j + 1] / 255.0;
+    pixels[i * 3 + 2] = d[j + 2] / 255.0;
+  }
 
-  imgTensor.dispose();
-  batched.dispose();
-  boxTensor.dispose();
-  cropTensor.dispose();
-
-  return normalized as tf.Tensor4D;
+  return tf.tensor4d(pixels, [1, INPUT_SIZE, INPUT_SIZE, 3]) as tf.Tensor4D;
 };
 
-const predictAndNormalize = async (input: tf.Tensor4D): Promise<Float32Array | null> => {
+export const extractEmbedding = async (
+  source: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
+  box: { x: number; y: number; width: number; height: number },
+  sourceWidth: number,
+  sourceHeight: number
+): Promise<Float32Array | null> => {
   if (!model) return null;
+
+  await ensureBackend();
+
+  const input = cropAndResizeFace(source, box, sourceWidth, sourceHeight);
   try {
     const output = model.predict(input) as tf.Tensor;
     const data = await output.data();
     output.dispose();
+
     const embedding = new Float32Array(data);
     let norm = 0;
     for (let i = 0; i < embedding.length; i++) norm += embedding[i] * embedding[i];
@@ -121,35 +110,8 @@ const predictAndNormalize = async (input: tf.Tensor4D): Promise<Float32Array | n
       return embedding;
     }
     throw e;
-  }
-};
-
-export const extractEmbedding = async (
-  source: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
-  box: { x: number; y: number; width: number; height: number },
-  sourceWidth: number,
-  sourceHeight: number
-): Promise<Float32Array | null> => {
-  if (!model) return null;
-
-  try {
-    const input = cropAndResizeFace(source, box, sourceWidth, sourceHeight);
-    try {
-      return await predictAndNormalize(input);
-    } finally {
-      input.dispose();
-    }
-  } catch (e: any) {
-    if (e?.message?.includes('shader') || e?.message?.includes('link') || e?.message?.includes('WebGL') || e?.message?.includes('Backend')) {
-      await fallbackToCPU();
-      const input = cropAndResizeFace(source, box, sourceWidth, sourceHeight);
-      try {
-        return await predictAndNormalize(input);
-      } finally {
-        input.dispose();
-      }
-    }
-    throw e;
+  } finally {
+    input.dispose();
   }
 };
 
