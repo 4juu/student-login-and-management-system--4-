@@ -532,7 +532,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
             const det = detections[fi];
             const box = det.detection.box;
             const qScore = det.detection.score;
-            if (qScore < 0.45 || box.width < 20 || box.height < 20) continue;
+            if (qScore < 0.65 || box.width < 30 || box.height < 30) continue;
 
             const boxKey = `${Math.round(box.x / 40)}_${Math.round(box.y / 40)}`;
 
@@ -615,7 +615,7 @@ export const FaceAttendance: React.FC<FaceAttendanceProps> = ({
           for (const det of detections) {
             const box = det.detection.box;
             const qScore = det.detection.score;
-            if (qScore < 0.45 || box.width < 20 || box.height < 20) continue;
+            if (qScore < 0.65 || box.width < 30 || box.height < 30) continue;
             const track = tracked.find((t: any) => calculateIoU(t.box, box) > 0.3);
             let matchDesc = normalizeDescriptor(new Float32Array(det.descriptor));
 
