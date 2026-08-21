@@ -54,7 +54,7 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
   const [phase, setPhase] = useState<'select' | 'live' | 'summary'>(validPreset.length ? 'live' : 'select');
   const [selected, setSelected] = useState<Set<string>>(new Set(initialSelectedIds ?? []));
   const [search, setSearch] = useState('');
-  const queueRef = useRef<string[]>(validPreset);
+  const [queue, setQueue] = useState<string[]>(validPreset);
   const [qi, setQi] = useState(0);
   const [samples, setSamples] = useState(0);
   const [feedback, setFeedback] = useState('وجّه الوجه داخل الدائرة');
@@ -86,11 +86,8 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
     });
   }, [students, search]);
 
-  const currentStudent = useMemo(
-    () => students.find(s => s.id === queueRef.current[qi]),
-    [students, qi],
-  );
-  const total = queueRef.current.length;
+  const total = queue.length;
+  const currentStudent = queue[qi] ? students.find(s => s.id === queue[qi]) : undefined;
 
   // ── الكاميرا ──
   useEffect(() => {
@@ -127,6 +124,8 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
   // ── إنهاء طالب والانتقال للتالي ──
   const qiRef = useRef(qi);
   qiRef.current = qi;
+  const queueLenRef = useRef(queue.length);
+  queueLenRef.current = queue.length;
 
   const finishStudent = useCallback((studentId: string, name: string, ok: boolean, reason?: string) => {
     setResults(prev => [...prev, { studentId, name, ok, reason }]);
@@ -138,7 +137,7 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
     setTimeout(() => {
       if (!mountedRef.current) return;
       setFeedback('وجّه الوجه داخل الدائرة');
-      if (qiRef.current + 1 >= queueRef.current.length) setPhase('summary');
+      if (qiRef.current + 1 >= queueLenRef.current) setPhase('summary');
       else setQi(i => i + 1);
     }, 1000);
   }, []);
@@ -265,7 +264,9 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
 
   const startEnrollment = () => {
     if (selected.size === 0) return;
-    queueRef.current = [...selected];
+    const ids = [...selected];
+    setQueue(ids);
+    queueLenRef.current = ids.length;
     setResults([]);
     setSamples(0);
     samplesDataRef.current = [];
@@ -281,7 +282,7 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
     samplesDataRef.current = [];
     setSamples(0);
     setFeedback('وجّه الوجه داخل الدائرة');
-    if (qiRef.current + 1 >= queueRef.current.length) setPhase('summary');
+    if (qiRef.current + 1 >= queueLenRef.current) setPhase('summary');
     else setQi(i => i + 1);
   };
 
@@ -436,6 +437,16 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
               <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-white/6 hover:bg-white/12 text-slate-300 text-sm font-bold transition">
                 إيقاف وإغلاق
               </button>
+            </div>
+          </div>
+        )}
+
+        {phase === 'live' && !currentStudent && (
+          <div className="p-5 text-center">
+            <p className="text-slate-300 font-bold text-sm mb-3">تعذر العثور على بيانات الطالب في قائمة الانتظار.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setPhase('summary')} className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl text-sm transition">عرض النتائج</button>
+              <button onClick={onClose} className="flex-1 bg-white/6 hover:bg-white/12 text-slate-300 font-bold py-2.5 rounded-xl text-sm transition">إغلاق</button>
             </div>
           </div>
         )}
