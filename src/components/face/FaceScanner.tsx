@@ -62,6 +62,8 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   const mountedRef = useRef(true);
   const lastTickRef = useRef(0);
   const lastSeenRef = useRef(0);
+  const staleCountRef = useRef(0);
+  const engineWasBrokenRef = useRef(false);
 
   const [cameraReady, setCameraReady] = useState(false);
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
@@ -273,7 +275,36 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
       try {
         // ١) كشف سريع عبر MediaPipe (موديل جوجل)
         const detections: DetectedFace[] = faceDetectorService.detect(video, nowTs);
-        if (detections.length > 0) lastSeenRef.current = nowTs;
+
+        // ═══ استعادة تلقائية: إذا المحرك تعطّل أثناء التشغيل ═══
+        if (!faceDetectorService.ready) {
+          engineWasBrokenRef.current = true;
+          staleCountRef.current = 0;
+          retry();
+          if (runningRef.current && mountedRef.current) {
+            loopTimerRef.current = window.setTimeout(tick, 200);
+          }
+          return;
+        }
+
+        if (detections.length > 0) {
+          lastSeenRef.current = nowTs;
+          staleCountRef.current = 0;
+        } else {
+          staleCountRef.current++;
+        }
+
+        // ═══ استعادة تلقائية: كشف فارغ طويل despite الكاميرا جاهزة ═══
+        if (staleCountRef.current > 40 && cameraReady) {
+          console.warn('[face-scanner] كشف فارغ متواصل — إعادة تهيئة المحرك');
+          staleCountRef.current = 0;
+          engineWasBrokenRef.current = true;
+          retry();
+          if (runningRef.current && mountedRef.current) {
+            loopTimerRef.current = window.setTimeout(tick, 200);
+          }
+          return;
+        }
 
         // وضع فردي: الوجه الأكبر فقط — جماعي: كل الوجوه
         const targets = groupMode ? detections : detections.slice(0, 1);
@@ -379,8 +410,17 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     return () => { mountedRef.current = false; };
   }, []);
 
+  // إعادة تعيين عدّاد الفراغ عند جاهزية المحرك بعد إعادة تهيئة
+  useEffect(() => {
+    if (engineReady) {
+      staleCountRef.current = 0;
+      engineWasBrokenRef.current = false;
+    }
+  }, [engineReady]);
+
   const statusPill = (() => {
     if (!engineReady || !cameraReady) return { icon: '⏳', text: 'جاري التحضير...', cls: 'bg-white/10 text-slate-300' };
+    if (engineWasBrokenRef.current) return { icon: '🔄', text: 'جاري إعادة تهيئة المحرك...', cls: 'bg-amber-500/90 text-white' };
     switch (status) {
       case 'marked': return { icon: '🎉', text: 'تم تسجيل الحضور!', cls: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/40' };
       case 'unknown': return { icon: '❓', text: 'وجه غير مسجل', cls: 'bg-amber-500/90 text-amber-950' };

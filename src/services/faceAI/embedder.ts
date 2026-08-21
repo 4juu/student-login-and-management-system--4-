@@ -148,11 +148,37 @@ class EmbeddingClient {
   }
 
   async embed(bitmap: ImageBitmap, box: Box): Promise<EmbedResult> {
-    return this.request<EmbedResult>({ type: 'embed', bitmap, box });
+    try {
+      return await this.request<EmbedResult>({ type: 'embed', bitmap, box });
+    } catch (e) {
+      if (String(e).includes('المحرك غير جاهز') || String(e).includes('انقطع')) {
+        console.warn('[face-embed] المحرك معطّل، محاولة إعادة التشغيل...');
+        this._ready = false;
+        this.worker?.terminate();
+        this.worker = null;
+        this.readyPromise = null;
+        this.restarts = 0;
+        this.ensureReady().catch(() => {});
+      }
+      throw e;
+    }
   }
 
   async embedBatch(bitmap: ImageBitmap, boxes: Box[]): Promise<Array<EmbedResult & { box: Box }>> {
-    return this.request<Array<EmbedResult & { box: Box }>>({ type: 'embedBatch', bitmap, boxes });
+    try {
+      return await this.request<Array<EmbedResult & { box: Box }>>({ type: 'embedBatch', bitmap, boxes });
+    } catch (e) {
+      if (String(e).includes('المحرك غير جاهز') || String(e).includes('انقطع')) {
+        console.warn('[face-embed] المحرك معطّل، محاولة إعادة التشغيل...');
+        this._ready = false;
+        this.worker?.terminate();
+        this.worker = null;
+        this.readyPromise = null;
+        this.restarts = 0;
+        this.ensureReady().catch(() => {});
+      }
+      throw e;
+    }
   }
 
   dispose(): void {

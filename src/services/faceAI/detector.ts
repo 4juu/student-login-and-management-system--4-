@@ -85,22 +85,38 @@ class FaceDetectionService {
    */
   detect(video: HTMLVideoElement, timestampMs: number): DetectedFace[] {
     if (!this.detector || video.readyState < 2 || !video.videoWidth) return [];
-    const result = this.detector.detectForVideo(video, timestampMs);
-    const out: DetectedFace[] = [];
-    for (const det of result.detections ?? []) {
-      const bb = det.boundingBox;
-      const score = det.categories?.[0]?.score ?? 0;
-      if (!bb || score < 0.5) continue;
-      // قص داخل حدود الفيديو
-      const x = Math.max(0, bb.originX);
-      const y = Math.max(0, bb.originY);
-      const width = Math.min(video.videoWidth - x, bb.width);
-      const height = Math.min(video.videoHeight - y, bb.height);
-      if (width < 24 || height < 24) continue;
-      out.push({ box: { x, y, width, height }, score });
+    try {
+      const result = this.detector.detectForVideo(video, timestampMs);
+      const out: DetectedFace[] = [];
+      for (const det of result.detections ?? []) {
+        const bb = det.boundingBox;
+        const score = det.categories?.[0]?.score ?? 0;
+        if (!bb || score < 0.5) continue;
+        const x = Math.max(0, bb.originX);
+        const y = Math.max(0, bb.originY);
+        const width = Math.min(video.videoWidth - x, bb.width);
+        const height = Math.min(video.videoHeight - y, bb.height);
+        if (width < 24 || height < 24) continue;
+        out.push({ box: { x, y, width, height }, score });
+      }
+      out.sort((a, b) => b.box.width * b.score - a.box.width * a.score);
+      return out;
+    } catch (e) {
+      console.error('[face-detector] فشل الكشف — إعادة تهيئة المحرك:', e);
+      this._ready = false;
+      this.detector = null;
+      this.loading = null;
+      this.report({ stage: 'wasm', percent: 0, detail: 'أُعيد تهيئة محرك الكشف...' });
+      return [];
     }
-    out.sort((a, b) => b.box.width * b.score - a.box.width * a.score);
-    return out;
+  }
+
+  /** إعادة تهيئة كاملة من الصفر — تستدعى عند تعطل المحرك */
+  reset() {
+    this._ready = false;
+    this.detector = null;
+    this.loading = null;
+    this.report({ stage: 'wasm', percent: 0, detail: 'تهيئة محرك الوجه...' });
   }
 }
 

@@ -1,5 +1,5 @@
 // hook موحد لمحرك الوجه الجديد — كاشف MediaPipe + عامل البصمات معاً
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { faceDetectorService, type DetectorProgress } from '../services/faceAI/detector';
 import { faceEmbedder, type EngineProgress } from '../services/faceAI/embedder';
 
@@ -51,5 +51,16 @@ export function useFaceAI(): UseFaceAIResult {
     };
   }, [attempt]);
 
-  return { ready, progress: combine(detProg, embProg), error, retry: () => setAttempt(a => a + 1) };
+  // إعادة تهيئة كاملة — تُستخدم عندما يكتشف المحرك تعطلاً أثناء التشغيل
+  const reinit = useCallback(() => {
+    faceDetectorService.reset();
+    faceEmbedder.dispose();
+    setReady(false);
+    setError(null);
+    setDetProg({ stage: 'wasm', percent: 0, detail: 'تهيئة محرك الوجه...' });
+    setEmbProg({ stage: 'model', percent: 0, detail: '...' });
+    setAttempt(a => a + 1);
+  }, []);
+
+  return { ready, progress: combine(detProg, embProg), error, retry: reinit };
 }
