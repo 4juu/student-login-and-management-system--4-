@@ -336,9 +336,14 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
             const vbx = res.box.x / scale, vby = res.box.y / scale;
             const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
 
-            const match = findBestMatch(new Float32Array(res.descriptor), rosterRef.current, MATCH_LOOSE);
+            const match = findBestMatch(
+              new Float32Array(res.descriptor),
+              rosterRef.current,
+              MATCH_LOOSE,
+              res.quality.composite,
+            );
 
-            if (!match || match.confidence < 70) {
+            if (!match || match.confidence < 50) {
               anyUnknown = true;
               liveBoxes.push({ box: boxInVideo, label: 'غير معروف', color: '#fbbf24' });
               continue;

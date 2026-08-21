@@ -282,7 +282,7 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
       });
       if (!mountedRef.current) return;
 
-      if ((res.quality.composite ?? 0) < 0.45) {
+      if ((res.quality.composite ?? 0) < 0.50) {
         setFeedback(res.quality.brightness < 0.3 ? 'الإضاءة ضعيفة جداً' : 'ثبّت وجهك ونظر للكاميرا');
         return;
       }

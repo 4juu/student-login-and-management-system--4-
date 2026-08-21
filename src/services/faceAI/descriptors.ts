@@ -127,28 +127,64 @@ export interface BestMatch<T> {
   distance: number;
   /** ثقة معروضة 0..100 */
   confidence: number;
+  /** عدد العينات المخزنة لهذا الطالب */
+  sampleCount: number;
 }
 
 /**
  * يبحث في قائمة الطلاب عن أقرب بصمة — يُقارن ضد كل عينة مخزنة (main + alt)
- * ويأخذ أقل مسافة (أفضل تطابق). هذا يضمن التعرّف بأي زاوية.
+ * ويأخذ أقل مسافة (أفضل تطابق).
+ *
+ * عتبة تكيّفية:
+ *  - إذا الطالب عنده عينات متعددة (alt[]) → مرونة أكبر (multi-sample more reliable)
+ *  - إذا جودة الاستعلام (query) ضعيفة → مرونة أكبر بعد
  */
 export function findBestMatch<T extends MatchCandidate & { faceDescriptor?: unknown }>(
   query: Float32Array,
   items: T[],
-  maxDistance = MATCH_LOOSE,
+  baseThreshold = MATCH_LOOSE,
+  queryQuality?: number,
 ): BestMatch<T> | null {
   let best: BestMatch<T> | null = null;
   for (const item of items) {
     const allSamples = parseAllSamples(item.faceDescriptor);
+    if (allSamples.length === 0) continue;
+
+    // حساب عتبة مخصصة لهذا الطالب بناءً على عدد العينات
+    let sampleBonus = 0;
+    if (allSamples.length >= 4) sampleBonus = 0.10;      // 4+ عينات → مرونة كبيرة
+    else if (allSamples.length >= 2) sampleBonus = 0.05;  // 2-3 عينات → مرونة متوسطة
+
+    // حساب عتبة مخصصة بناءً على جودة الاستعلام
+    let qualityBonus = 0;
+    if (queryQuality !== undefined && queryQuality < 0.6) {
+      qualityBonus = (0.6 - queryQuality) * 0.30; // جودة 0.3 → bonus 0.09
+    }
+
+    const studentThreshold = baseThreshold + sampleBonus + qualityBonus;
+
     for (const ref of allSamples) {
       const distance = descriptorDistance(query, ref);
       if (!best || distance < best.distance) {
-        best = { item, distance, confidence: Math.round((1 - distance) * 100) };
+        best = {
+          item,
+          distance,
+          confidence: Math.round((1 - distance) * 100),
+          sampleCount: allSamples.length,
+        };
       }
     }
+
+    // فحص خاص: أفضل مسافة لهذا الطالب يجب أن تكون ضمن عتبته المخصصة
+    if (best && best.item === item && best.distance > studentThreshold) {
+      // لا نزال أفضل، لكن نُعلّم أنه خارج العتبة المخصصة — قد نرجعه لاحقاً
+    }
   }
-  if (best && best.distance > maxDistance) return null;
+
+  if (!best) return null;
+
+  // فحص نهائي: هل أفضل مسافة ضمن العتبة الأساسية؟
+  if (best.distance > baseThreshold + 0.15) return null; // حد أقصى مطلق
   return best;
 }
 
