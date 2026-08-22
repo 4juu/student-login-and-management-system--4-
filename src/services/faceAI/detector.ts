@@ -29,6 +29,7 @@ class FaceDetectionService {
   private listeners = new Set<ProgressCb>();
   private lastProgress: DetectorProgress = { stage: 'wasm', percent: 0, detail: 'تهيئة محرك الكشف...' };
   private _ready = false;
+  private _lastTs = 0;
 
   get ready(): boolean { return this._ready; }
 
@@ -87,8 +88,11 @@ class FaceDetectionService {
    */
   detect(video: HTMLVideoElement, timestampMs: number): DetectedFace[] {
     if (!this.detector || video.readyState < 2 || !video.videoWidth) return [];
+    // وضع VIDEO يتطلب طوابع زمنية متزايدة رتيباً — نضمن ذلك لتفادي رمي MediaPipe
+    const ts = Math.max(timestampMs, this._lastTs + 1);
+    this._lastTs = ts;
     try {
-      const result = this.detector.detectForVideo(video, timestampMs);
+      const result = this.detector.detectForVideo(video, ts);
       const out: DetectedFace[] = [];
       for (const det of result.detections ?? []) {
         const bb = det.boundingBox;
@@ -111,11 +115,13 @@ class FaceDetectionService {
       out.sort((a, b) => b.box.width * b.score - a.box.width * a.score);
       return out;
     } catch (e) {
-      console.error('[face-detector] فشل الكشف — إعادة تهيئة المحرك:', e);
-      this._ready = false;
-      this.detector = null;
-      this.loading = null;
-      this.report({ stage: 'wasm', percent: 0, detail: 'أُعيد تهيئة محرك الكشف...' });
+      console.error('[face-detector] فشل الكشف — محاولة استعادة المحرك:', e);
+      this._lastTs = 0;
+      // لا نعطّل الكاشف نهائياً؛ نعيد تهيئته في الخلفية حالة عدم وجود تحميل جارٍ
+      if (!this.loading) {
+        this.reset();
+        this.ensureReady().catch(err => console.error('[face-detector] فشلت الاستعادة:', err));
+      }
       return [];
     }
   }
