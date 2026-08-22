@@ -113,6 +113,8 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
   useEffect(() => {
     if (showQRScanner) return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'TEXTAREA' || tag === 'INPUT') return;
       if (/^[0-9]$/.test(e.key)) {
         e.preventDefault();
         handleCodeInput(e.key);
