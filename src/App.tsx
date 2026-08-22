@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { ref as dbRef, onValue, off } from 'firebase/database';
 import { Student, AttendanceRecord, AttendanceSession, College, Stage } from './types/student';
 import { User } from './types/user';
 import { StudentManager } from './components/StudentManager';
@@ -39,19 +38,13 @@ const ProfileSettings = lazy(() =>
 const CollegeManager = lazy(() =>
   import('./components/CollegeManager').then(m => ({ default: m.CollegeManager }))
 );
-const SelfRegisterPage = lazy(() =>
-  import('./components/SelfRegister/SelfRegisterPage').then(m => ({ default: m.SelfRegisterPage }))
-);
-const SendRegisterLink = lazy(() =>
-  import('./components/Admin/SendRegisterLink').then(m => ({ default: m.SendRegisterLink }))
-);
 const SendAttendanceLink = lazy(() =>
   import('./components/Admin/SendAttendanceLink').then(m => ({ default: m.SendAttendanceLink }))
 );
 
-// 🚀 طلبات التسجيل تُحمَّل عند فتحها فقط (تحتوي مكتبة الوجوه)
-const LazyPendingRegistrations = lazy(() =>
-  import('./components/Admin/PendingRegistrations').then(m => ({ default: m.PendingRegistrations }))
+// 🚀 تسجيل البصمة مباشرة من الأدمن (واجهة مباشرة بدون روابط)
+const LazyFaceEnrollModal = lazy(() =>
+  import('./components/face/FaceEnrollModal').then(m => ({ default: m.FaceEnrollModal }))
 );
 
 import { auth, database } from './firebase/config';
@@ -117,10 +110,6 @@ interface AllStagesData {
 }
 
 function App() {
-  // 🆕 كشف توكن التسجيل الذاتي من URL - بطرق متعددة لدعم كل المتصفحات
-  const [registerToken, setRegisterToken] = useState<string | null>(null);
-  const [tokenChecked, setTokenChecked] = useState(false);
-
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [dataLoaded, setDataLoaded] = useState(false);
@@ -158,11 +147,9 @@ function App() {
 
   const [activeTab, setActiveTab] = useState<Tab>('stage-selector');
 
-  // 🆕 نظام التسجيل الذاتي - حالات الأدمن
-  const [showSendLink, setShowSendLink] = useState(false);
+  // 🆕 تسجيل البصمة مباشرة من الأدمن
   const [showAttendanceLink, setShowAttendanceLink] = useState(false);
-  const [showPendingRegistrations, setShowPendingRegistrations] = useState(false);
-  const [pendingCount, setPendingCount] = useState(0);
+  const [showFaceEnroll, setShowFaceEnroll] = useState(false);
 
   // 🤖 تهيئة التلغرام
   const [telegramConfig, setTelegramConfig] = useState<TelegramConfig | null>(null);
@@ -213,44 +200,6 @@ function App() {
     return currentUser?.uid || '';
   };
 
-  // 🆕 فحص متأخر للتوكن (للموبايل والـ in-app browsers)
-  useEffect(() => {
-    const detectToken = () => {
-      try {
-        let token: string | null = null;
-        const params = new URLSearchParams(window.location.search);
-        token = params.get('reg');
-
-        if (!token && window.location.hash) {
-          const hashStr = window.location.hash.replace(/^#\/?/, '');
-          const hashParams = new URLSearchParams(hashStr);
-          token = hashParams.get('reg');
-        }
-
-        if (!token) {
-          const match = window.location.href.match(/[?&#]reg=([^&#]+)/);
-          if (match?.[1]) token = decodeURIComponent(match[1]);
-        }
-
-        if (!token) token = sessionStorage.getItem('pendingRegToken');
-
-        if (token) {
-          sessionStorage.setItem('pendingRegToken', token);
-          setRegisterToken(token);
-        }
-
-        setTokenChecked(true);
-      } catch (e) {
-        console.error(e);
-        setTokenChecked(true);
-      }
-    };
-
-    detectToken();
-    window.addEventListener('pageshow', detectToken);
-    return () => window.removeEventListener('pageshow', detectToken);
-  }, []);
-
   useEffect(() => {
     const handleBeforeUnload = () => flushAllPendingSaves();
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -261,11 +210,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (registerToken) {
-      setLoading(false);
-      return;
-    }
-
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
@@ -302,30 +246,7 @@ function App() {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [registerToken]);
-
-  useEffect(() => {
-    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'college_admin')) {
-      setPendingCount(0);
-      return;
-    }
-
-    const path = `registrationSystem/pending/${currentUser.uid}`;
-    const requestsRef = dbRef(database, path);
-
-    const handleSnapshot = (snapshot: any) => {
-      if (!snapshot.exists()) { setPendingCount(0); return; }
-      const data = snapshot.val();
-      const count = Object.values(data).filter((r: any) => r.status === 'pending').length;
-      setPendingCount(count);
-    };
-
-    const unsubscribe = onValue(requestsRef, handleSnapshot, (error) => {
-      console.warn('⚠️ فشل الاستماع لطلبات التسجيل:', error);
-    });
-
-    return () => { off(requestsRef); unsubscribe(); };
-  }, [currentUser]);
+  }, []);
 
   const loadInitialData = async (user: User) => {
     setDataLoaded(false);
@@ -907,15 +828,6 @@ function App() {
   const handleTelegramConfigChange = useCallback((config: TelegramConfig | null) => setTelegramConfig(config), []);
   const handleUpdateProfile = useCallback((updatedUser: User) => setCurrentUser(updatedUser), []);
 
-  const handleExitSelfRegister = () => {
-    setRegisterToken(null);
-    sessionStorage.removeItem('pendingRegToken');
-    const url = new URL(window.location.href);
-    url.searchParams.delete('reg');
-    url.hash = '';
-    window.history.replaceState({}, '', url.toString());
-  };
-
   const isAdmin = currentUser?.role === 'admin';
   const isCollegeAdmin = currentUser?.role === 'college_admin';
   const canEditStudents = isAdmin || isCollegeAdmin;
@@ -952,19 +864,7 @@ function App() {
     };
   }, [currentUser, isMainAdmin, isCollegeAdmin, colleges, stages]);
 
-  if (registerToken) {
-    return (
-      <Suspense fallback={
-        <div className="min-h-screen flex items-center justify-center bg-[#0B1220]">
-          <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      }>
-        <SelfRegisterPage token={registerToken} onExit={handleExitSelfRegister} />
-      </Suspense>
-    );
-  }
-
-  if (loading || !tokenChecked) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4">
         <div className="flex flex-col items-center gap-5">
@@ -1096,10 +996,10 @@ function App() {
                 {isMainAdmin && (
                   <>
                     <button
-                      onClick={() => setShowSendLink(true)}
+                      onClick={() => setShowFaceEnroll(true)}
                       className="btn-base btn-primary shrink-0"
                     >
-                       إرسال روابط تسجيل
+                       تسجيل بصمة الوجه
                     </button>
                   </>
                 )}
@@ -1110,24 +1010,6 @@ function App() {
                   >
                     👨‍🏫 صلاحيات التدريسيين
                   </button>
-                )}
-                {(isMainAdmin || isCollegeAdmin) && (
-                  <div className="shrink-0 relative" style={{ overflow: 'visible' }}>
-                    <button
-                      onClick={() => setShowPendingRegistrations(true)}
-                      className="btn-base btn-secondary"
-                    >
-                       طلبات التسجيل
-                    </button>
-                    {pendingCount > 0 && (
-                      <span
-                        className="absolute bg-red-500 text-white text-xs font-bold rounded-full min-w-[22px] h-[22px] px-1.5 flex items-center justify-center shadow-lg"
-                        style={{ top: '-8px', left: '-8px', zIndex: 9999, animation: 'pulse-badge 1.5s ease-in-out infinite' }}
-                      >
-                        {pendingCount > 99 ? '99+' : pendingCount}
-                      </span>
-                    )}
-                  </div>
                 )}
                 <button
                   onClick={() => setActiveTab('profile')}
@@ -1336,22 +1218,6 @@ function App() {
         />
       </Suspense>
 
-      {showSendLink && currentUser && isMainAdmin && (
-        <Suspense fallback={null}>
-          <SendRegisterLink
-            adminUid={currentUser.uid}
-            colleges={isCollegeAdmin ? colleges.filter(c => c.id === currentUser.collegeId) : colleges}
-            stages={isCollegeAdmin ? stages.filter(s => s.collegeId === currentUser.collegeId) : stages}
-            loadStudents={async (stageId: string) => {
-              const uid = isCollegeAdmin ? getAdminUid() : currentUser.uid;
-              return await loadStudentsForStage(uid, stageId);
-            }}
-            telegramConfig={telegramConfig}
-            onClose={() => setShowSendLink(false)}
-          />
-        </Suspense>
-      )}
-
       {showAttendanceLink && currentUser && (
         <Suspense fallback={null}>
           <SendAttendanceLink
@@ -1367,12 +1233,12 @@ function App() {
         </Suspense>
       )}
 
-      {showPendingRegistrations && currentUser && (isMainAdmin || isCollegeAdmin) && (
+      {showFaceEnroll && currentUser && (
         <Suspense fallback={null}>
-          <LazyPendingRegistrations
-            adminUid={currentUser.uid}
-            dataAdminUid={isCollegeAdmin ? getAdminUid() : undefined}
-            onClose={() => setShowPendingRegistrations(false)}
+          <LazyFaceEnrollModal
+            students={students}
+            onUpdateStudent={handleUpdateStudent}
+            onClose={() => setShowFaceEnroll(false)}
           />
         </Suspense>
       )}
