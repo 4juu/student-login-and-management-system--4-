@@ -39,11 +39,11 @@ const ProfileSettings = lazy(() =>
 const CollegeManager = lazy(() =>
   import('./components/CollegeManager').then(m => ({ default: m.CollegeManager }))
 );
-const SelfRegisterPage = lazy(() =>
-  import('./components/SelfRegister/SelfRegisterPage').then(m => ({ default: m.SelfRegisterPage }))
+const SelfEnrollPage = lazy(() =>
+  import('./components/SelfRegister/SelfEnrollPage').then(m => ({ default: m.SelfEnrollPage }))
 );
-const SendRegisterLink = lazy(() =>
-  import('./components/Admin/SendRegisterLink').then(m => ({ default: m.SendRegisterLink }))
+const SendEnrollLink = lazy(() =>
+  import('./components/Admin/SendEnrollLink').then(m => ({ default: m.SendEnrollLink }))
 );
 const SendAttendanceLink = lazy(() =>
   import('./components/Admin/SendAttendanceLink').then(m => ({ default: m.SendAttendanceLink }))
@@ -959,7 +959,7 @@ function App() {
           <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
         </div>
       }>
-        <SelfRegisterPage token={registerToken} onExit={handleExitSelfRegister} />
+        <SelfEnrollPage token={registerToken} onExit={handleExitSelfRegister} />
       </Suspense>
     );
   }
@@ -1099,7 +1099,7 @@ function App() {
                       onClick={() => setShowSendLink(true)}
                       className="btn-base btn-primary shrink-0"
                     >
-                       إرسال روابط تسجيل
+                        إرسال رابط تسجيل بصمة
                     </button>
                   </>
                 )}
@@ -1338,15 +1338,8 @@ function App() {
 
       {showSendLink && currentUser && isMainAdmin && (
         <Suspense fallback={null}>
-          <SendRegisterLink
+          <SendEnrollLink
             adminUid={currentUser.uid}
-            colleges={isCollegeAdmin ? colleges.filter(c => c.id === currentUser.collegeId) : colleges}
-            stages={isCollegeAdmin ? stages.filter(s => s.collegeId === currentUser.collegeId) : stages}
-            loadStudents={async (stageId: string) => {
-              const uid = isCollegeAdmin ? getAdminUid() : currentUser.uid;
-              return await loadStudentsForStage(uid, stageId);
-            }}
-            telegramConfig={telegramConfig}
             onClose={() => setShowSendLink(false)}
           />
         </Suspense>

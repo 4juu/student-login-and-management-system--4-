@@ -52,7 +52,6 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
   const [flash, setFlash] = useState<'ok' | 'fail' | null>(null);
   const [fatal, setFatal] = useState<string | null>(null);
   const [faceInBoundary, setFaceInBoundary] = useState(false);
-  const [canCapture, setCanCapture] = useState(false);
   const [capturePhase, setCapturePhase] = useState<CapturePhase>('front');
 
   useBodyScrollLock(true);
@@ -137,7 +136,6 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
 
         if (!faces[0]) {
           setFaceInBoundary(false);
-          setCanCapture(false);
           setFeedback('لا أرى وجهاً — تأكد من الإضاءة');
           return;
         }
@@ -146,13 +144,11 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
         const relSize = face.box.width / v.videoWidth;
         if (relSize < MIN_REL_SIZE) {
           setFaceInBoundary(false);
-          setCanCapture(false);
           setFeedback('اقترب من الكاميرا قليلاً');
           return;
         }
         if (relSize > 0.85) {
           setFaceInBoundary(false);
-          setCanCapture(false);
           setFeedback('ابتعد قليلاً — الوجه قريب جداً');
           return;
         }
@@ -168,36 +164,12 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
         const dy = (fcy - ecy) / ery;
         const insideEllipse = (dx * dx + dy * dy) <= 1;
 
-        // تحديد موضع الوجه
-        const offsetRatioX = (ecx - fcx) / v.videoWidth;
-        const offsetRatioY = (ecy - fcy) / v.videoHeight;
-        let pos: 'center' | 'left' | 'right' | 'up' | 'down' = 'center';
-        if (offsetRatioX > 0.018) pos = 'right';
-        else if (offsetRatioX < -0.018) pos = 'left';
-        else if (offsetRatioY > 0.022) pos = 'up';
-        else if (offsetRatioY < -0.022) pos = 'down';
-
         setFaceInBoundary(insideEllipse);
+        // الزر مفعل دائماً ما دام وجه داخل الإطار — لا نشترط ميلاً بزاوية محددة
 
-        const phaseMatch =
-          (capturePhase === 'front' && pos === 'center') ||
-          (capturePhase === 'right' && pos === 'right') ||
-          (capturePhase === 'left' && pos === 'left') ||
-          (capturePhase === 'up' && pos === 'up') ||
-          (capturePhase === 'down' && pos === 'down');
-
-        setCanCapture(insideEllipse && phaseMatch);
-
-        if (phaseMatch && insideEllipse) {
-          setFeedback('تم ✓ — اضغط التقاط');
-        } else if (!insideEllipse) {
-          setFeedback(CAPTURE_PHASES.find(p => p.key === capturePhase)!.instruction);
-        } else {
-          const expected =
-            capturePhase === 'right' ? 'أمال لليمين' :
-            capturePhase === 'left' ? 'أمال لليسار' :
-            capturePhase === 'up' ? 'ارفع رأسك قليلاً' : 'أنزل رأسك قليلاً';
-          setFeedback(`أكمل الزاوية: ${expected}`);
+        if (insideEllipse) {
+          const instr = CAPTURE_PHASES.find(p => p.key === capturePhase)!.instruction;
+          setFeedback(`ممتاز — اضغط «التقاط» أو أكمل: ${instr}`);
         }
       } catch (e) {
         console.warn('[self-capture] خطأ في حلقة الكشف:', e);
@@ -336,6 +308,13 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
             <p className="text-xs text-white/50 mt-1">مرحباً <span className="font-bold text-indigo-300">{student.name}</span> — التقط من 5 زوايا</p>
           </div>
 
+          {/* توجيه الزاوية — أعلى الكاميرا وبخط كبير */}
+          <div className="mb-4 rounded-2xl bg-gradient-to-l from-indigo-500/15 to-violet-500/15 border border-indigo-400/30 p-4 text-center">
+            <div className="text-4xl mb-1 leading-none">{CAPTURE_PHASES[samples]?.icon ?? '👤'}</div>
+            <p className="text-xl font-extrabold text-white leading-snug">{CAPTURE_PHASES[samples]?.instruction ?? 'وجّه وجهك للأمام'}</p>
+            <p className="text-[11px] text-indigo-200/80 mt-1.5">زر «التقاط» مفعل دائماً — التقط فور ظهور وجهك</p>
+          </div>
+
           {/* الكاميرا */}
           <div className="rounded-2xl overflow-hidden relative bg-black w-full mb-4" style={{ aspectRatio: '4 / 3', maxWidth: 380, margin: '0 auto' }}>
             <video ref={videoRef} playsInline muted autoPlay
@@ -406,15 +385,14 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
             </div>
           )}
 
-          {/* زر التقاط */}
+          {/* زر التقاط — مفعل دائماً */}
           {samples < SAMPLES_NEEDED && (
             <button
               onClick={handleCapture}
-              disabled={!canCapture}
               className={`w-full mb-3 py-3 rounded-xl text-sm font-extrabold transition-all duration-200 active:scale-[0.97] ${
-                canCapture
+                faceInBoundary
                   ? 'bg-gradient-to-l from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-lg shadow-emerald-500/30 cursor-pointer'
-                  : 'bg-white/5 text-slate-500 cursor-not-allowed border border-white/10'
+                  : 'bg-white/10 text-slate-300 hover:bg-white/15 cursor-pointer border border-white/10'
               }`}
             >
               📸 التقاط — {CAPTURE_PHASES[samples].instruction} ({samples + 1}/{SAMPLES_NEEDED})

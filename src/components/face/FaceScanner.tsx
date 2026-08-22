@@ -17,6 +17,7 @@ import {
   isGalleryDescriptor,
   updateGallery,
   MATCH_LOOSE,
+  MIN_RECOG_CONFIDENCE,
   CONFIRM_FRAMES,
 } from '../../services/faceAI/descriptors';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
@@ -45,7 +46,7 @@ interface LogEntry {
 }
 
 const RECOGNITION_COOLDOWN = 30_000;
-const MIN_FACE_PX = 28;
+const MIN_FACE_PX = 22;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
 const MAX_FACES_PER_FRAME = 3;
@@ -371,9 +372,10 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               const vbx = res.box.x / scale, vby = res.box.y / scale;
               const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
 
-              if (!match || match.confidence < 62) {
+              if (!match || match.confidence < MIN_RECOG_CONFIDENCE) {
                 anyUnknown = true;
-                liveBoxes.push({ box: boxInVideo, label: 'غير معروف', color: '#fbbf24' });
+                const smallFace = res.box.width < MIN_FACE_PX * 1.7;
+                liveBoxes.push({ box: boxInVideo, label: smallFace ? 'اقترب قليلاً' : 'غير معروف', color: '#fbbf24' });
                 continue;
               }
 
@@ -445,7 +447,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
             const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
             const student = rosterRef.current.find(s => s.id === cache.cachedMatchId);
 
-            if (student && cache.cachedConfidence >= 62) {
+            if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE) {
               const alreadyMarked = presentRef.current.has(student.id);
               liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: alreadyMarked ? 'مسجل ✓' : undefined, color: alreadyMarked ? '#34d399' : '#818cf8' });
             } else {

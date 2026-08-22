@@ -18,6 +18,9 @@ export const MIN_MARGIN = 0.06;
 export const TAMPER_THRESHOLD = 0.30;
 export const CONFIRM_FRAMES = 3;
 
+/** أدنى نسبة ثقة مقبولة للتعرف أثناء الحضور (62% → 55%) — يوسّع نطاق القبول من قريب/بعيد مع بقاء حارس الهامش يحمي الدقة */
+export const MIN_RECOG_CONFIDENCE = 55;
+
 export interface MatchCandidate {
   id: string;
 }
@@ -184,9 +187,13 @@ export function findBestMatch<T extends MatchCandidate & { faceDescriptor?: unkn
     else if (allSamples.length >= 3) sampleBonus = 0.04;
     else if (allSamples.length >= 2) sampleBonus = 0.02;
 
+    // جودة الإطار: وجه عالي الجودة (قريب/مضيء) → نسمح بمسافة أبعد قليلاً
+    // وجه منخفض الجودة (بعيد/ضبابي) → نشدّد قليلاً لحماية الدقة ومنع القبول الخاطئ
     let qualityBonus = 0;
-    if (queryQuality !== undefined && queryQuality < 0.6) {
-      qualityBonus = (0.6 - queryQuality) * 0.10;
+    if (queryQuality !== undefined) {
+      if (queryQuality >= 0.72) qualityBonus = 0.03;
+      else if (queryQuality < 0.40) qualityBonus = -0.02;
+      else if (queryQuality < 0.55) qualityBonus = -0.01;
     }
 
     perItem.push({
