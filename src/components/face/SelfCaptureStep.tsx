@@ -173,10 +173,10 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
         const offsetRatioX = (ecx - fcx) / v.videoWidth;
         const offsetRatioY = (ecy - fcy) / v.videoHeight;
         let pos: 'center' | 'left' | 'right' | 'up' | 'down' = 'center';
-        if (offsetRatioX > 0.03) pos = 'right';       // ميلان طفيف لليمين يكفي
-        else if (offsetRatioX < -0.03) pos = 'left';  // ميلان طفيف لليسار يكفي
-        else if (offsetRatioY > 0.035) pos = 'up';    // الوجه أعلى الفريم = المستخدم رفع رأسه
-        else if (offsetRatioY < -0.035) pos = 'down'; // الوجه أسفل الفريم = المستخدم أنزل رأسه
+        if (offsetRatioX > 0.018) pos = 'right';
+        else if (offsetRatioX < -0.018) pos = 'left';
+        else if (offsetRatioY > 0.022) pos = 'up';
+        else if (offsetRatioY < -0.022) pos = 'down';
 
         setFaceInBoundary(insideEllipse);
 

@@ -87,7 +87,13 @@ export function isGalleryDescriptor(fd: unknown): fd is FaceGalleryDescriptor {
   const o = fd as Record<string, unknown>;
   return o.version === DESC_VERSION_GALLERY
     && Array.isArray(o.enrollment)
-    && Array.isArray(o.clusters);
+    && (Array.isArray(o.clusters) || (typeof o.clusters === 'object' && o.clusters !== null));
+}
+
+/** Firebase يحوّل المصفوفات الفارغة [] إلى كائنات {} — نعوّض تلقائياً */
+function normalizeClusters(clusters: unknown): PoseCluster[] {
+  if (Array.isArray(clusters)) return clusters;
+  return [];
 }
 
 export function migrateToGallery(old: StoredFaceDescriptor): FaceGalleryDescriptor {
@@ -180,7 +186,7 @@ export function parseGallerySamples(fd: unknown): Float32Array[] {
     const p = parseOneSample(s);
     if (p) result.push(p);
   }
-  const clusterArr = Array.isArray(gallery.clusters) ? gallery.clusters : [];
+  const clusterArr = normalizeClusters(gallery.clusters);
   for (const c of clusterArr) {
     const p = parseOneSample(c.vector);
     if (p) result.push(p);
@@ -417,7 +423,7 @@ export function updateGallery(
     return { gallery: current, action: 'rejected' };
   }
 
-  const sameBinIdx = current.clusters.findIndex(c => c.bin === bin);
+  const sameBinIdx = normalizeClusters(current.clusters).findIndex(c => c.bin === bin);
 
   let nearestDistance = Infinity;
   const allRefs = parseGallerySamples(current);
@@ -429,7 +435,7 @@ export function updateGallery(
     return { gallery: current, action: 'rejected' };
   }
 
-  const clusters = [...current.clusters];
+  const clusters = [...normalizeClusters(current.clusters)];
 
   if (sameBinIdx >= 0) {
     const cluster = clusters[sameBinIdx];
@@ -489,7 +495,7 @@ export function updateGallery(
 
 export function getCoveragePercent(fd: unknown): number {
   if (!isGalleryDescriptor(fd)) return 0;
-  const len = Array.isArray(fd.clusters) ? fd.clusters.length : 0;
+  const len = normalizeClusters(fd.clusters).length;
   return Math.min(100, Math.round((len / MAX_CLUSTERS) * 100));
 }
 
@@ -499,21 +505,21 @@ export const CLUSTER_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 120; // 120 يوم
 
 /** يشيل العناقيد القديمة جداً واللي معها mergeCount منخفض (ضعيفة أصلاً) */
 export function pruneStaleClusters(gallery: FaceGalleryDescriptor): FaceGalleryDescriptor {
-  if (!Array.isArray(gallery.clusters)) return { ...gallery, clusters: [] };
+  const clusters = normalizeClusters(gallery.clusters);
   const now = Date.now();
-  const clusters = gallery.clusters.filter(c => {
+  const filtered = clusters.filter(c => {
     const age = now - c.updatedAt;
     if (age < CLUSTER_MAX_AGE_MS) return true;
     return c.mergeCount >= 6; // عنقود قوي نبقيه حتى لو قديم
   });
-  return clusters.length === gallery.clusters.length ? gallery : { ...gallery, clusters };
+  return filtered.length === clusters.length ? gallery : { ...gallery, clusters: filtered };
 }
 
 // ── الزوايا الناقصة (للuman feedback) ──
 
 /** يُعيد قائمة بخانات الشبكة التي لا تغطيها عناقيد الطالب */
 export function getMissingBins(gallery: FaceGalleryDescriptor): string[] {
-  const covered = new Set(gallery.clusters.map(c => c.bin));
+  const covered = new Set(normalizeClusters(gallery.clusters).map(c => c.bin));
   const missing: string[] = [];
   for (const y of YAW_STEPS) for (const p of PITCH_STEPS) {
     const bin = `${y}_${p}`;
