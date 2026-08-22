@@ -11,9 +11,10 @@ import { faceEmbedder } from '../../services/faceAI/embedder';
 import { openCameraStream, waitVideoDimensionsStable } from '../../services/faceAI/camera';
 import {
   checkForTampering,
-  descriptorToStorage,
   hasValidDescriptor,
   l2Normalize,
+  DESC_VERSION_GALLERY,
+  type FaceGalleryDescriptor,
 } from '../../services/faceAI/descriptors';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
@@ -338,11 +339,15 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
         }
 
         onUpdateStudent(currentStudent.id, {
-          faceDescriptor: descriptorToStorage(finalDesc, {
+          faceDescriptor: {
+            version: DESC_VERSION_GALLERY,
+            enrollment: samplesDataRef.current.map(s =>
+              Array.from(l2Normalize(s)).map(v => Math.round(v * 1e5) / 1e5)
+            ),
+            clusters: [],
             samples: SAMPLES_NEEDED,
             quality,
-            alt: samplesDataRef.current.map(s => l2Normalize(s)),
-          }),
+          } satisfies FaceGalleryDescriptor,
           faceRegisteredAt: new Date().toISOString(),
         });
         try {

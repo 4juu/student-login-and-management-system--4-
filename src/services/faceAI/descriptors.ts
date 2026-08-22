@@ -4,6 +4,7 @@
 //   v4: { main, alt?, samples?, quality?, version: 4 }
 //   v5: { enrollment[], clusters[], samples?, quality?, version: 5 }
 // ─────────────────────────────────────────────────────────────
+import { YAW_STEPS, PITCH_STEPS } from './pose';
 
 // ══════════════════════════════════════════════════════════════
 // 1) الثوابت والأنواع (v4 + v5)
@@ -248,6 +249,7 @@ export function findBestMatch<T extends MatchCandidate & { faceDescriptor?: unkn
     for (const ref of allSamples) {
       const distance = descriptorDistance(query, ref);
       if (distance < bestForItem) bestForItem = distance;
+      if (bestForItem < 0.15) break; // تطابق شبه مؤكد — لا داعي نكمل
     }
 
     let sampleBonus = 0;
@@ -482,4 +484,48 @@ export function updateGallery(
 export function getCoveragePercent(fd: unknown): number {
   if (!isGalleryDescriptor(fd)) return 0;
   return Math.min(100, Math.round((fd.clusters.length / MAX_CLUSTERS) * 100));
+}
+
+// ── تنظيف العناقيد القديمة (Cluster Decay) ──
+
+export const CLUSTER_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 120; // 120 يوم
+
+/** يشيل العناقيد القديمة جداً واللي معها mergeCount منخفض (ضعيفة أصلاً) */
+export function pruneStaleClusters(gallery: FaceGalleryDescriptor): FaceGalleryDescriptor {
+  const now = Date.now();
+  const clusters = gallery.clusters.filter(c => {
+    const age = now - c.updatedAt;
+    if (age < CLUSTER_MAX_AGE_MS) return true;
+    return c.mergeCount >= 6; // عنقود قوي نبقيه حتى لو قديم
+  });
+  return clusters.length === gallery.clusters.length ? gallery : { ...gallery, clusters };
+}
+
+// ── الزوايا الناقصة (للuman feedback) ──
+
+/** يُعيد قائمة بخانات الشبكة التي لا تغطيها عناقيد الطالب */
+export function getMissingBins(gallery: FaceGalleryDescriptor): string[] {
+  const covered = new Set(gallery.clusters.map(c => c.bin));
+  const missing: string[] = [];
+  for (const y of YAW_STEPS) for (const p of PITCH_STEPS) {
+    const bin = `${y}_${p}`;
+    if (!covered.has(bin)) missing.push(bin);
+  }
+  return missing;
+}
+
+// ── ملخص صحة النظام ──
+
+export function getGalleryHealthSummary(students: Array<{ faceDescriptor?: unknown }>) {
+  let v4Count = 0, v5Count = 0, matureCount = 0, noFaceCount = 0;
+  for (const s of students) {
+    if (!hasValidDescriptor(s.faceDescriptor)) { noFaceCount++; continue; }
+    if (isGalleryDescriptor(s.faceDescriptor)) {
+      v5Count++;
+      if (getCoveragePercent(s.faceDescriptor) >= 80) matureCount++;
+    } else {
+      v4Count++;
+    }
+  }
+  return { v4Count, v5Count, matureCount, noFaceCount, total: students.length };
 }

@@ -425,7 +425,9 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
 
                   const result = updateGallery(currentGallery, smoothed, res.quality.composite, bin);
 
-                  if (result.action === 'merged' || result.action === 'created') {
+                  // ✅ اكتب v5 للقاعدة حتى لو ما تم دمج/إنشاء عنقود (أول مرة نشوفه v4)
+                  const wasV4 = !isGalleryDescriptor(student.faceDescriptor);
+                  if (result.action === 'merged' || result.action === 'created' || (wasV4 && result.action !== 'rejected')) {
                     updateRef.current(student.id, { faceDescriptor: result.gallery });
                   }
                 }

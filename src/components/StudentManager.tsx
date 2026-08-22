@@ -5,6 +5,8 @@ import {
   hasLegacyDescriptor,
   getCoveragePercent,
   isGalleryDescriptor,
+  getGalleryHealthSummary,
+  pruneStaleClusters,
 } from '../services/faceAI/descriptors';
 import { CaseSensitive, ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, ClipboardList, FolderOpen, Hash, IdCard, Lightbulb, LoaderCircle, Pencil, Plus, QrCode, RefreshCw, ScanFace, Smile, SquarePen, Trash2, TriangleAlert, Unlink, Upload, Users, Zap } from 'lucide-react';
 
@@ -499,9 +501,22 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
     setCurrentPage(1);
   }, [searchQuery, groupFilter, pageSize]);
 
+  // تنظيف العناقيد القديمة مرة عند فتح الصفحة
+  React.useEffect(() => {
+    if (!onUpdateStudent) return;
+    students.forEach(s => {
+      if (isGalleryDescriptor(s.faceDescriptor)) {
+        const pruned = pruneStaleClusters(s.faceDescriptor);
+        if (pruned !== s.faceDescriptor) onUpdateStudent(s.id, { faceDescriptor: pruned });
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const studentsWithFace = students.filter(s => hasValidDescriptor(s.faceDescriptor)).length;
   const studentsWithLegacy = students.filter(s => hasLegacyDescriptor(s.faceDescriptor)).length;
   const studentsWithoutFace = students.length - studentsWithFace - studentsWithLegacy;
+  const health = getGalleryHealthSummary(students);
 
   const pageIds = paginatedStudents.map(s => s.id);
   const allInPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id));
@@ -711,22 +726,20 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
             <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
-              <div className="text-2xl font-bold text-emerald-300">{studentsWithFace}</div>
-              <div className="text-xs text-emerald-400">بصمة صالحة</div>
+              <div className="text-2xl font-bold text-emerald-300">{health.v5Count}</div>
+              <div className="text-xs text-emerald-400">بصمة v5 (معرض)</div>
             </div>
             <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
-              <div className="text-2xl font-bold text-amber-300">{studentsWithLegacy}</div>
-              <div className="text-xs text-amber-400">بصمة قديمة</div>
+              <div className="text-2xl font-bold text-amber-300">{health.v4Count}</div>
+              <div className="text-xs text-amber-400">بصمة v4 (قديمة)</div>
             </div>
             <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
-              <div className="text-2xl font-bold text-slate-500">{studentsWithoutFace}</div>
+              <div className="text-2xl font-bold text-purple-300">{health.matureCount}</div>
+              <div className="text-xs text-purple-400">ناضجة (≥80%)</div>
+            </div>
+            <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
+              <div className="text-2xl font-bold text-slate-500">{health.noFaceCount}</div>
               <div className="text-xs text-slate-400">بدون بصمة</div>
-            </div>
-            <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
-              <div className="text-2xl font-bold text-pink-300">
-                {students.length > 0 ? Math.round((studentsWithFace / students.length) * 100) : 0}%
-              </div>
-              <div className="text-xs text-pink-400">نسبة الإكمال</div>
             </div>
           </div>
 

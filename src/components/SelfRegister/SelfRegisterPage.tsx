@@ -10,7 +10,7 @@ import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear, loadAttendanceRecords, loadSessions } from '../../firebase/dataService';
 import { decompressRecord } from '../../firebase/dataServiceCompressed';
 import { SkeletonCard } from '../Skeleton';
-import type { StoredFaceDescriptor } from '../../services/faceAI/descriptors';
+import type { StoredFaceDescriptor, FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
 import { AlertTriangle, XCircle, CalendarDays, CheckCircle, XCircle as XCircleIcon, Users, BookOpen, ArrowLeft } from 'lucide-react';
 
 const LazySelfCapture = lazy(() =>
@@ -272,7 +272,7 @@ export const SelfRegisterPage: React.FC<SelfRegisterPageProps> = ({ token, onExi
     } catch {}
   };
 
-  const handleFaceCaptured = async (descriptor: StoredFaceDescriptor) => {
+  const handleFaceCaptured = async (descriptor: StoredFaceDescriptor | FaceGalleryDescriptor) => {
     if (!link || !student) return;
     goTo('submitting');
     const cleanFD = deepSanitize(descriptor);

@@ -28,8 +28,8 @@ export function estimatePose(
 }
 
 // ── شبكة الزوايا: 7 × 7 = 49 خانة ──
-const YAW_STEPS  = [-45, -30, -15, 0, 15, 30, 45];
-const PITCH_STEPS = [-30, -20, -10, 0, 10, 20, 30];
+export const YAW_STEPS  = [-45, -30, -15, 0, 15, 30, 45];
+export const PITCH_STEPS = [-30, -20, -10, 0, 10, 20, 30];
 
 function nearestStep(val: number, steps: number[]): number {
   return steps.reduce((a, b) => Math.abs(b - val) < Math.abs(a - val) ? b : a);

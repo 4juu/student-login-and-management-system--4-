@@ -10,17 +10,18 @@ import { faceEmbedder } from '../../services/faceAI/embedder';
 import { openCameraStream, waitVideoDimensionsStable } from '../../services/faceAI/camera';
 import {
   checkForTampering,
-  descriptorToStorage,
   hasValidDescriptor,
   l2Normalize,
   StoredFaceDescriptor,
+  DESC_VERSION_GALLERY,
+  type FaceGalleryDescriptor,
 } from '../../services/faceAI/descriptors';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface SelfCaptureStepProps {
   student: Student;
   allStudents: Student[];
-  onCaptured: (descriptor: StoredFaceDescriptor) => void;
+  onCaptured: (descriptor: StoredFaceDescriptor | FaceGalleryDescriptor) => void;
   onCancel: () => void;
 }
 
@@ -270,13 +271,18 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
           return;
         }
 
-        // حفظ البصمة مع العينات الأصلية
+        // حفظ البصمة بصيغة v5 مباشرة
         const quality = Math.round(((res.quality.composite + 0.8) / 2) * 100) / 100;
-        capturedRef.current(descriptorToStorage(finalDesc, {
+        const galleryDescriptor: FaceGalleryDescriptor = {
+          version: DESC_VERSION_GALLERY,
+          enrollment: samplesDataRef.current.map(s =>
+            Array.from(l2Normalize(s)).map(v => Math.round(v * 1e5) / 1e5)
+          ),
+          clusters: [],
           samples: SAMPLES_NEEDED,
           quality,
-          alt: samplesDataRef.current.map(s => l2Normalize(s)),
-        }));
+        };
+        capturedRef.current(galleryDescriptor);
 
         setFlash('ok');
         try {
