@@ -1239,6 +1239,9 @@ function App() {
             students={students}
             onUpdateStudent={handleUpdateStudent}
             onClose={() => setShowFaceEnroll(false)}
+            colleges={colleges}
+            stages={stages}
+            loadStudents={async (stageId: string) => loadStudentsForStage(getAdminUid(), stageId)}
           />
         </Suspense>
       )}
