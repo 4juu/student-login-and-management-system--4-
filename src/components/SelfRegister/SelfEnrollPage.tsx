@@ -178,6 +178,20 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
             return;
           }
           setAllStudents(tagged);
+
+          // رابط فردي مربوط بطالب محدد → تجاوز رفع الهوية وانتقل مباشرة لالتقاط البصمة
+          if (linkData.type === 'single' && linkData.studentId) {
+            const bound = tagged.find(t => t.student.id === linkData.studentId);
+            if (bound) {
+              setMatched(bound);
+              goTo('capture-face');
+              return;
+            }
+            setErrorMsg('لم نجد بيانات الطالب المرتبط بهذا الرابط');
+            goTo('invalid-link');
+            return;
+          }
+
           goTo('upload-id');
         } finally { clearTimeout(st); }
       } catch (e: any) {

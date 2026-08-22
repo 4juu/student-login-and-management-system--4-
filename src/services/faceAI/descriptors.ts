@@ -95,6 +95,80 @@ export function hasValidDescriptor(fd: unknown): boolean {
   return Array.isArray(fd.enrollment) && fd.enrollment.some(s => parseOneSample(s) !== null);
 }
 
+/**
+ * يوحّد أي صيغة بصمة مخزّنة (v5 الحالية، أو الصيغ القديمة المسطّحة/ذات العناقيد)
+ * إلى صيغة v5 النظيفة. يُرجع null إذا لم توجد بيانات وجه صالحة.
+ * يُستخدم عند قبول طلبات التسجيل الذاتي لضمان قبول البصمة الجديدة مهما كانت صيغتها المخزّنة.
+ */
+export function migrateToV5(input: unknown): FaceGalleryDescriptor | null {
+  if (!input || typeof input !== 'object') return null;
+
+  // 1) صيغة v5 الحالية
+  if (isGalleryDescriptor(input)) {
+    const fd = input as FaceGalleryDescriptor;
+    const samples = fd.enrollment
+      .map(s => parseOneSample(s))
+      .filter((s): s is Float32Array => s !== null);
+    if (samples.length === 0) return null;
+    return {
+      version: DESC_VERSION_GALLERY,
+      enrollment: samples.map(s => Array.from(l2Normalize(s)).map(v => Math.round(v * 1e5) / 1e5)),
+      clusters: normalizeClusters(fd.clusters),
+      samples: samples.length,
+      quality: typeof fd.quality === 'number' ? fd.quality : undefined,
+    };
+  }
+
+  // 2) مصفوفة مسطّحة: متجه واحد 512 أو مصفوفة متجهات
+  if (Array.isArray(input)) {
+    const arr = input as unknown[];
+    if (arr.length === DESC_DIM && typeof arr[0] === 'number') {
+      const v = parseOneSample(arr);
+      if (!v) return null;
+      const norm = Array.from(l2Normalize(v)).map(x => Math.round(x * 1e5) / 1e5);
+      return { version: DESC_VERSION_GALLERY, enrollment: [norm], clusters: [], samples: 1 };
+    }
+    const samples = arr
+      .map(s => parseOneSample(s))
+      .filter((s): s is Float32Array => s !== null);
+    if (samples.length === 0) return null;
+    return {
+      version: DESC_VERSION_GALLERY,
+      enrollment: samples.map(s => Array.from(l2Normalize(s)).map(x => Math.round(x * 1e5) / 1e5)),
+      clusters: [],
+      samples: samples.length,
+    };
+  }
+
+  // 3) كائن بصيغة قديمة: enrollment محوّل إلى كائن بواسطة Firebase، أو حقل descriptor/vector
+  const o = input as Record<string, unknown>;
+  const enr = o.enrollment;
+  if (enr && typeof enr === 'object' && !Array.isArray(enr)) {
+    const samples = Object.values(enr as Record<string, unknown>)
+      .map(s => parseOneSample(s))
+      .filter((s): s is Float32Array => s !== null);
+    if (samples.length > 0) {
+      return {
+        version: DESC_VERSION_GALLERY,
+        enrollment: samples.map(s => Array.from(l2Normalize(s)).map(x => Math.round(x * 1e5) / 1e5)),
+        clusters: [],
+        samples: samples.length,
+      };
+    }
+  }
+
+  const single = o.descriptor ?? o.vector ?? o.embedding;
+  if (Array.isArray(single) && single.length === DESC_DIM && typeof single[0] === 'number') {
+    const v = parseOneSample(single);
+    if (v) {
+      const norm = Array.from(l2Normalize(v)).map(x => Math.round(x * 1e5) / 1e5);
+      return { version: DESC_VERSION_GALLERY, enrollment: [norm], clusters: [], samples: 1 };
+    }
+  }
+
+  return null;
+}
+
 // ══════════════════════════════════════════════════════════════
 // 5) parseStoredDescriptor + parseAllSamples + parseGallerySamples
 // ══════════════════════════════════════════════════════════════

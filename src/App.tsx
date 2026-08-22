@@ -1340,6 +1340,9 @@ function App() {
         <Suspense fallback={null}>
           <SendEnrollLink
             adminUid={currentUser.uid}
+            colleges={colleges}
+            stages={stages}
+            loadStudents={async (stageId: string) => loadStudentsForStage(getAdminUid(), stageId)}
             onClose={() => setShowSendLink(false)}
           />
         </Suspense>

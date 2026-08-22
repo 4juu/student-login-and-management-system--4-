@@ -8,8 +8,7 @@ import { SkeletonTable } from '../Skeleton';
 import {
   parseStoredDescriptor,
   checkForTampering,
-  hasValidDescriptor,
-  isGalleryDescriptor,
+  migrateToV5,
 } from '../../services/faceAI/descriptors';
 import { Camera, Check, CircleCheck, CircleX, ClipboardList, LoaderCircle, Mail, QrCode, Save, Smile, Trash2, TriangleAlert } from 'lucide-react';
 
@@ -122,15 +121,17 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       }
 
       // ── 2) Validate + migrate the face descriptor (if provided)
+      // نوحّد أي صيغة بصمة إلى v5 نظيفة — نقبل البصمة الجديدة مهما كانت صيغتها المخزّنة
       let finalDescriptor = req.faceDescriptor;
 
       if (req.faceDescriptor) {
-        if (!isGalleryDescriptor(req.faceDescriptor)) {
-          alert('لا يمكن الموافقة: البصمة المرفقة بصيغة قديمة غير مدعومة.\nاطلب من الطالب إعادة تسجيل البصمة بالرابط الجديد.');
+        const migrated = migrateToV5(req.faceDescriptor);
+        if (!migrated) {
+          alert('البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.');
           return;
         }
 
-        const query = parseStoredDescriptor(req.faceDescriptor);
+        const query = parseStoredDescriptor(migrated);
         if (!query) {
           alert('البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.');
           return;
@@ -138,9 +139,10 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         const allStudents: Student[] = Array.isArray(data) ? data : Object.values(data);
         const tamper = checkForTampering(query, allStudents, req.studentId);
         if (tamper.tampered) {
-          alert(`لا يمكن الموافقة: هذه البصمة مطابقة لبصمة الطالب:\n${tamper.matchedWith}\n\nيرجى التحقق من صحة الطلب.`);
+          alert(`لا يمكن الموافقة: هذه البصمة مطابقة لبصمة الطالب:\n${tamper.matchedWith}\n\nيرجى التحقق من صالة الطلب.`);
           return;
         }
+        finalDescriptor = migrated;
       }
 
       // ── 3) Update ONLY this student using update() — avoids rewriting whole array
@@ -365,14 +367,14 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                       <ClipboardList className="w-3 h-3" /> {req.nameMatched ? 'الاسم متطابق' : 'الاسم غير متطابق'}
                     </span>
                     <span className={`text-[10px] border rounded-full px-2 py-1 flex items-center gap-1 ${
-                      hasValidDescriptor(req.faceDescriptor)
+                      migrateToV5(req.faceDescriptor) !== null
                         ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
                         : req.faceDescriptor
                         ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
                         : 'bg-slate-800 border-slate-600'
                     }`}>
                       <Smile className="w-3 h-3" /> {
-                        hasValidDescriptor(req.faceDescriptor) ? 'بصمة وجه مسجلة'
+                        migrateToV5(req.faceDescriptor) !== null ? 'بصمة وجه مسجلة'
                           : req.faceDescriptor ? 'بصمة قديمة — تحتاج إعادة تسجيل'
                           : 'بدون بصمة'
                       }
