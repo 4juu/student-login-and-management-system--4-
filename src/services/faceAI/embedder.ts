@@ -54,10 +54,10 @@ class EmbeddingClient {
   /** يحدد أفضل دقة التقاط بناءً على أداء الجهاز الفعلي */
   get recommendedMaxWidth(): number {
     const avg = this.avgLatencyMs;
-    if (avg === 0) return 480;
-    if (avg > 220) return 320;
-    if (avg > 130) return 400;
-    return 480;
+    if (avg === 0) return 640;
+    if (avg > 280) return 320;
+    if (avg > 180) return 480;
+    return 640;
   }
 
   onProgress(cb: (p: EngineProgress) => void): () => void {

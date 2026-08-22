@@ -47,7 +47,7 @@ interface LogEntry {
 }
 
 const RECOGNITION_COOLDOWN = 30_000;
-const MIN_FACE_PX = 42;
+const MIN_FACE_PX = 28;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
 const MAX_FACES_PER_FRAME = 3;

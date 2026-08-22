@@ -53,7 +53,7 @@ function cropFace(g: OffscreenCanvasRenderingContext2D, bmp: ImageBitmap, box: B
   sx = bcx - side / 2; sy = bcy - side / 2; sw = side; sh = side;
   const cx1 = Math.max(0, sx), cy1 = Math.max(0, sy);
   const cx2 = Math.min(bmp.width, sx + sw), cy2 = Math.min(bmp.height, sy + sh);
-  if (cx2 - cx1 < 8 || cy2 - cy1 < 8) throw new Error('face too small');
+  if (cx2 - cx1 < 5 || cy2 - cy1 < 5) throw new Error('face too small');
   g.clearRect(0, 0, EMB_INPUT, EMB_INPUT);
   g.drawImage(bmp, cx1, cy1, cx2 - cx1, cy2 - cy1, 0, 0, EMB_INPUT, EMB_INPUT);
 }
@@ -72,7 +72,7 @@ async function embed(bmp: ImageBitmap, box: Box): Promise<EmbedOut> {
   }
   const brightness = sum / n / 255;
   const relSize = box.width / bmp.width;
-  const sizeScore = relSize < 0.12 ? relSize / 0.12 : relSize > 0.75 ? Math.max(0, 1 - (relSize - 0.75) / 0.25) : 1;
+  const sizeScore = relSize < 0.07 ? relSize / 0.07 : relSize > 0.75 ? Math.max(0, 1 - (relSize - 0.75) / 0.25) : 1;
   const fcx = box.x + box.width / 2, fcy = box.y + box.height / 2;
   const off = Math.hypot(fcx - bmp.width / 2, fcy - bmp.height / 2) / (Math.min(bmp.width, bmp.height) / 2);
   const centerScore = Math.max(0, 1 - off * 0.8);
