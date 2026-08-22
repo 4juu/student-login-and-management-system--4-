@@ -10,7 +10,7 @@ import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear, loadAttendanceRecords, loadSessions } from '../../firebase/dataService';
 import { decompressRecord } from '../../firebase/dataServiceCompressed';
 import { SkeletonCard } from '../Skeleton';
-import type { FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
+import { migrateToV5, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
 import { AlertTriangle, XCircle, CalendarDays, CheckCircle, Users, BookOpen, ArrowLeft, ScanFace } from 'lucide-react';
 
 const LazySelfCapture = lazy(() =>
@@ -23,6 +23,7 @@ type Step =
   | 'upload-id'
   | 'name-mismatch'
   | 'confirm'
+  | 'confirm-student'
   | 'capture-face'
   | 'submitting'
   | 'success'
@@ -35,26 +36,6 @@ interface SelfEnrollPageProps {
 }
 
 interface TaggedStudent { student: Student; stageId: string; }
-
-const deepSanitize = (obj: any): any => {
-  if (obj === null || obj === undefined) return null;
-  if (typeof obj === 'number' || typeof obj === 'string' || typeof obj === 'boolean') return obj;
-  if (typeof obj === 'function') return null;
-  if (obj instanceof Float32Array) return Array.from(obj);
-  if (obj instanceof Set) return Array.from(obj);
-  if (obj instanceof Map) return Object.fromEntries(obj);
-  if (Array.isArray(obj)) return obj.map(deepSanitize).filter(v => v != null);
-  if (typeof obj === 'object') {
-    const cleaned: any = {};
-    for (const key in obj) {
-      if (obj[key] === undefined) continue;
-      const s = deepSanitize(obj[key]);
-      if (s !== undefined) cleaned[key] = s;
-    }
-    return cleaned;
-  }
-  return obj;
-};
 
 const dbFetch = async <T,>(path: string, signal?: AbortSignal): Promise<T | null> => {
   const url = `${dbURL}/${path}.json`;
@@ -83,6 +64,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [matched, setMatched] = useState<TaggedStudent | null>(null);
   const [sessionNameMap, setSessionNameMap] = useState<Record<string, string>>({});
+  const [retryStep, setRetryStep] = useState<Step>('upload-id');
 
   const goTo = useCallback((s: Step) => setStep(prev => prev === s ? prev : s), []);
 
@@ -179,12 +161,12 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
           }
           setAllStudents(tagged);
 
-          // رابط فردي مربوط بطالب محدد → تجاوز رفع الهوية وانتقل مباشرة لالتقاط البصمة
+          // رابط فردي مربوط بطالب محدد → تجاوز رفع الهوية مع إظهار شاشة تأكيد الهوية أولاً
           if (linkData.type === 'single' && linkData.studentId) {
             const bound = tagged.find(t => t.student.id === linkData.studentId);
             if (bound) {
               setMatched(bound);
-              goTo('capture-face');
+              goTo('confirm-student');
               return;
             }
             setErrorMsg('لم نجد بيانات الطالب المرتبط بهذا الرابط');
@@ -258,7 +240,16 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   const handleFaceCaptured = async (descriptor: FaceGalleryDescriptor) => {
     if (!link || !matched) return;
     goTo('submitting');
-    const cleanFD = deepSanitize(descriptor);
+
+    // توحيد البصمة إلى v5 نظيفة + التحقق من سلامتها قبل الحفظ — لا نرسل بصمة فارغة/تالفة
+    const migrated = migrateToV5(descriptor);
+    if (!migrated) {
+      setErrorMsg('تعذر حفظ البصمة: لم يتم التقاط وجه صالح. أعد المحاولة.');
+      setRetryStep('capture-face');
+      goTo('error');
+      return;
+    }
+
     try {
       const requestId = `${matched.student.id}_${Date.now()}`;
       const qrCodeId = idData?.qrId || matched.student.qrCodeId || '';
@@ -275,19 +266,20 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
         qrCodeId,
         qrVerified: !!idData?.qrId,
         nameMatched: true,
-        faceDescriptor: cleanFD,
+        faceDescriptor: migrated,
+        linkToken: link.token,
+        linkType: link.type,
         status: 'pending',
         createdAt: new Date().toISOString(),
         hasExistingQr: !!matched.student.qrCodeId,
         hasExistingFace: !!matched.student.faceDescriptor,
       });
-      // رابط مخصص لطالب واحد فقط يُعلَّم مستخدماً — أما الرابط العام فيبقى متاحاً للجميع
-      if (link.type === 'single') {
-        await set(ref(database, `registrationSystem/links/${token}/used`), true).catch(() => {});
-      }
+      // لا نُعلّم الرابط «مستخدماً» هنا حتى يتمكّن الطالب من إعادة المحاولة عند الفشل.
+      // روابط الطالب الواحد تُعلَّم مستخدمة فقط بعد موافقة الأدمن (انظر PendingRegistrations).
       goTo('success');
     } catch (e: any) {
       setErrorMsg(e.code === 'PERMISSION_DENIED' ? 'لا توجد صلاحية' : e.message || 'فشل الحفظ');
+      setRetryStep('capture-face');
       goTo('error');
     }
   };
@@ -397,6 +389,33 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     );
   }
 
+  if (step === 'confirm-student' && matched) {
+    const student = matched.student;
+    return (
+      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
+        <div className="glass-card p-8 max-w-md w-full text-center">
+          <div className="mx-auto w-16 h-16 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-4">
+            <ScanFace className="w-8 h-8 text-indigo-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">تأكيد الهوية</h2>
+          <div className="bg-white/5 rounded-xl p-4 mb-4 text-right space-y-2">
+            <p className="text-sm text-white/50">الاسم: <span className="text-white font-bold">{student.name}</span></p>
+            <p className="text-sm text-white/50">الكود: <span className="text-white font-mono">{student.code}</span></p>
+          </div>
+          <p className="text-sm text-white/60 mb-6">
+            سيتم تسجيل بصمة هذا الطالب. تأكد أنك الطالب نفسه قبل المتابعة.
+          </p>
+          <button onClick={() => goTo('capture-face')} className="btn-base btn-primary w-full py-3">
+            <ScanFace className="w-4 h-4" /> تأكيد وتسجيل البصمة
+          </button>
+          <button onClick={onExit} className="btn-base btn-secondary w-full py-3 mt-2">
+            إلغاء
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (step === 'capture-face' && matched) {
     return (
       <Suspense fallback={<div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl"><div className="w-full max-w-md"><SkeletonCard /></div></div>}>
@@ -435,10 +454,10 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
           </div>
           <h2 className="text-2xl font-bold text-red-400 mb-2">حدث خطأ</h2>
           <p className="text-white/60 mb-6">{errorMsg}</p>
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={onExit} className="btn-base btn-secondary py-3">خروج</button>
-            <button onClick={() => goTo('upload-id')} className="btn-base btn-primary py-3">إعادة</button>
-          </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={onExit} className="btn-base btn-secondary py-3">خروج</button>
+              <button onClick={() => goTo(retryStep)} className="btn-base btn-primary py-3">إعادة</button>
+            </div>
         </div>
       </div>
     );

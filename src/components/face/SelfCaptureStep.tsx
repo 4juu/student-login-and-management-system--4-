@@ -12,6 +12,7 @@ import {
   checkForTampering,
   hasValidDescriptor,
   l2Normalize,
+  DESC_DIM,
   DESC_VERSION_GALLERY,
   type FaceGalleryDescriptor,
 } from '../../services/faceAI/descriptors';
@@ -201,6 +202,21 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
       });
       if (!mountedRef.current) return;
 
+      // التحقق من سلامة المتجه قبل تخزينه — يمنع حفظ بصمة فارغة/تالفة تمرّ من بوابة الجودة
+      const rawDesc = res.descriptor as ArrayLike<number> | undefined;
+      if (!rawDesc || rawDesc.length !== DESC_DIM) {
+        setFeedback('تعذر استخراج البصمة — حرّك رأسك قليلاً وأعد المحاولة');
+        return;
+      }
+      let allFinite = true;
+      for (let i = 0; i < rawDesc.length; i++) {
+        if (!Number.isFinite(rawDesc[i])) { allFinite = false; break; }
+      }
+      if (!allFinite) {
+        setFeedback('جودة البصمة منخفضة — حسّن الإضاءة وأعد المحاولة');
+        return;
+      }
+
       if ((res.quality.composite ?? 0) < 0.50) {
         setFeedback(res.quality.brightness < 0.3 ? 'الإضاءة ضعيفة جداً' : 'ثبّت وجهك وانظر للكاميرا');
         return;
@@ -253,6 +269,14 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
           samples: SAMPLES_NEEDED,
           quality,
         };
+
+        // تحقق نهائي من سلامة البصمة قبل الإرسال — لا نرسل بصمة فارغة/تالفة
+        if (!hasValidDescriptor(galleryDescriptor)) {
+          setFlash('fail');
+          setFatal('تعذر حفظ البصمة بشكل صحيح. أعد المحاولة.');
+          return;
+        }
+
         capturedRef.current(galleryDescriptor);
 
         setFlash('ok');

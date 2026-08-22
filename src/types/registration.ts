@@ -34,6 +34,9 @@ export interface PendingRegistration {
 
   faceDescriptor: any;
 
+  linkToken?: string;
+  linkType?: RegistrationLinkType;
+
   status: 'pending' | 'approved' | 'rejected';
   rejectionReason?: string;
 

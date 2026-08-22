@@ -4,6 +4,7 @@ import { database } from '../../firebase/config';
 import { Student } from '../../types/student';
 import { PendingRegistration } from '../../types/registration';
 import { getActiveAcademicYear } from '../../firebase/dataService';
+import { markLinkAsUsed } from '../../services/tokenService';
 import { SkeletonTable } from '../Skeleton';
 import {
   parseStoredDescriptor,
@@ -159,6 +160,11 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         reviewedAt: new Date().toISOString(),
         reviewedBy: adminUid,
       });
+
+      // ── 5) تعليم الرابط المخصص لطالب واحد «مستخدماً» بعد الموافقة فقط
+      if (req.linkType === 'single' && req.linkToken) {
+        await markLinkAsUsed(req.linkToken, req.studentId).catch(() => {});
+      }
 
       console.log('✅ تمت الموافقة واستبدال البصمة بنجاح');
     } catch (e: any) {
