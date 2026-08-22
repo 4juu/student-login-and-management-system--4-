@@ -1,24 +1,22 @@
 // ─────────────────────────────────────────────────────────────
-// صيغة البصمة v4 — GhostFaceNet 512-bits L2-normalized
-// { main: number[512], alt?: number[512][], samples?, quality?, version: 4 }
-// alt يحتوي العينات الأصلية (أمام/يمين/يسار) — المقارنة تتم ضد كل عينة
+// نظام بصمات الوجه — GhostFaceNet 512-bits L2-normalized
+// يدعم صيغتين متعايشتين:
+//   v4: { main, alt?, samples?, quality?, version: 4 }
+//   v5: { enrollment[], clusters[], samples?, quality?, version: 5 }
 // ─────────────────────────────────────────────────────────────
+
+// ══════════════════════════════════════════════════════════════
+// 1) الثوابت والأنواع (v4 + v5)
+// ══════════════════════════════════════════════════════════════
 
 export const DESC_DIM = 512;
 export const DESC_VERSION = 4;
 export const DESC_VERSION_GALLERY = 5;
 
-/** عتبة المسافة الكوسينية الأساسية — صار محسوب بعناية بدل القيمة القديمة الفضفاضة */
 export const MATCH_STRICT = 0.32;
 export const MATCH_LOOSE = 0.42;
-
-/** أقل هامش مطلوب بين أفضل تطابق وثاني أفضل تطابق لقبول القرار */
 export const MIN_MARGIN = 0.06;
-
-/** إذا تطابق وجه طالب مع بصمة طالب آخر أقل من هذه العتبة → احتيال محتمل */
 export const TAMPER_THRESHOLD = 0.30;
-
-/** عدد إطارات التأكيد المطلوبة قبل قبول أي تطابق (يُستخدم بالواجهة) */
 export const CONFIRM_FRAMES = 3;
 
 export interface StoredFaceDescriptor {
@@ -27,13 +25,40 @@ export interface StoredFaceDescriptor {
   samples?: number;
   quality?: number;
   version: number;
-  /** عدد مرات التحسين التلقائي عبر الحضور — يتوقف عند MAX_ADAPTIVE_MERGES */
   mergeCount?: number;
 }
 
 export interface MatchCandidate {
   id: string;
 }
+
+// ── أنواع v5: شبكة الزوايا (Pose Grid) ──
+
+export const MAX_CLUSTERS = 18;
+export const MAX_MERGES_PER_CLUSTER = 12;
+export const MIN_CLUSTER_QUALITY = 0.60;
+export const MAX_NEW_CLUSTER_DISTANCE = 0.40;
+export const MAX_CLUSTER_MERGE_DISTANCE = MATCH_STRICT;
+
+export interface PoseCluster {
+  bin: string;
+  vector: number[];
+  mergeCount: number;
+  quality: number;
+  updatedAt: number;
+}
+
+export interface FaceGalleryDescriptor {
+  version: typeof DESC_VERSION_GALLERY;
+  enrollment: number[][];
+  clusters: PoseCluster[];
+  samples?: number;
+  quality?: number;
+}
+
+// ══════════════════════════════════════════════════════════════
+// 2) parseOneSample (مشتركة بين v4 و v5)
+// ══════════════════════════════════════════════════════════════
 
 function parseOneSample(arr: unknown): Float32Array | null {
   if (!Array.isArray(arr) || arr.length !== DESC_DIM) return null;
@@ -52,18 +77,73 @@ function parseOneSample(arr: unknown): Float32Array | null {
   return f;
 }
 
+// ══════════════════════════════════════════════════════════════
+// 3) isGalleryDescriptor + migrateToGallery
+// ══════════════════════════════════════════════════════════════
+
+export function isGalleryDescriptor(fd: unknown): fd is FaceGalleryDescriptor {
+  return !!fd && typeof fd === 'object' && (fd as Record<string, unknown>).version === DESC_VERSION_GALLERY;
+}
+
+export function migrateToGallery(old: StoredFaceDescriptor): FaceGalleryDescriptor {
+  const enrollment: number[][] = [old.main, ...(old.alt ?? [])];
+  return {
+    version: DESC_VERSION_GALLERY,
+    enrollment,
+    clusters: [],
+    samples: old.samples,
+    quality: old.quality,
+  };
+}
+
+// ══════════════════════════════════════════════════════════════
+// 4) hasValidDescriptor + hasLegacyDescriptor (بعد isGalleryDescriptor)
+// ══════════════════════════════════════════════════════════════
+
+/** تحقق من صلاحية البصمة بأي صيغة مدعومة (v4 أو v5) */
+export function hasValidDescriptor(fd: unknown): boolean {
+  if (isGalleryDescriptor(fd)) {
+    return fd.enrollment.some(s => parseOneSample(s) !== null);
+  }
+  if (!fd || typeof fd !== 'object') return false;
+  const d = fd as Partial<StoredFaceDescriptor>;
+  if (d.version !== DESC_VERSION) return false;
+  return parseOneSample(d.main) !== null;
+}
+
+/** بصمة من نظام قديم فعلاً (face-api / مضغوطة) — لا تعمل مع أي محرك حالي */
+export function hasLegacyDescriptor(fd: unknown): boolean {
+  if (fd == null || typeof fd !== 'object') return false;
+  if (isGalleryDescriptor(fd)) return false;
+  return !hasValidDescriptor(fd);
+}
+
+// ══════════════════════════════════════════════════════════════
+// 5) parseStoredDescriptor + parseAllSamples + parseGallerySamples
+// ══════════════════════════════════════════════════════════════
+
+/** ترجّع "البصمة الرئيسية" كـ Float32Array — تدعم الصيغتين */
 export function parseStoredDescriptor(input: unknown): Float32Array | null {
   if (!input || typeof input !== 'object') return null;
+
+  if (isGalleryDescriptor(input)) {
+    for (const s of input.enrollment) {
+      const p = parseOneSample(s);
+      if (p) return p;
+    }
+    return null;
+  }
+
   const d = input as Partial<StoredFaceDescriptor>;
   if (d.version !== DESC_VERSION) return null;
   return parseOneSample(d.main);
 }
 
+/** جميع العينات القابلة للمقارنة — تدعم الصيغتين */
 export function parseAllSamples(input: unknown): Float32Array[] {
   if (!input || typeof input !== 'object') return [];
-  // دعم v5 gallery أولاً
   if (isGalleryDescriptor(input)) return parseGallerySamples(input);
-  // fallback لـ v4
+
   const d = input as Partial<StoredFaceDescriptor>;
   if (d.version !== DESC_VERSION) return [];
   const result: Float32Array[] = [];
@@ -78,13 +158,32 @@ export function parseAllSamples(input: unknown): Float32Array[] {
   return result;
 }
 
-export function hasValidDescriptor(fd: unknown): boolean {
-  return parseStoredDescriptor(fd) !== null;
+/** كل عينات المعرض: عينات التسجيل + العناقيد المكتسبة */
+export function parseGallerySamples(fd: unknown): Float32Array[] {
+  let gallery: FaceGalleryDescriptor | null = null;
+
+  if (isGalleryDescriptor(fd)) {
+    gallery = fd;
+  } else if (hasValidDescriptor(fd)) {
+    gallery = migrateToGallery(fd as StoredFaceDescriptor);
+  }
+  if (!gallery) return [];
+
+  const result: Float32Array[] = [];
+  for (const s of gallery.enrollment) {
+    const p = parseOneSample(s);
+    if (p) result.push(p);
+  }
+  for (const c of gallery.clusters) {
+    const p = parseOneSample(c.vector);
+    if (p) result.push(p);
+  }
+  return result;
 }
 
-export function hasLegacyDescriptor(fd: unknown): boolean {
-  return fd != null && typeof fd === 'object' && !hasValidDescriptor(fd);
-}
+// ══════════════════════════════════════════════════════════════
+// 6) باقي الدوال (l2Normalize, findBestMatch, checkForTampering, updateGallery...)
+// ══════════════════════════════════════════════════════════════
 
 export function descriptorToStorage(
   main: Float32Array,
@@ -129,15 +228,9 @@ export interface BestMatch<T> {
   distance: number;
   confidence: number;
   sampleCount: number;
-  /** الفرق بين هذا التطابق وثاني أفضل تطابق — كلما زاد كان القرار أوثق */
   margin: number;
 }
 
-/**
- * البحث عن أقرب بصمة مع حماية مزدوجة:
- * ١) عتبة تكيّفية فعلية لكل طالب (مو معطّلة كالسابق)
- * ٢) هامش أمان إجباري بين الأفضل والثاني — يمنع الخلط بين طالبين متشابهين
- */
 export function findBestMatch<T extends MatchCandidate & { faceDescriptor?: unknown }>(
   query: Float32Array,
   items: T[],
@@ -158,7 +251,7 @@ export function findBestMatch<T extends MatchCandidate & { faceDescriptor?: unkn
     }
 
     let sampleBonus = 0;
-    if (allSamples.length >= 5) sampleBonus = 0.07;   // 5 عينات (تغطية كاملة) → مرونة أكبر بثقة
+    if (allSamples.length >= 5) sampleBonus = 0.07;
     else if (allSamples.length >= 3) sampleBonus = 0.04;
     else if (allSamples.length >= 2) sampleBonus = 0.02;
 
@@ -194,7 +287,6 @@ export function findBestMatch<T extends MatchCandidate & { faceDescriptor?: unkn
   };
 }
 
-/** فحص الاحتيال: هل بصمة هذا الطالب قريبة جداً من طالب آخر؟ */
 export function checkForTampering<T extends MatchCandidate & { name: string; faceDescriptor?: unknown }>(
   query: Float32Array,
   others: T[],
@@ -211,10 +303,6 @@ export function checkForTampering<T extends MatchCandidate & { name: string; fac
   return { tampered: false };
 }
 
-/**
- * فحص دوري: مقارنة كل الطلاب ببعض — يكشف تشابه مريب بين بصمتين لطالبين مختلفين
- * يُستخدم بصفحة إدارة الطلاب للتنبيه المبكر عند أخطاء التسجيل
- */
 export function findSuspiciousPairs<T extends MatchCandidate & { name: string; faceDescriptor?: unknown }>(
   students: T[],
 ): Array<{ a: string; b: string; distance: number }> {
@@ -237,13 +325,10 @@ export function findSuspiciousPairs<T extends MatchCandidate & { name: string; f
   return suspicious;
 }
 
-// ── Face-ID Style: تحسين البصمة تلقائياً مع كل حضور ──
+// ── Face-ID Style: تحسين البصمة v4 تلقائياً ──
 
-/** الحد الأقصى لعدد مرات التحسين التلقائي — بعدها تصبح البصمة "مثبّتة" */
 export const MAX_ADAPTIVE_MERGES = 15;
-/** أقل جودة مقبولة لعينة يُسمح بدمجها بالبصمة */
 export const MIN_MERGE_QUALITY = 0.62;
-/** أقصى مسافة مسموحة بين العينة الجديدة والبصمة الحالية حتى تُدمج */
 export const MAX_MERGE_DISTANCE = MATCH_STRICT;
 
 export interface MergeResult {
@@ -252,11 +337,6 @@ export interface MergeResult {
   reason?: string;
 }
 
-/**
- * دمج عيّنة جديدة (وقت الحضور) مع البصمة المخزّنة عبر متوسط متحرك مرجّح.
- * كل عيّنة جديدة تأثيرها يقل تدريجياً كلما زاد mergeCount — يشبه Face ID.
- * alt ما تتغيّر إطلاقاً (العينات الأصلية مرجع أمان).
- */
 export function mergeDescriptor(
   current: StoredFaceDescriptor,
   newSample: Float32Array,
@@ -278,17 +358,15 @@ export function mergeDescriptor(
 
   const distance = descriptorDistance(newSample, mainParsed);
   if (distance > MAX_MERGE_DISTANCE) {
-    return { descriptor: current, merged: false, reason: 'العيّنة مختلفة كثيراً — تجاهل احتياطاً' };
+    return { descriptor: current, merged: false, reason: 'العيّنة مختلفة كثيراً' };
   }
 
-  // متوسط متحرك مرجّح: كل عيّنة جديدة وزنها 1/(k+1)
   const k = mergeCount;
   const dim = mainParsed.length;
   const updated = new Float32Array(dim);
   for (let i = 0; i < dim; i++) {
     updated[i] = (mainParsed[i] * k + newSample[i]) / (k + 1);
   }
-  // إعادة تطبيع L2
   let norm = 0; for (let i = 0; i < dim; i++) norm += updated[i] * updated[i];
   norm = Math.sqrt(norm) || 1;
   for (let i = 0; i < dim; i++) updated[i] /= norm;
@@ -307,7 +385,6 @@ export function mergeDescriptor(
   };
 }
 
-/** نسبة اكتمال "نضج" البصمة — لعرضها بالواجهة (0 → 100) */
 export function getMaturityPercent(fd: unknown): number {
   const d = fd as Partial<StoredFaceDescriptor> | null;
   const mergeCount = d?.mergeCount ?? 0;
@@ -316,80 +393,12 @@ export function getMaturityPercent(fd: unknown): number {
 
 // ── شبكة الزوايا (Pose Grid) — نظام العناقيد v5 ──
 
-export const MAX_CLUSTERS = 18;
-export const MAX_MERGES_PER_CLUSTER = 12;
-export const MIN_CLUSTER_QUALITY = 0.60;
-export const MAX_NEW_CLUSTER_DISTANCE = 0.40;
-export const MAX_CLUSTER_MERGE_DISTANCE = MATCH_STRICT;
-
-export interface PoseCluster {
-  bin: string;
-  vector: number[];
-  mergeCount: number;
-  quality: number;
-  updatedAt: number;
-}
-
-export interface FaceGalleryDescriptor {
-  version: typeof DESC_VERSION_GALLERY;
-  enrollment: number[][];
-  clusters: PoseCluster[];
-  samples?: number;
-  quality?: number;
-}
-
-export function isGalleryDescriptor(fd: unknown): fd is FaceGalleryDescriptor {
-  return !!fd && typeof fd === 'object' && (fd as Record<string, unknown>).version === DESC_VERSION_GALLERY;
-}
-
-/** يحوّل بصمة v4 القديمة (main+alt) إلى معرض v5 — للترحيل التلقائي بدون فقدان بيانات */
-export function migrateToGallery(old: StoredFaceDescriptor): FaceGalleryDescriptor {
-  const enrollment: number[][] = [old.main, ...(old.alt ?? [])];
-  return {
-    version: DESC_VERSION_GALLERY,
-    enrollment,
-    clusters: [],
-    samples: old.samples,
-    quality: old.quality,
-  };
-}
-
-/** كل العينات القابلة للمقارنة: عينات التسجيل + كل العناقيد المكتسبة */
-export function parseGallerySamples(fd: unknown): Float32Array[] {
-  let gallery: FaceGalleryDescriptor | null = null;
-
-  if (isGalleryDescriptor(fd)) {
-    gallery = fd;
-  } else if (hasValidDescriptor(fd)) {
-    gallery = migrateToGallery(fd as StoredFaceDescriptor);
-  }
-  if (!gallery) return [];
-
-  const result: Float32Array[] = [];
-  for (const s of gallery.enrollment) {
-    const p = parseOneSample(s);
-    if (p) result.push(p);
-  }
-  for (const c of gallery.clusters) {
-    const p = parseOneSample(c.vector);
-    if (p) result.push(p);
-  }
-  return result;
-}
-
 export interface ClusterUpdateResult {
   gallery: FaceGalleryDescriptor;
   action: 'merged' | 'created' | 'rejected' | 'skipped_mature';
   bin?: string;
 }
 
-/**
- * الدالة الأساسية: تستقبل عيّنة جديدة وتقرر:
- *  - زاوية معروفة → دمج بمتوسط متحرك
- *  - زاوية جديدة → إنشاء عنقود (حتى الحد الأقصى)
- *  - عنقود مستقر → تجاهل
- *  - عيّنة بعيدة → رفض (حماية من التلوّث)
- */
 export function updateGallery(
   current: FaceGalleryDescriptor,
   newSample: Float32Array,
@@ -402,7 +411,6 @@ export function updateGallery(
 
   const sameBinIdx = current.clusters.findIndex(c => c.bin === bin);
 
-  // فحص الأمان: هل العيّنة قريبة من بصمة هذا الطالب أصلاً؟
   let nearestDistance = Infinity;
   const allRefs = parseGallerySamples(current);
   for (const ref of allRefs) {
@@ -443,7 +451,6 @@ export function updateGallery(
     return { gallery: current, action: 'skipped_mature', bin };
   }
 
-  // زاوية جديدة — أنشئ عنقود
   const newCluster: PoseCluster = {
     bin,
     vector: Array.from(newSample).map(v => Math.round(v * 1e5) / 1e5),
@@ -455,7 +462,6 @@ export function updateGallery(
   if (clusters.length < MAX_CLUSTERS) {
     clusters.push(newCluster);
   } else {
-    // امتلأت السعة — أخلِ أضعف عنقود
     let weakestIdx = 0;
     for (let i = 1; i < clusters.length; i++) {
       if (clusters[i].mergeCount < clusters[weakestIdx].mergeCount ||
@@ -473,7 +479,6 @@ export function updateGallery(
   return { gallery: { ...current, clusters }, action: 'created', bin };
 }
 
-/** نسبة تغطية الزوايا الفعلية — لعرضها بالواجهة */
 export function getCoveragePercent(fd: unknown): number {
   if (!isGalleryDescriptor(fd)) return 0;
   return Math.min(100, Math.round((fd.clusters.length / MAX_CLUSTERS) * 100));
