@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-// صيغة البصمة الجديدة v4 — GhostFaceNet 512-bits L2-normalized
+// صيغة البصمة v4 — GhostFaceNet 512-bits L2-normalized
 // { main: number[512], alt?: number[512][], samples?, quality?, version: 4 }
 // alt يحتوي العينات الأصلية (أمام/يمين/يسار) — المقارنة تتم ضد كل عينة
 // ─────────────────────────────────────────────────────────────
@@ -7,19 +7,21 @@
 export const DESC_DIM = 512;
 export const DESC_VERSION = 4;
 
-/** عتبة المسافة الكوسينية — صارم للمطابقة المؤكدة */
-export const MATCH_STRICT = 0.35;
-/**
- * عتبة متساهلة — تُقبل تغيّرات في الزاوية والمسافة والاتجاه.
- * لأن البصمة تحتوي عينات متعددة الزوايا، نرفع العتبة لتقديم مرونة أكبر.
- */
-export const MATCH_LOOSE = 0.70;
+/** عتبة المسافة الكوسينية الأساسية — صار محسوب بعناية بدل القيمة القديمة الفضفاضة */
+export const MATCH_STRICT = 0.32;
+export const MATCH_LOOSE = 0.42;
+
+/** أقل هامش مطلوب بين أفضل تطابق وثاني أفضل تطابق لقبول القرار */
+export const MIN_MARGIN = 0.06;
+
 /** إذا تطابق وجه طالب مع بصمة طالب آخر أقل من هذه العتبة → احتيال محتمل */
-export const TAMPER_THRESHOLD = 0.32;
+export const TAMPER_THRESHOLD = 0.30;
+
+/** عدد إطارات التأكيد المطلوبة قبل قبول أي تطابق (يُستخدم بالواجهة) */
+export const CONFIRM_FRAMES = 3;
 
 export interface StoredFaceDescriptor {
   main: number[];
-  /** عينات أصلية إضافية (أمام/يمين/يسار) — تُقارَن كل منها أثناء التعرّف */
   alt?: number[][];
   samples?: number;
   quality?: number;
@@ -30,7 +32,6 @@ export interface MatchCandidate {
   id: string;
 }
 
-/** تحليل عينة واحدة من المخزون إلى Float32Array */
 function parseOneSample(arr: unknown): Float32Array | null {
   if (!Array.isArray(arr) || arr.length !== DESC_DIM) return null;
   const f = new Float32Array(DESC_DIM);
@@ -55,7 +56,6 @@ export function parseStoredDescriptor(input: unknown): Float32Array | null {
   return parseOneSample(d.main);
 }
 
-/** يُعيد جميع العينات المخزنة (main + alt) */
 export function parseAllSamples(input: unknown): Float32Array[] {
   if (!input || typeof input !== 'object') return [];
   const d = input as Partial<StoredFaceDescriptor>;
@@ -76,7 +76,6 @@ export function hasValidDescriptor(fd: unknown): boolean {
   return parseStoredDescriptor(fd) !== null;
 }
 
-/** بصمة من نظام قديم (face-api / مضغوطة / multi) — لا تعمل مع المحرك الجديد */
 export function hasLegacyDescriptor(fd: unknown): boolean {
   return fd != null && typeof fd === 'object' && !hasValidDescriptor(fd);
 }
@@ -87,10 +86,7 @@ export function descriptorToStorage(
 ): StoredFaceDescriptor {
   const out: number[] = new Array(DESC_DIM);
   for (let i = 0; i < DESC_DIM; i++) out[i] = Math.round(main[i] * 1e5) / 1e5;
-  const result: StoredFaceDescriptor = {
-    main: out,
-    version: DESC_VERSION,
-  };
+  const result: StoredFaceDescriptor = { main: out, version: DESC_VERSION };
   if (opts?.samples !== undefined) result.samples = opts.samples;
   if (opts?.quality !== undefined) result.quality = Math.round(opts.quality * 100) / 100;
   if (opts?.alt && opts.alt.length > 0) {
@@ -125,19 +121,16 @@ export function descriptorDistance(a: Float32Array, b: Float32Array): number {
 export interface BestMatch<T> {
   item: T;
   distance: number;
-  /** ثقة معروضة 0..100 */
   confidence: number;
-  /** عدد العينات المخزنة لهذا الطالب */
   sampleCount: number;
+  /** الفرق بين هذا التطابق وثاني أفضل تطابق — كلما زاد كان القرار أوثق */
+  margin: number;
 }
 
 /**
- * يبحث في قائمة الطلاب عن أقرب بصمة — يُقارن ضد كل عينة مخزنة (main + alt)
- * ويأخذ أقل مسافة (أفضل تطابق).
- *
- * عتبة تكيّفية:
- *  - إذا الطالب عنده عينات متعددة (alt[]) → مرونة أكبر (multi-sample more reliable)
- *  - إذا جودة الاستعلام (query) ضعيفة → مرونة أكبر بعد
+ * البحث عن أقرب بصمة مع حماية مزدوجة:
+ * ١) عتبة تكيّفية فعلية لكل طالب (مو معطّلة كالسابق)
+ * ٢) هامش أمان إجباري بين الأفضل والثاني — يمنع الخلط بين طالبين متشابهين
  */
 export function findBestMatch<T extends MatchCandidate & { faceDescriptor?: unknown }>(
   query: Float32Array,
@@ -145,53 +138,56 @@ export function findBestMatch<T extends MatchCandidate & { faceDescriptor?: unkn
   baseThreshold = MATCH_LOOSE,
   queryQuality?: number,
 ): BestMatch<T> | null {
-  let best: BestMatch<T> | null = null;
+  interface PerItem { item: T; distance: number; sampleCount: number; threshold: number }
+  const perItem: PerItem[] = [];
+
   for (const item of items) {
     const allSamples = parseAllSamples(item.faceDescriptor);
     if (allSamples.length === 0) continue;
 
-    // حساب عتبة مخصصة لهذا الطالب بناءً على عدد العينات
-    let sampleBonus = 0;
-    if (allSamples.length >= 4) sampleBonus = 0.10;      // 4+ عينات → مرونة كبيرة
-    else if (allSamples.length >= 2) sampleBonus = 0.05;  // 2-3 عينات → مرونة متوسطة
-
-    // حساب عتبة مخصصة بناءً على جودة الاستعلام
-    let qualityBonus = 0;
-    if (queryQuality !== undefined && queryQuality < 0.6) {
-      qualityBonus = (0.6 - queryQuality) * 0.30; // جودة 0.3 → bonus 0.09
-    }
-
-    const studentThreshold = baseThreshold + sampleBonus + qualityBonus;
-
+    let bestForItem = Infinity;
     for (const ref of allSamples) {
       const distance = descriptorDistance(query, ref);
-      if (!best || distance < best.distance) {
-        best = {
-          item,
-          distance,
-          confidence: Math.round((1 - distance) * 100),
-          sampleCount: allSamples.length,
-        };
-      }
+      if (distance < bestForItem) bestForItem = distance;
     }
 
-    // فحص خاص: أفضل مسافة لهذا الطالب يجب أن تكون ضمن عتبته المخصصة
-    if (best && best.item === item && best.distance > studentThreshold) {
-      // لا نزال أفضل، لكن نُعلّم أنه خارج العتبة المخصصة — قد نرجعه لاحقاً
+    let sampleBonus = 0;
+    if (allSamples.length >= 4) sampleBonus = 0.04;
+    else if (allSamples.length >= 2) sampleBonus = 0.02;
+
+    let qualityBonus = 0;
+    if (queryQuality !== undefined && queryQuality < 0.6) {
+      qualityBonus = (0.6 - queryQuality) * 0.10;
     }
+
+    perItem.push({
+      item,
+      distance: bestForItem,
+      sampleCount: allSamples.length,
+      threshold: baseThreshold + sampleBonus + qualityBonus,
+    });
   }
 
-  if (!best) return null;
+  if (perItem.length === 0) return null;
 
-  // فحص نهائي: هل أفضل مسافة ضمن العتبة الأساسية؟
-  if (best.distance > baseThreshold + 0.15) return null; // حد أقصى مطلق
-  return best;
+  perItem.sort((a, b) => a.distance - b.distance);
+  const first = perItem[0];
+  const second = perItem[1];
+  const margin = second ? second.distance - first.distance : 1;
+
+  if (first.distance > first.threshold) return null;
+  if (second && margin < MIN_MARGIN) return null;
+
+  return {
+    item: first.item,
+    distance: first.distance,
+    confidence: Math.round((1 - first.distance) * 100),
+    sampleCount: first.sampleCount,
+    margin: Math.round(margin * 100) / 100,
+  };
 }
 
-/**
- * فحص الاحتيال: هل بصمة هذا الطالب قريبة جداً من طالب آخر؟
- * يُقارن ضد كل عينة مخزنة للطلاب الآخرين
- */
+/** فحص الاحتيال: هل بصمة هذا الطالب قريبة جداً من طالب آخر؟ */
 export function checkForTampering<T extends MatchCandidate & { name: string; faceDescriptor?: unknown }>(
   query: Float32Array,
   others: T[],
@@ -206,4 +202,30 @@ export function checkForTampering<T extends MatchCandidate & { name: string; fac
     }
   }
   return { tampered: false };
+}
+
+/**
+ * فحص دوري: مقارنة كل الطلاب ببعض — يكشف تشابه مريب بين بصمتين لطالبين مختلفين
+ * يُستخدم بصفحة إدارة الطلاب للتنبيه المبكر عند أخطاء التسجيل
+ */
+export function findSuspiciousPairs<T extends MatchCandidate & { name: string; faceDescriptor?: unknown }>(
+  students: T[],
+): Array<{ a: string; b: string; distance: number }> {
+  const withFace = students.filter(s => parseAllSamples(s.faceDescriptor).length > 0);
+  const suspicious: Array<{ a: string; b: string; distance: number }> = [];
+  for (let i = 0; i < withFace.length; i++) {
+    const samplesA = parseAllSamples(withFace[i].faceDescriptor);
+    for (let j = i + 1; j < withFace.length; j++) {
+      const samplesB = parseAllSamples(withFace[j].faceDescriptor);
+      let minDist = Infinity;
+      for (const a of samplesA) for (const b of samplesB) {
+        const d = descriptorDistance(a, b);
+        if (d < minDist) minDist = d;
+      }
+      if (minDist < TAMPER_THRESHOLD) {
+        suspicious.push({ a: withFace[i].name, b: withFace[j].name, distance: Math.round(minDist * 100) / 100 });
+      }
+    }
+  }
+  return suspicious;
 }

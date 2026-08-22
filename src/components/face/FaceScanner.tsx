@@ -14,6 +14,7 @@ import {
   findBestMatch,
   hasValidDescriptor,
   MATCH_LOOSE,
+  CONFIRM_FRAMES,
 } from '../../services/faceAI/descriptors';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
@@ -87,6 +88,8 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   const cooldowns = useRef(new Map<string, number>());
   const hwZoomRange = useRef<{ min: number; max: number; step: number } | null>(null);
   const loggedIdsRef = useRef(new Set<string>());
+  const pendingMatchRef = useRef<{ id: string; count: number } | null>(null);
+  const unknownStreakRef = useRef(0);
 
   // ── تطبيق التقريب العتادي إن كان مدعوماً ──
   const digitalZoom = hasHwZoom ? 1 : zoom;
@@ -327,7 +330,6 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
           );
           if (!runningRef.current || !mountedRef.current) return;
 
-          const now = Date.now();
           let anyUnknown = false;
           let markedAny = false;
 
@@ -343,17 +345,39 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               res.quality.composite,
             );
 
-            if (!match || match.confidence < 50) {
+            // عتبة عرض إضافية فوق عتبة findBestMatch نفسها (طبقة حماية ثانية)
+            if (!match || match.confidence < 62) {
               anyUnknown = true;
+              unknownStreakRef.current++;
+              pendingMatchRef.current = null;
               liveBoxes.push({ box: boxInVideo, label: 'غير معروف', color: '#fbbf24' });
               continue;
             }
 
             const student = match.item;
+
+            // ── تأكيد زمني: نفس الطالب يجب أن يتكرر عدة إطارات متتالية ──
+            if (pendingMatchRef.current?.id === student.id) {
+              pendingMatchRef.current.count++;
+            } else {
+              pendingMatchRef.current = { id: student.id, count: 1 };
+            }
+
+            if (pendingMatchRef.current.count < CONFIRM_FRAMES) {
+              liveBoxes.push({
+                box: boxInVideo,
+                label: student.name.split(' ')[0],
+                sub: 'جاري التحقق...',
+                color: '#818cf8',
+              });
+              continue; // لا تسجيل حضور بعد — ننتظر تأكيد إطارات أكثر
+            }
+
             const alreadyMarked = presentRef.current.has(student.id);
+            const now2 = Date.now();
             const lastHit = cooldowns.current.get(student.id) ?? 0;
 
-            if (alreadyMarked || now - lastHit < RECOGNITION_COOLDOWN) {
+            if (alreadyMarked || now2 - lastHit < RECOGNITION_COOLDOWN) {
               liveBoxes.push({
                 box: boxInVideo,
                 label: student.name.split(' ')[0],
@@ -368,7 +392,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               continue;
             }
 
-            cooldowns.current.set(student.id, now);
+            cooldowns.current.set(student.id, now2);
             markedAny = true;
             liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'حاضر ✓', color: '#34d399' });
             if (!loggedIdsRef.current.has(student.id)) {
