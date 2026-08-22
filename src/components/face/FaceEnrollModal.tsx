@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { Student } from '../../types/student';
 import {
   hasValidDescriptor,
-  type StoredFaceDescriptor,
   type FaceGalleryDescriptor,
 } from '../../services/faceAI/descriptors';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
@@ -68,7 +67,7 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
     }
   }, [qi, queue.length]);
 
-  const handleCaptured = useCallback((descriptor: StoredFaceDescriptor | FaceGalleryDescriptor) => {
+  const handleCaptured = useCallback((descriptor: FaceGalleryDescriptor) => {
     if (!currentStudent) return;
     onUpdateStudent(currentStudent.id, {
       faceDescriptor: descriptor,

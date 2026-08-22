@@ -10,7 +10,6 @@ import {
   checkForTampering,
   hasValidDescriptor,
   isGalleryDescriptor,
-  migrateToGallery,
 } from '../../services/faceAI/descriptors';
 import { Camera, Check, CircleCheck, CircleX, ClipboardList, LoaderCircle, Mail, QrCode, Save, Smile, Trash2, TriangleAlert } from 'lucide-react';
 
@@ -126,41 +125,21 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       let finalDescriptor = req.faceDescriptor;
 
       if (req.faceDescriptor) {
-        if (isGalleryDescriptor(req.faceDescriptor)) {
-          // v5 gallery — valid as-is, just parse first sample for tamper check
-          const query = parseStoredDescriptor(req.faceDescriptor);
-          if (!query) {
-            alert('البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.');
-            return;
-          }
-          const allStudents: Student[] = Array.isArray(data) ? data : Object.values(data);
-          const tamper = checkForTampering(query, allStudents, req.studentId);
-          if (tamper.tampered) {
-            alert(`لا يمكن الموافقة: هذه البصمة مطابقة لبصمة الطالب:\n${tamper.matchedWith}\n\nيرجى التحقق من صحة الطلب.`);
-            return;
-          }
-        } else {
-          // v4 قديم أو صيغة غير معروفة — نحاول التحويل التلقائي إلى v5
-          const d = req.faceDescriptor as any;
-          if (d && typeof d === 'object' && d.main && Array.isArray(d.main) && d.main.length === 512) {
-            // v4 صالح — نحوّل إلى v5
-            finalDescriptor = migrateToGallery(d);
-            console.log('🔄 تم تحويل البصمة من v4 إلى v5 تلقائياً');
+        if (!isGalleryDescriptor(req.faceDescriptor)) {
+          alert('لا يمكن الموافقة: البصمة المرفقة بصيغة قديمة غير مدعومة.\nاطلب من الطالب إعادة تسجيل البصمة بالرابط الجديد.');
+          return;
+        }
 
-            // tamper check على البصمة المحولة
-            const query = parseStoredDescriptor(finalDescriptor);
-            if (query) {
-              const allStudents: Student[] = Array.isArray(data) ? data : Object.values(data);
-              const tamper = checkForTampering(query, allStudents, req.studentId);
-              if (tamper.tampered) {
-                alert(`لا يمكن الموافقة: هذه البصمة مطابقة لبصمة الطالب:\n${tamper.matchedWith}\n\nيرجى التحقق من صحة الطلب.`);
-                return;
-              }
-            }
-          } else {
-            alert('لا يمكن الموافقة: البصمة المرفقة غير صالحة.\nاطلب من الطالب إعادة تسجيل البصمة بالرابط الجديد.');
-            return;
-          }
+        const query = parseStoredDescriptor(req.faceDescriptor);
+        if (!query) {
+          alert('البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.');
+          return;
+        }
+        const allStudents: Student[] = Array.isArray(data) ? data : Object.values(data);
+        const tamper = checkForTampering(query, allStudents, req.studentId);
+        if (tamper.tampered) {
+          alert(`لا يمكن الموافقة: هذه البصمة مطابقة لبصمة الطالب:\n${tamper.matchedWith}\n\nيرجى التحقق من صحة الطلب.`);
+          return;
         }
       }
 

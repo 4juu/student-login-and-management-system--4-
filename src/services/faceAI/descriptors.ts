@@ -1,17 +1,15 @@
 // ─────────────────────────────────────────────────────────────
 // نظام بصمات الوجه — GhostFaceNet 512-bits L2-normalized
-// يدعم صيغتين متعايشتين:
-//   v4: { main, alt?, samples?, quality?, version: 4 }
-//   v5: { enrollment[], clusters[], samples?, quality?, version: 5 }
+// الصيغة الوحيدة: v5 Pose Grid
+//   { version: 5, enrollment: number[][], clusters: PoseCluster[], samples?, quality? }
 // ─────────────────────────────────────────────────────────────
 import { YAW_STEPS, PITCH_STEPS } from './pose';
 
 // ══════════════════════════════════════════════════════════════
-// 1) الثوابت والأنواع (v4 + v5)
+// 1) الثوابت والأنواع
 // ══════════════════════════════════════════════════════════════
 
 export const DESC_DIM = 512;
-export const DESC_VERSION = 4;
 export const DESC_VERSION_GALLERY = 5;
 
 export const MATCH_STRICT = 0.32;
@@ -20,20 +18,9 @@ export const MIN_MARGIN = 0.06;
 export const TAMPER_THRESHOLD = 0.30;
 export const CONFIRM_FRAMES = 3;
 
-export interface StoredFaceDescriptor {
-  main: number[];
-  alt?: number[][];
-  samples?: number;
-  quality?: number;
-  version: number;
-  mergeCount?: number;
-}
-
 export interface MatchCandidate {
   id: string;
 }
-
-// ── أنواع v5: شبكة الزوايا (Pose Grid) ──
 
 export const MAX_CLUSTERS = 18;
 export const MAX_MERGES_PER_CLUSTER = 12;
@@ -58,7 +45,7 @@ export interface FaceGalleryDescriptor {
 }
 
 // ══════════════════════════════════════════════════════════════
-// 2) parseOneSample (مشتركة بين v4 و v5)
+// 2) parseOneSample
 // ══════════════════════════════════════════════════════════════
 
 function parseOneSample(arr: unknown): Float32Array | null {
@@ -79,7 +66,7 @@ function parseOneSample(arr: unknown): Float32Array | null {
 }
 
 // ══════════════════════════════════════════════════════════════
-// 3) isGalleryDescriptor + migrateToGallery
+// 3) isGalleryDescriptor
 // ══════════════════════════════════════════════════════════════
 
 export function isGalleryDescriptor(fd: unknown): fd is FaceGalleryDescriptor {
@@ -96,98 +83,45 @@ function normalizeClusters(clusters: unknown): PoseCluster[] {
   return [];
 }
 
-export function migrateToGallery(old: StoredFaceDescriptor): FaceGalleryDescriptor {
-  const enrollment: number[][] = [old.main, ...(old.alt ?? [])];
-  return {
-    version: DESC_VERSION_GALLERY,
-    enrollment,
-    clusters: [],
-    samples: old.samples,
-    quality: old.quality,
-  };
-}
-
 // ══════════════════════════════════════════════════════════════
-// 4) hasValidDescriptor + hasLegacyDescriptor (بعد isGalleryDescriptor)
+// 4) hasValidDescriptor
 // ══════════════════════════════════════════════════════════════
 
-/** تحقق من صلاحية البصمة بأي صيغة مدعومة (v4 أو v5) */
 export function hasValidDescriptor(fd: unknown): boolean {
-  if (isGalleryDescriptor(fd)) {
-    return Array.isArray(fd.enrollment) && fd.enrollment.some(s => parseOneSample(s) !== null);
-  }
-  if (!fd || typeof fd !== 'object') return false;
-  const d = fd as Partial<StoredFaceDescriptor>;
-  if (d.version !== DESC_VERSION) return false;
-  return parseOneSample(d.main) !== null;
-}
-
-/** بصمة من نظام قديم فعلاً (face-api / مضغوطة) — لا تعمل مع أي محرك حالي */
-export function hasLegacyDescriptor(fd: unknown): boolean {
-  if (fd == null || typeof fd !== 'object') return false;
-  if (isGalleryDescriptor(fd)) return false;
-  return !hasValidDescriptor(fd);
+  if (!isGalleryDescriptor(fd)) return false;
+  return Array.isArray(fd.enrollment) && fd.enrollment.some(s => parseOneSample(s) !== null);
 }
 
 // ══════════════════════════════════════════════════════════════
 // 5) parseStoredDescriptor + parseAllSamples + parseGallerySamples
 // ══════════════════════════════════════════════════════════════
 
-/** ترجّع "البصمة الرئيسية" كـ Float32Array — تدعم الصيغتين */
+/** ترجّع "البصمة الرئيسية" كـ Float32Array */
 export function parseStoredDescriptor(input: unknown): Float32Array | null {
-  if (!input || typeof input !== 'object') return null;
-
-  if (isGalleryDescriptor(input)) {
-    for (const s of input.enrollment) {
-      const p = parseOneSample(s);
-      if (p) return p;
-    }
-    return null;
+  if (!isGalleryDescriptor(input)) return null;
+  for (const s of input.enrollment) {
+    const p = parseOneSample(s);
+    if (p) return p;
   }
-
-  const d = input as Partial<StoredFaceDescriptor>;
-  if (d.version !== DESC_VERSION) return null;
-  return parseOneSample(d.main);
+  return null;
 }
 
-/** جميع العينات القابلة للمقارنة — تدعم الصيغتين */
+/** جميع العينات القابلة للمقارنة */
 export function parseAllSamples(input: unknown): Float32Array[] {
-  if (!input || typeof input !== 'object') return [];
-  if (isGalleryDescriptor(input)) return parseGallerySamples(input);
-
-  const d = input as Partial<StoredFaceDescriptor>;
-  if (d.version !== DESC_VERSION) return [];
-  const result: Float32Array[] = [];
-  const main = parseOneSample(d.main);
-  if (main) result.push(main);
-  if (Array.isArray(d.alt)) {
-    for (const a of d.alt) {
-      const parsed = parseOneSample(a);
-      if (parsed) result.push(parsed);
-    }
-  }
-  return result;
+  if (!isGalleryDescriptor(input)) return [];
+  return parseGallerySamples(input);
 }
 
 /** كل عينات المعرض: عينات التسجيل + العناقيد المكتسبة */
 export function parseGallerySamples(fd: unknown): Float32Array[] {
-  let gallery: FaceGalleryDescriptor | null = null;
-
-  if (isGalleryDescriptor(fd)) {
-    gallery = fd;
-  } else if (hasValidDescriptor(fd)) {
-    gallery = migrateToGallery(fd as StoredFaceDescriptor);
-  }
-  if (!gallery) return [];
+  if (!isGalleryDescriptor(fd)) return [];
 
   const result: Float32Array[] = [];
-  const enrollArr = Array.isArray(gallery.enrollment) ? gallery.enrollment : [];
-  for (const s of enrollArr) {
+  for (const s of fd.enrollment) {
     const p = parseOneSample(s);
     if (p) result.push(p);
   }
-  const clusterArr = normalizeClusters(gallery.clusters);
-  for (const c of clusterArr) {
+  for (const c of normalizeClusters(fd.clusters)) {
     const p = parseOneSample(c.vector);
     if (p) result.push(p);
   }
@@ -195,27 +129,8 @@ export function parseGallerySamples(fd: unknown): Float32Array[] {
 }
 
 // ══════════════════════════════════════════════════════════════
-// 6) باقي الدوال (l2Normalize, findBestMatch, checkForTampering, updateGallery...)
+// 6) الدوال المساعدة
 // ══════════════════════════════════════════════════════════════
-
-export function descriptorToStorage(
-  main: Float32Array,
-  opts?: { samples?: number; quality?: number; alt?: Float32Array[] },
-): StoredFaceDescriptor {
-  const out: number[] = new Array(DESC_DIM);
-  for (let i = 0; i < DESC_DIM; i++) out[i] = Math.round(main[i] * 1e5) / 1e5;
-  const result: StoredFaceDescriptor = { main: out, version: DESC_VERSION };
-  if (opts?.samples !== undefined) result.samples = opts.samples;
-  if (opts?.quality !== undefined) result.quality = Math.round(opts.quality * 100) / 100;
-  if (opts?.alt && opts.alt.length > 0) {
-    result.alt = opts.alt.map(a => {
-      const arr: number[] = new Array(DESC_DIM);
-      for (let i = 0; i < DESC_DIM; i++) arr[i] = Math.round(a[i] * 1e5) / 1e5;
-      return arr;
-    });
-  }
-  return result;
-}
 
 export function l2Normalize(d: Float32Array): Float32Array {
   let n = 0;
@@ -261,7 +176,7 @@ export function findBestMatch<T extends MatchCandidate & { faceDescriptor?: unkn
     for (const ref of allSamples) {
       const distance = descriptorDistance(query, ref);
       if (distance < bestForItem) bestForItem = distance;
-      if (bestForItem < 0.15) break; // تطابق شبه مؤكد — لا داعي نكمل
+      if (bestForItem < 0.15) break;
     }
 
     let sampleBonus = 0;
@@ -339,73 +254,9 @@ export function findSuspiciousPairs<T extends MatchCandidate & { name: string; f
   return suspicious;
 }
 
-// ── Face-ID Style: تحسين البصمة v4 تلقائياً ──
-
-export const MAX_ADAPTIVE_MERGES = 15;
-export const MIN_MERGE_QUALITY = 0.62;
-export const MAX_MERGE_DISTANCE = MATCH_STRICT;
-
-export interface MergeResult {
-  descriptor: StoredFaceDescriptor;
-  merged: boolean;
-  reason?: string;
-}
-
-export function mergeDescriptor(
-  current: StoredFaceDescriptor,
-  newSample: Float32Array,
-  quality: number,
-): MergeResult {
-  const mergeCount = current.mergeCount ?? 0;
-
-  if (mergeCount >= MAX_ADAPTIVE_MERGES) {
-    return { descriptor: current, merged: false, reason: 'البصمة مثبّتة بالفعل' };
-  }
-  if (quality < MIN_MERGE_QUALITY) {
-    return { descriptor: current, merged: false, reason: 'جودة العيّنة ضعيفة' };
-  }
-
-  const mainParsed = parseOneSample(current.main);
-  if (!mainParsed) {
-    return { descriptor: current, merged: false, reason: 'بصمة حالية غير صالحة' };
-  }
-
-  const distance = descriptorDistance(newSample, mainParsed);
-  if (distance > MAX_MERGE_DISTANCE) {
-    return { descriptor: current, merged: false, reason: 'العيّنة مختلفة كثيراً' };
-  }
-
-  const k = mergeCount;
-  const dim = mainParsed.length;
-  const updated = new Float32Array(dim);
-  for (let i = 0; i < dim; i++) {
-    updated[i] = (mainParsed[i] * k + newSample[i]) / (k + 1);
-  }
-  let norm = 0; for (let i = 0; i < dim; i++) norm += updated[i] * updated[i];
-  norm = Math.sqrt(norm) || 1;
-  for (let i = 0; i < dim; i++) updated[i] /= norm;
-
-  const outMain: number[] = new Array(dim);
-  for (let i = 0; i < dim; i++) outMain[i] = Math.round(updated[i] * 1e5) / 1e5;
-
-  return {
-    descriptor: {
-      ...current,
-      main: outMain,
-      mergeCount: k + 1,
-      quality: Math.max(current.quality ?? 0, Math.round(quality * 100) / 100),
-    },
-    merged: true,
-  };
-}
-
-export function getMaturityPercent(fd: unknown): number {
-  const d = fd as Partial<StoredFaceDescriptor> | null;
-  const mergeCount = d?.mergeCount ?? 0;
-  return Math.min(100, Math.round((mergeCount / MAX_ADAPTIVE_MERGES) * 100));
-}
-
-// ── شبكة الزوايا (Pose Grid) — نظام العناقيد v5 ──
+// ══════════════════════════════════════════════════════════════
+// 7) شبكة الزوايا (Pose Grid) — نظام العناقيد v5
+// ══════════════════════════════════════════════════════════════
 
 export interface ClusterUpdateResult {
   gallery: FaceGalleryDescriptor;
@@ -501,23 +352,21 @@ export function getCoveragePercent(fd: unknown): number {
 
 // ── تنظيف العناقيد القديمة (Cluster Decay) ──
 
-export const CLUSTER_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 120; // 120 يوم
+export const CLUSTER_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 120;
 
-/** يشيل العناقيد القديمة جداً واللي معها mergeCount منخفض (ضعيفة أصلاً) */
 export function pruneStaleClusters(gallery: FaceGalleryDescriptor): FaceGalleryDescriptor {
   const clusters = normalizeClusters(gallery.clusters);
   const now = Date.now();
   const filtered = clusters.filter(c => {
     const age = now - c.updatedAt;
     if (age < CLUSTER_MAX_AGE_MS) return true;
-    return c.mergeCount >= 6; // عنقود قوي نبقيه حتى لو قديم
+    return c.mergeCount >= 6;
   });
   return filtered.length === clusters.length ? gallery : { ...gallery, clusters: filtered };
 }
 
-// ── الزوايا الناقصة (للuman feedback) ──
+// ── الزوايا الناقصة ──
 
-/** يُعيد قائمة بخانات الشبكة التي لا تغطيها عناقيد الطالب */
 export function getMissingBins(gallery: FaceGalleryDescriptor): string[] {
   const covered = new Set(normalizeClusters(gallery.clusters).map(c => c.bin));
   const missing: string[] = [];
@@ -531,15 +380,11 @@ export function getMissingBins(gallery: FaceGalleryDescriptor): string[] {
 // ── ملخص صحة النظام ──
 
 export function getGalleryHealthSummary(students: Array<{ faceDescriptor?: unknown }>) {
-  let v4Count = 0, v5Count = 0, matureCount = 0, noFaceCount = 0;
+  let v5Count = 0, matureCount = 0, noFaceCount = 0;
   for (const s of students) {
     if (!hasValidDescriptor(s.faceDescriptor)) { noFaceCount++; continue; }
-    if (isGalleryDescriptor(s.faceDescriptor)) {
-      v5Count++;
-      if (getCoveragePercent(s.faceDescriptor) >= 80) matureCount++;
-    } else {
-      v4Count++;
-    }
+    v5Count++;
+    if (getCoveragePercent(s.faceDescriptor) >= 80) matureCount++;
   }
-  return { v4Count, v5Count, matureCount, noFaceCount, total: students.length };
+  return { v5Count, matureCount, noFaceCount, total: students.length };
 }

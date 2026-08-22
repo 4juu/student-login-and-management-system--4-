@@ -2,7 +2,6 @@ import React, { useState, useRef, useMemo, useCallback, lazy, Suspense } from 'r
 import { Student } from '../types/student';
 import {
   hasValidDescriptor,
-  hasLegacyDescriptor,
   getCoveragePercent,
   isGalleryDescriptor,
   getGalleryHealthSummary,
@@ -454,13 +453,13 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
     setShowFaceRegister(true);
   };
 
-  /* إعادة تسجيل البصمات القديمة غير المتوافقة مع المحرك الجديد */
-  const reEnrollLegacy = () => {
-    const legacyIds = students
-      .filter(s => hasLegacyDescriptor(s.faceDescriptor))
+  /* إعادة تسجيل الطالب بدون بصمة */
+  const reEnrollNoFace = () => {
+    const noFaceIds = students
+      .filter(s => !hasValidDescriptor(s.faceDescriptor))
       .map(s => s.id);
-    if (legacyIds.length === 0) return;
-    openFaceEnroll(legacyIds);
+    if (noFaceIds.length === 0) return;
+    openFaceEnroll(noFaceIds);
   };
 
   const uniqueGroups = useMemo(() => {
@@ -518,8 +517,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
   }, []);
 
   const studentsWithFace = students.filter(s => hasValidDescriptor(s.faceDescriptor)).length;
-  const studentsWithLegacy = students.filter(s => hasLegacyDescriptor(s.faceDescriptor)).length;
-  const studentsWithoutFace = students.length - studentsWithFace - studentsWithLegacy;
+  const studentsWithoutFace = students.length - studentsWithFace;
   const health = getGalleryHealthSummary(students);
 
   const pageIds = paginatedStudents.map(s => s.id);
@@ -734,10 +732,6 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
               <div className="text-xs text-emerald-400">بصمة v5 (معرض)</div>
             </div>
             <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
-              <div className="text-2xl font-bold text-amber-300">{health.v4Count}</div>
-              <div className="text-xs text-amber-400">بصمة v4 (قديمة)</div>
-            </div>
-            <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
               <div className="text-2xl font-bold text-purple-300">{health.matureCount}</div>
               <div className="text-xs text-purple-400">ناضجة (≥80%)</div>
             </div>
@@ -747,16 +741,16 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
             </div>
           </div>
 
-          {studentsWithLegacy > 0 && (
+          {studentsWithoutFace > 0 && (
             <div className="mb-3 bg-gradient-to-r from-amber-500/10 to-yellow-500/10 border border-amber-500/30 rounded-lg p-3 flex items-start gap-2">
               <TriangleAlert className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
               <div className="flex-1 text-xs text-slate-300">
-                <strong className="text-amber-300">{studentsWithLegacy} طالب</strong> لديهم بصمات بنظام قديم غير متوافق — أعد تسجيلها لتعمل مع المحرك الجديد.
+                <strong className="text-amber-300">{studentsWithoutFace} طالب</strong> بدون بصمة وجه مسجّلة — سجّلها لتفعيل الحضور بالكاميرا.
                 <button
-                  onClick={reEnrollLegacy}
+                  onClick={reEnrollNoFace}
                   className="mr-2 px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-amber-950 rounded-md font-bold transition"
                 >
-                  إعادة تسجيل الآن
+                  تسجيل الآن
                 </button>
               </div>
             </div>
@@ -772,9 +766,9 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
           >
             <ScanFace className="w-6 h-6" />
             <span className="text-base">إضافة بصمات جديدة</span>
-            {studentsWithLegacy + studentsWithoutFace > 0 && (
+            {studentsWithoutFace > 0 && (
               <span className="absolute top-1 left-2 bg-yellow-400 text-yellow-900 text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow">
-                {studentsWithLegacy + studentsWithoutFace} بانتظار التسجيل
+                {studentsWithoutFace} بانتظار التسجيل
               </span>
             )}
           </button>
@@ -989,8 +983,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
               paginatedStudents.map((student, index) => {
                 const globalIndex = (safeCurrentPage - 1) * pageSize + index + 1;
 
-                const hasFace = hasValidDescriptor(student.faceDescriptor) || hasLegacyDescriptor(student.faceDescriptor);
-                const isLegacy = !hasValidDescriptor(student.faceDescriptor);
+                const hasFace = hasValidDescriptor(student.faceDescriptor);
 
                 return (
                   <tr
@@ -1218,25 +1211,19 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
                         {hasFace ? (
                           <>
                             <span
-                                className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border ${
-                                  isLegacy
-                                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                                    : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                                }`}
+                                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
                               title={
                                 student.faceRegisteredAt
-                                  ? `سُجلت في: ${new Date(student.faceRegisteredAt).toLocaleDateString('ar-EG')}${isLegacy ? '\nنظام قديم — تحتاج إعادة تسجيل' : ''}`
-                                  : isLegacy ? 'نظام قديم — تحتاج إعادة تسجيل' : 'مسجّلة'
+                                  ? `سُجلت في: ${new Date(student.faceRegisteredAt).toLocaleDateString('ar-EG')}`
+                                  : 'مسجّلة'
                               }
                             >
-                              {isLegacy ? <TriangleAlert className="w-3.5 h-3.5" /> : <CircleCheck className="w-3.5 h-3.5" />}
-                              {isLegacy ? 'قديمة' : 'صالحة'}
+                              <CircleCheck className="w-3.5 h-3.5" />
+                              صالحة
                             </span>
-                            {!isLegacy && hasValidDescriptor(student.faceDescriptor) && (
-                              <span className="text-[10px] text-slate-400" title={isGalleryDescriptor(student.faceDescriptor) ? `تغطية الزوايا: ${getCoveragePercent(student.faceDescriptor)}%` : 'بصمة أساسية'}>
-                                {isGalleryDescriptor(student.faceDescriptor)
-                                  ? `تغطية: ${getCoveragePercent(student.faceDescriptor)}%`
-                                  : 'أساسية'}
+                            {isGalleryDescriptor(student.faceDescriptor) && (
+                              <span className="text-[10px] text-slate-400" title={`تغطية الزوايا: ${getCoveragePercent(student.faceDescriptor)}%`}>
+                                تغطية: {getCoveragePercent(student.faceDescriptor)}%
                               </span>
                             )}
                             {onUpdateStudent && (

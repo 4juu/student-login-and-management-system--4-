@@ -15,11 +15,9 @@ import {
   findBestMatch,
   hasValidDescriptor,
   isGalleryDescriptor,
-  migrateToGallery,
   updateGallery,
   MATCH_LOOSE,
   CONFIRM_FRAMES,
-  type StoredFaceDescriptor,
 } from '../../services/faceAI/descriptors';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { estimatePose, poseToBin } from '../../services/faceAI/pose';
@@ -419,15 +417,11 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
 
                 if (pose) {
                   const bin = poseToBin(pose);
-                  const currentGallery = isGalleryDescriptor(student.faceDescriptor)
-                    ? student.faceDescriptor
-                    : migrateToGallery(student.faceDescriptor as StoredFaceDescriptor);
+                  if (!isGalleryDescriptor(student.faceDescriptor)) continue;
 
-                  const result = updateGallery(currentGallery, smoothed, res.quality.composite, bin);
+                  const result = updateGallery(student.faceDescriptor, smoothed, res.quality.composite, bin);
 
-                  // ✅ اكتب v5 للقاعدة حتى لو ما تم دمج/إنشاء عنقود (أول مرة نشوفه v4)
-                  const wasV4 = !isGalleryDescriptor(student.faceDescriptor);
-                  if (result.action === 'merged' || result.action === 'created' || (wasV4 && result.action !== 'rejected')) {
+                  if (result.action === 'merged' || result.action === 'created') {
                     updateRef.current(student.id, { faceDescriptor: result.gallery });
                   }
                 }

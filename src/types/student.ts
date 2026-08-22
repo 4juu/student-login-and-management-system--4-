@@ -5,7 +5,7 @@ export interface Student {
   group?: string;
   universityId?: string;
   qrCodeId?: string;
-  faceDescriptor?: number[] | any; // بصمة v4: { main: number[512], samples?, quality?, version: 4 }
+  faceDescriptor?: number[] | object | any; // بصمة v5 (Pose Grid): FaceGalleryDescriptor
   faceRegisteredAt?: string;
   faceCompressed?: boolean;
   createdAt: string;

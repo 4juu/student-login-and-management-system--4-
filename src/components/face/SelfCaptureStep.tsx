@@ -12,7 +12,6 @@ import {
   checkForTampering,
   hasValidDescriptor,
   l2Normalize,
-  StoredFaceDescriptor,
   DESC_VERSION_GALLERY,
   type FaceGalleryDescriptor,
 } from '../../services/faceAI/descriptors';
@@ -21,7 +20,7 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 interface SelfCaptureStepProps {
   student: Student;
   allStudents: Student[];
-  onCaptured: (descriptor: StoredFaceDescriptor | FaceGalleryDescriptor) => void;
+  onCaptured: (descriptor: FaceGalleryDescriptor) => void;
   onCancel: () => void;
 }
 
