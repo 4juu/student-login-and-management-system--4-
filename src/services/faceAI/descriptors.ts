@@ -152,7 +152,8 @@ export function findBestMatch<T extends MatchCandidate & { faceDescriptor?: unkn
     }
 
     let sampleBonus = 0;
-    if (allSamples.length >= 4) sampleBonus = 0.04;
+    if (allSamples.length >= 5) sampleBonus = 0.07;   // 5 عينات (تغطية كاملة) → مرونة أكبر بثقة
+    else if (allSamples.length >= 3) sampleBonus = 0.04;
     else if (allSamples.length >= 2) sampleBonus = 0.02;
 
     let qualityBonus = 0;

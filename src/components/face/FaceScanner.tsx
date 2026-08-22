@@ -13,6 +13,7 @@ import { faceEmbedder, type Box } from '../../services/faceAI/embedder';
 import {
   findBestMatch,
   hasValidDescriptor,
+  l2Normalize,
   MATCH_LOOSE,
   CONFIRM_FRAMES,
 } from '../../services/faceAI/descriptors';
@@ -40,7 +41,7 @@ interface LogEntry {
 }
 
 const RECOGNITION_COOLDOWN = 30_000;
-const MIN_FACE_PX = 56;
+const MIN_FACE_PX = 42;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
 
@@ -90,6 +91,8 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   const loggedIdsRef = useRef(new Set<string>());
   const pendingMatchRef = useRef<{ id: string; count: number } | null>(null);
   const unknownStreakRef = useRef(0);
+  // تنعيم زمني: آخر ٣ بصمات لكل وجه مُتتبَّع (تقريب عبر الترتيب داخل الفريم)
+  const embeddingBufferRef = useRef<Map<string, Float32Array[]>>(new Map());
 
   // ── تطبيق التقريب العتادي إن كان مدعوماً ──
   const digitalZoom = hasHwZoom ? 1 : zoom;
@@ -312,6 +315,8 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
         const bigEnough = targets.filter(d => d.box.width >= MIN_FACE_PX && d.box.height >= MIN_FACE_PX);
 
         if (bigEnough.length === 0) {
+          embeddingBufferRef.current.clear();
+          pendingMatchRef.current = null;
           setStatus('idle');
           drawBoxes(liveBoxes);
         } else {
@@ -338,8 +343,26 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
             const vbx = res.box.x / scale, vby = res.box.y / scale;
             const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
 
+            // ── تنعيم زمني: دمج آخر ٣ بصمات لنفس الوجه لإلغاء الضوضاء اللحظية ──
+            const rawDesc = new Float32Array(res.descriptor);
+            const trackKey = `slot_${results.indexOf(res)}`;
+            const buf = embeddingBufferRef.current.get(trackKey) ?? [];
+            buf.push(rawDesc);
+            if (buf.length > 3) buf.shift();
+            embeddingBufferRef.current.set(trackKey, buf);
+
+            let smoothed: Float32Array;
+            if (buf.length >= 2) {
+              const avg = new Float32Array(rawDesc.length);
+              for (const s of buf) for (let i = 0; i < s.length; i++) avg[i] += s[i];
+              for (let i = 0; i < avg.length; i++) avg[i] /= buf.length;
+              smoothed = l2Normalize(avg);
+            } else {
+              smoothed = rawDesc;
+            }
+
             const match = findBestMatch(
-              new Float32Array(res.descriptor),
+              smoothed,
               rosterRef.current,
               MATCH_LOOSE,
               res.quality.composite,

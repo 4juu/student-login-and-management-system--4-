@@ -24,14 +24,16 @@ interface SelfCaptureStepProps {
   onCancel: () => void;
 }
 
-const SAMPLES_NEEDED = 3;
+const SAMPLES_NEEDED = 5;
 const MIN_REL_SIZE = 0.14;
 
-type CapturePhase = 'front' | 'right' | 'left';
+type CapturePhase = 'front' | 'right' | 'left' | 'up' | 'down';
 const CAPTURE_PHASES: { key: CapturePhase; instruction: string; icon: string }[] = [
-  { key: 'front', instruction: 'وجّه وجهك للمام', icon: '👤' },
+  { key: 'front', instruction: 'وجّه وجهك للأمام', icon: '👤' },
   { key: 'right', instruction: 'أمال وجهك لليمين قليلاً', icon: '👉' },
   { key: 'left', instruction: 'أمال وجهك لليسار قليلاً', icon: '👈' },
+  { key: 'up', instruction: 'ارفع رأسك قليلاً للأعلى', icon: '👆' },
+  { key: 'down', instruction: 'أنزل رأسك قليلاً للأسفل', icon: '👇' },
 ];
 
 export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allStudents, onCaptured, onCancel }) => {
@@ -167,17 +169,22 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
         const insideEllipse = (dx * dx + dy * dy) <= 1;
 
         // تحديد موضع الوجه
-        const offsetRatio = (ecx - fcx) / v.videoWidth;
-        let pos: 'center' | 'left' | 'right' = 'center';
-        if (offsetRatio > 0.03) pos = 'right';       // ميلان طفيف لليمين يكفي
-        else if (offsetRatio < -0.03) pos = 'left';   // ميلان طفيف لليسار يكفي
+        const offsetRatioX = (ecx - fcx) / v.videoWidth;
+        const offsetRatioY = (ecy - fcy) / v.videoHeight;
+        let pos: 'center' | 'left' | 'right' | 'up' | 'down' = 'center';
+        if (offsetRatioX > 0.03) pos = 'right';       // ميلان طفيف لليمين يكفي
+        else if (offsetRatioX < -0.03) pos = 'left';  // ميلان طفيف لليسار يكفي
+        else if (offsetRatioY > 0.035) pos = 'up';    // الوجه أعلى الفريم = المستخدم رفع رأسه
+        else if (offsetRatioY < -0.035) pos = 'down'; // الوجه أسفل الفريم = المستخدم أنزل رأسه
 
         setFaceInBoundary(insideEllipse);
 
         const phaseMatch =
           (capturePhase === 'front' && pos === 'center') ||
           (capturePhase === 'right' && pos === 'right') ||
-          (capturePhase === 'left' && pos === 'left');
+          (capturePhase === 'left' && pos === 'left') ||
+          (capturePhase === 'up' && pos === 'up') ||
+          (capturePhase === 'down' && pos === 'down');
 
         setCanCapture(insideEllipse && phaseMatch);
 
@@ -186,7 +193,10 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
         } else if (!insideEllipse) {
           setFeedback(CAPTURE_PHASES.find(p => p.key === capturePhase)!.instruction);
         } else {
-          const expected = capturePhase === 'right' ? 'أمال لليمين' : 'أمال لليسار';
+          const expected =
+            capturePhase === 'right' ? 'أمال لليمين' :
+            capturePhase === 'left' ? 'أمال لليسار' :
+            capturePhase === 'up' ? 'ارفع رأسك قليلاً' : 'أنزل رأسك قليلاً';
           setFeedback(`أكمل الزاوية: ${expected}`);
         }
       } catch (e) {
@@ -236,10 +246,16 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
       } else if (sampleCount === 2) {
         setCapturePhase('left');
         setFeedback('تم — الآن أمال لليسار');
+      } else if (sampleCount === 3) {
+        setCapturePhase('up');
+        setFeedback('تم — الآن ارفع رأسك قليلاً');
+      } else if (sampleCount === 4) {
+        setCapturePhase('down');
+        setFeedback('تم — الآن أنزل رأسك قليلاً');
       }
 
       if (sampleCount >= SAMPLES_NEEDED) {
-        // دمج العينات الثلاث ثم تطبيع L2
+        // دمج العينات الخمس ثم تطبيع L2
         const dim = samplesDataRef.current[0].length;
         const avg = new Float32Array(dim);
         for (const s of samplesDataRef.current) for (let i = 0; i < dim; i++) avg[i] += s[i];
