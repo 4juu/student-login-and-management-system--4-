@@ -88,55 +88,73 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         throw new Error('بيانات الطالب ناقصة (studentId)');
       }
 
-      const studentsPath = `academicYears/${year}/userData/${storageUid}/stageData/${req.stageId}/students`;
-      const snap = await get(ref(database, studentsPath));
+      const basePath = `academicYears/${year}/userData/${storageUid}/stageData/${req.stageId}/students`;
 
+      // ── 1) Find the student's key first (array index or object key)
+      const snap = await get(ref(database, basePath));
       if (!snap.exists()) {
         throw new Error('لم نجد بيانات الطلاب');
       }
 
       const data = snap.val();
-      const studentsArr: Student[] = Array.isArray(data) ? data : Object.values(data);
-      const idx = studentsArr.findIndex(s => s.id === req.studentId);
+      let studentKey: string | number | null = null;
+      let studentData: Student | null = null;
 
-      if (idx === -1) {
+      if (Array.isArray(data)) {
+        const idx = data.findIndex(s => s && s.id === req.studentId);
+        if (idx !== -1) {
+          studentKey = idx;
+          studentData = data[idx];
+        }
+      } else if (data && typeof data === 'object') {
+        for (const [key, val] of Object.entries(data)) {
+          if (val && typeof val === 'object' && (val as Student).id === req.studentId) {
+            studentKey = key;
+            studentData = val as Student;
+            break;
+          }
+        }
+      }
+
+      if (studentKey === null || !studentData) {
         throw new Error(`لم نجد الطالب بالمعرف: ${req.studentId}`);
       }
 
+      // ── 2) Validate the new face descriptor (if provided)
       if (req.faceDescriptor) {
         const query = parseStoredDescriptor(req.faceDescriptor);
         if (!query) {
-          setProcessing(null);
           alert('لا يمكن الموافقة: البصمة المرفقة بنظام قديم غير متوافق.\nاطلب من الطالب إعادة تسجيل البصمة بالرابط الجديد.');
           return;
         }
-        const tamper = checkForTampering(query, studentsArr, req.studentId);
+        // Need all students for tamper check — convert to array
+        const allStudents: Student[] = Array.isArray(data) ? data : Object.values(data);
+        const tamper = checkForTampering(query, allStudents, req.studentId);
         if (tamper.tampered) {
-          setProcessing(null);
           alert(`لا يمكن الموافقة: هذه البصمة مطابقة لبصمة الطالب:\n${tamper.matchedWith}\n\nيرجى التحقق من صحة الطلب.`);
           return;
         }
       }
 
-      studentsArr[idx] = {
-        ...studentsArr[idx],
+      // ── 3) Update ONLY this student using update() — avoids rewriting whole array
+      const studentRef = ref(database, `${basePath}/${studentKey}`);
+      await update(studentRef, {
         qrCodeId: req.qrCodeId,
         faceDescriptor: req.faceDescriptor,
         faceRegisteredAt: new Date().toISOString(),
-      } as Student;
+      });
 
-      await set(ref(database, studentsPath), studentsArr);
-
+      // ── 4) Update pending request status
       await update(ref(database, `registrationSystem/pending/${adminUid}/${req.id}`), {
         status: 'approved',
         reviewedAt: new Date().toISOString(),
         reviewedBy: adminUid,
       });
 
-      console.log('✅ تمت الموافقة');
+      console.log('✅ تمت الموافقة واستبدال البصمة بنجاح');
     } catch (e: any) {
-      console.error(e);
-      alert('فشلت العملية: ' + (e.message || ''));
+      console.error('❌ خطأ في الموافقة:', e);
+      alert('فشلت العملية: ' + (e.message || 'خطأ غير معروف'));
     } finally {
       setProcessing(null);
     }
