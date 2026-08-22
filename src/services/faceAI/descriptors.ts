@@ -83,7 +83,11 @@ function parseOneSample(arr: unknown): Float32Array | null {
 // ══════════════════════════════════════════════════════════════
 
 export function isGalleryDescriptor(fd: unknown): fd is FaceGalleryDescriptor {
-  return !!fd && typeof fd === 'object' && (fd as Record<string, unknown>).version === DESC_VERSION_GALLERY;
+  if (!fd || typeof fd !== 'object') return false;
+  const o = fd as Record<string, unknown>;
+  return o.version === DESC_VERSION_GALLERY
+    && Array.isArray(o.enrollment)
+    && Array.isArray(o.clusters);
 }
 
 export function migrateToGallery(old: StoredFaceDescriptor): FaceGalleryDescriptor {
@@ -104,7 +108,7 @@ export function migrateToGallery(old: StoredFaceDescriptor): FaceGalleryDescript
 /** تحقق من صلاحية البصمة بأي صيغة مدعومة (v4 أو v5) */
 export function hasValidDescriptor(fd: unknown): boolean {
   if (isGalleryDescriptor(fd)) {
-    return fd.enrollment.some(s => parseOneSample(s) !== null);
+    return Array.isArray(fd.enrollment) && fd.enrollment.some(s => parseOneSample(s) !== null);
   }
   if (!fd || typeof fd !== 'object') return false;
   const d = fd as Partial<StoredFaceDescriptor>;
@@ -171,11 +175,13 @@ export function parseGallerySamples(fd: unknown): Float32Array[] {
   if (!gallery) return [];
 
   const result: Float32Array[] = [];
-  for (const s of gallery.enrollment) {
+  const enrollArr = Array.isArray(gallery.enrollment) ? gallery.enrollment : [];
+  for (const s of enrollArr) {
     const p = parseOneSample(s);
     if (p) result.push(p);
   }
-  for (const c of gallery.clusters) {
+  const clusterArr = Array.isArray(gallery.clusters) ? gallery.clusters : [];
+  for (const c of clusterArr) {
     const p = parseOneSample(c.vector);
     if (p) result.push(p);
   }
@@ -483,7 +489,8 @@ export function updateGallery(
 
 export function getCoveragePercent(fd: unknown): number {
   if (!isGalleryDescriptor(fd)) return 0;
-  return Math.min(100, Math.round((fd.clusters.length / MAX_CLUSTERS) * 100));
+  const len = Array.isArray(fd.clusters) ? fd.clusters.length : 0;
+  return Math.min(100, Math.round((len / MAX_CLUSTERS) * 100));
 }
 
 // ── تنظيف العناقيد القديمة (Cluster Decay) ──
@@ -492,6 +499,7 @@ export const CLUSTER_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 120; // 120 يوم
 
 /** يشيل العناقيد القديمة جداً واللي معها mergeCount منخفض (ضعيفة أصلاً) */
 export function pruneStaleClusters(gallery: FaceGalleryDescriptor): FaceGalleryDescriptor {
+  if (!Array.isArray(gallery.clusters)) return { ...gallery, clusters: [] };
   const now = Date.now();
   const clusters = gallery.clusters.filter(c => {
     const age = now - c.updatedAt;

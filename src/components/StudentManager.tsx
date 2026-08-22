@@ -504,12 +504,16 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
   // تنظيف العناقيد القديمة مرة عند فتح الصفحة
   React.useEffect(() => {
     if (!onUpdateStudent) return;
-    students.forEach(s => {
-      if (isGalleryDescriptor(s.faceDescriptor)) {
-        const pruned = pruneStaleClusters(s.faceDescriptor);
-        if (pruned !== s.faceDescriptor) onUpdateStudent(s.id, { faceDescriptor: pruned });
-      }
-    });
+    try {
+      students.forEach(s => {
+        if (isGalleryDescriptor(s.faceDescriptor)) {
+          const pruned = pruneStaleClusters(s.faceDescriptor);
+          if (pruned !== s.faceDescriptor) onUpdateStudent(s.id, { faceDescriptor: pruned });
+        }
+      });
+    } catch (e) {
+      console.warn('[student-manager] فشل تنظيف العناقيد:', e);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
