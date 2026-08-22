@@ -334,7 +334,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
           {/* رأس */}
           <div className="text-center mb-4">
             <h2 className="text-xl font-bold text-white">تسجيل بصمة الوجه</h2>
-            <p className="text-xs text-white/50 mt-1">مرحباً <span className="font-bold text-indigo-300">{student.name}</span> — التقط من 3 زوايا</p>
+            <p className="text-xs text-white/50 mt-1">مرحباً <span className="font-bold text-indigo-300">{student.name}</span> — التقط من 5 زوايا</p>
           </div>
 
           {/* الكاميرا */}
