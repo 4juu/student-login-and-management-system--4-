@@ -26,6 +26,8 @@ export interface StoredFaceDescriptor {
   samples?: number;
   quality?: number;
   version: number;
+  /** عدد مرات التحسين التلقائي عبر الحضور — يتوقف عند MAX_ADAPTIVE_MERGES */
+  mergeCount?: number;
 }
 
 export interface MatchCandidate {
@@ -229,4 +231,81 @@ export function findSuspiciousPairs<T extends MatchCandidate & { name: string; f
     }
   }
   return suspicious;
+}
+
+// ── Face-ID Style: تحسين البصمة تلقائياً مع كل حضور ──
+
+/** الحد الأقصى لعدد مرات التحسين التلقائي — بعدها تصبح البصمة "مثبّتة" */
+export const MAX_ADAPTIVE_MERGES = 15;
+/** أقل جودة مقبولة لعينة يُسمح بدمجها بالبصمة */
+export const MIN_MERGE_QUALITY = 0.62;
+/** أقصى مسافة مسموحة بين العينة الجديدة والبصمة الحالية حتى تُدمج */
+export const MAX_MERGE_DISTANCE = MATCH_STRICT;
+
+export interface MergeResult {
+  descriptor: StoredFaceDescriptor;
+  merged: boolean;
+  reason?: string;
+}
+
+/**
+ * دمج عيّنة جديدة (وقت الحضور) مع البصمة المخزّنة عبر متوسط متحرك مرجّح.
+ * كل عيّنة جديدة تأثيرها يقل تدريجياً كلما زاد mergeCount — يشبه Face ID.
+ * alt ما تتغيّر إطلاقاً (العينات الأصلية مرجع أمان).
+ */
+export function mergeDescriptor(
+  current: StoredFaceDescriptor,
+  newSample: Float32Array,
+  quality: number,
+): MergeResult {
+  const mergeCount = current.mergeCount ?? 0;
+
+  if (mergeCount >= MAX_ADAPTIVE_MERGES) {
+    return { descriptor: current, merged: false, reason: 'البصمة مثبّتة بالفعل' };
+  }
+  if (quality < MIN_MERGE_QUALITY) {
+    return { descriptor: current, merged: false, reason: 'جودة العيّنة ضعيفة' };
+  }
+
+  const mainParsed = parseOneSample(current.main);
+  if (!mainParsed) {
+    return { descriptor: current, merged: false, reason: 'بصمة حالية غير صالحة' };
+  }
+
+  const distance = descriptorDistance(newSample, mainParsed);
+  if (distance > MAX_MERGE_DISTANCE) {
+    return { descriptor: current, merged: false, reason: 'العيّنة مختلفة كثيراً — تجاهل احتياطاً' };
+  }
+
+  // متوسط متحرك مرجّح: كل عيّنة جديدة وزنها 1/(k+1)
+  const k = mergeCount;
+  const dim = mainParsed.length;
+  const updated = new Float32Array(dim);
+  for (let i = 0; i < dim; i++) {
+    updated[i] = (mainParsed[i] * k + newSample[i]) / (k + 1);
+  }
+  // إعادة تطبيع L2
+  let norm = 0; for (let i = 0; i < dim; i++) norm += updated[i] * updated[i];
+  norm = Math.sqrt(norm) || 1;
+  for (let i = 0; i < dim; i++) updated[i] /= norm;
+
+  const outMain: number[] = new Array(dim);
+  for (let i = 0; i < dim; i++) outMain[i] = Math.round(updated[i] * 1e5) / 1e5;
+
+  return {
+    descriptor: {
+      ...current,
+      main: outMain,
+      mergeCount: k + 1,
+      quality: Math.max(current.quality ?? 0, Math.round(quality * 100) / 100),
+    },
+    merged: true,
+  };
+}
+
+/** نسبة اكتمال "نضج" البصمة — لعرضها بالواجهة (0 → 100) */
+export function getMaturityPercent(fd: unknown): number {
+  const d = fd as Partial<StoredFaceDescriptor> | null;
+  const mergeCount = d?.mergeCount ?? 0;
+  return Math.min(100, Math.round((mergeCount / MAX_ADAPTIVE_MERGES) * 100));
 }

@@ -3,6 +3,7 @@ import { Student } from '../types/student';
 import {
   hasValidDescriptor,
   hasLegacyDescriptor,
+  getMaturityPercent,
 } from '../services/faceAI/descriptors';
 import { CaseSensitive, ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, ClipboardList, FolderOpen, Hash, IdCard, Lightbulb, LoaderCircle, Pencil, Plus, QrCode, RefreshCw, ScanFace, Smile, SquarePen, Trash2, TriangleAlert, Unlink, Upload, Users, Zap } from 'lucide-react';
 
@@ -1213,6 +1214,12 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
                               {isLegacy ? <TriangleAlert className="w-3.5 h-3.5" /> : <CircleCheck className="w-3.5 h-3.5" />}
                               {isLegacy ? 'قديمة' : 'صالحة'}
                             </span>
+                            {!isLegacy && hasValidDescriptor(student.faceDescriptor) && (
+                              <span className="text-[10px] text-slate-400" title={`نضج البصمة: ${getMaturityPercent(student.faceDescriptor)}%`}>
+                                نضج: {getMaturityPercent(student.faceDescriptor)}%
+                                {getMaturityPercent(student.faceDescriptor) >= 100 && ' ✨'}
+                              </span>
+                            )}
                             {onUpdateStudent && (
                               <button
                                 onClick={() => removeFaceData(student)}

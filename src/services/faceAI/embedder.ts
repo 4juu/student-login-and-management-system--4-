@@ -41,8 +41,24 @@ class EmbeddingClient {
   private lastProgress: EngineProgress = { stage: 'model', percent: 0, detail: '...' };
   private restarts = 0;
   private _ready = false;
+  private latencies: number[] = [];
+  private readonly LATENCY_SAMPLE_SIZE = 5;
 
   get ready(): boolean { return this._ready; }
+
+  get avgLatencyMs(): number {
+    if (this.latencies.length === 0) return 0;
+    return this.latencies.reduce((a, b) => a + b, 0) / this.latencies.length;
+  }
+
+  /** يحدد أفضل دقة التقاط بناءً على أداء الجهاز الفعلي */
+  get recommendedMaxWidth(): number {
+    const avg = this.avgLatencyMs;
+    if (avg === 0) return 480;
+    if (avg > 220) return 320;
+    if (avg > 130) return 400;
+    return 480;
+  }
 
   onProgress(cb: (p: EngineProgress) => void): () => void {
     this.progressListeners.add(cb);
@@ -148,8 +164,11 @@ class EmbeddingClient {
   }
 
   async embed(bitmap: ImageBitmap, box: Box): Promise<EmbedResult> {
+    const start = performance.now();
     try {
-      return await this.request<EmbedResult>({ type: 'embed', bitmap, box });
+      const res = await this.request<EmbedResult>({ type: 'embed', bitmap, box });
+      this.recordLatency(performance.now() - start);
+      return res;
     } catch (e) {
       if (String(e).includes('المحرك غير جاهز') || String(e).includes('انقطع')) {
         console.warn('[face-embed] المحرك معطّل، محاولة إعادة التشغيل...');
@@ -165,8 +184,11 @@ class EmbeddingClient {
   }
 
   async embedBatch(bitmap: ImageBitmap, boxes: Box[]): Promise<Array<EmbedResult & { box: Box }>> {
+    const start = performance.now();
     try {
-      return await this.request<Array<EmbedResult & { box: Box }>>({ type: 'embedBatch', bitmap, boxes });
+      const res = await this.request<Array<EmbedResult & { box: Box }>>({ type: 'embedBatch', bitmap, boxes });
+      this.recordLatency((performance.now() - start) / Math.max(1, boxes.length));
+      return res;
     } catch (e) {
       if (String(e).includes('المحرك غير جاهز') || String(e).includes('انقطع')) {
         console.warn('[face-embed] المحرك معطّل، محاولة إعادة التشغيل...');
@@ -191,6 +213,11 @@ class EmbeddingClient {
       p.reject(new Error('تم إغلاق المحرك'));
     }
     this.pending.clear();
+  }
+
+  private recordLatency(ms: number) {
+    this.latencies.push(ms);
+    if (this.latencies.length > this.LATENCY_SAMPLE_SIZE) this.latencies.shift();
   }
 }
 

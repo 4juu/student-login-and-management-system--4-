@@ -10,12 +10,14 @@ import {
 } from '../../services/faceAI/detector';
 import { openCameraStream, waitVideoDimensionsStable } from '../../services/faceAI/camera';
 import { faceEmbedder, type Box } from '../../services/faceAI/embedder';
+import { FaceTracker, type TrackBox } from '../../services/faceAI/tracker';
 import {
   findBestMatch,
   hasValidDescriptor,
-  l2Normalize,
+  mergeDescriptor,
   MATCH_LOOSE,
   CONFIRM_FRAMES,
+  type StoredFaceDescriptor,
 } from '../../services/faceAI/descriptors';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
@@ -23,6 +25,7 @@ interface FaceScannerProps {
   students: Student[];
   activeSession: AttendanceSession | null;
   onMarkAttendance: (student: Student) => Promise<void> | void;
+  onUpdateStudent: (id: string, updates: Partial<Student>) => void;
   alreadyPresentIds: Set<string>;
   onClose: () => void;
 }
@@ -44,12 +47,16 @@ const RECOGNITION_COOLDOWN = 30_000;
 const MIN_FACE_PX = 42;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
+const MAX_FACES_PER_FRAME = 3;
+const REEMBED_MIN_INTERVAL = 350;
+const REEMBED_MOVE_THRESHOLD = 0.08;
 
 const AVATAR_COLORS = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-cyan-500', 'bg-violet-500'];
 
 export const FaceScanner: React.FC<FaceScannerProps> = ({
   students,
   onMarkAttendance,
+  onUpdateStudent,
   alreadyPresentIds,
   onClose,
 }) => {
@@ -89,10 +96,9 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   const cooldowns = useRef(new Map<string, number>());
   const hwZoomRange = useRef<{ min: number; max: number; step: number } | null>(null);
   const loggedIdsRef = useRef(new Set<string>());
-  const pendingMatchRef = useRef<{ id: string; count: number } | null>(null);
-  const unknownStreakRef = useRef(0);
-  // تنعيم زمني: آخر ٣ بصمات لكل وجه مُتتبَّع (تقريب عبر الترتيب داخل الفريم)
-  const embeddingBufferRef = useRef<Map<string, Float32Array[]>>(new Map());
+  const trackerRef = useRef(new FaceTracker());
+  const updateRef = useRef(onUpdateStudent);
+  updateRef.current = onUpdateStudent;
 
   // ── تطبيق التقريب العتادي إن كان مدعوماً ──
   const digitalZoom = hasHwZoom ? 1 : zoom;
@@ -312,118 +318,131 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
         }
 
         const targets = detections;
-        const bigEnough = targets.filter(d => d.box.width >= MIN_FACE_PX && d.box.height >= MIN_FACE_PX);
+        const bigEnough = targets
+          .filter(d => d.box.width >= MIN_FACE_PX && d.box.height >= MIN_FACE_PX)
+          .slice(0, MAX_FACES_PER_FRAME);
 
         if (bigEnough.length === 0) {
-          embeddingBufferRef.current.clear();
-          pendingMatchRef.current = null;
+          trackerRef.current.update([]);
           setStatus('idle');
           drawBoxes(liveBoxes);
         } else {
-          // ٢) استخراج البصمات داخل العامل
-          const bmp = await grabVideoFrame(video, 640);
-          if (!bmp) { drawBoxes(liveBoxes); return; }
-          const scale = bmp.width / video.videoWidth;
-          const results = await faceEmbedder.embedBatch(
-            bmp,
-            bigEnough.map(d => ({
-              x: d.box.x * scale,
-              y: d.box.y * scale,
-              width: d.box.width * scale,
-              height: d.box.height * scale,
-            })),
-          );
-          if (!runningRef.current || !mountedRef.current) return;
+          // ✅ اربط الصناديق بمساراتها (IOU tracking)
+          const boxes: TrackBox[] = bigEnough.map(d => d.box);
+          const tracked = trackerRef.current.update(boxes);
 
+          // ✅ حدّد فقط الوجوه اللي فعلاً تستحق إعادة حساب embedding
+          const needEmbed = tracked.filter(t =>
+            trackerRef.current.shouldReembed(t.trackId, nowTs, REEMBED_MIN_INTERVAL, REEMBED_MOVE_THRESHOLD)
+          );
+
+          const now = Date.now();
           let anyUnknown = false;
           let markedAny = false;
 
-          for (const res of results) {
-            const vbw = res.box.width / scale, vbh = res.box.height / scale;
-            const vbx = res.box.x / scale, vby = res.box.y / scale;
-            const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
-
-            // ── تنعيم زمني: دمج آخر ٣ بصمات لنفس الوجه لإلغاء الضوضاء اللحظية ──
-            const rawDesc = new Float32Array(res.descriptor);
-            const trackKey = `slot_${results.indexOf(res)}`;
-            const buf = embeddingBufferRef.current.get(trackKey) ?? [];
-            buf.push(rawDesc);
-            if (buf.length > 3) buf.shift();
-            embeddingBufferRef.current.set(trackKey, buf);
-
-            let smoothed: Float32Array;
-            if (buf.length >= 2) {
-              const avg = new Float32Array(rawDesc.length);
-              for (const s of buf) for (let i = 0; i < s.length; i++) avg[i] += s[i];
-              for (let i = 0; i < avg.length; i++) avg[i] /= buf.length;
-              smoothed = l2Normalize(avg);
-            } else {
-              smoothed = rawDesc;
-            }
-
-            const match = findBestMatch(
-              smoothed,
-              rosterRef.current,
-              MATCH_LOOSE,
-              res.quality.composite,
+          // حساب الوجوه اللي تحتاج حساب embedding
+          if (needEmbed.length > 0) {
+            const currentMaxWidth = faceEmbedder.recommendedMaxWidth;
+            const bmp = await grabVideoFrame(video, currentMaxWidth);
+            if (!bmp) { drawBoxes(liveBoxes); return; }
+            const scale = bmp.width / video.videoWidth;
+            const results = await faceEmbedder.embedBatch(
+              bmp,
+              needEmbed.map(t => ({
+                x: t.box.x * scale,
+                y: t.box.y * scale,
+                width: t.box.width * scale,
+                height: t.box.height * scale,
+              })),
             );
+            if (!runningRef.current || !mountedRef.current) return;
 
-            // عتبة عرض إضافية فوق عتبة findBestMatch نفسها (طبقة حماية ثانية)
-            if (!match || match.confidence < 62) {
-              anyUnknown = true;
-              unknownStreakRef.current++;
-              pendingMatchRef.current = null;
-              liveBoxes.push({ box: boxInVideo, label: 'غير معروف', color: '#fbbf24' });
-              continue;
-            }
+            for (let i = 0; i < results.length; i++) {
+              const res = results[i];
+              const trackId = needEmbed[i].trackId;
+              const raw = new Float32Array(res.descriptor);
+              const smoothed = trackerRef.current.addEmbedding(trackId, raw, nowTs);
 
-            const student = match.item;
+              const match = findBestMatch(smoothed, rosterRef.current, MATCH_LOOSE, res.quality.composite);
+              trackerRef.current.setCache(trackId, match?.item.id ?? null, match?.confidence ?? 0);
 
-            // ── تأكيد زمني: نفس الطالب يجب أن يتكرر عدة إطارات متتالية ──
-            if (pendingMatchRef.current?.id === student.id) {
-              pendingMatchRef.current.count++;
-            } else {
-              pendingMatchRef.current = { id: student.id, count: 1 };
-            }
+              const vbw = res.box.width / scale, vbh = res.box.height / scale;
+              const vbx = res.box.x / scale, vby = res.box.y / scale;
+              const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
 
-            if (pendingMatchRef.current.count < CONFIRM_FRAMES) {
-              liveBoxes.push({
-                box: boxInVideo,
-                label: student.name.split(' ')[0],
-                sub: 'جاري التحقق...',
-                color: '#818cf8',
-              });
-              continue; // لا تسجيل حضور بعد — ننتظر تأكيد إطارات أكثر
-            }
-
-            const alreadyMarked = presentRef.current.has(student.id);
-            const now2 = Date.now();
-            const lastHit = cooldowns.current.get(student.id) ?? 0;
-
-            if (alreadyMarked || now2 - lastHit < RECOGNITION_COOLDOWN) {
-              liveBoxes.push({
-                box: boxInVideo,
-                label: student.name.split(' ')[0],
-                sub: alreadyMarked ? 'مسجل ✓' : undefined,
-                color: '#34d399',
-              });
-              // سجل واحد فقط لكل طالب طوال الجلسة — لا تكرار
-              if (alreadyMarked && !loggedIdsRef.current.has(student.id)) {
-                loggedIdsRef.current.add(student.id);
-                pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'already', confidence: match.confidence });
+              if (!match || match.confidence < 62) {
+                anyUnknown = true;
+                liveBoxes.push({ box: boxInVideo, label: 'غير معروف', color: '#fbbf24' });
+                continue;
               }
+
+              const student = match.item;
+              const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id);
+
+              if (confirmCount < CONFIRM_FRAMES) {
+                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
+                continue;
+              }
+
+              const alreadyMarked = presentRef.current.has(student.id);
+              const lastHit = cooldowns.current.get(student.id) ?? 0;
+
+              if (alreadyMarked || now - lastHit < RECOGNITION_COOLDOWN) {
+                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: alreadyMarked ? 'مسجل ✓' : undefined, color: '#34d399' });
+                if (alreadyMarked && !loggedIdsRef.current.has(student.id)) {
+                  loggedIdsRef.current.add(student.id);
+                  pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'already', confidence: match.confidence });
+                }
+                continue;
+              }
+
+              cooldowns.current.set(student.id, now);
+              markedAny = true;
+              liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'حاضر ✓', color: '#34d399' });
+              if (!loggedIdsRef.current.has(student.id)) {
+                loggedIdsRef.current.add(student.id);
+                pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'marked', confidence: match.confidence });
+              }
+
+              Promise.resolve(markRef.current(student)).catch(e => console.error('[face-scanner] فشل تسجيل الحضور:', e));
+
+              // ✅ Face-ID Style: تحسين البصمة تدريجياً مع كل حضور
+              try {
+                const merge = mergeDescriptor(
+                  student.faceDescriptor as StoredFaceDescriptor,
+                  smoothed,
+                  res.quality.composite,
+                );
+                if (merge.merged) {
+                  updateRef.current(student.id, { faceDescriptor: merge.descriptor });
+                }
+              } catch (e) {
+                console.warn('[face-scanner] فشل تحسين البصمة:', e);
+              }
+            }
+          }
+
+          // ✅ الوجوه اللي ما احتاجت إعادة حساب — استخدم النتيجة المخزّنة بالـ cache
+          for (const t of tracked) {
+            if (needEmbed.some(n => n.trackId === t.trackId)) continue;
+            const cache = trackerRef.current.getCache(t.trackId);
+            if (!cache || !cache.cachedMatchId) {
+              liveBoxes.push({ box: t.box, color: 'rgba(255,255,255,0.3)' });
               continue;
             }
 
-            cooldowns.current.set(student.id, now2);
-            markedAny = true;
-            liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'حاضر ✓', color: '#34d399' });
-            if (!loggedIdsRef.current.has(student.id)) {
-              loggedIdsRef.current.add(student.id);
-              pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'marked', confidence: match.confidence });
-            }
+            const vbw = t.box.width, vbh = t.box.height;
+            const vbx = t.box.x, vby = t.box.y;
+            const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
+            const student = rosterRef.current.find(s => s.id === cache.cachedMatchId);
 
-            Promise.resolve(markRef.current(student)).catch(e => console.error('[face-scanner] فشل تسجيل الحضور:', e));
+            if (student && cache.cachedConfidence >= 62) {
+              const alreadyMarked = presentRef.current.has(student.id);
+              liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: alreadyMarked ? 'مسجل ✓' : undefined, color: alreadyMarked ? '#34d399' : '#818cf8' });
+            } else {
+              liveBoxes.push({ box: boxInVideo, label: 'غير معروف', color: '#fbbf24' });
+              anyUnknown = true;
+            }
           }
 
           if (markedAny) {
@@ -458,6 +477,11 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
+  }, []);
+
+  // تنظيف المتتبّع عند الخروج
+  useEffect(() => {
+    return () => { trackerRef.current.reset(); };
   }, []);
 
   // إعادة تعيين عدّاد الفراغ عند جاهزية المحرك بعد إعادة تهيئة
