@@ -11,6 +11,8 @@ const MODEL_PATH = BASE + 'models/blaze_face_short_range.tflite';
 export interface DetectedFace {
   box: { x: number; y: number; width: number; height: number };
   score: number;
+  /** النقاط المرجعية الست لـ MediaPipe (إحداثيات الفيديو الحقيقية) */
+  keypoints?: { x: number; y: number }[];
 }
 
 export type DetectorProgress = {
@@ -97,7 +99,14 @@ class FaceDetectionService {
         const width = Math.min(video.videoWidth - x, bb.width);
         const height = Math.min(video.videoHeight - y, bb.height);
         if (width < 24 || height < 24) continue;
-        out.push({ box: { x, y, width, height }, score });
+
+        // ✅ النقاط المرجعية (نسبية 0..1) → نحوّلها لإحداثيات الفيديو الحقيقية
+        const keypoints = det.keypoints?.map(kp => ({
+          x: kp.x * video.videoWidth,
+          y: kp.y * video.videoHeight,
+        }));
+
+        out.push({ box: { x, y, width, height }, score, keypoints });
       }
       out.sort((a, b) => b.box.width * b.score - a.box.width * a.score);
       return out;

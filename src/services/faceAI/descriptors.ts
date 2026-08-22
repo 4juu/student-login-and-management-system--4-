@@ -6,6 +6,7 @@
 
 export const DESC_DIM = 512;
 export const DESC_VERSION = 4;
+export const DESC_VERSION_GALLERY = 5;
 
 /** عتبة المسافة الكوسينية الأساسية — صار محسوب بعناية بدل القيمة القديمة الفضفاضة */
 export const MATCH_STRICT = 0.32;
@@ -60,6 +61,9 @@ export function parseStoredDescriptor(input: unknown): Float32Array | null {
 
 export function parseAllSamples(input: unknown): Float32Array[] {
   if (!input || typeof input !== 'object') return [];
+  // دعم v5 gallery أولاً
+  if (isGalleryDescriptor(input)) return parseGallerySamples(input);
+  // fallback لـ v4
   const d = input as Partial<StoredFaceDescriptor>;
   if (d.version !== DESC_VERSION) return [];
   const result: Float32Array[] = [];
@@ -308,4 +312,169 @@ export function getMaturityPercent(fd: unknown): number {
   const d = fd as Partial<StoredFaceDescriptor> | null;
   const mergeCount = d?.mergeCount ?? 0;
   return Math.min(100, Math.round((mergeCount / MAX_ADAPTIVE_MERGES) * 100));
+}
+
+// ── شبكة الزوايا (Pose Grid) — نظام العناقيد v5 ──
+
+export const MAX_CLUSTERS = 18;
+export const MAX_MERGES_PER_CLUSTER = 12;
+export const MIN_CLUSTER_QUALITY = 0.60;
+export const MAX_NEW_CLUSTER_DISTANCE = 0.40;
+export const MAX_CLUSTER_MERGE_DISTANCE = MATCH_STRICT;
+
+export interface PoseCluster {
+  bin: string;
+  vector: number[];
+  mergeCount: number;
+  quality: number;
+  updatedAt: number;
+}
+
+export interface FaceGalleryDescriptor {
+  version: typeof DESC_VERSION_GALLERY;
+  enrollment: number[][];
+  clusters: PoseCluster[];
+  samples?: number;
+  quality?: number;
+}
+
+export function isGalleryDescriptor(fd: unknown): fd is FaceGalleryDescriptor {
+  return !!fd && typeof fd === 'object' && (fd as Record<string, unknown>).version === DESC_VERSION_GALLERY;
+}
+
+/** يحوّل بصمة v4 القديمة (main+alt) إلى معرض v5 — للترحيل التلقائي بدون فقدان بيانات */
+export function migrateToGallery(old: StoredFaceDescriptor): FaceGalleryDescriptor {
+  const enrollment: number[][] = [old.main, ...(old.alt ?? [])];
+  return {
+    version: DESC_VERSION_GALLERY,
+    enrollment,
+    clusters: [],
+    samples: old.samples,
+    quality: old.quality,
+  };
+}
+
+/** كل العينات القابلة للمقارنة: عينات التسجيل + كل العناقيد المكتسبة */
+export function parseGallerySamples(fd: unknown): Float32Array[] {
+  let gallery: FaceGalleryDescriptor | null = null;
+
+  if (isGalleryDescriptor(fd)) {
+    gallery = fd;
+  } else if (hasValidDescriptor(fd)) {
+    gallery = migrateToGallery(fd as StoredFaceDescriptor);
+  }
+  if (!gallery) return [];
+
+  const result: Float32Array[] = [];
+  for (const s of gallery.enrollment) {
+    const p = parseOneSample(s);
+    if (p) result.push(p);
+  }
+  for (const c of gallery.clusters) {
+    const p = parseOneSample(c.vector);
+    if (p) result.push(p);
+  }
+  return result;
+}
+
+export interface ClusterUpdateResult {
+  gallery: FaceGalleryDescriptor;
+  action: 'merged' | 'created' | 'rejected' | 'skipped_mature';
+  bin?: string;
+}
+
+/**
+ * الدالة الأساسية: تستقبل عيّنة جديدة وتقرر:
+ *  - زاوية معروفة → دمج بمتوسط متحرك
+ *  - زاوية جديدة → إنشاء عنقود (حتى الحد الأقصى)
+ *  - عنقود مستقر → تجاهل
+ *  - عيّنة بعيدة → رفض (حماية من التلوّث)
+ */
+export function updateGallery(
+  current: FaceGalleryDescriptor,
+  newSample: Float32Array,
+  quality: number,
+  bin: string,
+): ClusterUpdateResult {
+  if (quality < MIN_CLUSTER_QUALITY) {
+    return { gallery: current, action: 'rejected' };
+  }
+
+  const sameBinIdx = current.clusters.findIndex(c => c.bin === bin);
+
+  // فحص الأمان: هل العيّنة قريبة من بصمة هذا الطالب أصلاً؟
+  let nearestDistance = Infinity;
+  const allRefs = parseGallerySamples(current);
+  for (const ref of allRefs) {
+    const d = descriptorDistance(newSample, ref);
+    if (d < nearestDistance) nearestDistance = d;
+  }
+  if (allRefs.length > 0 && nearestDistance > MAX_NEW_CLUSTER_DISTANCE) {
+    return { gallery: current, action: 'rejected' };
+  }
+
+  const clusters = [...current.clusters];
+
+  if (sameBinIdx >= 0) {
+    const cluster = clusters[sameBinIdx];
+    const existingVec = parseOneSample(cluster.vector);
+    if (existingVec && cluster.mergeCount < MAX_MERGES_PER_CLUSTER) {
+      const dist = descriptorDistance(newSample, existingVec);
+      if (dist > MAX_CLUSTER_MERGE_DISTANCE) {
+        return { gallery: current, action: 'rejected' };
+      }
+      const k = cluster.mergeCount;
+      const dim = existingVec.length;
+      const merged = new Float32Array(dim);
+      for (let i = 0; i < dim; i++) merged[i] = (existingVec[i] * k + newSample[i]) / (k + 1);
+      let norm = 0; for (let i = 0; i < dim; i++) norm += merged[i] * merged[i];
+      norm = Math.sqrt(norm) || 1;
+      for (let i = 0; i < dim; i++) merged[i] /= norm;
+
+      clusters[sameBinIdx] = {
+        ...cluster,
+        vector: Array.from(merged).map(v => Math.round(v * 1e5) / 1e5),
+        mergeCount: k + 1,
+        quality: Math.max(cluster.quality, quality),
+        updatedAt: Date.now(),
+      };
+      return { gallery: { ...current, clusters }, action: 'merged', bin };
+    }
+    return { gallery: current, action: 'skipped_mature', bin };
+  }
+
+  // زاوية جديدة — أنشئ عنقود
+  const newCluster: PoseCluster = {
+    bin,
+    vector: Array.from(newSample).map(v => Math.round(v * 1e5) / 1e5),
+    mergeCount: 1,
+    quality,
+    updatedAt: Date.now(),
+  };
+
+  if (clusters.length < MAX_CLUSTERS) {
+    clusters.push(newCluster);
+  } else {
+    // امتلأت السعة — أخلِ أضعف عنقود
+    let weakestIdx = 0;
+    for (let i = 1; i < clusters.length; i++) {
+      if (clusters[i].mergeCount < clusters[weakestIdx].mergeCount ||
+          (clusters[i].mergeCount === clusters[weakestIdx].mergeCount && clusters[i].updatedAt < clusters[weakestIdx].updatedAt)) {
+        weakestIdx = i;
+      }
+    }
+    if (clusters[weakestIdx].mergeCount <= 2) {
+      clusters[weakestIdx] = newCluster;
+    } else {
+      return { gallery: current, action: 'rejected' };
+    }
+  }
+
+  return { gallery: { ...current, clusters }, action: 'created', bin };
+}
+
+/** نسبة تغطية الزوايا الفعلية — لعرضها بالواجهة */
+export function getCoveragePercent(fd: unknown): number {
+  if (!isGalleryDescriptor(fd)) return 0;
+  return Math.min(100, Math.round((fd.clusters.length / MAX_CLUSTERS) * 100));
 }

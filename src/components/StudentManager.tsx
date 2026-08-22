@@ -3,7 +3,8 @@ import { Student } from '../types/student';
 import {
   hasValidDescriptor,
   hasLegacyDescriptor,
-  getMaturityPercent,
+  getCoveragePercent,
+  isGalleryDescriptor,
 } from '../services/faceAI/descriptors';
 import { CaseSensitive, ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, ClipboardList, FolderOpen, Hash, IdCard, Lightbulb, LoaderCircle, Pencil, Plus, QrCode, RefreshCw, ScanFace, Smile, SquarePen, Trash2, TriangleAlert, Unlink, Upload, Users, Zap } from 'lucide-react';
 
@@ -1215,9 +1216,10 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
                               {isLegacy ? 'قديمة' : 'صالحة'}
                             </span>
                             {!isLegacy && hasValidDescriptor(student.faceDescriptor) && (
-                              <span className="text-[10px] text-slate-400" title={`نضج البصمة: ${getMaturityPercent(student.faceDescriptor)}%`}>
-                                نضج: {getMaturityPercent(student.faceDescriptor)}%
-                                {getMaturityPercent(student.faceDescriptor) >= 100 && ' ✨'}
+                              <span className="text-[10px] text-slate-400" title={isGalleryDescriptor(student.faceDescriptor) ? `تغطية الزوايا: ${getCoveragePercent(student.faceDescriptor)}%` : 'بصمة أساسية'}>
+                                {isGalleryDescriptor(student.faceDescriptor)
+                                  ? `تغطية: ${getCoveragePercent(student.faceDescriptor)}%`
+                                  : 'أساسية'}
                               </span>
                             )}
                             {onUpdateStudent && (

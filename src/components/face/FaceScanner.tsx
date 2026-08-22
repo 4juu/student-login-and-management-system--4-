@@ -14,12 +14,15 @@ import { FaceTracker, type TrackBox } from '../../services/faceAI/tracker';
 import {
   findBestMatch,
   hasValidDescriptor,
-  mergeDescriptor,
+  isGalleryDescriptor,
+  migrateToGallery,
+  updateGallery,
   MATCH_LOOSE,
   CONFIRM_FRAMES,
   type StoredFaceDescriptor,
 } from '../../services/faceAI/descriptors';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { estimatePose, poseToBin } from '../../services/faceAI/pose';
 
 interface FaceScannerProps {
   students: Student[];
@@ -406,18 +409,28 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
 
               Promise.resolve(markRef.current(student)).catch(e => console.error('[face-scanner] فشل تسجيل الحضور:', e));
 
-              // ✅ Face-ID Style: تحسين البصمة تدريجياً مع كل حضور
+              // ✅ Pose Grid: تحسين البصمة تدريجياً عبر شبكة الزوايا
               try {
-                const merge = mergeDescriptor(
-                  student.faceDescriptor as StoredFaceDescriptor,
-                  smoothed,
-                  res.quality.composite,
+                const origDet = bigEnough.find(d =>
+                  Math.abs(d.box.x - needEmbed[i].box.x) < 1 &&
+                  Math.abs(d.box.y - needEmbed[i].box.y) < 1
                 );
-                if (merge.merged) {
-                  updateRef.current(student.id, { faceDescriptor: merge.descriptor });
+                const pose = estimatePose(origDet?.keypoints);
+
+                if (pose) {
+                  const bin = poseToBin(pose);
+                  const currentGallery = isGalleryDescriptor(student.faceDescriptor)
+                    ? student.faceDescriptor
+                    : migrateToGallery(student.faceDescriptor as StoredFaceDescriptor);
+
+                  const result = updateGallery(currentGallery, smoothed, res.quality.composite, bin);
+
+                  if (result.action === 'merged' || result.action === 'created') {
+                    updateRef.current(student.id, { faceDescriptor: result.gallery });
+                  }
                 }
               } catch (e) {
-                console.warn('[face-scanner] فشل تحسين البصمة:', e);
+                console.warn('[face-scanner] فشل تحديث معرض الزوايا:', e);
               }
             }
           }
