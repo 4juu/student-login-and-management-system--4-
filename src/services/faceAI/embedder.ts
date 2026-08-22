@@ -103,6 +103,10 @@ class EmbeddingClient {
             this._ready = true;
             resolveInit();
             break;
+          case 'init-error':
+            clearTimeout(initTimer);
+            rejectInit(new Error(String(m.error || 'فشل تهيئة محرك البصمات')));
+            break;
           case 'result': {
             const p = this.pending.get(m.id as number);
             if (!p) break;

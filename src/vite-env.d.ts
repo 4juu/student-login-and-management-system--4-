@@ -13,6 +13,20 @@ interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
 
+// ✅ onnxruntime-web/wasm (الإصدار 1.17.0 لا يصدّر تصريح أنواع للوحدة الفرعية /wasm)
+declare module 'onnxruntime-web/wasm' {
+  export const env: any;
+  export const Tensor: any;
+  export interface InferenceSession {
+    inputNames: string[];
+    outputNames: string[];
+    run(feeds: Record<string, any>): Promise<Record<string, { data: Float32Array }>>;
+  }
+  export const InferenceSession: {
+    create(model: string, opts?: any): Promise<InferenceSession>;
+  };
+}
+
 // ✅ دعم ملفات CSS
 declare module '*.css';
 declare module '*.scss';

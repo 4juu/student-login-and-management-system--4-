@@ -128,7 +128,12 @@ self.onmessage = async (ev: MessageEvent<Msg>) => {
   try {
     switch (msg.type) {
       case 'init':
-        await init();
+        try {
+          await init();
+        } catch (e) {
+          // ⚠️ خطأ أثناء تهيئة المحرك — أبلغ العميل لكي يرفض الوعد بدل التعليق للأبد
+          post({ type: 'init-error', error: String((e as Error)?.message || e) });
+        }
         break;
       case 'embed': {
         const r = await embed(msg.bitmap, msg.box);
