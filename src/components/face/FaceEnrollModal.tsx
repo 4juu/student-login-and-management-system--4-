@@ -1,6 +1,6 @@
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Student, College, Stage } from '../../types/student';
+import { Student } from '../../types/student';
 import {
   hasValidDescriptor,
   type StoredFaceDescriptor,
@@ -17,9 +17,6 @@ interface FaceEnrollModalProps {
   onUpdateStudent: (id: string, updates: Partial<Student>) => void;
   initialSelectedIds?: string[];
   onClose: () => void;
-  colleges?: College[];
-  stages?: Stage[];
-  loadStudents?: (stageId: string) => Promise<Student[]>;
 }
 
 interface Result {
@@ -30,47 +27,18 @@ interface Result {
 }
 
 export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
-  students: initialStudents,
+  students,
   onUpdateStudent,
   initialSelectedIds,
   onClose,
-  colleges = [],
-  stages = [],
-  loadStudents,
 }) => {
-  const hasStageSelector = colleges.length > 0 && stages.length > 0 && !!loadStudents;
-
-  const [selectedCollegeId, setSelectedCollegeId] = useState<string>('');
-  const [selectedStageId, setSelectedStageId] = useState<string>('');
-  const [loadedStudents, setLoadedStudents] = useState<Student[]>([]);
-  const [loadingStudents, setLoadingStudents] = useState(false);
-
-  const stagesForCollege = useMemo(() =>
-    stages.filter(s => s.collegeId === selectedCollegeId),
-    [stages, selectedCollegeId]
-  );
-
-  useEffect(() => {
-    if (!selectedStageId || !loadStudents) return;
-    setLoadingStudents(true);
-    loadStudents(selectedStageId)
-      .then(s => setLoadedStudents(s || []))
-      .catch(() => setLoadedStudents([]))
-      .finally(() => setLoadingStudents(false));
-  }, [selectedStageId, loadStudents]);
-
-  const students = hasStageSelector ? loadedStudents : initialStudents;
-  const stageReady = hasStageSelector && selectedStageId && !loadingStudents && loadedStudents.length > 0;
-
   const validPreset = useMemo(
     () => (initialSelectedIds ?? []).filter(id => students.some(s => s.id === id)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
-  const [phase, setPhase] = useState<'stage-select' | 'select' | 'live' | 'summary'>(
-    hasStageSelector ? 'stage-select' : validPreset.length ? 'live' : 'select'
-  );
+  const [phase, setPhase] = useState<'select' | 'live' | 'summary'>(validPreset.length ? 'live' : 'select');
   const [selected, setSelected] = useState<Set<string>>(new Set(initialSelectedIds ?? []));
   const [search, setSearch] = useState('');
   const [queue, setQueue] = useState<string[]>(validPreset);
@@ -138,7 +106,6 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
           <div className="flex-1 min-w-0">
             <h2 className="text-white font-extrabold text-base leading-tight">تسجيل بصمة الوجه</h2>
             <p className="text-[11px] text-slate-400">
-              {phase === 'stage-select' && 'اختر الكلية ثم المرحلة'}
               {phase === 'select' && 'اختر طالباً أو أكثر — التقاط يدوي لكل طالب'}
               {phase === 'live' && queue.length > 0 && `الطالب ${qi + 1} من ${queue.length}`}
               {phase === 'summary' && `اكتمل: ${okCount} نجح · ${results.length - okCount} فشل`}
@@ -149,57 +116,6 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
             ✕
           </button>
         </div>
-
-        {/* خطوة اختيار الكلية والمرحلة */}
-        {phase === 'stage-select' && (
-          <div className="p-5 space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">الكلية</label>
-              <select
-                value={selectedCollegeId}
-                onChange={e => { setSelectedCollegeId(e.target.value); setSelectedStageId(''); setLoadedStudents([]); }}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-indigo-400 focus:outline-none"
-              >
-                <option value="" className="bg-slate-800">— اختر الكلية —</option>
-                {colleges.map(c => (
-                  <option key={c.id} value={c.id} className="bg-slate-800">{c.name}</option>
-                ))}
-              </select>
-            </div>
-            {selectedCollegeId && (
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1.5">المرحلة</label>
-                <select
-                  value={selectedStageId}
-                  onChange={e => setSelectedStageId(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-indigo-400 focus:outline-none"
-                >
-                  <option value="" className="bg-slate-800">— اختر المرحلة —</option>
-                  {stagesForCollege.map(s => (
-                    <option key={s.id} value={s.id} className="bg-slate-800">{s.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-            {loadingStudents && (
-              <div className="text-center py-4">
-                <div className="inline-block w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                <p className="text-xs text-slate-400 mt-2">جاري تحميل الطلاب...</p>
-              </div>
-            )}
-            {selectedStageId && !loadingStudents && loadedStudents.length === 0 && (
-              <p className="text-center text-sm text-amber-400">لا يوجد طلاب في هذه المرحلة</p>
-            )}
-            {stageReady && (
-              <button
-                onClick={() => setPhase('select')}
-                className="w-full bg-gradient-to-l from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold py-3 rounded-xl transition active:scale-[0.98]"
-              >
-                عرض الطلاب ({loadedStudents.length})
-              </button>
-            )}
-          </div>
-        )}
 
         {/* خطوة الاختيار */}
         {phase === 'select' && (
