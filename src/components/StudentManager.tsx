@@ -6,6 +6,7 @@ import {
   isGalleryDescriptor,
   getGalleryHealthSummary,
   pruneStaleClusters,
+  migrateToV5,
 } from '../services/faceAI/descriptors';
 import { CaseSensitive, ChartColumn, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, ClipboardList, FolderOpen, Hash, IdCard, Lightbulb, LoaderCircle, Pencil, Plus, QrCode, RefreshCw, ScanFace, Smile, SquarePen, Trash2, TriangleAlert, Unlink, Upload, Users, Zap } from 'lucide-react';
 
@@ -500,18 +501,28 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
     setCurrentPage(1);
   }, [searchQuery, groupFilter, pageSize]);
 
-  // تنظيف العناقيد القديمة مرة عند فتح الصفحة
+  // تنظيف تلقائي: تقليم العناقيد القديمة + حذف اي بصمة غير متوافقة مع صيغة v5 الصارمة
   React.useEffect(() => {
     if (!onUpdateStudent) return;
     try {
       students.forEach(s => {
-        if (isGalleryDescriptor(s.faceDescriptor)) {
-          const pruned = pruneStaleClusters(s.faceDescriptor);
-          if (pruned !== s.faceDescriptor) onUpdateStudent(s.id, { faceDescriptor: pruned });
+        const fd = s.faceDescriptor;
+        if (!fd) return;
+        if (isGalleryDescriptor(fd)) {
+          // بصمة غير قابلة للتحليل اطلاقا (فارغة/تالفة) → حذف نهائي
+          if (migrateToV5(fd) === null) {
+            onUpdateStudent(s.id, { faceDescriptor: null });
+            return;
+          }
+          const pruned = pruneStaleClusters(fd);
+          if (pruned !== fd) onUpdateStudent(s.id, { faceDescriptor: pruned });
+        } else {
+          // اي تنسيق قديم (مصفوفة مسطحة، {descriptor}...) → حذف
+          onUpdateStudent(s.id, { faceDescriptor: null });
         }
       });
     } catch (e) {
-      console.warn('[student-manager] فشل تنظيف العناقيد:', e);
+      console.warn('[student-manager] فشل تنظيف البصمات:', e);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

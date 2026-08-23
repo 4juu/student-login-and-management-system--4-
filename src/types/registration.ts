@@ -1,4 +1,4 @@
-export type RegistrationLinkType = 'single' | 'bulk' | 'attendance' | 'enroll';
+export type RegistrationLinkType = 'single' | 'bulk' | 'attendance';
 
 export interface RegistrationLink {
   token: string;
@@ -15,6 +15,10 @@ export interface RegistrationLink {
   academicYear?: string;
   subjectName?: string;
   teacherId?: string;
+
+  studentName?: string;
+  studentCode?: string;
+  qrCodeId?: string;
 }
 
 export interface PendingRegistration {

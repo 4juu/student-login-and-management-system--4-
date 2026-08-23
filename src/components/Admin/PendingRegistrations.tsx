@@ -33,6 +33,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [rejectReason, setRejectReason] = useState('');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [purging, setPurging] = useState(false);
 
   useEffect(() => {
     const path = `registrationSystem/pending/${adminUid}`;
@@ -205,6 +206,31 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
     }
   };
 
+  // حذف كل الطلبات التي بصمتها تالفة/فارغة (أُنشئت قبل تفعيل التحقق الصارم) — لا يمكن الموافقة عليها أبداً
+  const handlePurgeCorrupt = async () => {
+    const corrupt = requests.filter(r => r.faceDescriptor && migrateToV5(r.faceDescriptor) === null);
+    if (corrupt.length === 0) {
+      alert('لا توجد طلبات تالفة — كل البصمات سليمة ✅');
+      return;
+    }
+    if (!confirm(`سيتم حذف ${corrupt.length} طلباً تالفاً نهائياً. على الطلاب المتأثرين إعادة التسجيل من رابطهم. متابعة؟`)) return;
+
+    setPurging(true);
+    try {
+      const updates: { [key: string]: null } = {};
+      for (const r of corrupt) {
+        updates[`registrationSystem/pending/${adminUid}/${r.id}`] = null;
+      }
+      await update(ref(database), updates);
+      alert(`تم حذف ${corrupt.length} طلباً تالفاً.`);
+    } catch (e) {
+      console.error(e);
+      alert('فشل حذف الطلبات التالفة');
+    } finally {
+      setPurging(false);
+    }
+  };
+
   const stats = useMemo(() => ({
     total: requests.length,
     pending: requests.filter(r => r.status === 'pending').length,
@@ -228,12 +254,23 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
             </h2>
             <p className="text-sm text-slate-400">مراجعة طلبات الطلاب الذاتية</p>
           </div>
-          <button
-            onClick={onClose}
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold"
-          >
-            ✕ إغلاق
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePurgeCorrupt}
+              disabled={purging}
+              title="حذف الطلبات التي بصمتها تالفة ولا يمكن الموافقة عليها"
+              className="flex items-center gap-1.5 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 px-3 py-2 rounded-lg font-bold text-sm transition disabled:opacity-50"
+            >
+              {purging ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              حذف التالفة
+            </button>
+            <button
+              onClick={onClose}
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold"
+            >
+              ✕ إغلاق
+            </button>
+          </div>
         </div>
 
         <div className="px-5 py-3 border-b border-white/10 bg-white/5">

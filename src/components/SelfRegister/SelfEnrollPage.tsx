@@ -1,7 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense, useCallback } from 'react';
-import { ref, set, get } from 'firebase/database';
+import { ref, set } from 'firebase/database';
 import { database, dbURL } from '../../firebase/config';
-import { Student, AttendanceRecord } from '../../types/student';
+import { AttendanceRecord, Student } from '../../types/student';
 import { RegistrationLink, IDExtractionResult } from '../../types/registration';
 import { getRegistrationLink, validateLink } from '../../services/tokenService';
 import { findNameInOCRText } from '../../services/nameMatching';
@@ -11,7 +11,9 @@ import { getActiveAcademicYear, loadAttendanceRecords, loadSessions } from '../.
 import { decompressRecord } from '../../firebase/dataServiceCompressed';
 import { SkeletonCard } from '../Skeleton';
 import { migrateToV5, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
-import { AlertTriangle, XCircle, CalendarDays, CheckCircle, Users, BookOpen, ArrowLeft, ScanFace } from 'lucide-react';
+import { useFaceAI } from '../../hooks/useFaceAI';
+import { EngineOverlay } from '../face/EngineOverlay';
+import { AlertTriangle, XCircle, CalendarDays, CheckCircle, Users, BookOpen, ArrowLeft, ScanFace, IdCard } from 'lucide-react';
 
 const LazySelfCapture = lazy(() =>
   import('../face/SelfCaptureStep').then(m => ({ default: m.SelfCaptureStep }))
@@ -23,7 +25,6 @@ type Step =
   | 'upload-id'
   | 'name-mismatch'
   | 'confirm'
-  | 'confirm-student'
   | 'capture-face'
   | 'submitting'
   | 'success'
@@ -35,8 +36,6 @@ interface SelfEnrollPageProps {
   onExit: () => void;
 }
 
-interface TaggedStudent { student: Student; stageId: string; }
-
 const dbFetch = async <T,>(path: string, signal?: AbortSignal): Promise<T | null> => {
   const url = `${dbURL}/${path}.json`;
   const res = await fetch(url, { signal });
@@ -44,11 +43,31 @@ const dbFetch = async <T,>(path: string, signal?: AbortSignal): Promise<T | null
   return res.json() as Promise<T | null>;
 };
 
+/** قراءة طلاب مرحلة واحدة فقط عبر المسار العام students (يعمل بدون تسجيل دخول) */
+export const loadStageStudentsPublic = async (
+  adminUid: string,
+  year: string,
+  stageId: string,
+): Promise<Student[]> => {
+  const base = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}/students`;
+  const data = await dbFetch<any>(base);
+  if (!data) return [];
+  const arr: any[] = Array.isArray(data) ? data : Object.values(data);
+  return arr.filter(s => s && s.id && s.name) as Student[];
+};
+
+const buildStudentFromLink = (lnk: RegistrationLink): Student => ({
+  id: lnk.studentId || '',
+  name: lnk.studentName || '',
+  code: lnk.studentCode || '',
+  qrCodeId: lnk.qrCodeId,
+} as Student);
+
 const normalizeDate = (dateStr: string): string => {
   if (!dateStr) return '';
   const arabicNums = '٠١٢٣٤٥٦٧٨٩';
   const engNums = '0123456789';
-  let n = dateStr.replace(/[٠-٩]/g, d => engNums[arabicNums.indexOf(d)]).replace(/[‏‎\u200E\u200F]/g, '').trim();
+  let n = dateStr.replace(/[٠-٩]/g, d => engNums[arabicNums.indexOf(d)]).replace(/[\u200E\u200F]/g, '').trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(n)) return n;
   const m = n.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
@@ -56,33 +75,20 @@ const normalizeDate = (dateStr: string): string => {
 };
 
 export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit }) => {
+  // محرك البصمة يشتغل أول شيء — لا تظهر أي خطوة تفاعلية قبل جهوزيته
+  const { ready: engineReady, progress, error: engineError, retry: engineRetry } = useFaceAI();
+
   const [step, setStep] = useState<Step>('loading');
   const [link, setLink] = useState<RegistrationLink | null>(null);
-  const [allStudents, setAllStudents] = useState<TaggedStudent[]>([]);
+  const [expected, setExpected] = useState<Student | null>(null);
+  const [stageStudents, setStageStudents] = useState<Student[]>([]);
   const [idData, setIdData] = useState<IDExtractionResult | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
-  const [matched, setMatched] = useState<TaggedStudent | null>(null);
   const [sessionNameMap, setSessionNameMap] = useState<Record<string, string>>({});
   const [retryStep, setRetryStep] = useState<Step>('upload-id');
 
   const goTo = useCallback((s: Step) => setStep(prev => prev === s ? prev : s), []);
-
-  const loadAllStudentsForAdmin = async (adminUid: string, year: string): Promise<TaggedStudent[]> => {
-    const base = `academicYears/${year}/userData/${adminUid}/stageData`;
-    const snap = await get(ref(database, base));
-    const out: TaggedStudent[] = [];
-    if (snap.exists()) {
-      const stagesObj = snap.val() as Record<string, any>;
-      for (const stageId of Object.keys(stagesObj)) {
-        const students = stagesObj[stageId]?.students;
-        if (!students) continue;
-        const arr: Student[] = Array.isArray(students) ? students : Object.values(students);
-        for (const s of arr) if (s && s.id) out.push({ student: s as Student, stageId });
-      }
-    }
-    return out;
-  };
 
   const loadStageRecordsForStudent = async (
     lnk: RegistrationLink, studentId: string, signal?: AbortSignal,
@@ -101,7 +107,8 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     for (const s of teacherSessions) { if (s?.id && s.name) sNameMap[s.id] = s.name; }
     let records = teacherRecords.filter(r => r?.studentId === studentId);
 
-    if (records.length === 0 && lnk.subjectName) {
+    if (records.length === 0) {
+      // مسار مباشر عام لسجلات كل المدرسين في المرحلة — نعرض سجلات الطالب المطابق فقط
       const base = `academicYears/${year}/userData/${lnk.adminUid}/stageData/${lnk.stageId}`;
       const teachersData = await dbFetch<any>(`${base}/teacherRecords`, signal);
       if (teachersData) {
@@ -120,7 +127,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
             all.push(...raw.filter(r => r && typeof r === 'object' && r.id));
           }
         }
-        records = all.filter(r => r.studentId === studentId && r.subjectName === lnk.subjectName);
+        records = all.filter(r => r.studentId === studentId);
       }
     }
     return { records, sessionNameMap: sNameMap };
@@ -143,39 +150,64 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
         if (!validation.valid) { setErrorMsg(validation.reason || 'الرابط غير صالح'); goTo('invalid-link'); return; }
         if (!linkData) { setErrorMsg('الرابط غير موجود'); goTo('invalid-link'); return; }
 
+        if ((linkData.type as string) === 'enroll') {
+          setErrorMsg('هذا النوع من الروابط لم يعد مدعوماً — اطلب رابطاً جديداً من إدارة الكلية');
+          goTo('invalid-link');
+          return;
+        }
+
         setLink(linkData);
 
-        let year = linkData.academicYear || '';
-        if (!year) { try { year = await getActiveAcademicYear(); } catch { year = ''; } }
-        if (!year) { setErrorMsg('تعذر تحميل السنة الدراسية'); goTo('invalid-link'); return; }
+        // روابط الحضور: نجلب طلاب المرحلة من المسار العام ونطابق الاسم عليهم
+        if (linkData.type === 'attendance') {
+          let year = linkData.academicYear || '';
+          if (!year) { try { year = await getActiveAcademicYear(); } catch { year = ''; } }
+          if (!year) { setErrorMsg('تعذر تحميل السنة الدراسية'); goTo('invalid-link'); return; }
 
-        const ac = new AbortController();
-        const st = setTimeout(() => ac.abort(), TIMEOUT);
-        try {
-          const tagged = await loadAllStudentsForAdmin(linkData.adminUid, year);
-          if (!mounted) return;
-          if (tagged.length === 0) {
-            setErrorMsg('لم نجد بيانات طلاب لربط بصمتك بها');
-            goTo('invalid-link');
-            return;
-          }
-          setAllStudents(tagged);
-
-          // رابط فردي مربوط بطالب محدد → تجاوز رفع الهوية مع إظهار شاشة تأكيد الهوية أولاً
-          if (linkData.type === 'single' && linkData.studentId) {
-            const bound = tagged.find(t => t.student.id === linkData.studentId);
-            if (bound) {
-              setMatched(bound);
-              goTo('confirm-student');
+          const ac = new AbortController();
+          const st = setTimeout(() => ac.abort(), TIMEOUT);
+          try {
+            const list = await loadStageStudentsPublic(linkData.adminUid, year, linkData.stageId);
+            if (!mounted) return;
+            if (list.length === 0) {
+              setErrorMsg('لم نجد بيانات طلاب لهذه المرحلة');
+              goTo('invalid-link');
               return;
             }
-            setErrorMsg('لم نجد بيانات الطالب المرتبط بهذا الرابط');
-            goTo('invalid-link');
+            setStageStudents(list);
+            goTo('upload-id');
+          } finally { clearTimeout(st); }
+          return;
+        }
+
+        // روابط التسجيل الفردية: هوية الطالب مضمّنة داخل الرابط نفسه — بدون قراءة بيانات الطلاب
+        if (linkData.studentName && linkData.studentId) {
+          setExpected(buildStudentFromLink(linkData));
+          goTo('upload-id');
+          return;
+        }
+
+        // روابط قديمة أُنشئت قبل تضمين الهوية: نجلب الطالب المربوط فقط من المسار العام
+        if (linkData.studentId) {
+          let year = linkData.academicYear || '';
+          if (!year) { try { year = await getActiveAcademicYear(); } catch { year = ''; } }
+          if (!year) { setErrorMsg('تعذر تحميل السنة الدراسية'); goTo('invalid-link'); return; }
+
+          const list = await loadStageStudentsPublic(linkData.adminUid, year, linkData.stageId);
+          if (!mounted) return;
+          const bound = list.find(s => s.id === linkData.studentId);
+          if (bound) {
+            setExpected(bound);
+            goTo('upload-id');
             return;
           }
+          setErrorMsg('لم نجد بيانات الطالب المرتبط بهذا الرابط');
+          goTo('invalid-link');
+          return;
+        }
 
-          goTo('upload-id');
-        } finally { clearTimeout(st); }
+        setErrorMsg('هذا الرابط غير مرتبط بأي طالب');
+        goTo('invalid-link');
       } catch (e: any) {
         if (!mounted) return;
         setErrorMsg(e?.name === 'AbortError' ? 'تعذر الاتصال بقاعدة البيانات' : 'فشل تحميل بيانات الرابط');
@@ -186,48 +218,49 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     return () => { mounted = false; clearTimeout(globalTimeout); };
   }, [token, goTo]);
 
-  const matchStudent = (result: IDExtractionResult): TaggedStudent | null => {
-    let best: { t: TaggedStudent; confidence: number } | null = null;
-    if (result.ocrText) {
-      for (const t of allStudents) {
-        const check = findNameInOCRText(t.student.name, result.ocrText);
-        if (check.matched && (!best || check.confidence > best.confidence)) {
-          best = { t, confidence: check.confidence };
-        }
-      }
-    }
-    if (best) return best.t;
-    if (result.qrId) {
-      const byQr = allStudents.find(t =>
-        t.student.universityId === result.qrId || t.student.qrCodeId === result.qrId
-      );
-      if (byQr) return byQr;
-    }
-    return null;
-  };
-
   const handleIdExtracted = async (result: IDExtractionResult) => {
-    try {
-      setIdData(result);
-      if (!link) return;
+    setIdData(result);
+    if (!link) return;
 
-      if (allStudents.length === 0) {
-        setErrorMsg('لم نجد بيانات طلاب لربط بصمتك بها');
-        goTo('invalid-link');
+    try {
+      // تسجيل البصمة: الاسم يجب أن يطابق اسم الطالب داخل الرابط حصراً
+      if (link.type !== 'attendance') {
+        const st = expected;
+        if (!st || !st.name) { setErrorMsg('بيانات الطالب غير متوفرة في الرابط'); goTo('invalid-link'); return; }
+
+        const nameOk = !!(result.ocrText && st.name && findNameInOCRText(st.name, result.ocrText).matched);
+        const qrOk = !!(result.qrId && st.qrCodeId && result.qrId === st.qrCodeId);
+
+        if (nameOk || qrOk) {
+          goTo('confirm');
+        } else {
+          goTo('name-mismatch');
+        }
         return;
       }
 
-      const found = matchStudent(result);
-      if (found) {
-        setMatched(found);
-        if (link.type === 'attendance') {
-          const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link, found.student.id);
-          setAttendanceRecords(records);
-          setSessionNameMap(namesMap);
-          goTo('attendance-report');
-        } else {
-          goTo('confirm');
+      // الحضور: مطابقة على طلاب المرحلة
+      let found: Student | null = null;
+      if (result.ocrText) {
+        let bestConf = -1;
+        for (const s of stageStudents) {
+          const check = findNameInOCRText(s.name, result.ocrText);
+          if (check.matched && check.confidence > bestConf) { found = s; bestConf = check.confidence; }
         }
+      }
+      if (!found && result.qrId) {
+        found = stageStudents.find(s =>
+          s.universityId === result.qrId ||
+          (s.qrCodeId && s.qrCodeId === result.qrId)
+        ) || null;
+      }
+
+      if (found) {
+        setExpected(found);
+        const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link, found.id);
+        setAttendanceRecords(records);
+        setSessionNameMap(namesMap);
+        goTo('attendance-report');
       } else {
         goTo('name-mismatch');
       }
@@ -238,7 +271,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   };
 
   const handleFaceCaptured = async (descriptor: FaceGalleryDescriptor) => {
-    if (!link || !matched) return;
+    if (!link || !expected) return;
     goTo('submitting');
 
     // توحيد البصمة إلى v5 نظيفة + التحقق من سلامتها قبل الحفظ — لا نرسل بصمة فارغة/تالفة
@@ -251,17 +284,17 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     }
 
     try {
-      const requestId = `${matched.student.id}_${Date.now()}`;
-      const qrCodeId = idData?.qrId || matched.student.qrCodeId || '';
+      const requestId = `${expected.id}_${Date.now()}`;
+      const qrCodeId = idData?.qrId || expected.qrCodeId || '';
       await set(ref(database, `registrationSystem/pending/${link.adminUid}/${requestId}`), {
         id: requestId,
         adminUid: link.adminUid,
-        stageId: matched.stageId,
-        studentId: matched.student.id,
-        studentCode: matched.student.code,
-        nameInSystem: matched.student.name,
-        nameFromCard: matched.student.name,
-        nationalId: idData?.qrId || idData?.nationalId || '',
+        stageId: link.stageId,
+        studentId: expected.id,
+        studentCode: expected.code || '',
+        nameInSystem: expected.name,
+        nameFromCard: expected.name,
+        nationalId: idData?.nationalId || '',
         qrCodeUrl: idData?.qrUrl || '',
         qrCodeId,
         qrVerified: !!idData?.qrId,
@@ -271,8 +304,8 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
         linkType: link.type,
         status: 'pending',
         createdAt: new Date().toISOString(),
-        hasExistingQr: !!matched.student.qrCodeId,
-        hasExistingFace: !!matched.student.faceDescriptor,
+        hasExistingQr: !!expected.qrCodeId,
+        hasExistingFace: !!expected.faceDescriptor,
       });
       // لا نُعلّم الرابط «مستخدماً» هنا حتى يتمكّن الطالب من إعادة المحاولة عند الفشل.
       // روابط الطالب الواحد تُعلَّم مستخدمة فقط بعد موافقة الأدمن (انظر PendingRegistrations).
@@ -285,14 +318,31 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   };
 
   const getAttendanceStats = () => {
-    if (!matched) return { present: 0, absent: 0, total: 0, records: [] as any[] };
+    if (!expected) return { present: 0, absent: 0, total: 0, records: [] as AttendanceRecord[] };
     const present = attendanceRecords.filter(r => r.status === 'present').length;
     const absent = attendanceRecords.filter(r => r.status === 'absent').length;
     const sortedRecords = [...attendanceRecords].sort((a, b) => normalizeDate(b.date).localeCompare(normalizeDate(a.date)));
     return { present, absent, total: present + absent, records: sortedRecords };
   };
 
-  const subjectName = link?.subjectName || link?.adminUid || 'المادة';
+  const subjectName = link?.subjectName || 'المادة';
+
+  // بوابة محرك البصمة: الخطوات التفاعلية لا تظهر إلا بعد تحميل المودل بالكامل
+  const needsEngine = step !== 'loading' && step !== 'invalid-link';
+  if (needsEngine && !engineReady) {
+    return (
+      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
+        <div className="w-full max-w-md">
+          <EngineOverlay
+            progress={progress}
+            error={engineError}
+            onRetry={engineRetry}
+            onCancel={onExit}
+          />
+        </div>
+      </div>
+    );
+  }
 
   if (step === 'loading') {
     return <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl"><div className="w-full max-w-md"><SkeletonCard /></div></div>;
@@ -313,18 +363,24 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     );
   }
 
-  if (step === 'upload-id') {
+  if (step === 'upload-id' && expected) {
     return (
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
         <div className="w-full max-w-md">
-          <div className="text-center mb-5">
-            <div className="mx-auto w-14 h-14 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-3">
-              <ScanFace className="w-7 h-7 text-indigo-400" />
+          {link?.type !== 'attendance' && expected.name && (
+            <div className="text-center mb-5">
+              <div className="mx-auto w-14 h-14 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-3">
+                <ScanFace className="w-7 h-7 text-indigo-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white">تسجيل بصمة الوجه الذاتي</h2>
+              <p className="text-sm text-white/50 mt-1">ارفع صورة الهوية الوطنية ليتحقق النظام من مطابقة الاسم</p>
+              <div className="mt-3 inline-flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/25 rounded-full px-4 py-1.5">
+                <IdCard className="w-4 h-4 text-indigo-300" />
+                <span className="text-sm font-bold text-indigo-200">{expected.name}</span>
+              </div>
             </div>
-            <h2 className="text-xl font-bold text-white">تسجيل بصمة الوجه الذاتي</h2>
-            <p className="text-sm text-white/50 mt-1">ارفع صورة الهوية ليتعرّف النظام على اسمك تلقائياً</p>
-          </div>
-          <IDCardUpload student={{ id: '', name: '', code: '' } as Student} onExtracted={handleIdExtracted} onCancel={onExit} />
+          )}
+          <IDCardUpload student={expected} onExtracted={handleIdExtracted} onCancel={onExit} />
         </div>
       </div>
     );
@@ -337,7 +393,12 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
           <div className="mx-auto w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4">
             <AlertTriangle className="w-8 h-8 text-amber-400" />
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">تعذّر التعرّف على الطالب</h2>
+          <h2 className="text-2xl font-bold text-white mb-2">تعذّر التحقق من الهوية</h2>
+          {expected?.name && link?.type !== 'attendance' && (
+            <div className="glass-card-sm p-3 mb-4">
+              <p className="text-sm text-white/50">الاسم المطلوب: <span className="text-white font-bold">{expected.name}</span></p>
+            </div>
+          )}
           <div className="glass-card-sm p-4 mb-4 text-right space-y-2">
             {idData.ocrText && (
               <p className="text-sm text-white/50">النصوص المستخرجة: <span className="text-white/80 font-mono text-xs break-all">{idData.ocrText.slice(0, 300)}</span></p>
@@ -347,7 +408,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
             )}
           </div>
           <p className="text-sm text-white/60 mb-6">
-            لم نتمكن من مطابقة البطاقة مع أي طالب في النظام. تأكد أن الاسم على الهوية مطابق لما في النظام وحاول التصوير بوضوح.
+            تأكد أنك تصوّر هويتك أنت، وأن الاسم على البطاقة واضح ومطابق للمعروض أعلاه، ثم أعد المحاولة.
           </p>
           <button onClick={() => goTo('upload-id')} className="btn-base btn-secondary w-full py-3">
             <XCircle className="w-4 h-4" /> إعادة تصوير الهوية
@@ -357,23 +418,24 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     );
   }
 
-  if (step === 'confirm' && matched) {
-    const student = matched.student;
+  if (step === 'confirm' && expected) {
+    const student = expected;
     const barcode = idData?.qrId || student.qrCodeId || '';
+    const qrVerified = !!(idData?.qrId && barcode === idData.qrId);
     return (
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
         <div className="glass-card p-8 max-w-md w-full text-center">
           <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-4">
             <CheckCircle className="w-8 h-8 text-emerald-400" />
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">تم التعرّف عليك</h2>
+          <h2 className="text-2xl font-bold text-white mb-2">تم التحقق من هويتك</h2>
           <div className="bg-white/5 rounded-xl p-4 mb-4 text-right space-y-2">
             <p className="text-sm text-white/50">الاسم: <span className="text-white font-bold">{student.name}</span></p>
-            <p className="text-sm text-white/50">الكود: <span className="text-white font-mono">{student.code}</span></p>
+            {student.code && <p className="text-sm text-white/50">الكود: <span className="text-white font-mono">{student.code}</span></p>}
             {barcode && (
               <p className="text-sm text-white/50">الباركود: <span className="text-emerald-300 font-mono">{barcode}</span></p>
             )}
-            {idData?.qrId && (
+            {qrVerified && (
               <p className="text-[11px] text-emerald-400">✅ تم التحقق من الباركود على الهوية</p>
             )}
           </div>
@@ -389,39 +451,12 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     );
   }
 
-  if (step === 'confirm-student' && matched) {
-    const student = matched.student;
-    return (
-      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
-        <div className="glass-card p-8 max-w-md w-full text-center">
-          <div className="mx-auto w-16 h-16 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-4">
-            <ScanFace className="w-8 h-8 text-indigo-400" />
-          </div>
-          <h2 className="text-2xl font-bold text-white mb-2">تأكيد الهوية</h2>
-          <div className="bg-white/5 rounded-xl p-4 mb-4 text-right space-y-2">
-            <p className="text-sm text-white/50">الاسم: <span className="text-white font-bold">{student.name}</span></p>
-            <p className="text-sm text-white/50">الكود: <span className="text-white font-mono">{student.code}</span></p>
-          </div>
-          <p className="text-sm text-white/60 mb-6">
-            سيتم تسجيل بصمة هذا الطالب. تأكد أنك الطالب نفسه قبل المتابعة.
-          </p>
-          <button onClick={() => goTo('capture-face')} className="btn-base btn-primary w-full py-3">
-            <ScanFace className="w-4 h-4" /> تأكيد وتسجيل البصمة
-          </button>
-          <button onClick={onExit} className="btn-base btn-secondary w-full py-3 mt-2">
-            إلغاء
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (step === 'capture-face' && matched) {
+  if (step === 'capture-face' && expected) {
     return (
       <Suspense fallback={<div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl"><div className="w-full max-w-md"><SkeletonCard /></div></div>}>
         <LazySelfCapture
-          student={matched.student}
-          allStudents={allStudents.map(t => t.student)}
+          student={expected}
+          allStudents={[]}
           onCaptured={handleFaceCaptured}
           onCancel={() => goTo('confirm')}
         />
@@ -441,8 +476,8 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     );
   }
 
-  if (step === 'success' && matched) {
-    return <RegistrationSuccess student={matched.student} qrVerified={!!idData?.qrId} onExit={onExit} />;
+  if (step === 'success' && expected) {
+    return <RegistrationSuccess student={expected} qrVerified={!!(idData?.qrId && (idData.qrId === expected.qrCodeId || !expected.qrCodeId))} onExit={onExit} />;
   }
 
   if (step === 'error') {
@@ -463,7 +498,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     );
   }
 
-  if (step === 'attendance-report' && matched) {
+  if (step === 'attendance-report' && expected) {
     const { present, absent, total, records } = getAttendanceStats();
     return (
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
@@ -484,8 +519,8 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
                 <div className="bg-emerald-500/20 p-4 rounded-xl"><Users className="w-8 h-8 text-emerald-400" /></div>
                 <div>
                   <p className="text-sm text-white/50">اسم الطالب</p>
-                  <h2 className="text-2xl font-bold text-white">{matched.student.name}</h2>
-                  <p className="text-sm text-white/40 font-mono">كود: {matched.student.code}</p>
+                  <h2 className="text-2xl font-bold text-white">{expected.name}</h2>
+                  {expected.code && <p className="text-sm text-white/40 font-mono">كود: {expected.code}</p>}
                 </div>
               </div>
             </div>
@@ -514,7 +549,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
                           {record.status === 'present' ? <CheckCircle className="w-5 h-5 text-green-400" /> : <XCircle className="w-5 h-5 text-red-400" />}
                         </div>
                         <div className="text-right">
-                          <p className="font-medium text-white">{record.sessionName || sessionNameMap[record.sessionId] || 'جلسة'}</p>
+                          <p className="font-medium text-white">{(record as any).sessionName || sessionNameMap[record.sessionId] || 'جلسة'}</p>
                           <p className="text-xs text-white/50 font-mono">{normalizeDate(record.date)} {record.time && `• ${record.time}`}</p>
                         </div>
                       </div>

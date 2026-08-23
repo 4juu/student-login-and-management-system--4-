@@ -46,12 +46,12 @@ export const createSingleRegistrationLink = async (
 };
 
 /**
- * 🆕 توليد روابط جماعية لقائمة طلاب
+ * 🆕 توليد روابط جماعية لقائمة طلاب — هوية كل طالب مضمّنة داخل رابطه
  */
 export const createBulkRegistrationLinks = async (
   adminUid: string,
   stageId: string,
-  studentIds: string[],
+  students: Array<{ id: string; name?: string; code?: string; qrCodeId?: string }>,
   expiryDays: number = DEFAULT_EXPIRY_DAYS
 ): Promise<Array<{ studentId: string; token: string; url: string }>> => {
   const results: Array<{ studentId: string; token: string; url: string }> = [];
@@ -60,35 +60,39 @@ export const createBulkRegistrationLinks = async (
   let academicYear = '';
   try { academicYear = await getActiveAcademicYear(); } catch {}
   const ay = academicYear || undefined;
-  
+
   const updates: { [key: string]: RegistrationLink } = {};
-  
-  for (const studentId of studentIds) {
+
+  for (const st of students) {
     const token = nanoid(20);
     const linkData: RegistrationLink = {
       token,
       adminUid,
       stageId,
-      studentId,
+      studentId: st.id,
       type: 'single',  // كل واحد رابطه خاص
       createdBy: adminUid,
       createdAt: new Date().toISOString(),
       expiresAt,
       used: false,
       academicYear: ay,
+
+      studentName: st.name || undefined,
+      studentCode: st.code || undefined,
+      qrCodeId: st.qrCodeId || undefined,
     };
-    
+
     updates[`${LINKS_PATH}/${token}`] = linkData;
     results.push({
-      studentId,
+      studentId: st.id,
       token,
       url: `${window.location.origin}${window.location.pathname}?reg=${token}`,
     });
   }
-  
+
   // حفظ دفعة واحدة
   await update(ref(database), updates);
-  
+
   return results;
 };
 
@@ -124,37 +128,6 @@ export const createAttendanceLink = async (
   
   await set(ref(database, `${LINKS_PATH}/${token}`), linkData);
   
-  const url = `${window.location.origin}${window.location.pathname}?reg=${token}`;
-  return { token, url };
-};
-
-/**
- * 🆕 توليد رابط تسجيل بصمة ذاتي (عام - يطابق الطالب باسمه من الهوية)
- */
-export const createEnrollLink = async (
-  adminUid: string,
-  expiryDays: number = DEFAULT_EXPIRY_DAYS
-): Promise<{ token: string; url: string }> => {
-  const token = nanoid(20);
-  const now = Date.now();
-  let academicYear = '';
-  try { academicYear = await getActiveAcademicYear(); } catch {}
-
-  const linkData: RegistrationLink = {
-    token,
-    adminUid,
-    stageId: '',
-    studentId: null,
-    type: 'enroll',
-    createdBy: adminUid,
-    createdAt: new Date().toISOString(),
-    expiresAt: now + expiryDays * 24 * 60 * 60 * 1000,
-    used: false,
-    academicYear: academicYear || undefined,
-  };
-
-  await set(ref(database, `${LINKS_PATH}/${token}`), linkData);
-
   const url = `${window.location.origin}${window.location.pathname}?reg=${token}`;
   return { token, url };
 };

@@ -96,9 +96,9 @@ export function hasValidDescriptor(fd: unknown): boolean {
 }
 
 /**
- * يوحّد أي صيغة بصمة مخزّنة (v5 الحالية، أو الصيغ القديمة المسطّحة/ذات العناقيد)
- * إلى صيغة v5 النظيفة. يُرجع null إذا لم توجد بيانات وجه صالحة.
- * يُستخدم عند قبول طلبات التسجيل الذاتي لضمان قبول البصمة الجديدة مهما كانت صيغتها المخزّنة.
+ * مدقق صارم v5 فقط - اي تنسيق قديم (مصفوفة مسطحة، مصفوفة عينات، enrollment ككائن،
+ * او {descriptor/vector/embedding}) يرفض نهائيا ويعيد null.
+ * العناقيد الحالية (clusters) تحفظ كما هي حتى لا يفقد الطالب تعلمه التدريجي.
  */
 export function migrateToV5(input: unknown): FaceGalleryDescriptor | null {
   if (!input || typeof input !== 'object') return null;
@@ -119,52 +119,6 @@ export function migrateToV5(input: unknown): FaceGalleryDescriptor | null {
     };
   }
 
-  // 2) مصفوفة مسطّحة: متجه واحد 512 أو مصفوفة متجهات
-  if (Array.isArray(input)) {
-    const arr = input as unknown[];
-    if (arr.length === DESC_DIM && typeof arr[0] === 'number') {
-      const v = parseOneSample(arr);
-      if (!v) return null;
-      const norm = Array.from(l2Normalize(v)).map(x => Math.round(x * 1e5) / 1e5);
-      return { version: DESC_VERSION_GALLERY, enrollment: [norm], clusters: [], samples: 1 };
-    }
-    const samples = arr
-      .map(s => parseOneSample(s))
-      .filter((s): s is Float32Array => s !== null);
-    if (samples.length === 0) return null;
-    return {
-      version: DESC_VERSION_GALLERY,
-      enrollment: samples.map(s => Array.from(l2Normalize(s)).map(x => Math.round(x * 1e5) / 1e5)),
-      clusters: [],
-      samples: samples.length,
-    };
-  }
-
-  // 3) كائن بصيغة قديمة: enrollment محوّل إلى كائن بواسطة Firebase، أو حقل descriptor/vector
-  const o = input as Record<string, unknown>;
-  const enr = o.enrollment;
-  if (enr && typeof enr === 'object' && !Array.isArray(enr)) {
-    const samples = Object.values(enr as Record<string, unknown>)
-      .map(s => parseOneSample(s))
-      .filter((s): s is Float32Array => s !== null);
-    if (samples.length > 0) {
-      return {
-        version: DESC_VERSION_GALLERY,
-        enrollment: samples.map(s => Array.from(l2Normalize(s)).map(x => Math.round(x * 1e5) / 1e5)),
-        clusters: [],
-        samples: samples.length,
-      };
-    }
-  }
-
-  const single = o.descriptor ?? o.vector ?? o.embedding;
-  if (Array.isArray(single) && single.length === DESC_DIM && typeof single[0] === 'number') {
-    const v = parseOneSample(single);
-    if (v) {
-      const norm = Array.from(l2Normalize(v)).map(x => Math.round(x * 1e5) / 1e5);
-      return { version: DESC_VERSION_GALLERY, enrollment: [norm], clusters: [], samples: 1 };
-    }
-  }
 
   return null;
 }
