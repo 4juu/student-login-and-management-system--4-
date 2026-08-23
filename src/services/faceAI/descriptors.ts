@@ -77,7 +77,11 @@ export function isGalleryDescriptor(fd: unknown): fd is FaceGalleryDescriptor {
   const o = fd as Record<string, unknown>;
   return o.version === DESC_VERSION_GALLERY
     && Array.isArray(o.enrollment)
-    && (Array.isArray(o.clusters) || (typeof o.clusters === 'object' && o.clusters !== null));
+    // Firebase يحذف تلقائياً أي clusters: [] فاضية عند الحفظ — غيابها يعني "لا عناقيد بعد" وليس بصمة تالفة
+    && (o.clusters === undefined
+        || o.clusters === null
+        || Array.isArray(o.clusters)
+        || typeof o.clusters === 'object');
 }
 
 /** Firebase يحوّل المصفوفات الفارغة [] إلى كائنات {} — نعوّض تلقائياً */
