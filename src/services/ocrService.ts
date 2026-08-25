@@ -1,6 +1,6 @@
 import { IDExtractionResult } from '../types/registration';
 import { extractQRFromImageFile, extractIdFromQRUrl } from './qrExtractor';
-import { findNameInOCRText } from './nameMatching';
+import { findNameInOCRText, extractNameFromOCR } from './nameMatching';
 
 let worker: any = null;
 let workerReady = false;
@@ -178,6 +178,8 @@ export const extractIDData = async (
     }
   }
 
+  const extractedName = extractNameFromOCR(ocrText);
+
   onProgress?.('اكتمل', 100);
 
   if (!qrText && !ocrText.trim()) {
@@ -194,6 +196,7 @@ export const extractIDData = async (
     nationalId,
     ocrText,
     nameFromCard,
+    extractedName,
   };
 };
 
