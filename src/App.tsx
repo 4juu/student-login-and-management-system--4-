@@ -635,13 +635,13 @@ function App() {
   }, []);
 
   const handleDeleteStudent = useCallback((id: string) => {
-    if (window.confirm('هل أنت متأكد من حذف هذا الطالب؟')) {
-      userModifiedStudentsRef.current = true;
-      intentionalDeleteRef.current.students = true;
-      intentionalDeleteRef.current.records = true;
-      setStudents(prev => prev.filter(s => s.id !== id));
-      setAttendanceRecords(prev => prev.filter(r => r.studentId !== id));
-    }
+    // التأكيد يتم عند واجهة القائمة (window.confirm واحد فقط) — التأكيد المزدوج هنا
+    // يُكبه المتصفح أحياناً فيرجع false صامتاً ويبدو أن الحذف لا يعمل
+    userModifiedStudentsRef.current = true;
+    intentionalDeleteRef.current.students = true;
+    intentionalDeleteRef.current.records = true;
+    setStudents(prev => prev.filter(s => s.id !== id));
+    setAttendanceRecords(prev => prev.filter(r => r.studentId !== id));
   }, []);
 
   const handleDeleteSelectedStudents = useCallback((ids: string[]) => {

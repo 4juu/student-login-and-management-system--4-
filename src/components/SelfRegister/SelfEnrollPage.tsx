@@ -181,17 +181,9 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
         }
 
         // روابط التسجيل الفردية: هوية الطالب مضمّنة داخل الرابط نفسه — بدون قراءة بيانات الطلاب
+        // (فحص تكرار البصمة يجيب قائمة الطلاب طازة وقت الالتقاط نفسه، انظر handleFaceCaptured)
         if (linkData.studentName && linkData.studentId) {
           setExpected(buildStudentFromLink(linkData));
-          // تحميل خلفي لطلاب المرحلة لفحص تكرار البصمة لاحقاً — لا يوقف الواجهة لو فشل
-          (async () => {
-            try {
-              let year = linkData.academicYear || '';
-              if (!year) year = await getActiveAcademicYear();
-              const list = await loadStageStudentsPublic(linkData.adminUid, year, linkData.stageId);
-              if (mounted) setStageStudents(list);
-            } catch { /* تجاهل - الفحص سيتم لاحقاً عند الموافقة بأي حال */ }
-          })();
           goTo('upload-id');
           return;
         }
@@ -291,11 +283,15 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
       return;
     }
 
-    // فحص التكرار: هل هذه البصمة مسجلة مسبقاً لطالب آخر بنفس المرحلة؟
-    if (stageStudents.length > 0) {
+    // فحص التكرار: نجيب قائمة الطلاب طازة الآن (مو من كاش قديم) لضمان دقة الفحص
+    try {
+      let year = link.academicYear || '';
+      if (!year) year = await getActiveAcademicYear();
+      const freshList = await loadStageStudentsPublic(link.adminUid, year, link.stageId);
+
       const query = parseStoredDescriptor(migrated);
-      if (query) {
-        const tamper = checkForTampering(query, stageStudents, expected.id);
+      if (query && freshList.length > 0) {
+        const tamper = checkForTampering(query, freshList, expected.id);
         if (tamper.tampered) {
           setErrorMsg(`لا يمكن إكمال التسجيل: هذه البصمة مسجّلة بالفعل للطالب "${tamper.matchedWith}". إذا كان هذا خطأ، تواصل مع إدارة الكلية.`);
           setRetryStep('capture-face');
@@ -303,6 +299,9 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
           return;
         }
       }
+    } catch (e) {
+      console.warn('⚠️ فشل فحص التكرار المسبق — سيتم الاعتماد على فحص الأدمن عند الموافقة', e);
+      // لا نوقف التسجيل — طبقة الحماية الثانية (موافقة الأدمن) موجودة أصلاً
     }
 
     goTo('submitting');
