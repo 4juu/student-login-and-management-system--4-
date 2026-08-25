@@ -10,10 +10,10 @@ import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear, loadAttendanceRecords, loadSessions } from '../../firebase/dataService';
 import { decompressRecord } from '../../firebase/dataServiceCompressed';
 import { SkeletonCard } from '../Skeleton';
-import { migrateToV5, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
+import { migrateToV5, parseAllSamples, checkForTampering, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
 import { useFaceAI } from '../../hooks/useFaceAI';
 import { EngineOverlay } from '../face/EngineOverlay';
-import { AlertTriangle, XCircle, CalendarDays, CheckCircle, Users, BookOpen, ArrowLeft, ScanFace, IdCard } from 'lucide-react';
+import { AlertTriangle, XCircle, CalendarDays, CheckCircle, Users, BookOpen, ArrowLeft, ScanFace, ShieldCheck, BadgeCheck } from 'lucide-react';
 
 const LazySelfCapture = lazy(() =>
   import('../face/SelfCaptureStep').then(m => ({ default: m.SelfCaptureStep }))
@@ -283,6 +283,35 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
       return;
     }
 
+    // فحص التكرار قبل الإرسال للأدمن — يقارن كل عينات البصمة الجديدة (كل الزوايا) وليس عينة واحدة فقط
+    try {
+      const allNewSamples = parseAllSamples(migrated);
+      if (allNewSamples.length > 0) {
+        let year = link.academicYear || '';
+        if (!year) { try { year = await getActiveAcademicYear(); } catch {} }
+
+        const stageStudents = year
+          ? await loadStageStudentsPublic(link.adminUid, year, link.stageId)
+          : [];
+
+        let tamperResult: { tampered: boolean; matchedWith?: string } = { tampered: false };
+        for (const sample of allNewSamples) {
+          const r = checkForTampering(sample, stageStudents, expected.id);
+          if (r.tampered) { tamperResult = r; break; }
+        }
+
+        if (tamperResult.tampered) {
+          setErrorMsg(`عذراً، هذه البصمة مسجّلة بالفعل باسم الطالب: ${tamperResult.matchedWith}`);
+          setRetryStep('capture-face');
+          goTo('error');
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ فشل فحص تكرار البصمة، سيتم المتابعة للأدمن كخط دفاع ثانٍ:', e);
+      // لا نمنع الطالب لو الفحص فشل تقنياً — الفحص النهائي عند موافقة الأدمن يبقى كطبقة حماية أخيرة
+    }
+
     try {
       const requestId = `${expected.id}_${Date.now()}`;
       const qrCodeId = idData?.qrId || expected.qrCodeId || '';
@@ -364,55 +393,59 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   }
 
   if (step === 'upload-id' && expected) {
-    return (
-      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
-        <div className="w-full max-w-md">
-          {link?.type !== 'attendance' && expected.name && (
-            <div className="text-center mb-5">
-              <div className="mx-auto w-14 h-14 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-3">
-                <ScanFace className="w-7 h-7 text-indigo-400" />
-              </div>
-              <h2 className="text-xl font-bold text-white">تسجيل بصمة الوجه الذاتي</h2>
-              <p className="text-sm text-white/50 mt-1">ارفع صورة الهوية الوطنية ليتحقق النظام من مطابقة الاسم</p>
-              <div className="mt-3 inline-flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/25 rounded-full px-4 py-1.5">
-                <IdCard className="w-4 h-4 text-indigo-300" />
-                <span className="text-sm font-bold text-indigo-200">{expected.name}</span>
-              </div>
-            </div>
-          )}
-          <IDCardUpload student={expected} onExtracted={handleIdExtracted} onCancel={onExit} />
-        </div>
-      </div>
-    );
+    // IDCardUpload يحمل شاشته الكاملة بالتصميم الفاتح الرسمي (رأس + اسم الطالب + إرشادات)
+    return <IDCardUpload student={expected} onExtracted={handleIdExtracted} onCancel={onExit} />;
   }
 
   if (step === 'name-mismatch' && idData) {
     return (
-      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
-        <div className="glass-card p-8 max-w-md w-full text-center">
-          <div className="mx-auto w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4">
-            <AlertTriangle className="w-8 h-8 text-amber-400" />
-          </div>
-          <h2 className="text-2xl font-bold text-white mb-2">تعذّر التحقق من الهوية</h2>
-          {expected?.name && link?.type !== 'attendance' && (
-            <div className="glass-card-sm p-3 mb-4">
-              <p className="text-sm text-white/50">الاسم المطلوب: <span className="text-white font-bold">{expected.name}</span></p>
+      <div className="min-h-screen bg-[#f4f6f8] flex items-center justify-center p-4" dir="rtl">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 max-w-md w-full overflow-hidden">
+          <div className="bg-[#0e2a47] px-6 py-5 border-b-4 border-amber-500 text-center">
+            <div className="mx-auto w-14 h-14 rounded-full bg-white/10 border border-white/25 flex items-center justify-center mb-2">
+              <AlertTriangle className="w-8 h-8 text-amber-300" />
             </div>
-          )}
-          <div className="glass-card-sm p-4 mb-4 text-right space-y-2">
-            {idData.ocrText && (
-              <p className="text-sm text-white/50">النصوص المستخرجة: <span className="text-white/80 font-mono text-xs break-all">{idData.ocrText.slice(0, 300)}</span></p>
-            )}
-            {idData.qrId && (
-              <p className="text-sm text-white/50">رمز QR: <span className="text-white/80 font-mono text-xs">{idData.qrId}</span></p>
-            )}
+            <h2 className="text-lg font-bold text-white">تعذّر التحقق من الطلب</h2>
+            <p className="text-xs text-slate-300 mt-1">نظام التحقق الإلكتروني للطلبة</p>
           </div>
-          <p className="text-sm text-white/60 mb-6">
-            تأكد أنك تصوّر هويتك أنت، وأن الاسم على البطاقة واضح ومطابق للمعروض أعلاه، ثم أعد المحاولة.
-          </p>
-          <button onClick={() => goTo('upload-id')} className="btn-base btn-secondary w-full py-3">
-            <XCircle className="w-4 h-4" /> إعادة تصوير الهوية
-          </button>
+
+          <div className="p-6">
+            {expected?.name && link?.type !== 'attendance' && (
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-4 text-center">
+                <p className="text-sm text-slate-500">الاسم المطلوب التحقق منه</p>
+                <p className="text-base font-bold text-[#0e2a47] mt-0.5">{expected.name}</p>
+              </div>
+            )}
+
+            <div className="bg-white border border-slate-200 rounded-lg p-4 mb-4 text-right space-y-2">
+              {idData.ocrText && (
+                <p className="text-xs text-slate-500">
+                  النص المستخرج: <span className="text-slate-700 font-mono text-[11px] break-all">{idData.ocrText.slice(0, 300)}</span>
+                </p>
+              )}
+              {idData.qrId && (
+                <p className="text-xs text-slate-500">
+                  رمز QR: <span className="text-slate-700 font-mono text-[11px]">{idData.qrId}</span>
+                </p>
+              )}
+              {errorMsg && (
+                <p className="text-xs text-red-600 font-bold bg-red-50 border border-red-200 rounded-md p-2">
+                  {errorMsg}
+                </p>
+              )}
+            </div>
+
+            <p className="text-sm text-slate-600 mb-6 text-center leading-relaxed">
+              تأكد أنك تصوّر هويتك الشخصية، وأن الاسم على البطاقة واضح ومطابق للاسم المطلوب أعلاه، ثم أعد المحاولة.
+            </p>
+
+            <button
+              onClick={() => goTo('upload-id')}
+              className="w-full bg-[#0e2a47] hover:bg-[#123a61] text-white font-bold py-3 rounded-lg active:scale-[0.99] transition flex items-center justify-center gap-2"
+            >
+              <XCircle className="w-4 h-4" /> إعادة تصوير الهوية
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -423,29 +456,54 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     const barcode = idData?.qrId || student.qrCodeId || '';
     const qrVerified = !!(idData?.qrId && barcode === idData.qrId);
     return (
-      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
-        <div className="glass-card p-8 max-w-md w-full text-center">
-          <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-4">
-            <CheckCircle className="w-8 h-8 text-emerald-400" />
+      <div className="min-h-screen bg-[#f4f6f8] flex items-center justify-center p-4" dir="rtl">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 max-w-md w-full overflow-hidden">
+          <div className="bg-[#0e2a47] px-6 py-5 border-b-4 border-[#c9a227] text-center">
+            <div className="mx-auto w-14 h-14 rounded-full bg-white/10 border border-white/25 flex items-center justify-center mb-2">
+              <ShieldCheck className="w-8 h-8 text-emerald-300" />
+            </div>
+            <h2 className="text-lg font-bold text-white">تم التحقق من هويتك</h2>
+            <p className="text-xs text-slate-300 mt-1">يرجى مراجعة البيانات قبل المتابعة</p>
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">تم التحقق من هويتك</h2>
-          <div className="bg-white/5 rounded-xl p-4 mb-4 text-right space-y-2">
-            <p className="text-sm text-white/50">الاسم: <span className="text-white font-bold">{student.name}</span></p>
-            {student.code && <p className="text-sm text-white/50">الكود: <span className="text-white font-mono">{student.code}</span></p>}
-            {barcode && (
-              <p className="text-sm text-white/50">الباركود: <span className="text-emerald-300 font-mono">{barcode}</span></p>
-            )}
-            {qrVerified && (
-              <p className="text-[11px] text-emerald-400">✅ تم التحقق من الباركود على الهوية</p>
-            )}
+
+          <div className="p-6">
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-5 text-right space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-500">الاسم</span>
+                <span className="text-sm font-bold text-[#0e2a47]">{student.name}</span>
+              </div>
+              {student.code && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-500">الكود</span>
+                  <span className="text-sm font-mono text-slate-700">{student.code}</span>
+                </div>
+              )}
+              {barcode && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-500">الباركود</span>
+                  <span className="text-sm font-mono text-[#0f766e]">{barcode}</span>
+                </div>
+              )}
+              {qrVerified && (
+                <div className="pt-2 border-t border-slate-200">
+                  <p className="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
+                    <BadgeCheck className="w-3.5 h-3.5" /> تم التحقق من الباركود على الهوية
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <p className="text-sm text-slate-600 mb-6 text-center leading-relaxed">
+              اضغط "بدء التسجيل" لالتقاط بصمة وجهك وإكمال عملية التحقق.
+            </p>
+
+            <button onClick={() => goTo('capture-face')} className="w-full bg-[#0e2a47] hover:bg-[#123a61] text-white font-bold py-3 rounded-lg active:scale-[0.99] transition flex items-center justify-center gap-2">
+              <ScanFace className="w-4 h-4" /> بدء تسجيل البصمة
+            </button>
+            <button onClick={() => goTo('upload-id')} className="w-full mt-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-600 font-bold py-3 rounded-lg active:scale-[0.99] transition flex items-center justify-center gap-2">
+              <XCircle className="w-4 h-4" /> بطاقة خاطئة، إعادة المحاولة
+            </button>
           </div>
-          <p className="text-sm text-white/60 mb-6">اضغط البدء لتسجيل بصمة وجهك بنفس آلية التسجيل في إدارة الطلاب.</p>
-          <button onClick={() => goTo('capture-face')} className="btn-base btn-primary w-full py-3">
-            <ScanFace className="w-4 h-4" /> بدء تسجيل البصمة
-          </button>
-          <button onClick={() => goTo('upload-id')} className="btn-base btn-secondary w-full py-3 mt-2">
-            <XCircle className="w-4 h-4" /> بطاقة خاطئة
-          </button>
         </div>
       </div>
     );
@@ -482,17 +540,30 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
 
   if (step === 'error') {
     return (
-      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
-        <div className="glass-card p-8 max-w-md w-full text-center">
-          <div className="mx-auto w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-4">
-            <XCircle className="w-8 h-8 text-red-400" />
-          </div>
-          <h2 className="text-2xl font-bold text-red-400 mb-2">حدث خطأ</h2>
-          <p className="text-white/60 mb-6">{errorMsg}</p>
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={onExit} className="btn-base btn-secondary py-3">خروج</button>
-              <button onClick={() => goTo(retryStep)} className="btn-base btn-primary py-3">إعادة</button>
+      <div className="min-h-screen bg-[#f4f6f8] flex items-center justify-center p-4" dir="rtl">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 max-w-md w-full overflow-hidden">
+          <div className="bg-[#0e2a47] px-6 py-5 border-b-4 border-red-500 text-center">
+            <div className="mx-auto w-14 h-14 rounded-full bg-white/10 border border-white/25 flex items-center justify-center mb-2">
+              <XCircle className="w-8 h-8 text-red-300" />
             </div>
+            <h2 className="text-lg font-bold text-white">تعذّر إتمام الطلب</h2>
+            <p className="text-xs text-slate-300 mt-1">نظام التحقق الإلكتروني للطلبة</p>
+          </div>
+
+          <div className="p-6">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-center">
+              <p className="text-sm text-red-700 leading-relaxed font-medium">{errorMsg}</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={onExit} className="py-3 bg-white hover:bg-slate-50 border border-slate-300 text-slate-600 font-bold rounded-lg transition active:scale-[0.99]">
+                خروج
+              </button>
+              <button onClick={() => goTo(retryStep)} className="py-3 bg-[#0e2a47] hover:bg-[#123a61] text-white font-bold rounded-lg transition active:scale-[0.99]">
+                إعادة المحاولة
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
