@@ -30,6 +30,8 @@ export interface PendingRegistration {
   nameInSystem: string;
 
   nameFromCard?: string;
+  /** 🆕 الاسم المستخرج فعلياً من البطاقة */
+  extractedName?: string;
   nationalId?: string;
   qrCodeUrl?: string;
   qrCodeId?: string;

@@ -122,8 +122,8 @@ export function extractNameFromOCR(ocrText: string): string | null {
   const cleaned = keepArabicLettersOnly(cut);
   if (!cleaned || cleaned.length < 3) return null;
 
-  // حماية إضافية: اسم حقيقي عادة 3 كلمات على الأقل (اسم + اسم أب والجد على الأقل)
-  const words = cleaned.split(' ').filter(w => w.length >= 3);
+  // حماية إضافية: اسم حقيقي عادة كلمتين على الأقل (اسم + اسم أب على الأقل)
+  const words = cleaned.split(' ').filter(w => w.length >= 2);
   if (words.length === 0) return null;
 
   return words.join(' ');
