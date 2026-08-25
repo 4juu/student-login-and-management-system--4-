@@ -10,7 +10,7 @@ import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear, loadAttendanceRecords, loadSessions } from '../../firebase/dataService';
 import { decompressRecord } from '../../firebase/dataServiceCompressed';
 import { SkeletonCard } from '../Skeleton';
-import { migrateToV5, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
+import { migrateToV5, parseStoredDescriptor, checkForTampering, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
 import { useFaceAI } from '../../hooks/useFaceAI';
 import { EngineOverlay } from '../face/EngineOverlay';
 import { AlertTriangle, XCircle, CalendarDays, CheckCircle, Users, BookOpen, ArrowLeft, ScanFace, IdCard } from 'lucide-react';
@@ -183,6 +183,15 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
         // روابط التسجيل الفردية: هوية الطالب مضمّنة داخل الرابط نفسه — بدون قراءة بيانات الطلاب
         if (linkData.studentName && linkData.studentId) {
           setExpected(buildStudentFromLink(linkData));
+          // تحميل خلفي لطلاب المرحلة لفحص تكرار البصمة لاحقاً — لا يوقف الواجهة لو فشل
+          (async () => {
+            try {
+              let year = linkData.academicYear || '';
+              if (!year) year = await getActiveAcademicYear();
+              const list = await loadStageStudentsPublic(linkData.adminUid, year, linkData.stageId);
+              if (mounted) setStageStudents(list);
+            } catch { /* تجاهل - الفحص سيتم لاحقاً عند الموافقة بأي حال */ }
+          })();
           goTo('upload-id');
           return;
         }
@@ -272,7 +281,6 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
 
   const handleFaceCaptured = async (descriptor: FaceGalleryDescriptor) => {
     if (!link || !expected) return;
-    goTo('submitting');
 
     // توحيد البصمة إلى v5 نظيفة + التحقق من سلامتها قبل الحفظ — لا نرسل بصمة فارغة/تالفة
     const migrated = migrateToV5(descriptor);
@@ -282,6 +290,22 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
       goTo('error');
       return;
     }
+
+    // فحص التكرار: هل هذه البصمة مسجلة مسبقاً لطالب آخر بنفس المرحلة؟
+    if (stageStudents.length > 0) {
+      const query = parseStoredDescriptor(migrated);
+      if (query) {
+        const tamper = checkForTampering(query, stageStudents, expected.id);
+        if (tamper.tampered) {
+          setErrorMsg(`لا يمكن إكمال التسجيل: هذه البصمة مسجّلة بالفعل للطالب "${tamper.matchedWith}". إذا كان هذا خطأ، تواصل مع إدارة الكلية.`);
+          setRetryStep('capture-face');
+          goTo('error');
+          return;
+        }
+      }
+    }
+
+    goTo('submitting');
 
     try {
       const requestId = `${expected.id}_${Date.now()}`;
