@@ -1,6 +1,6 @@
 import { IDExtractionResult } from '../types/registration';
 import { extractQRFromImageFile, extractIdFromQRUrl } from './qrExtractor';
-import { findNameInOCRText } from './nameMatching';
+import { findNameInOCRText, extractNameFromOCR } from './nameMatching';
 
 let worker: any = null;
 let workerReady = false;
@@ -170,6 +170,13 @@ export const extractIDData = async (
   const qrId = qrText ? (extractIdFromQRUrl(qrText) || qrText) : undefined;
   const nationalId = qrId || undefined;
 
+  // 🆕 الاسم المستخرج فعلياً من البطاقة (بعد كلمة "الأسم"/"الاسم" مباشرة) — يعمل دائماً بدون الحاجة لمعرفة اسم مسبق
+  let extractedName = '';
+  if (ocrText) {
+    extractedName = extractNameFromOCR(ocrText) || '';
+  }
+
+  // مطابقة الاسم المعروف (اسم الطالب بالنظام) مع نص البطاقة — للتحقق فقط
   let nameFromCard = '';
   if (knownName && ocrText) {
     const result = findNameInOCRText(knownName, ocrText);
@@ -194,6 +201,7 @@ export const extractIDData = async (
     nationalId,
     ocrText,
     nameFromCard,
+    extractedName,
   };
 };
 

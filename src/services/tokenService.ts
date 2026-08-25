@@ -13,6 +13,17 @@ const LINKS_PATH = 'registrationSystem/links';
 const DEFAULT_EXPIRY_DAYS = 30;
 
 /**
+ * 🧹 تنظيف الكائن من أي حقل قيمته undefined — Firebase RTDB يرفض undefined ويرمي خطأ فوري
+ */
+const stripUndefined = <T extends object>(obj: T): T => {
+  const out: any = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
+};
+
+/**
  * 🆕 توليد رابط تسجيل لطالب واحد
  */
 export const createSingleRegistrationLink = async (
@@ -39,7 +50,7 @@ export const createSingleRegistrationLink = async (
     academicYear: academicYear || undefined,
   };
   
-  await set(ref(database, `${LINKS_PATH}/${token}`), linkData);
+  await set(ref(database, `${LINKS_PATH}/${token}`), stripUndefined(linkData));
   
   const url = `${window.location.origin}${window.location.pathname}?reg=${token}`;
   return { token, url };
@@ -82,7 +93,7 @@ export const createBulkRegistrationLinks = async (
       qrCodeId: st.qrCodeId || undefined,
     };
 
-    updates[`${LINKS_PATH}/${token}`] = linkData;
+    updates[`${LINKS_PATH}/${token}`] = stripUndefined(linkData);
     results.push({
       studentId: st.id,
       token,
@@ -126,7 +137,7 @@ export const createAttendanceLink = async (
     teacherId: teacherId || undefined,
   };
   
-  await set(ref(database, `${LINKS_PATH}/${token}`), linkData);
+  await set(ref(database, `${LINKS_PATH}/${token}`), stripUndefined(linkData));
   
   const url = `${window.location.origin}${window.location.pathname}?reg=${token}`;
   return { token, url };

@@ -10,7 +10,7 @@ import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear, loadAttendanceRecords, loadSessions } from '../../firebase/dataService';
 import { decompressRecord } from '../../firebase/dataServiceCompressed';
 import { SkeletonCard } from '../Skeleton';
-import { migrateToV5, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
+import { migrateToV5, parseAllSamples, checkForTampering, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
 import { useFaceAI } from '../../hooks/useFaceAI';
 import { EngineOverlay } from '../face/EngineOverlay';
 import { AlertTriangle, XCircle, CalendarDays, CheckCircle, Users, BookOpen, ArrowLeft, ScanFace, IdCard } from 'lucide-react';
@@ -281,6 +281,35 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
       setRetryStep('capture-face');
       goTo('error');
       return;
+    }
+
+    // فحص التكرار قبل الإرسال للأدمن — يقارن كل عينات البصمة الجديدة (كل الزوايا) وليس عينة واحدة فقط
+    try {
+      const allNewSamples = parseAllSamples(migrated);
+      if (allNewSamples.length > 0) {
+        let year = link.academicYear || '';
+        if (!year) { try { year = await getActiveAcademicYear(); } catch {} }
+
+        const stageStudents = year
+          ? await loadStageStudentsPublic(link.adminUid, year, link.stageId)
+          : [];
+
+        let tamperResult: { tampered: boolean; matchedWith?: string } = { tampered: false };
+        for (const sample of allNewSamples) {
+          const r = checkForTampering(sample, stageStudents, expected.id);
+          if (r.tampered) { tamperResult = r; break; }
+        }
+
+        if (tamperResult.tampered) {
+          setErrorMsg(`عذراً، هذه البصمة مسجّلة بالفعل باسم الطالب: ${tamperResult.matchedWith}`);
+          setRetryStep('capture-face');
+          goTo('error');
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ فشل فحص تكرار البصمة، سيتم المتابعة للأدمن كخط دفاع ثانٍ:', e);
+      // لا نمنع الطالب لو الفحص فشل تقنياً — الفحص النهائي عند موافقة الأدمن يبقى كطبقة حماية أخيرة
     }
 
     try {
