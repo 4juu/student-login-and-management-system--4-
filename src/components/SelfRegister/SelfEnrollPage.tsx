@@ -239,12 +239,14 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
         return;
       }
 
-      // الحضور: مطابقة على طلاب المرحلة
+      // الحضور: مطابقة على طلاب المرحلة — نبدأ بالاسم المستخرج من حقل "الأسم" أولاً (أدق)، ثم fallback للنص الخام
       let found: Student | null = null;
-      if (result.ocrText) {
+      const nameCandidates = [result.extractedName, result.ocrText].filter(Boolean) as string[];
+      for (const nameSrc of nameCandidates) {
+        if (found) break;
         let bestConf = -1;
         for (const s of stageStudents) {
-          const check = findNameInOCRText(s.name, result.ocrText);
+          const check = findNameInOCRText(s.name, nameSrc);
           if (check.matched && check.confidence > bestConf) { found = s; bestConf = check.confidence; }
         }
       }
@@ -356,8 +358,8 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
 
   const subjectName = link?.subjectName || 'المادة';
 
-  // بوابة محرك البصمة: الخطوات التفاعلية لا تظهر إلا بعد تحميل المودل بالكامل
-  const needsEngine = step !== 'loading' && step !== 'invalid-link';
+  // بوابة محرك البصمة: لا يُحمَّل إلا عند خطوة التقاط الوجه فعلياً — الحضور لا يحتاجه
+  const needsEngine = step === 'capture-face';
   if (needsEngine && !engineReady) {
     return (
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
