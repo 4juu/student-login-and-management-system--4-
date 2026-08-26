@@ -1,9 +1,16 @@
 import { IDExtractionResult } from '../types/registration';
 import { extractQRFromImageFile, extractIdFromQRUrl } from './qrExtractor';
-import { findNameInOCRText, extractNameFromOCR } from './nameMatching';
+import { findNameInOCRText } from './nameMatching';
 
-let worker: any = null;
-let workerReady = false;
+// ============================================================
+// 🔗 عنوان خادم استخراج الأسماء (Flask + OpenCV + Tesseract)
+// غيّره حسب بيئة التشغيل: localhost:5000 للتطوير، أو رابط السيرفر للإنتاج
+// ============================================================
+const NAME_API_URL = (import.meta as any).env?.VITE_NAME_API_URL || 'http://localhost:5000';
+
+// ============================================================
+// 🖼️ أدوات معالجة الصورة ( cliente-side — QR + تمويه)
+// ============================================================
 
 const loadImageFromFile = (file: File): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
@@ -30,45 +37,6 @@ const upscaleIfNeeded = async (file: File, minWidth = 2000): Promise<File> => {
       if (blob) resolve(new File([blob], file.name, { type: 'image/jpeg' }));
       else resolve(file);
     }, 'image/jpeg', 0.95);
-  });
-};
-
-const preprocessForOCR = async (file: File): Promise<Blob> => {
-  const img = await loadImageFromFile(file);
-  const canvas = document.createElement('canvas');
-  canvas.width = img.width;
-  canvas.height = img.height;
-  const ctx = canvas.getContext('2d')!;
-  ctx.drawImage(img, 0, 0);
-
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const d = imageData.data;
-
-  const gray = new Float32Array(d.length / 4);
-  for (let i = 0; i < gray.length; i++) {
-    gray[i] = d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114;
-  }
-
-  let sum = 0;
-  for (let i = 0; i < gray.length; i++) sum += gray[i];
-  const mean = sum / gray.length;
-
-  let variance = 0;
-  for (let i = 0; i < gray.length; i++) variance += (gray[i] - mean) * (gray[i] - mean);
-  const std = Math.sqrt(variance / gray.length);
-
-  const low = Math.max(0, mean - std);
-  const high = Math.min(255, mean + std);
-
-  for (let i = 0; i < gray.length; i++) {
-    const val = gray[i] < low ? 0 : gray[i] > high ? 255 : ((gray[i] - low) / (high - low)) * 255;
-    d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = val;
-  }
-
-  ctx.putImageData(imageData, 0, 0);
-
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((b) => { if (b) resolve(b); else reject(new Error('')); }, 'image/png');
   });
 };
 
@@ -101,38 +69,36 @@ const detectBlur = async (file: File): Promise<number> => {
   }
 };
 
-async function initWorker(): Promise<void> {
-  if (workerReady && worker) return;
-  try {
-    const { createWorker } = await import('tesseract.js');
-    worker = await createWorker('ara+eng', 1, {
-      logger: () => {},
-    });
-    await worker.setParameters({
-      tessedit_pageseg_mode: '3',
-      preserve_interword_spaces: '1',
-      user_defined_dpi: '300',
-    });
-    workerReady = true;
-  } catch (e) {
-    console.warn('⚠️ فشل تحميل Tesseract:', e);
-    workerReady = false;
-  }
+// ============================================================
+// 🔗 استدعاء خادم استخراج الأسماء
+// ============================================================
+
+interface NameAPIResponse {
+  name_en?: string | null;
+  name_ar?: string | null;
+  error?: string;
 }
 
-async function runOCR(file: File): Promise<string> {
-  await initWorker();
-  if (!worker) return '';
+const callNameExtractionAPI = async (imageFile: File): Promise<NameAPIResponse> => {
+  const formData = new FormData();
+  formData.append('id_card', imageFile);
 
-  try {
-    const processed = await preprocessForOCR(file);
-    const { data } = await worker.recognize(processed);
-    return data?.text || '';
-  } catch (e) {
-    console.warn('⚠️ OCR فشل:', e);
-    return '';
+  const res = await fetch(`${NAME_API_URL}/extract-name`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `فشل استخراج الاسم (${res.status})`);
   }
-}
+
+  return res.json();
+};
+
+// ============================================================
+// 🎯 الدالة الرئيسية: استخراج بيانات الهوية
+// ============================================================
 
 export const extractIDData = async (
   imageFile: File,
@@ -155,31 +121,33 @@ export const extractIDData = async (
     console.warn('⚠️ QR فشل:', e);
   }
 
-  onProgress?.('قراءة نص البطاقة...', 40);
-  let ocrText = '';
+  onProgress?.('استخراج الاسم من البطاقة...', 50);
+
+  let extractedName = '';
+  let nameEn = '';
+  let nameAr = '';
   try {
-    const upscaled = await upscaleIfNeeded(imageFile, 1800);
-    ocrText = await runOCR(upscaled);
-  } catch (e) {
-    console.warn('⚠️ OCR فشل:', e);
+    const apiResult = await callNameExtractionAPI(imageFile);
+    nameEn = apiResult.name_en || '';
+    nameAr = apiResult.name_ar || '';
+    extractedName = nameAr || nameEn;
+  } catch (e: any) {
+    console.warn('⚠️ استخراج الأسماء عبر API فشل:', e?.message);
   }
 
-  onProgress?.('تحليل البيانات...', 75);
+  onProgress?.('تحليل البيانات...', 85);
 
   const qrUrl = qrText || undefined;
   const qrId = qrText ? (extractIdFromQRUrl(qrText) || qrText) : undefined;
   const nationalId = qrId || undefined;
 
-  // 🆕 الاسم المستخرج فعلياً من البطاقة (بعد كلمة "الأسم"/"الاسم" مباشرة) — يعمل دائماً بدون الحاجة لمعرفة اسم مسبق
-  let extractedName = '';
-  if (ocrText) {
-    extractedName = extractNameFromOCR(ocrText) || '';
-  }
+  // بناء ocrText بنيوي لأغراض العرض في واجهة التحقق
+  const ocrText = [nameEn && `Name: ${nameEn}`, nameAr && `الاسم: ${nameAr}`].filter(Boolean).join('\n');
 
-  // مطابقة الاسم المعروف (اسم الطالب بالنظام) مع نص البطاقة — للتحقق فقط
+  // مطابقة الاسم المعروف (اسم الطالب بالنظام) مع الاسم المستخرج — للتحقق فقط
   let nameFromCard = '';
-  if (knownName && ocrText) {
-    const result = findNameInOCRText(knownName, ocrText);
+  if (knownName && extractedName) {
+    const result = findNameInOCRText(knownName, extractedName);
     if (result.matched) {
       nameFromCard = knownName;
     }
@@ -187,7 +155,7 @@ export const extractIDData = async (
 
   onProgress?.('اكتمل', 100);
 
-  if (!qrText && !ocrText.trim()) {
+  if (!qrText && !extractedName) {
     return {
       success: false,
       error: 'لم نتمكن من قراءة البطاقة. تأكد من وضوح الصورة وإضاءتها.',
@@ -199,11 +167,15 @@ export const extractIDData = async (
     qrUrl,
     qrId,
     nationalId,
-    ocrText,
+    ocrText: ocrText || undefined,
     nameFromCard,
-    extractedName,
+    extractedName: extractedName || undefined,
   };
 };
+
+// ============================================================
+// 🔳 تجهيز QR (للقراءة عبر html5-qrcode)
+// ============================================================
 
 export const preprocessForQR = async (file: File): Promise<Blob> => {
   const upscaled = await upscaleIfNeeded(file, 2000);
@@ -227,9 +199,5 @@ export const preprocessForQR = async (file: File): Promise<Blob> => {
 };
 
 export const terminateOCR = async () => {
-  if (worker) {
-    try { await worker.terminate(); } catch {}
-    worker = null;
-    workerReady = false;
-  }
+  // لا يوجد محرك OCR محلي — الاستخراج عبر الخادم فقط
 };
