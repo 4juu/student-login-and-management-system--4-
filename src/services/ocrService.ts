@@ -1,6 +1,6 @@
 import { IDExtractionResult } from '../types/registration';
 import { extractQRFromImageFile, extractIdFromQRUrl } from './qrExtractor';
-import { findNameInOCRText } from './nameMatching';
+import { findNameInOCRText, extractNameFromOCR } from './nameMatching';
 
 // ============================================================
 // 🔗 عنوان خادم استخراج الأسماء (Flask + OpenCV + Tesseract)
@@ -9,7 +9,7 @@ import { findNameInOCRText } from './nameMatching';
 const NAME_API_URL = (import.meta as any).env?.VITE_NAME_API_URL || 'http://localhost:5000';
 
 // ============================================================
-// 🖼️ أدوات معالجة الصورة ( cliente-side — QR + تمويه)
+// 🖼️ أدوات معالجة الصورة ( client-side — QR + تمويه)
 // ============================================================
 
 const loadImageFromFile = (file: File): Promise<HTMLImageElement> =>
@@ -70,7 +70,7 @@ const detectBlur = async (file: File): Promise<number> => {
 };
 
 // ============================================================
-// 🔗 استدعاء خادم استخراج الأسماء
+// 🔗 استدعاء خادم استخراج الأسماء (الأولوية الأولى)
 // ============================================================
 
 interface NameAPIResponse {
@@ -94,6 +94,83 @@ const callNameExtractionAPI = async (imageFile: File): Promise<NameAPIResponse> 
   }
 
   return res.json();
+};
+
+// ============================================================
+// 🔤 Fallback: OCR محلي عبر Tesseract.js في المتصفح
+// يستخدم فقط إذا فشل خادم Flask
+// ============================================================
+
+let tesseractWorker: any = null;
+
+const initTesseractWorker = async (): Promise<any> => {
+  if (tesseractWorker) return tesseractWorker;
+  const { createWorker } = await import('tesseract.js');
+  tesseractWorker = await createWorker('ara+eng', 1, { logger: () => {} });
+  await tesseractWorker.setParameters({
+    tessedit_pageseg_mode: '6',
+    preserve_interword_spaces: '1',
+    user_defined_dpi: '300',
+  });
+  return tesseractWorker;
+};
+
+const preprocessForLocalOCR = async (file: File): Promise<Blob> => {
+  const img = await loadImageFromFile(file);
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(img, 0, 0);
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imageData.data;
+  const gray = new Float32Array(d.length / 4);
+  for (let i = 0; i < gray.length; i++) {
+    gray[i] = d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114;
+  }
+
+  let sum = 0;
+  for (let i = 0; i < gray.length; i++) sum += gray[i];
+  const mean = sum / gray.length;
+  let variance = 0;
+  for (let i = 0; i < gray.length; i++) variance += (gray[i] - mean) * (gray[i] - mean);
+  const std = Math.sqrt(variance / gray.length);
+  const low = Math.max(0, mean - std);
+  const high = Math.min(255, mean + std);
+
+  for (let i = 0; i < gray.length; i++) {
+    const val = gray[i] < low ? 0 : gray[i] > high ? 255 : ((gray[i] - low) / (high - low)) * 255;
+    d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = val;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((b) => { if (b) resolve(b); else reject(new Error('')); }, 'image/png');
+  });
+};
+
+const runLocalOCR = async (imageFile: File): Promise<{ nameEn: string; nameAr: string; ocrText: string }> => {
+  const worker = await initTesseractWorker();
+  const processed = await preprocessForLocalOCR(imageFile);
+  const { data } = await worker.recognize(processed);
+  const rawText = data?.text || '';
+
+  const nameEn = extractEnglishName(rawText);
+  const nameAr = extractNameFromOCR(rawText) || '';
+
+  return { nameEn, nameAr, ocrText: rawText };
+};
+
+const extractEnglishName = (text: string): string => {
+  for (const line of text.split('\n')) {
+    const match = line.match(/name\s*[:\-]?\s*(.+)/i);
+    if (match) {
+      const name = match[1].replace(/[^A-Za-z .'\-]/g, '').trim();
+      if (name.length >= 3) return name;
+    }
+  }
+  return '';
 };
 
 // ============================================================
@@ -126,13 +203,29 @@ export const extractIDData = async (
   let extractedName = '';
   let nameEn = '';
   let nameAr = '';
+  let ocrText = '';
+
+  // المحاولة الأولى: خادم Flask (OpenCV + Tesseract server-side — الأدق)
   try {
     const apiResult = await callNameExtractionAPI(imageFile);
     nameEn = apiResult.name_en || '';
     nameAr = apiResult.name_ar || '';
     extractedName = nameAr || nameEn;
+    ocrText = [nameEn && `Name: ${nameEn}`, nameAr && `الاسم: ${nameAr}`].filter(Boolean).join('\n');
   } catch (e: any) {
-    console.warn('⚠️ استخراج الأسماء عبر API فشل:', e?.message);
+    console.warn('⚠️ Flask API فشل، الانتقال لـ Tesseract.js المحلي:', e?.message);
+
+    // المحاولة الثانية: Tesseract.js في المتصفح (بدون خادم)
+    try {
+      onProgress?.('الخادم غير متاح — جاري القراءة المحلية...', 55);
+      const local = await runLocalOCR(imageFile);
+      nameEn = local.nameEn;
+      nameAr = local.nameAr;
+      extractedName = nameAr || nameEn;
+      ocrText = local.ocrText;
+    } catch (e2: any) {
+      console.warn('⚠️ OCR المحلي فشل أيضاً:', e2?.message);
+    }
   }
 
   onProgress?.('تحليل البيانات...', 85);
@@ -140,9 +233,6 @@ export const extractIDData = async (
   const qrUrl = qrText || undefined;
   const qrId = qrText ? (extractIdFromQRUrl(qrText) || qrText) : undefined;
   const nationalId = qrId || undefined;
-
-  // بناء ocrText بنيوي لأغراض العرض في واجهة التحقق
-  const ocrText = [nameEn && `Name: ${nameEn}`, nameAr && `الاسم: ${nameAr}`].filter(Boolean).join('\n');
 
   // مطابقة الاسم المعروف (اسم الطالب بالنظام) مع الاسم المستخرج — للتحقق فقط
   let nameFromCard = '';
@@ -199,5 +289,8 @@ export const preprocessForQR = async (file: File): Promise<Blob> => {
 };
 
 export const terminateOCR = async () => {
-  // لا يوجد محرك OCR محلي — الاستخراج عبر الخادم فقط
+  if (tesseractWorker) {
+    try { await tesseractWorker.terminate(); } catch {}
+    tesseractWorker = null;
+  }
 };
