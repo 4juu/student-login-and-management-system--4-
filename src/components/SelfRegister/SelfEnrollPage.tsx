@@ -75,9 +75,6 @@ const normalizeDate = (dateStr: string): string => {
 };
 
 export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit }) => {
-  // محرك البصمة يشتغل أول شيء — لا تظهر أي خطوة تفاعلية قبل جهوزيته
-  const { ready: engineReady, progress, error: engineError, retry: engineRetry } = useFaceAI();
-
   const [step, setStep] = useState<Step>('loading');
   const [link, setLink] = useState<RegistrationLink | null>(null);
   const [expected, setExpected] = useState<Student | null>(null);
@@ -89,6 +86,10 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   const [retryStep, setRetryStep] = useState<Step>('upload-id');
 
   const goTo = useCallback((s: Step) => setStep(prev => prev === s ? prev : s), []);
+
+  // محرك البصمة يشتغل فقط عند خطوة التقاط الوجه — الحضور لا يحتاجه أبداً
+  const captureNeeded = step === 'capture-face';
+  const { ready: engineReady, progress, error: engineError, retry: engineRetry } = useFaceAI(captureNeeded);
 
   const loadStageRecordsForStudent = async (
     lnk: RegistrationLink, studentId: string, signal?: AbortSignal,
@@ -359,7 +360,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   const subjectName = link?.subjectName || 'المادة';
 
   // بوابة محرك البصمة: لا يُحمَّل إلا عند خطوة التقاط الوجه فعلياً — الحضور لا يحتاجه
-  const needsEngine = step === 'capture-face';
+  const needsEngine = captureNeeded && !engineReady;
   if (needsEngine && !engineReady) {
     return (
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">

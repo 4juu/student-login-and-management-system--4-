@@ -20,7 +20,7 @@ function combine(det: DetectorProgress, emb: EngineProgress): { percent: number;
   };
 }
 
-export function useFaceAI(): UseFaceAIResult {
+export function useFaceAI(enabled = true): UseFaceAIResult {
   const [ready, setReady] = useState(false);
   const [detProg, setDetProg] = useState<DetectorProgress>({ stage: 'wasm', percent: 0, detail: '...' });
   const [embProg, setEmbProg] = useState<EngineProgress>({ stage: 'model', percent: 0, detail: '...' });
@@ -28,6 +28,8 @@ export function useFaceAI(): UseFaceAIResult {
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    if (!enabled) return;
+
     // إعادة تحميل كاملة من الصفر كل مرة — تمنع اختفاء المودل بسبب حالة WASM قديمة
     faceDetectorService.reset();
     faceEmbedder.dispose();
@@ -51,7 +53,7 @@ export function useFaceAI(): UseFaceAIResult {
       offDet();
       offEmb();
     };
-  }, [attempt]);
+  }, [attempt, enabled]);
 
   const reinit = useCallback(() => {
     faceDetectorService.reset();
