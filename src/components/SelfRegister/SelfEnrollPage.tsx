@@ -392,11 +392,13 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     );
   }
 
-  if (step === 'upload-id' && expected) {
+  if (step === 'upload-id' && (expected || link?.type === 'attendance')) {
+    const isAttendanceNoMatch = link?.type === 'attendance' && !expected;
+    const uploadStudent = expected || { id: '', name: '', code: '' } as import('../../types/student').Student;
     return (
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
         <div className="w-full max-w-md">
-          {link?.type !== 'attendance' && expected.name && (
+          {link?.type !== 'attendance' && expected?.name && (
             <div className="text-center mb-5">
               <div className="mx-auto w-14 h-14 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-3">
                 <ScanFace className="w-7 h-7 text-indigo-400" />
@@ -409,7 +411,16 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
               </div>
             </div>
           )}
-          <IDCardUpload student={expected} onExtracted={handleIdExtracted} onCancel={onExit} />
+          {isAttendanceNoMatch && (
+            <div className="text-center mb-5">
+              <div className="mx-auto w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-3">
+                <BookOpen className="w-7 h-7 text-emerald-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white">تسجيل الحضور والغياب</h2>
+              <p className="text-sm text-white/50 mt-1">صوّر بطاقة هويتك لنعرفك من قائمة الطلبة</p>
+            </div>
+          )}
+          <IDCardUpload student={uploadStudent} onExtracted={handleIdExtracted} onCancel={onExit} />
         </div>
       </div>
     );
