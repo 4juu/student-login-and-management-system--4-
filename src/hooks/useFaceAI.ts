@@ -20,7 +20,7 @@ function combine(det: DetectorProgress, emb: EngineProgress): { percent: number;
   };
 }
 
-export function useFaceAI(): UseFaceAIResult {
+export function useFaceAI(enabled = true): UseFaceAIResult {
   const [ready, setReady] = useState(false);
   const [detProg, setDetProg] = useState<DetectorProgress>({ stage: 'wasm', percent: 0, detail: '...' });
   const [embProg, setEmbProg] = useState<EngineProgress>({ stage: 'model', percent: 0, detail: '...' });
@@ -28,7 +28,11 @@ export function useFaceAI(): UseFaceAIResult {
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    // إعادة تحميل كاملة من الصفر كل مرة — تمنع اختفاء المودل بسبب حالة WASM قديمة
+    if (!enabled) {
+      setReady(false);
+      return;
+    }
+
     faceDetectorService.reset();
     faceEmbedder.dispose();
     setReady(false);
@@ -51,9 +55,10 @@ export function useFaceAI(): UseFaceAIResult {
       offDet();
       offEmb();
     };
-  }, [attempt]);
+  }, [enabled, attempt]);
 
   const reinit = useCallback(() => {
+    if (!enabled) return;
     faceDetectorService.reset();
     faceEmbedder.dispose();
     setReady(false);
@@ -61,7 +66,7 @@ export function useFaceAI(): UseFaceAIResult {
     setDetProg({ stage: 'wasm', percent: 0, detail: 'تهيئة محرك الوجه...' });
     setEmbProg({ stage: 'model', percent: 0, detail: '...' });
     setAttempt(a => a + 1);
-  }, []);
+  }, [enabled]);
 
   return { ready, progress: combine(detProg, embProg), error, retry: reinit };
 }

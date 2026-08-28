@@ -75,9 +75,6 @@ const normalizeDate = (dateStr: string): string => {
 };
 
 export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit }) => {
-  // محرك البصمة يشتغل أول شيء — لا تظهر أي خطوة تفاعلية قبل جهوزيته
-  const { ready: engineReady, progress, error: engineError, retry: engineRetry } = useFaceAI();
-
   const [step, setStep] = useState<Step>('loading');
   const [link, setLink] = useState<RegistrationLink | null>(null);
   const [expected, setExpected] = useState<Student | null>(null);
@@ -87,6 +84,10 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [sessionNameMap, setSessionNameMap] = useState<Record<string, string>>({});
   const [retryStep, setRetryStep] = useState<Step>('upload-id');
+
+  // محرك البصمة يشتغل فقط عندما يحتاج (خطوة التصوير)
+  const needsEngine = step === 'capture-face';
+  const { ready: engineReady, progress, error: engineError, retry: engineRetry } = useFaceAI(needsEngine);
 
   const goTo = useCallback((s: Step) => setStep(prev => prev === s ? prev : s), []);
 
@@ -356,9 +357,9 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
 
   const subjectName = link?.subjectName || 'المادة';
 
-  // بوابة محرك البصمة: الخطوات التفاعلية لا تظهر إلا بعد تحميل المودل بالكامل
-  const needsEngine = step !== 'loading' && step !== 'invalid-link';
-  if (needsEngine && !engineReady) {
+  // بوابة محرك البصمة: يظهر فقط عند خطوة التصوير
+  const showEngineGate = needsEngine && !engineReady;
+  if (showEngineGate) {
     return (
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
         <div className="w-full max-w-md">
