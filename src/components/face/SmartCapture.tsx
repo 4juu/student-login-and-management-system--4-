@@ -16,6 +16,7 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
   const streamRef = useRef<MediaStream | null>(null);
 
   const [cameraError, setCameraError] = useState('');
+  const [capturing, setCapturing] = useState(false);
   const [detection, setDetection] = useState<CardDetection>({
     status: 'no_card', message: 'وجّه الكاميرا نحو البطاقة', coverage: 0, blurScore: 0,
   });
@@ -89,24 +90,27 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
 
   const handleCaptureInternal = useCallback(() => {
     const video = videoRef.current;
-    if (!video || !streamRef.current) return;
+    if (!video || !streamRef.current || capturing) return;
 
-    streamRef.current.getTracks().forEach(t => t.stop());
-    streamRef.current = null;
+    setCapturing(true);
     cancelAnimationFrame(animRef.current);
 
+    // الرسم قبل إيقاف الكاميرا: إيقاف الـ stream يجعل الفيديو أسوداً فوراً
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d')!;
     ctx.drawImage(video, 0, 0);
 
+    streamRef.current.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+
     canvas.toBlob((blob) => {
       if (blob) {
         onCapture(new File([blob], 'id-card.jpg', { type: 'image/jpeg', lastModified: Date.now() }));
       }
     }, 'image/jpeg', 0.95);
-  }, [onCapture]);
+  }, [onCapture, capturing]);
 
   const borderColor =
     detection.status === 'ready' ? '#22c55e' :
@@ -144,7 +148,7 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
             <div className="absolute -bottom-1 -left-1 w-7 h-7 border-b-[3px] border-l-[3px] rounded-bl-xl" style={{ borderColor }} />
             <div className="absolute -bottom-1 -right-1 w-7 h-7 border-b-[3px] border-r-[3px] rounded-br-xl" style={{ borderColor }} />
 
-            {detection.status !== 'ready' && (
+            {!capturing && detection.status !== 'ready' && (
               <div className="absolute inset-0 overflow-hidden rounded-[9px] pointer-events-none">
                 <div
                   className="absolute left-0 right-0 h-0.5 animate-scan"
@@ -164,7 +168,9 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
               transition: 'background 0.3s',
             }}
           >
-            {detection.status === 'ready' ? (
+            {capturing ? (
+              <>⏺ جاري التقاط الصورة...</>
+            ) : detection.status === 'ready' ? (
               <>✓ {detection.message}</>
             ) : (
               <>
@@ -191,10 +197,10 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
 
           <button
             onClick={handleCaptureInternal}
-            disabled={!streamRef.current}
+            disabled={!streamRef.current || capturing}
             className="flex-[2] py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-600 disabled:to-gray-600 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition active:scale-95"
           >
-            <Camera className="w-4 h-4" /> تصوير الهوية
+            <Camera className="w-4 h-4" /> {capturing ? 'جاري الالتقاط...' : 'تصوير الهوية'}
           </button>
         </div>
 
