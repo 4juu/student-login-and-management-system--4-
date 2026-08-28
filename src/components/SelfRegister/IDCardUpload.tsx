@@ -10,6 +10,7 @@ import {
   Check,
   CircleX,
   IdCard,
+  Image as ImageIcon,
   Lightbulb,
   Lock,
   RefreshCw,
@@ -95,6 +96,7 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
   const [statusText, setStatusText] = useState('');
   const [error, setError] = useState('');
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -120,6 +122,24 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
   const handleSmartCapture = (capturedFile: File) => {
     setFile(capturedFile);
     setPreview(URL.createObjectURL(capturedFile));
+    setMode('review');
+  };
+
+  const handleGallerySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (!selected) return;
+    if (!selected.type.startsWith('image/')) {
+      setError('الرجاء اختيار صورة فقط');
+      return;
+    }
+    if (selected.size > 10 * 1024 * 1024) {
+      setError('الصورة كبيرة جداً (أقصى حد 10 MB)');
+      return;
+    }
+    setError('');
+    setFile(selected);
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview(URL.createObjectURL(selected));
     setMode('review');
   };
 
@@ -221,7 +241,15 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
               >
                 <Camera className="w-5 h-5" /> تصوير الهوية
               </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full bg-white hover:bg-gray-50 border-2 border-indigo-200 text-indigo-700 font-bold py-3.5 rounded-xl active:scale-[0.98] transition flex items-center justify-center gap-2.5"
+              >
+                <ImageIcon className="w-5 h-5" /> اختر من المعرض
+              </button>
             </div>
+
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleGallerySelect} className="hidden" />
 
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-xs font-bold text-blue-800 mb-1.5 flex items-center gap-1.5">
