@@ -25,6 +25,8 @@ interface IDCardUploadProps {
   student: Student;
   onExtracted: (result: IDExtractionResult) => void;
   onCancel: () => void;
+  /** نص اختياري يظهر بدلاً من "اسم الطالب — صوّر البطاقة الرسمية" (يُستخدم لروابط الحضور قبل معرفة الطالب) */
+  title?: string;
 }
 
 const blobFromCanvas = (canvas: HTMLCanvasElement): Promise<Blob> =>
@@ -87,6 +89,7 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
   student,
   onExtracted,
   onCancel,
+  title,
 }) => {
   const [mode, setMode] = useState<Mode>('choice');
   const [preview, setPreview] = useState<string | null>(null);
@@ -223,7 +226,11 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
           </div>
           <h2 className="text-xl font-bold text-gray-800">تصوير بطاقة الهوية</h2>
           <p className="text-sm text-gray-500 mt-1">
-            <span className="font-bold text-indigo-600">{student.name}</span> — صوّر البطاقة الرسمية
+            {title ? title : (
+              <>
+                <span className="font-bold text-indigo-600">{student.name}</span> — صوّر البطاقة الرسمية
+              </>
+            )}
           </p>
         </div>
 

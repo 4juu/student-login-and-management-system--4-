@@ -393,11 +393,11 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     );
   }
 
-  if (step === 'upload-id' && expected) {
+  if (step === 'upload-id' && (expected || link?.type === 'attendance')) {
     return (
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
         <div className="w-full max-w-md">
-          {link?.type !== 'attendance' && expected.name && (
+          {link?.type !== 'attendance' && expected && expected.name && (
             <div className="text-center mb-5">
               <div className="mx-auto w-14 h-14 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-3">
                 <ScanFace className="w-7 h-7 text-indigo-400" />
@@ -410,7 +410,12 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
               </div>
             </div>
           )}
-          <IDCardUpload student={expected} onExtracted={handleIdExtracted} onCancel={onExit} />
+          <IDCardUpload
+            student={expected || ({ id: '', name: '', code: '' } as Student)}
+            title={link?.type === 'attendance' && !expected ? 'ارفع صورتك للاطلاع على تقرير الحضور والغياب' : undefined}
+            onExtracted={handleIdExtracted}
+            onCancel={onExit}
+          />
         </div>
       </div>
     );
