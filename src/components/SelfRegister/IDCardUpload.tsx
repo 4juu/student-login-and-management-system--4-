@@ -156,7 +156,6 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
     setFile(capturedFile);
     setPreview(URL.createObjectURL(capturedFile));
     setMode('review');
-    processFile(capturedFile);
   };
 
   const handleGallerySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
