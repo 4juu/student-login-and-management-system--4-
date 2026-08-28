@@ -102,10 +102,20 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
     const ctx = canvas.getContext('2d')!;
     ctx.drawImage(video, 0, 0);
 
+    const roi = getROI();
+    let outCanvas = canvas;
+    if (roi && roi.w > 0 && roi.h > 0) {
+      outCanvas = document.createElement('canvas');
+      outCanvas.width = Math.max(1, Math.round(roi.w));
+      outCanvas.height = Math.max(1, Math.round(roi.h));
+      const octx = outCanvas.getContext('2d')!;
+      octx.drawImage(canvas, roi.x, roi.y, roi.w, roi.h, 0, 0, outCanvas.width, outCanvas.height);
+    }
+
     streamRef.current.getTracks().forEach(t => t.stop());
     streamRef.current = null;
 
-    canvas.toBlob((blob) => {
+    outCanvas.toBlob((blob) => {
       if (blob) {
         onCapture(new File([blob], 'id-card.jpg', { type: 'image/jpeg', lastModified: Date.now() }));
       }

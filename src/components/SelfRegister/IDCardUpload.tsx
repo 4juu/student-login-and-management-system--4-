@@ -122,10 +122,41 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
     updateUserRotation(transform.rotation);
   }, [transform.rotation, updateUserRotation]);
 
+  const processFile = async (targetFile: File) => {
+    setProcessing(true);
+    setError('');
+    setProgress(0);
+    setStatusText('جاري التحليل...');
+
+    try {
+      const result = await extractIDData(
+        targetFile,
+        (s, pct) => { setProgress(pct); setStatusText(s); },
+        student.name,
+      );
+
+      if (!result.success) {
+        setError(result.error || 'فشل قراءة الهوية');
+        setProcessing(false);
+        return;
+      }
+
+      if (preview) URL.revokeObjectURL(preview);
+      setPreview(null);
+      setFile(null);
+      setProcessing(false);
+      onExtracted(result);
+    } catch (e: any) {
+      setError(e.message || 'حدث خطأ غير متوقع');
+      setProcessing(false);
+    }
+  };
+
   const handleSmartCapture = (capturedFile: File) => {
     setFile(capturedFile);
     setPreview(URL.createObjectURL(capturedFile));
     setMode('review');
+    processFile(capturedFile);
   };
 
   const handleGallerySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -148,10 +179,6 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
 
   const handleProcess = async () => {
     if (!file) return;
-    setProcessing(true);
-    setError('');
-    setProgress(0);
-    setStatusText('جاري التحليل...');
 
     try {
       let imageToSend: File | Blob = file;
@@ -168,28 +195,13 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
           rect.width, rect.height
         );
         imageToSend = blob;
-        setStatusText('جاري تحليل الصورة المعالجة...');
       }
 
-      const result = await extractIDData(
+      await processFile(
         imageToSend instanceof Blob
           ? new File([imageToSend], 'adjusted.jpg', { type: 'image/jpeg' })
-          : imageToSend,
-        (s, pct) => { setProgress(pct); setStatusText(s); },
-        student.name,
+          : imageToSend
       );
-
-      if (!result.success) {
-        setError(result.error || 'فشل قراءة الهوية');
-        setProcessing(false);
-        return;
-      }
-
-      if (preview) URL.revokeObjectURL(preview);
-      setPreview(null);
-      setFile(null);
-      setProcessing(false);
-      onExtracted(result);
     } catch (e: any) {
       setError(e.message || 'حدث خطأ غير متوقع');
       setProcessing(false);
