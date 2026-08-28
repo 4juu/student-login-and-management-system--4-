@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Camera, Upload, X, AlertCircle } from 'lucide-react';
+import { Camera, X, AlertCircle } from 'lucide-react';
 import { analyzeCardFrame, resetDetector, CardDetection } from '../../services/cardDetector';
 
 const CARD_RATIO = 85.6 / 53.98;
@@ -14,13 +14,11 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
   const animRef = useRef<number>(0);
   const lastAnalysisRef = useRef<number>(0);
   const streamRef = useRef<MediaStream | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [cameraError, setCameraError] = useState('');
   const [detection, setDetection] = useState<CardDetection>({
     status: 'no_card', message: 'وجّه الكاميرا نحو البطاقة', coverage: 0, blurScore: 0,
   });
-  const [readyCount, setReadyCount] = useState(0);
 
   const FRAME_INTERVAL = 120;
 
@@ -42,7 +40,7 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
           await videoRef.current.play();
         }
       } catch {
-        if (mounted) setCameraError('الكاميرا غير متاحة — استخدم رفع الصورة من المعرض');
+        if (mounted) setCameraError('الكاميرا غير متاحة');
       }
     };
     start();
@@ -79,11 +77,6 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
             if (prev.status === 'ready' && result.status === 'ready') return prev;
             return result;
           });
-          if (result.status === 'ready') {
-            setReadyCount(c => c + 1);
-          } else {
-            setReadyCount(0);
-          }
         }
         lastAnalysisRef.current = ts;
       }
@@ -93,12 +86,6 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
     animRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animRef.current);
   }, [cameraError, getROI]);
-
-  useEffect(() => {
-    if (detection.status === 'ready' && readyCount >= 3) {
-      handleCaptureInternal();
-    }
-  }, [readyCount, detection.status]);
 
   const handleCaptureInternal = useCallback(() => {
     const video = videoRef.current;
@@ -121,18 +108,6 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
     }, 'image/jpeg', 0.95);
   }, [onCapture]);
 
-  const handleGallerySelect = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
-
-  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    cancelAnimationFrame(animRef.current);
-    onCapture(f);
-  }, [onCapture]);
-
   const borderColor =
     detection.status === 'ready' ? '#22c55e' :
     detection.status === 'blurry' || detection.status === 'moving' ? '#eab308' :
@@ -142,7 +117,6 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col" dir="rtl">
-      {/* Camera feed */}
       <div className="relative flex-1 overflow-hidden">
         <video
           ref={videoRef}
@@ -152,7 +126,6 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
           className="absolute inset-0 w-full h-full object-cover"
         />
 
-        {/* Dark overlay with card cutout */}
         <div className="absolute inset-0 flex items-center justify-center">
           <div
             className="relative"
@@ -166,13 +139,11 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
               transition: 'border-color 0.3s, box-shadow 0.3s',
             }}
           >
-            {/* Corner marks */}
             <div className="absolute -top-1 -left-1 w-7 h-7 border-t-[3px] border-l-[3px] rounded-tl-xl" style={{ borderColor }} />
             <div className="absolute -top-1 -right-1 w-7 h-7 border-t-[3px] border-r-[3px] rounded-tr-xl" style={{ borderColor }} />
             <div className="absolute -bottom-1 -left-1 w-7 h-7 border-b-[3px] border-l-[3px] rounded-bl-xl" style={{ borderColor }} />
             <div className="absolute -bottom-1 -right-1 w-7 h-7 border-b-[3px] border-r-[3px] rounded-br-xl" style={{ borderColor }} />
 
-            {/* Scan line animation */}
             {detection.status !== 'ready' && (
               <div className="absolute inset-0 overflow-hidden rounded-[9px] pointer-events-none">
                 <div
@@ -184,7 +155,6 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
           </div>
         </div>
 
-        {/* Status badge */}
         <div className="absolute top-4 left-0 right-0 flex justify-center z-20">
           <div
             className="px-4 py-2 rounded-full text-sm font-bold shadow-lg backdrop-blur-sm flex items-center gap-2"
@@ -206,13 +176,12 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
         </div>
       </div>
 
-      {/* Bottom controls */}
       <div className="bg-black/90 backdrop-blur-sm px-6 py-5 flex flex-col items-center gap-3">
         <p className="text-xs text-gray-400 text-center leading-relaxed">
-          ضع البطاقة داخل الإطار — التصوير تلقائي عند الاستقرار
+          ضع البطاقة داخل الإطار واضغط التصوير
         </p>
 
-        <div className="flex items-center gap-4 w-full max-w-xs">
+        <div className="flex items-center gap-3 w-full max-w-xs">
           <button
             onClick={onCancel}
             className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition active:scale-95"
@@ -223,16 +192,9 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
           <button
             onClick={handleCaptureInternal}
             disabled={!streamRef.current}
-            className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-600 disabled:to-gray-600 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition active:scale-95"
+            className="flex-[2] py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-600 disabled:to-gray-600 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition active:scale-95"
           >
-            <Camera className="w-4 h-4" /> التقط
-          </button>
-
-          <button
-            onClick={handleGallerySelect}
-            className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition active:scale-95"
-          >
-            <Upload className="w-4 h-4" /> معرض
+            <Camera className="w-4 h-4" /> تصوير الهوية
           </button>
         </div>
 
@@ -240,14 +202,6 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
           <p className="text-xs text-amber-400 text-center">{cameraError}</p>
         )}
       </div>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleFileChange}
-        className="hidden"
-      />
 
       <style>{`
         @keyframes scan {

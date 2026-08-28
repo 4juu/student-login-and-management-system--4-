@@ -10,7 +10,6 @@ import {
   Check,
   CircleX,
   IdCard,
-  Image as ImageIcon,
   Lightbulb,
   Lock,
   RefreshCw,
@@ -96,7 +95,6 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
   const [statusText, setStatusText] = useState('');
   const [error, setError] = useState('');
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -122,24 +120,6 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
   const handleSmartCapture = (capturedFile: File) => {
     setFile(capturedFile);
     setPreview(URL.createObjectURL(capturedFile));
-    setMode('review');
-  };
-
-  const handleGallerySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = e.target.files?.[0];
-    if (!selected) return;
-    if (!selected.type.startsWith('image/')) {
-      setError('الرجاء اختيار صورة فقط');
-      return;
-    }
-    if (selected.size > 10 * 1024 * 1024) {
-      setError('الصورة كبيرة جداً (أقصى حد 10 MB)');
-      return;
-    }
-    setError('');
-    setFile(selected);
-    if (preview) URL.revokeObjectURL(preview);
-    setPreview(URL.createObjectURL(selected));
     setMode('review');
   };
 
@@ -239,24 +219,15 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
                 onClick={() => setMode('smart_capture')}
                 className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-3.5 rounded-xl shadow-lg active:scale-[0.98] transition flex items-center justify-center gap-2.5"
               >
-                <Camera className="w-5 h-5" /> تصوير ذكي مع توجيه مباشر
-              </button>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full bg-white hover:bg-gray-50 border-2 border-indigo-200 text-indigo-700 font-bold py-3.5 rounded-xl active:scale-[0.98] transition flex items-center justify-center gap-2.5"
-              >
-                <ImageIcon className="w-5 h-5" /> اختر من المعرض
+                <Camera className="w-5 h-5" /> تصوير الهوية
               </button>
             </div>
-
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleGallerySelect} className="hidden" />
 
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-xs font-bold text-blue-800 mb-1.5 flex items-center gap-1.5">
                 <Lightbulb className="w-3.5 h-3.5" /> نصائح للحصول على أفضل نتيجة:
               </p>
               <ul className="text-[11px] text-blue-700 space-y-1 list-disc list-inside leading-relaxed">
-                <li>التصوير الذكي يوجّهك تلقائياً للاصطياد الأفضل</li>
                 <li>ضع البطاقة على خلفية داكنة</li>
                 <li>تأكد أن رمز QR ظاهر وواضح</li>
                 <li>أضوء الإضاءة على البطاقة بشكل متساوٍ</li>
