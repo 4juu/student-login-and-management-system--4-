@@ -17,14 +17,12 @@ const loadImageFromFile = (file: File): Promise<HTMLImageElement> =>
 const upscaleIfNeeded = async (file: File, minWidth = 2000): Promise<File> => {
   const img = await loadImageFromFile(file);
   if (img.width >= minWidth) return file;
-
   const scale = minWidth / img.width;
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(img.width * scale);
   canvas.height = Math.round(img.height * scale);
   const ctx = canvas.getContext('2d')!;
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
   return new Promise<File>((resolve) => {
     canvas.toBlob((blob) => {
       if (blob) resolve(new File([blob], file.name, { type: 'image/jpeg' }));
@@ -43,32 +41,56 @@ const preprocessForOCR = async (file: File): Promise<Blob> => {
 
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const d = imageData.data;
-
   const gray = new Float32Array(d.length / 4);
   for (let i = 0; i < gray.length; i++) {
     gray[i] = d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114;
   }
-
   let sum = 0;
   for (let i = 0; i < gray.length; i++) sum += gray[i];
   const mean = sum / gray.length;
-
   let variance = 0;
   for (let i = 0; i < gray.length; i++) variance += (gray[i] - mean) * (gray[i] - mean);
   const std = Math.sqrt(variance / gray.length);
-
   const low = Math.max(0, mean - std);
   const high = Math.min(255, mean + std);
-
   for (let i = 0; i < gray.length; i++) {
     const val = gray[i] < low ? 0 : gray[i] > high ? 255 : ((gray[i] - low) / (high - low)) * 255;
     d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = val;
   }
-
   ctx.putImageData(imageData, 0, 0);
-
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((b) => { if (b) resolve(b); else reject(new Error('')); }, 'image/png');
+  });
+};
+
+const cropNameRegion = async (file: File): Promise<File> => {
+  const img = await loadImageFromFile(file);
+  const canvas = document.createElement('canvas');
+  const w = img.width;
+  const h = img.height;
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(img, 0, 0);
+
+  const nameRegion = ctx.getImageData(
+    Math.round(w * 0.35),
+    Math.round(h * 0.38),
+    Math.round(w * 0.65),
+    Math.round(h * 0.22)
+  );
+
+  const canvas2 = document.createElement('canvas');
+  canvas2.width = nameRegion.width;
+  canvas2.height = nameRegion.height;
+  const ctx2 = canvas2.getContext('2d')!;
+  ctx2.putImageData(nameRegion, 0, 0);
+
+  return new Promise<File>((resolve) => {
+    canvas2.toBlob((blob) => {
+      if (blob) resolve(new File([blob], 'name-region.jpg', { type: 'image/jpeg' }));
+      else resolve(file);
+    }, 'image/jpeg', 0.95);
   });
 };
 
@@ -105,9 +127,7 @@ async function initWorker(): Promise<void> {
   if (workerReady && worker) return;
   try {
     const { createWorker } = await import('tesseract.js');
-    worker = await createWorker('ara+eng', 1, {
-      logger: () => {},
-    });
+    worker = await createWorker('ara+eng', 1, { logger: () => {} });
     await worker.setParameters({
       tessedit_pageseg_mode: '3',
       preserve_interword_spaces: '1',
@@ -115,7 +135,7 @@ async function initWorker(): Promise<void> {
     });
     workerReady = true;
   } catch (e) {
-    console.warn('⚠️ فشل تحميل Tesseract:', e);
+    console.warn('Tesseract load failed:', e);
     workerReady = false;
   }
 }
@@ -123,13 +143,25 @@ async function initWorker(): Promise<void> {
 async function runOCR(file: File): Promise<string> {
   await initWorker();
   if (!worker) return '';
-
   try {
     const processed = await preprocessForOCR(file);
     const { data } = await worker.recognize(processed);
     return data?.text || '';
   } catch (e) {
-    console.warn('⚠️ OCR فشل:', e);
+    console.warn('OCR failed:', e);
+    return '';
+  }
+}
+
+async function runOCROnNameRegion(file: File): Promise<string> {
+  await initWorker();
+  if (!worker) return '';
+  try {
+    const cropped = await cropNameRegion(file);
+    const processed = await preprocessForOCR(cropped);
+    const { data } = await worker.recognize(processed);
+    return data?.text || '';
+  } catch {
     return '';
   }
 }
@@ -152,34 +184,42 @@ export const extractIDData = async (
     const upscaled = await upscaleIfNeeded(imageFile, 2000);
     qrText = await extractQRFromImageFile(upscaled);
   } catch (e) {
-    console.warn('⚠️ QR فشل:', e);
+    console.warn('QR failed:', e);
   }
 
-  onProgress?.('قراءة نص البطاقة...', 40);
+  onProgress?.('قراءة نص البطاقة...', 35);
   let ocrText = '';
   try {
     const upscaled = await upscaleIfNeeded(imageFile, 1800);
     ocrText = await runOCR(upscaled);
   } catch (e) {
-    console.warn('⚠️ OCR فشل:', e);
+    console.warn('OCR failed:', e);
+  }
+
+  onProgress?.('قراءة منطقة الاسم...', 55);
+  let nameRegionText = '';
+  try {
+    nameRegionText = await runOCROnNameRegion(imageFile);
+  } catch (e) {
+    console.warn('Name region OCR failed:', e);
   }
 
   onProgress?.('تحليل البيانات...', 75);
+
+  const combinedOcr = [ocrText, nameRegionText].filter(Boolean).join('\n');
 
   const qrUrl = qrText || undefined;
   const qrId = qrText ? (extractIdFromQRUrl(qrText) || qrText) : undefined;
   const nationalId = qrId || undefined;
 
-  // 🆕 الاسم المستخرج فعلياً من البطاقة (بعد كلمة "الأسم"/"الاسم" مباشرة) — يعمل دائماً بدون الحاجة لمعرفة اسم مسبق
   let extractedName = '';
-  if (ocrText) {
-    extractedName = extractNameFromOCR(ocrText) || '';
+  if (combinedOcr) {
+    extractedName = extractNameFromOCR(combinedOcr) || '';
   }
 
-  // مطابقة الاسم المعروف (اسم الطالب بالنظام) مع نص البطاقة — للتحقق فقط
   let nameFromCard = '';
-  if (knownName && ocrText) {
-    const result = findNameInOCRText(knownName, ocrText);
+  if (knownName && combinedOcr) {
+    const result = findNameInOCRText(knownName, combinedOcr);
     if (result.matched) {
       nameFromCard = knownName;
     }
@@ -187,7 +227,7 @@ export const extractIDData = async (
 
   onProgress?.('اكتمل', 100);
 
-  if (!qrText && !ocrText.trim()) {
+  if (!qrText && !combinedOcr.trim()) {
     return {
       success: false,
       error: 'لم نتمكن من قراءة البطاقة. تأكد من وضوح الصورة وإضاءتها.',
@@ -199,7 +239,7 @@ export const extractIDData = async (
     qrUrl,
     qrId,
     nationalId,
-    ocrText,
+    ocrText: combinedOcr,
     nameFromCard,
     extractedName,
   };

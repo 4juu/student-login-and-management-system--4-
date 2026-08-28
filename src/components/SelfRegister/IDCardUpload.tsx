@@ -4,6 +4,7 @@ import { IDExtractionResult } from '../../types/registration';
 import { extractIDData } from '../../services/ocrService';
 import { useImageTransform } from '../../hooks/useImageTransform';
 import { useImageTilt } from '../../hooks/useImageTilt';
+import { SmartCapture } from '../face/SmartCapture';
 import {
   Camera,
   Check,
@@ -80,11 +81,14 @@ const rasterizeTransform = async (
   return blobFromCanvas(canvas);
 };
 
+type Mode = 'choice' | 'smart_capture' | 'review';
+
 export const IDCardUpload: React.FC<IDCardUploadProps> = ({
   student,
   onExtracted,
   onCancel,
 }) => {
+  const [mode, setMode] = useState<Mode>('choice');
   const [preview, setPreview] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -93,7 +97,6 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
   const [error, setError] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -116,7 +119,13 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
     updateUserRotation(transform.rotation);
   }, [transform.rotation, updateUserRotation]);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSmartCapture = (capturedFile: File) => {
+    setFile(capturedFile);
+    setPreview(URL.createObjectURL(capturedFile));
+    setMode('review');
+  };
+
+  const handleGallerySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (!selected) return;
     if (!selected.type.startsWith('image/')) {
@@ -131,6 +140,7 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
     setFile(selected);
     if (preview) URL.revokeObjectURL(preview);
     setPreview(URL.createObjectURL(selected));
+    setMode('review');
   };
 
   const handleProcess = async () => {
@@ -191,6 +201,7 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
     setProgress(0);
     setStatusText('');
     resetTransform();
+    setMode('choice');
   };
 
   const frameColor = useMemo(() => {
@@ -198,6 +209,10 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
     if (level === 'yellow') return '#eab308';
     return '#ef4444';
   }, [isLevel, level]);
+
+  if (mode === 'smart_capture') {
+    return <SmartCapture onCapture={handleSmartCapture} onCancel={onCancel} />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4" dir="rtl">
@@ -217,14 +232,14 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
           <p className="text-[11px] text-emerald-700">الصورة تُحذف فوراً بعد المعالجة. لا نخزن أي صور على خوادمنا.</p>
         </div>
 
-        {!preview && !processing && (
+        {mode === 'choice' && !processing && (
           <>
             <div className="space-y-2.5 mb-4">
               <button
-                onClick={() => cameraInputRef.current?.click()}
+                onClick={() => setMode('smart_capture')}
                 className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-3.5 rounded-xl shadow-lg active:scale-[0.98] transition flex items-center justify-center gap-2.5"
               >
-                <Camera className="w-5 h-5" /> التقط صورة الهوية
+                <Camera className="w-5 h-5" /> تصوير ذكي مع توجيه مباشر
               </button>
               <button
                 onClick={() => fileInputRef.current?.click()}
@@ -234,14 +249,14 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
               </button>
             </div>
 
-            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleFileSelect} className="hidden" />
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleGallerySelect} className="hidden" />
 
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-xs font-bold text-blue-800 mb-1.5 flex items-center gap-1.5">
                 <Lightbulb className="w-3.5 h-3.5" /> نصائح للحصول على أفضل نتيجة:
               </p>
               <ul className="text-[11px] text-blue-700 space-y-1 list-disc list-inside leading-relaxed">
+                <li>التصوير الذكي يوجّهك تلقائياً للاصطياد الأفضل</li>
                 <li>ضع البطاقة على خلفية داكنة</li>
                 <li>تأكد أن رمز QR ظاهر وواضح</li>
                 <li>أضوء الإضاءة على البطاقة بشكل متساوٍ</li>
@@ -251,7 +266,7 @@ export const IDCardUpload: React.FC<IDCardUploadProps> = ({
           </>
         )}
 
-        {preview && !processing && (
+        {mode === 'review' && preview && !processing && (
           <div className="space-y-3">
             <div
               ref={containerRef}
