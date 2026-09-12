@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   IdCard,
-  Images,
   RefreshCw,
   ScanLine,
   ShieldCheck,
@@ -18,8 +17,6 @@ import { findNameInOCRText } from '../../services/nameMatching';
 import {
   MATCH_THRESHOLD,
   extractStudentName,
-  nameSimilarity,
-  rankByNameInput,
   rankStudents,
   type StudentMatch,
 } from '../../services/cardMatch';
@@ -109,8 +106,6 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
   const [extractedName, setExtractedName] = useState<string | null>(null);
   const [matches, setMatches] = useState<StudentMatch[]>([]);
   const [selected, setSelected] = useState<Student | null>(null);
-  const [manualName, setManualName] = useState('');
-  const [manualMatches, setManualMatches] = useState<StudentMatch[]>([]);
   const [verify, setVerify] = useState<{ matched: boolean; confidence: number } | null>(null);
 
   const [progress, setProgress] = useState<ProgressState>({ percent: 0, status: '' });
@@ -118,7 +113,6 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isVerifyMode = !!expected;
 
@@ -150,7 +144,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
         await videoRef.current.play();
       }
     } catch {
-      setError('الكاميرا غير متاحة على هذا الجهاز — استخدم خيار «رفع من الجهاز»');
+      setError('الكاميرا غير متاحة على هذا الجهاز');
       setScreen('choice');
     }
   }, []);
@@ -238,38 +232,11 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
     [isVerifyMode, expected, roster.length],
   );
 
-  const handleGallerySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      setError('الرجاء اختيار صورة فقط');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      setError('الصورة كبيرة جداً (أقصى حد 10 MB)');
-      return;
-    }
-    setError('');
-    void scanImage(file);
-  };
-
-  const handleManualChange = (v: string) => {
-    setManualName(v);
-    setManualMatches(rankByNameInput(v, roster));
-    setSelected(null);
-    if (v.trim() && roster.length) {
-      const exact = roster.find(s => nameSimilarity(v, s.name) >= MATCH_THRESHOLD);
-      if (exact) setSelected(exact);
-    }
-  };
-
   const handleReset = () => {
     setScreen('choice');
     setExtractedName(null);
     setMatches([]);
     setSelected(null);
-    setManualName('');
-    setManualMatches([]);
     setVerify(null);
     setError('');
   };
@@ -337,7 +304,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
           <div className="sel-progress mt-5" role="progressbar" aria-valuenow={progress.percent} aria-valuemin={0} aria-valuemax={100}>
             <div className="sel-progress-fill" style={{ width: `${Math.min(100, progress.percent)}%` }} />
           </div>
-          <p className="mt-2 text-xs font-semibold text-[#7A8CA8] tabular-nums">{Math.round(progress.percent)}%</p>
+          <p className="mt-2 text-xs font-semibold text-[#93A5C8] tabular-nums">{Math.round(progress.percent)}%</p>
           <p className="sel-cam-hint mt-4">
             {progress.percent < 20
               ? 'أول عملية قد تستغرق دقائق لتحميل محرك اللغة — تحدث مرة واحدة فقط'
@@ -359,12 +326,12 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
         <Stepper current={1} />
         <div className="sel-card">
           <div className="flex items-center justify-between mb-5">
-            <h2 className="text-lg font-extrabold text-[#0D1B3D]">التحقق من الهوية الجامعية</h2>
+            <h2 className="text-lg font-extrabold text-[#F3F7FF]">التحقق من الهوية الجامعية</h2>
             {linkType === 'attendance' && !isVerifyMode && <span className={`sel-chip ${topChip.tone}`}>{topChip.text}</span>}
           </div>
 
           <p className="sel-muted mb-5">
-            صوّر بطاقتك الجامعية أو ارفعها — نستخرج اسمك ونطابقه مع قاعدة البيانات. الخطوة الأولى من ثلاث.
+            صوّر بطاقتك الجامعية مباشرة — نستخرج اسمك ونطابقه مع قاعدة البيانات. الخطوة الأولى من ثلاث.
           </p>
 
           {isVerifyMode && expected?.name && (
@@ -381,31 +348,13 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
               </span>
               <span className="text-right">
                 <span className="sel-option-title block">تصوير مباشر</span>
-                <span className="sel-option-desc block">بفتح الكاميرا على البطاقة</span>
-              </span>
-            </button>
-
-            <button type="button" className="sel-option" onClick={() => fileInputRef.current?.click()}>
-              <span className="sel-option-icon">
-                <Images className="w-6 h-6" />
-              </span>
-              <span className="text-right">
-                <span className="sel-option-title block">رفع من الجهاز</span>
-                <span className="sel-option-desc block">صورة جاهزة من هاتفك</span>
+                <span className="sel-option-desc block">افتح الكاميرا ووجّهها نحو البطاقة</span>
               </span>
             </button>
           </div>
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleGallerySelect}
-            className="hidden"
-          />
-
           {error && (
-            <div className="mt-4 p-3 bg-[#FDEEEB] border border-[#F9D6D0] rounded-xl text-red-700 text-sm flex items-start gap-2">
+            <div className="mt-4 p-3 bg-[#3A1F28] border border-[#5C2B35] rounded-xl text-red-300 text-sm flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
@@ -455,11 +404,11 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
             <h2 className="sel-heading mt-4 mb-2">تعذّر التحقق من الاسم</h2>
             <p className="sel-muted mb-4">
               الاسم المطلوب على البطاقة هو{' '}
-              <span className="font-bold text-[#0D1B3D]">{expected?.name}</span>
+              <span className="font-bold text-[#F3F7FF]">{expected?.name}</span>
             </p>
             {extractedName && (
-              <p className="text-sm text-[#5A6D8A] mb-5">
-                الاسم المقروء من البطاقة: <span className="font-bold text-[#0D1B3D]">{extractedName}</span>
+              <p className="text-sm text-[#93A5C8] mb-5">
+                الاسم المقروء من البطاقة: <span className="font-bold text-[#F3F7FF]">{extractedName}</span>
               </p>
             )}
             <button type="button" className="sel-btn sel-btn-primary" onClick={handleReset}>
@@ -472,9 +421,6 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
             matches={matches}
             selected={selected}
             setSelected={setSelected}
-            manualName={manualName}
-            manualMatches={manualMatches}
-            onManualChange={handleManualChange}
             onContinue={confirmSelected}
             onRetry={handleReset}
           />
@@ -485,7 +431,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
             <img
               src={capturedUrl}
               alt="مُصغّر البطاقة المقرؤة"
-              className="h-20 w-auto rounded-xl border border-[#E2EAF8] shadow-sm"
+              className="h-20 w-auto rounded-xl border border-[#22334F] shadow-sm"
             />
           </div>
         )}
@@ -514,7 +460,7 @@ const ResultMatch: React.FC<{
       <p className="sel-identity-label">الاسم</p>
       <p className="sel-identity-name">{student.name}</p>
       {student.code && (
-        <div className="mt-2 flex items-center justify-between border-t border-[#DCE8FA] pt-2">
+        <div className="mt-2 flex items-center justify-between border-t border-[#22355A] pt-2">
           <p className="sel-identity-label">كود الطالب</p>
           <p className="sel-identity-code">{student.code}</p>
         </div>
@@ -537,26 +483,23 @@ const ResultMatch: React.FC<{
 );
 
 /* ──────────────────────────────────────── */
-/*  روابط الحضور: اختيار الاسم يدوياً        */
+/*  روابط الحضور: اختيار الاسم من المقترحات */
 /* ──────────────────────────────────────── */
 const ResultRoster: React.FC<{
   matches: StudentMatch[];
   selected: Student | null;
   setSelected: (s: Student) => void;
-  manualName: string;
-  manualMatches: StudentMatch[];
-  onManualChange: (v: string) => void;
   onContinue: () => void;
   onRetry: () => void;
-}> = ({ matches, selected, setSelected, manualName, manualMatches, onManualChange, onContinue, onRetry }) => (
+}> = ({ matches, selected, setSelected, onContinue, onRetry }) => (
   <div>
     <div className="text-center mb-5">
       <div className="sel-icon-circle sel-warn-soft mx-auto"><AlertTriangle className="w-8 h-8" /></div>
       <h2 className="sel-heading mt-4 mb-2">تعذّر تحديد اسمك بدقة</h2>
-      <p className="sel-muted">اختر اسمك من المقترحات أدناه أو اكتبه يدوياً للمتابعة.</p>
+      <p className="sel-muted">اختر اسمك من المقترحات أدناه للمتابعة.</p>
     </div>
 
-    {matches.length > 0 && (
+    {matches.length > 0 ? (
       <div className="space-y-2.5 mb-5">
         {matches.slice(0, 4).map(m => (
           <button
@@ -568,9 +511,9 @@ const ResultRoster: React.FC<{
             <span className="flex items-center gap-3 min-w-0">
               <span className="sel-radio"><Check className="w-2.5 h-2.5" /></span>
               <span className="text-right min-w-0">
-                <span className="block text-sm font-bold text-[#0D1B3D] truncate">{m.student.name}</span>
+                <span className="block text-sm font-bold text-[#F3F7FF] truncate">{m.student.name}</span>
                 {m.student.code && (
-                  <span className="block text-[11px] text-[#7A8CA8] tabular-nums" style={{ direction: 'ltr', textAlign: 'right' }}>
+                  <span className="block text-[11px] text-[#93A5C8] tabular-nums" style={{ direction: 'ltr', textAlign: 'right' }}>
                     كود: {m.student.code}
                   </span>
                 )}
@@ -580,32 +523,9 @@ const ResultRoster: React.FC<{
           </button>
         ))}
       </div>
+    ) : (
+      <p className="sel-muted text-center mb-5">لم نعثر على أسماء مطابقة — أعد التصوير بإضاءة أوضح.</p>
     )}
-
-    <div className="mb-5">
-      <p className="text-xs font-bold text-[#5A6D8A] mb-2">أو اكتب اسمك يدوياً:</p>
-      <input
-        value={manualName}
-        onChange={e => onManualChange(e.target.value)}
-        placeholder="مثال: علي حسين محمد"
-        className="sel-input"
-      />
-      {manualMatches.length > 0 && (
-        <div className="mt-2 space-y-1.5">
-          {manualMatches.slice(0, 3).map(m => (
-            <button
-              key={m.student.id}
-              type="button"
-              className="w-full flex items-center justify-between gap-3 text-right p-3 rounded-xl bg-[#F7FAFF] border border-[#E3EBF9] hover:border-[#9DBBF1] transition"
-              onClick={() => { onManualChange(m.student.name); setSelected(m.student); }}
-            >
-              <span className="text-sm font-bold text-[#0D1B3D]">{m.student.name}</span>
-              <span className="sel-suggestion-score">{m.score}%</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
 
     <div className="grid grid-cols-2 gap-2">
       <button type="button" className="sel-btn sel-btn-ghost sel-btn-sm" onClick={onRetry}>

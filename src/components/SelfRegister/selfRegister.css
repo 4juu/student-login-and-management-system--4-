@@ -1,5 +1,5 @@
 /* =========================================================
-   🪪 Self-Enroll — Government Light Theme (صفحة الطالب)
+   🪪 Self-Enroll — Government Dark Navy Theme (صفحة الطالب)
    RTL · Mobile-first · Safe-area aware · Accessibility first
    ========================================================= */
 
@@ -7,9 +7,9 @@
   min-height: 100vh;
   min-height: 100dvh;
   background:
-    radial-gradient(1100px 460px at 50% -8%, rgba(37, 99, 235, 0.10), transparent 62%),
-    linear-gradient(165deg, #F5F9FF 0%, #E8F1FF 100%);
-  color: #10234B;
+    radial-gradient(1100px 460px at 50% -8%, rgba(59, 130, 246, 0.16), transparent 62%),
+    linear-gradient(165deg, #0A1224 0%, #0E1830 100%);
+  color: #DCE6F6;
 }
 
 .sel-shell {
@@ -40,20 +40,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 20px rgba(20, 88, 226, 0.28);
+  box-shadow: 0 8px 20px rgba(20, 88, 226, 0.4);
   flex-shrink: 0;
 }
 
 .sel-title {
   font-size: 1.15rem;
   font-weight: 800;
-  color: #0D1B3D;
+  color: #F3F7FF;
   line-height: 1.35;
 }
 
 .sel-subtitle {
   font-size: 0.8125rem;
-  color: #5A6D8A;
+  color: #93A5C8;
   margin-top: 0.15rem;
   line-height: 1.6;
 }
@@ -81,11 +81,11 @@
   left: 50%;
   width: 100%;
   height: 2px;
-  background: #D7E2F5;
+  background: #24365C;
   z-index: 0;
 }
 
-.sel-step.done:not(:last-child)::after { background: #7AA8F0; }
+.sel-step.done:not(:last-child)::after { background: #3B82F6; }
 
 .sel-step-dot {
   position: relative;
@@ -98,40 +98,40 @@
   justify-content: center;
   font-weight: 700;
   font-size: 0.8125rem;
-  border: 2px solid #C4D3EC;
-  background: #fff;
-  color: #7A8CA8;
+  border: 2px solid #3A4E73;
+  background: #10203C;
+  color: #6E83A8;
   transition: all 0.3s ease;
 }
 
 .sel-step.active .sel-step-dot {
-  border-color: #1458E2;
-  color: #1458E2;
-  box-shadow: 0 0 0 4px rgba(20, 88, 226, 0.12);
+  border-color: #3B82F6;
+  color: #7AA8F0;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
 }
 
 .sel-step.done .sel-step-dot {
-  background: #1458E2;
-  border-color: #1458E2;
+  background: linear-gradient(135deg, #1458E2, #2B7BFF);
+  border-color: #3B82F6;
   color: #fff;
 }
 
 .sel-step-label {
   font-size: 0.6875rem;
   font-weight: 600;
-  color: #7A8CA8;
+  color: #93A5C8;
   text-align: center;
 }
 
 .sel-step.active .sel-step-label,
-.sel-step.done .sel-step-label { color: #0D1B3D; }
+.sel-step.done .sel-step-label { color: #E6EEFB; }
 
 /* ── البطاقات والأزرار ─────────────────────────────────── */
 .sel-card {
-  background: #fff;
-  border: 1px solid #E2EAF8;
+  background: #0E1930;
+  border: 1px solid #22334F;
   border-radius: 20px;
-  box-shadow: 0 10px 30px rgba(12, 45, 110, 0.06);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
 
 .sel-btn {
@@ -154,46 +154,46 @@
 .sel-btn-primary {
   background: linear-gradient(135deg, #1458E2, #2B7BFF);
   color: #fff;
-  box-shadow: 0 10px 24px rgba(20, 88, 226, 0.3);
+  box-shadow: 0 10px 24px rgba(20, 88, 226, 0.4);
 }
 
 .sel-btn-primary:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 14px 32px rgba(20, 88, 226, 0.38);
+  box-shadow: 0 14px 32px rgba(20, 88, 226, 0.5);
 }
 
 .sel-btn-primary:active:not(:disabled) { transform: scale(0.98); }
 .sel-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .sel-btn-ghost {
-  background: #F1F5FC;
-  color: #1458E2;
-  border: 1px solid #DCE7FA;
+  background: #16223E;
+  color: #7AA8F0;
+  border: 1px solid #2A3B5F;
 }
 
-.sel-btn-ghost:hover { background: #E8F0FE; }
+.sel-btn-ghost:hover { background: #1A2A4A; }
 .sel-btn-ghost:active { transform: scale(0.98); }
 
 .sel-btn-outline {
-  background: #fff;
-  color: #3C4E6E;
-  border: 1.5px solid #D5E2F5;
+  background: #101B33;
+  color: #B7C6E2;
+  border: 1.5px solid #2A3B5F;
 }
 
-.sel-btn-outline:hover { border-color: #A9C3F0; background: #F7FAFF; }
+.sel-btn-outline:hover { border-color: #3B82F6; background: #16223E; }
 .sel-btn-outline:active { transform: scale(0.98); }
 
 .sel-btn-sm { min-height: 46px; padding: 0.5rem 1rem; }
 
-/* ── خانات الاختيار (تصوير / رفع) ─────────────────────── */
+/* ── خانات الاختيار ────────────────────────────────────── */
 .sel-option {
   width: 100%;
   display: flex;
   align-items: center;
   gap: 1rem;
   text-align: right;
-  background: #fff;
-  border: 1.5px solid #DCE7FA;
+  background: #0F1B36;
+  border: 1.5px solid #2A3B5F;
   border-radius: 16px;
   padding: 1.1rem 1.25rem;
   cursor: pointer;
@@ -201,8 +201,8 @@
 }
 
 .sel-option:hover {
-  border-color: #7AA8F0;
-  box-shadow: 0 8px 20px rgba(13, 42, 90, 0.06);
+  border-color: #3B82F6;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
 }
 
 .sel-option:active { transform: scale(0.99); }
@@ -214,13 +214,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #EEF4FF, #E3EDFF);
-  color: #1458E2;
+  background: linear-gradient(135deg, #16264A, #1B2E57);
+  color: #7AA8F0;
   flex-shrink: 0;
 }
 
-.sel-option-title { font-weight: 700; color: #0D1B3D; font-size: 0.9375rem; }
-.sel-option-desc { font-size: 0.75rem; color: #6B7F9F; margin-top: 0.15rem; line-height: 1.5; }
+.sel-option-title { font-weight: 700; color: #E6EEFB; font-size: 0.9375rem; }
+.sel-option-desc { font-size: 0.75rem; color: #8CA0C4; margin-top: 0.15rem; line-height: 1.5; }
 
 /* ── الشارات ───────────────────────────────────────────── */
 .sel-chip {
@@ -233,30 +233,30 @@
   font-weight: 700;
 }
 
-.sel-chip-blue { background: #E9F0FE; color: #1458E2; border: 1px solid #D4E2FB; }
-.sel-chip-violet { background: #F3EDFF; color: #6D28D9; border: 1px solid #E6D9FC; }
-.sel-chip-green { background: #E6F8F0; color: #0E9F6E; border: 1px solid #CBEEDF; }
-.sel-chip-amber { background: #FEF5E7; color: #B45309; border: 1px solid #FBE2BA; }
-.sel-chip-red { background: #FDEEEB; color: #DC2626; border: 1px solid #F9D6D0; }
-.sel-chip-gray { background: #F1F5FC; color: #52678A; border: 1px solid #E3EBF9; }
+.sel-chip-blue { background: #16264A; color: #93B4FF; border: 1px solid #2A406B; }
+.sel-chip-violet { background: #241B3D; color: #C4B5FD; border: 1px solid #3B2F5E; }
+.sel-chip-green { background: #0F3A2C; color: #34D399; border: 1px solid #1D5A45; }
+.sel-chip-amber { background: #33270F; color: #FBBF24; border: 1px solid #5C4520; }
+.sel-chip-red { background: #3A1F28; color: #F87171; border: 1px solid #5C2B35; }
+.sel-chip-gray { background: #16223E; color: #A8B9DA; border: 1px solid #2A3B5F; }
 
 /* ── ملاحظات الخصوصية / الثقة ─────────────────────────── */
 .sel-note {
   display: flex;
   gap: 0.6rem;
-  background: #F6F9FF;
-  border: 1px solid #E7EEFB;
+  background: #15203A;
+  border: 1px solid #24365A;
   border-radius: 14px;
   padding: 0.9rem 1rem;
-  color: #5A6D8A;
+  color: #9CB1D4;
   font-size: 0.8125rem;
   line-height: 1.65;
 }
 
-.sel-note svg { color: #0E9F6E; flex-shrink: 0; margin-top: 0.1rem; }
+.sel-note svg { color: #34D399; flex-shrink: 0; margin-top: 0.1rem; }
 
 .sel-footer { margin-top: auto; padding-top: 2rem; }
-.sel-footer-inner { text-align: center; color: #8A9BB8; font-size: 0.75rem; line-height: 1.8; }
+.sel-footer-inner { text-align: center; color: #5E7396; font-size: 0.75rem; line-height: 1.8; }
 
 /* ── شاشة النتائج ─────────────────────────────────────── */
 .sel-icon-circle {
@@ -270,33 +270,33 @@
 }
 
 .sel-ok { background: linear-gradient(135deg, #10B981, #0E9F6E); box-shadow: 0 14px 30px rgba(16, 185, 129, 0.28); color: #fff; }
-.sel-ok-soft { background: #E6F8F0; border: 1px solid #CBEEDF; color: #0E9F6E; }
-.sel-warn-soft { background: #FEF5E7; border: 1px solid #FBE2BA; color: #D97706; }
-.sel-err-soft { background: #FDEEEB; border: 1px solid #F9D6D0; color: #DC2626; }
+.sel-ok-soft { background: #0F3A2C; border: 1px solid #1D5A45; color: #34D399; }
+.sel-warn-soft { background: #33270F; border: 1px solid #5C4520; color: #FBBF24; }
+.sel-err-soft { background: #3A1F28; border: 1px solid #5C2B35; color: #F87171; }
 
-.sel-heading { font-size: 1.25rem; font-weight: 800; color: #0D1B3D; }
-.sel-muted { color: #5A6D8A; font-size: 0.875rem; line-height: 1.7; }
+.sel-heading { font-size: 1.25rem; font-weight: 800; color: #F3F7FF; }
+.sel-muted { color: #93A5C8; font-size: 0.875rem; line-height: 1.7; }
 
 .sel-identity {
-  background: linear-gradient(160deg, #F7FAFF, #EFF5FF);
-  border: 1px solid #E0EAF9;
+  background: linear-gradient(160deg, #132041, #182848);
+  border: 1px solid #22355A;
   border-radius: 16px;
   padding: 1.1rem 1.25rem;
   text-align: right;
 }
 
-.sel-identity-label { font-size: 0.75rem; color: #6B7F9F; font-weight: 600; }
-.sel-identity-name { font-size: 1.4rem; font-weight: 800; color: #0D1B3D; margin-top: 0.15rem; }
+.sel-identity-label { font-size: 0.75rem; color: #93A5C8; font-weight: 600; }
+.sel-identity-name { font-size: 1.4rem; font-weight: 800; color: #F3F7FF; margin-top: 0.15rem; }
 .sel-identity-code {
   font-variant-numeric: tabular-nums;
   font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
   font-size: 0.8125rem;
-  color: #52678A;
+  color: #A8B9DA;
   direction: ltr;
   text-align: right;
 }
 
-/* ── المقترحات والكتابة اليدوية ───────────────────────── */
+/* ── المقترحات ─────────────────────────────────────────── */
 .sel-suggestion {
   width: 100%;
   display: flex;
@@ -304,27 +304,27 @@
   justify-content: space-between;
   gap: 0.75rem;
   text-align: right;
-  background: #F7FAFF;
-  border: 1.5px solid #E3EBF9;
+  background: #13203A;
+  border: 1.5px solid #24365C;
   border-radius: 14px;
   padding: 0.85rem 1rem;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.sel-suggestion:hover { border-color: #9DBBF1; }
+.sel-suggestion:hover { border-color: #3B82F6; }
 
 .sel-suggestion.selected {
-  border-color: #1458E2;
-  background: #EAF1FF;
-  box-shadow: 0 0 0 3px rgba(20, 88, 226, 0.1);
+  border-color: #3B82F6;
+  background: #16264A;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
 }
 
 .sel-radio {
   width: 1.3rem;
   height: 1.3rem;
   border-radius: 50%;
-  border: 2px solid #C4D3EC;
+  border: 2px solid #3A4E73;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -334,38 +334,38 @@
 }
 
 .sel-suggestion.selected .sel-radio {
-  border-color: #1458E2;
-  background: #1458E2;
+  border-color: #3B82F6;
+  background: #3B82F6;
 }
 
-.sel-suggestion-score { font-size: 0.75rem; font-weight: 700; color: #6B7F9F; }
+.sel-suggestion-score { font-size: 0.75rem; font-weight: 700; color: #8CA0C4; }
 
 .sel-input {
   width: 100%;
   min-height: 52px;
   border-radius: 14px;
-  border: 1.5px solid #D5E2F5;
-  background: #fff;
+  border: 1.5px solid #2A3B5F;
+  background: #0F1B36;
   padding: 0.7rem 1rem;
   font-size: 1rem;
-  color: #0D1B3D;
+  color: #E6EEFB;
   transition: border-color 0.2s, box-shadow 0.2s;
   font-family: inherit;
 }
 
 .sel-input:focus {
   outline: none;
-  border-color: #7AA8F0;
-  box-shadow: 0 0 0 4px rgba(20, 88, 226, 0.08);
+  border-color: #3B82F6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
 }
 
-.sel-input::placeholder { color: #A7B6CE; }
+.sel-input::placeholder { color: #5E7396; }
 
 /* ── التقدم (OCR) ─────────────────────────────────────── */
 .sel-progress {
   height: 10px;
   border-radius: 999px;
-  background: #E7EEFB;
+  background: #22345A;
   overflow: hidden;
 }
 
@@ -396,7 +396,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 14px 30px rgba(20, 88, 226, 0.3);
+  box-shadow: 0 14px 30px rgba(20, 88, 226, 0.4);
   position: relative;
   z-index: 1;
 }
@@ -405,7 +405,7 @@
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 2px solid rgba(20, 88, 226, 0.35);
+  border: 2px solid rgba(59, 130, 246, 0.4);
   animation: sel-pulse 1.7s ease-out infinite;
 }
 
@@ -419,13 +419,13 @@
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: #0B1530;
+  background: #020409;
   display: flex;
   flex-direction: column;
 }
 
 .sel-cam-top {
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(9, 16, 34, 0.96);
   backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
@@ -433,7 +433,7 @@
   gap: 0.75rem;
   padding: 0.7rem 0.9rem;
   padding-top: max(0.7rem, env(safe-area-inset-top));
-  color: #0D1B3D;
+  color: #E6EEFB;
 }
 
 .sel-cam-top-btn {
@@ -443,14 +443,14 @@
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 12px;
-  background: #F1F5FC;
-  border: 1px solid #E3EBF9;
-  color: #3C4E6E;
+  background: #16223E;
+  border: 1px solid #2A3B5F;
+  color: #A8B9DA;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.sel-cam-top-btn:hover { background: #E8F0FE; color: #1458E2; }
+.sel-cam-top-btn:hover { background: #1A2A4A; color: #7AA8F0; }
 
 .sel-cam-view { flex: 1; position: relative; overflow: hidden; background: #030712; }
 
@@ -485,7 +485,7 @@
 }
 
 .sel-cam-pill-inner {
-  background: rgba(5, 12, 30, 0.55);
+  background: rgba(5, 12, 30, 0.6);
   backdrop-filter: blur(6px);
   color: #fff;
   font-size: 0.8125rem;
@@ -498,7 +498,7 @@
 }
 
 .sel-cam-bottom {
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(9, 16, 34, 0.96);
   backdrop-filter: blur(8px);
   padding: 0.9rem;
   padding-bottom: max(0.9rem, env(safe-area-inset-bottom));
@@ -512,20 +512,20 @@
   width: 4.25rem;
   height: 4.25rem;
   border-radius: 50%;
-  background: #fff;
-  border: 5px solid #1458E2;
+  background: #101B33;
+  border: 5px solid #3B82F6;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   cursor: pointer;
   transition: transform 0.15s ease;
 }
 
 .sel-shutter:active { transform: scale(0.9); }
-.sel-shutter-inner { width: 3rem; height: 3rem; border-radius: 50%; background: #1458E2; }
+.sel-shutter-inner { width: 3rem; height: 3rem; border-radius: 50%; background: #3B82F6; }
 
-.sel-cam-hint { font-size: 0.75rem; color: #6B7F9F; text-align: center; line-height: 1.6; }
+.sel-cam-hint { font-size: 0.75rem; color: #8CA0C4; text-align: center; line-height: 1.6; }
 
 /* ── تقرير الحضور ─────────────────────────────────────── */
 .sel-report-hero {
@@ -541,9 +541,9 @@
   text-align: center;
 }
 
-.sel-stat-green { background: #E6F8F0; border: 1px solid #CBEEDF; }
-.sel-stat-red { background: #FDEEEC; border: 1px solid #F8D8D3; }
-.sel-stat-blue { background: #EAF1FF; border: 1px solid #D7E4FB; }
+.sel-stat-green { background: #0F3A2C; border: 1px solid #1D5A45; }
+.sel-stat-red { background: #3A1F28; border: 1px solid #5C2B35; }
+.sel-stat-blue { background: #132747; border: 1px solid #2A406B; }
 
 .sel-stat-num { font-size: 1.75rem; font-weight: 800; }
 
@@ -552,26 +552,26 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  background: #F7FAFF;
-  border: 1px solid #E7EEFB;
+  background: #13203A;
+  border: 1px solid #22355A;
   border-radius: 14px;
   padding: 0.8rem 1rem;
 }
 
 .sel-pill { padding: 0.28rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
-.sel-pill-green { background: #E6F8F0; color: #0E9F6E; }
-.sel-pill-red { background: #FDEEEC; color: #DC2626; }
+.sel-pill-green { background: #0F3A2C; color: #34D399; }
+.sel-pill-red { background: #3A1F28; color: #F87171; }
 
 /* ── سكلتون / حركات ───────────────────────────────────── */
 .sel-skeleton {
   border-radius: 20px;
-  background: #fff;
-  border: 1px solid #E2EAF8;
+  background: #0E1930;
+  border: 1px solid #22334F;
   padding: 1.5rem;
 }
 
 .sel-shimmer {
-  background: linear-gradient(90deg, #EEF3FC 25%, #F7FAFF 50%, #EEF3FC 75%);
+  background: linear-gradient(90deg, #16223E 25%, #1C2A4A 50%, #16223E 75%);
   background-size: 200% 100%;
   animation: sel-shimmer 1.4s infinite;
   border-radius: 12px;

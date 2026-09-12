@@ -49,43 +49,43 @@ export const RegistrationSuccess: React.FC<RegistrationSuccessProps> = ({
           </div>
 
           <h2 className="sel-heading mt-5 mb-1 flex items-center justify-center gap-2">
-            <PartyPopper className="w-6 h-6 text-[#0E9F6E]" /> تم تسجيل طلبك بنجاح
+            <PartyPopper className="w-6 h-6 text-[#34D399]" /> تم تسجيل طلبك بنجاح
           </h2>
           <p className="sel-muted mb-5">
-            مرحباً <span className="font-bold text-[#0D1B3D]">{student.name}</span> — بياناتك وصلتنا بأمان
+            مرحباً <span className="font-bold text-[#F3F7FF]">{student.name}</span> — بياناتك وصلتنا بأمان
           </p>
 
           {qrVerified ? (
-            <div className="rounded-2xl border border-[#CBEEDF] bg-[#E6F8F0] p-4 mb-5">
-              <div className="flex items-center gap-2 text-[#0E9F6E] font-bold mb-1">
+            <div className="rounded-2xl border border-[#1D5A45] bg-[#0F3A2C] p-4 mb-5">
+              <div className="flex items-center gap-2 text-[#34D399] font-bold mb-1">
                 <CheckCircle2 className="w-5 h-5" /> تم التحقق من رمز QR في البطاقة
               </div>
-              <p className="text-sm text-[#0E9F6E]">يمكنك الآن استخدام الهوية والوجه والرمز داخل الكلية</p>
+              <p className="text-sm text-[#34D399]">يمكنك الآن استخدام الهوية والوجه والرمز داخل الكلية</p>
             </div>
           ) : (
-            <div className="rounded-2xl border border-[#FBE2BA] bg-[#FEF5E7] p-4 mb-5 text-right">
-              <p className="font-bold text-[#B45309] mb-1 flex items-center gap-2">
+            <div className="rounded-2xl border border-[#5C4520] bg-[#33270F] p-4 mb-5 text-right">
+              <p className="font-bold text-[#FBBF24] mb-1 flex items-center gap-2">
                 <Clock className="w-5 h-5" /> بانتظار موافقة المشرف
               </p>
-              <p className="text-sm text-[#92610C] leading-relaxed">
+              <p className="text-sm text-[#E5B768] leading-relaxed">
                 أُرسل طلب تسجيل وجهك للمراجعة. سيُفعَّل حسابك فور موافقة إدارة الكلية — وقد تلاحظ ذلك عبر إشعار الأدمن داخل النظام.
               </p>
             </div>
           )}
 
-          <div className="rounded-2xl border border-[#E7EEFB] bg-[#F6F9FF] p-4 mb-5 text-right">
-            <p className="text-xs font-bold text-[#5A6D8A] mb-2 flex items-center gap-1.5">
-              <ClipboardList className="w-4 h-4 text-[#1458E2]" /> ما تم تسجيله:
+          <div className="rounded-2xl border border-[#24365A] bg-[#132041] p-4 mb-5 text-right">
+            <p className="text-xs font-bold text-[#93A5C8] mb-2 flex items-center gap-1.5">
+              <ClipboardList className="w-4 h-4 text-[#7AA8F0]" /> ما تم تسجيله:
             </p>
-            <ul className="space-y-1.5 text-sm text-[#3C4E6E]">
+            <ul className="space-y-1.5 text-sm text-[#B7C6E2]">
               <li className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-[#0E9F6E]" /> السم الشخصي المطابق للسجل الرسمي
+                <Check className="w-4 h-4 text-[#34D399]" /> السم الشخصي المطابق للسجل الرسمي
               </li>
               <li className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-[#0E9F6E]" /> بصمة الوجه (أرقام رياضية مشفّرة)
+                <Check className="w-4 h-4 text-[#34D399]" /> بصمة الوجه (أرقام رياضية مشفّرة)
               </li>
               <li className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-[#0E9F6E]" /> ربط الهوية بملف الطالب
+                <Check className="w-4 h-4 text-[#34D399]" /> ربط الهوية بملف الطالب
               </li>
             </ul>
           </div>

@@ -418,7 +418,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
               </div>
               <div className="sel-shimmer h-4 w-1/2 mx-auto mb-3" />
               <div className="sel-shimmer h-3 w-3/4 mx-auto" />
-              <p className="text-center text-sm text-[#7A8CA8] mt-6 font-semibold">
+              <p className="text-center text-sm text-[#93A5C8] mt-6 font-semibold">
                 جاري التحقق من صحة الرابط…
               </p>
             </div>
@@ -459,21 +459,21 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
                 <p className="sel-identity-label">الاسم</p>
                 <p className="sel-identity-name">{expected.name}</p>
                 {expected.code && (
-                  <div className="mt-2 flex items-center justify-between border-t border-[#DCE8FA] pt-2">
+                  <div className="mt-2 flex items-center justify-between border-t border-[#22355A] pt-2">
                     <p className="sel-identity-label">كود الطالب</p>
                     <p className="sel-identity-code">{expected.code}</p>
                   </div>
                 )}
               </div>
 
-              <div className="rounded-2xl border border-[#E7F0FB] bg-[#F7FAFF] p-4 mb-5">
-                <p className="text-sm font-bold text-[#1458E2] mb-3 flex items-center gap-2">
+              <div className="rounded-2xl border border-[#24365A] bg-[#132041] p-4 mb-5">
+                <p className="text-sm font-bold text-[#7AA8F0] mb-3 flex items-center gap-2">
                   <Fingerprint className="w-5 h-5" /> خطوات تسجيل البصمة
                 </p>
-                <ul className="space-y-2 text-sm text-[#3C4E6E]">
-                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-[#0E9F6E]" /> وجّه وجهك داخل الدائرة</li>
-                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-[#0E9F6E]" /> أدر رأسك للجهات الخمس المطلوبة</li>
-                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-[#0E9F6E]" /> سيُحفظ الطلب ويُعرض على الأدمن للموافقة</li>
+                <ul className="space-y-2 text-sm text-[#B7C6E2]">
+                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-[#34D399]" /> وجّه وجهك داخل الدائرة</li>
+                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-[#34D399]" /> أدر رأسك للجهات الخمس المطلوبة</li>
+                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-[#34D399]" /> سيُحفظ الطلب ويُعرض على الأدمن للموافقة</li>
                 </ul>
               </div>
 
@@ -577,38 +577,38 @@ const ReportStep: React.FC<{
 
       <div className="grid grid-cols-3 gap-3 mb-6">
         <div className="sel-stat sel-stat-green">
-          <p className="text-xs font-semibold text-[#0E9F6E] mb-1">حضور</p>
-          <div className="sel-stat-num text-[#0E9F6E]">{stats.present}</div>
+          <p className="text-xs font-semibold text-[#34D399] mb-1">حضور</p>
+          <div className="sel-stat-num text-[#34D399]">{stats.present}</div>
         </div>
         <div className="sel-stat sel-stat-red">
-          <p className="text-xs font-semibold text-[#DC2626] mb-1">غياب</p>
-          <div className="sel-stat-num text-[#DC2626]">{stats.absent}</div>
+          <p className="text-xs font-semibold text-[#F87171] mb-1">غياب</p>
+          <div className="sel-stat-num text-[#F87171]">{stats.absent}</div>
         </div>
         <div className="sel-stat sel-stat-blue">
-          <p className="text-xs font-semibold text-[#1458E2] mb-1">المجموع</p>
-          <div className="sel-stat-num text-[#1458E2]">{stats.total}</div>
+          <p className="text-xs font-semibold text-[#60A5FA] mb-1">المجموع</p>
+          <div className="sel-stat-num text-[#60A5FA]">{stats.total}</div>
         </div>
       </div>
 
       {stats.records.length > 0 ? (
         <>
-          <h3 className="text-sm font-extrabold text-[#0D1B3D] mb-3 flex items-center gap-2">
-            <CalendarDays className="w-4 h-4 text-[#1458E2]" /> تفاصيل الجلسات
+          <h3 className="text-sm font-extrabold text-[#F3F7FF] mb-3 flex items-center gap-2">
+            <CalendarDays className="w-4 h-4 text-[#60A5FA]" /> تفاصيل الجلسات
           </h3>
           <div className="space-y-2 max-h-72 overflow-y-auto">
             {stats.records.map(record => (
               <div key={record.id} className="sel-row-item">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={`flex items-center justify-center w-8 h-8 rounded-full shrink-0 ${
-                    record.status === 'present' ? 'bg-[#E6F8F0] text-[#0E9F6E]' : 'bg-[#FDEEEC] text-[#DC2626]'
+                    record.status === 'present' ? 'bg-[#0F3A2C] text-[#34D399]' : 'bg-[#3A1F28] text-[#F87171]'
                   }`}>
                     {record.status === 'present' ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
                   </div>
                   <div className="text-right min-w-0">
-                    <p className="font-bold text-[#0D1B3D] text-sm truncate">
+                    <p className="font-bold text-[#F3F7FF] text-sm truncate">
                       {(record as any).sessionName || sessionNameMap[record.sessionId] || 'جلسة'}
                     </p>
-                    <p className="text-xs text-[#7A8CA8] tabular-nums">
+                    <p className="text-xs text-[#93A5C8] tabular-nums">
                       {normalizeDate(record.date)}{record.time ? ` · ${record.time}` : ''}
                     </p>
                   </div>
@@ -625,7 +625,7 @@ const ReportStep: React.FC<{
           <div className="sel-icon-circle sel-ok-soft mx-auto">
             <Clock className="w-8 h-8" />
           </div>
-          <p className="sel-muted mt-4 mb-1 font-bold text-[#0D1B3D]">لا توجد سجلات بعد</p>
+          <p className="sel-muted mt-4 mb-1 font-bold text-[#F3F7FF]">لا توجد سجلات بعد</p>
           <p className="sel-muted">عند تسجيل المحاضرات ستظهر بياناتك هنا</p>
         </div>
       )}
