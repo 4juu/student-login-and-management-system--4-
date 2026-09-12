@@ -29,6 +29,7 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
 
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [loadProgress, setLoadProgress] = useState({ percent: 0, detail: 'تهيئة محرك كشف البطاقة...' });
+  const [retryKey, setRetryKey] = useState(0);
   const [cameraError, setCameraError] = useState('');
   const [capturing, setCapturing] = useState(false);
   const [corners, setCorners] = useState<QuadCorners | null>(null);
@@ -64,7 +65,15 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
       mounted = false;
       off();
     };
-  }, []);
+  }, [retryKey]);
+
+  const handleRetryLoad = () => {
+    opencvLoader.reset();
+    setCameraError('');
+    setLoadProgress({ percent: 0, detail: 'تهيئة محرك كشف البطاقة...' });
+    setLoadState('loading');
+    setRetryKey(k => k + 1);
+  };
 
   // ── 2) فتح الكاميرا فقط بعد جاهزية المحرك ──
   useEffect(() => {
@@ -318,12 +327,20 @@ export const SmartCapture: React.FC<SmartCaptureProps> = ({ onCapture, onCancel 
           )}
 
           {isError && (
-            <button
-              onClick={onCancel}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-2.5 rounded-xl text-sm font-bold transition active:scale-95"
-            >
-              إلغاء
-            </button>
+            <div className="flex items-center gap-3 justify-center">
+              <button
+                onClick={onCancel}
+                className="bg-white/10 hover:bg-white/15 text-white px-8 py-2.5 rounded-xl text-sm font-bold transition active:scale-95"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={handleRetryLoad}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-2.5 rounded-xl text-sm font-bold transition active:scale-95"
+              >
+                إعادة المحاولة
+              </button>
+            </div>
           )}
         </div>
       </div>

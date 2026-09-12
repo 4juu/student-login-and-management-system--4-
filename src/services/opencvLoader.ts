@@ -25,6 +25,8 @@ class OpenCVLoader {
   private loading: Promise<OpenCV> | null = null;
   private listeners = new Set<ProgressCb>();
   private lastProgress: OpenCVProgress = { percent: 0, detail: 'تهيئة محرك كشف البطاقة...' };
+  private initTimer: number | null = null;
+  private watchdog: number | null = null;
 
   onProgress(cb: ProgressCb): () => void {
     this.listeners.add(cb);
@@ -98,23 +100,53 @@ class OpenCVLoader {
 
         script.onload = () => {
           URL.revokeObjectURL(url);
-          const cv = (window as any).cv;
-          if (!cv) {
-            reject(new Error('فشل تفعيل محرك كشف البطاقة'));
+          const cvGlobal = (window as any).cv as any;
+
+          const finish = (mod: any) => {
+            this.clearInitTimers();
+            this._cv = mod as OpenCV;
+            this.report({ percent: 100, detail: 'محرك كشف البطاقة جاهز' });
+            resolve(mod as OpenCV);
+          };
+
+          const fail = (e: Error) => {
+            this.clearInitTimers();
+            reject(e);
+          };
+
+          if (cvGlobal && cvGlobal.Mat && cvGlobal.imread) {
+            // جاهز مباشرة (حالة نادرة — مُفعل قبل الوصول)
+            finish(cvGlobal);
             return;
           }
 
-          const onInit = () => {
-            this._cv = cv as OpenCV;
-            this.report({ percent: 100, detail: 'محرك كشف البطاقة جاهز' });
-            resolve(cv as OpenCV);
-          };
-
-          if (cv.Mat && cv.imread) {
-            onInit();
-          } else {
-            cv.onRuntimeInitialized = onInit;
+          if (cvGlobal && typeof cvGlobal.then === 'function') {
+            // نسخة 5.x تُخرج window.cv كـ Promise — الانتظار لحلّه هو الطريقة الصحيحة
+            this.startInitAnimation();
+            this.armWatchdog(fail);
+            cvGlobal
+              .then((mod: any) => {
+                if (!mod || !mod.Mat) {
+                  fail(new Error('تعذر إكمال تفعيل محرك كشف البطاقة'));
+                  return;
+                }
+                finish(mod);
+              })
+              .catch((e: unknown) =>
+                fail(e instanceof Error ? e : new Error('فشل تفعيل محرك كشف البطاقة'))
+              );
+            return;
           }
+
+          if (cvGlobal && cvGlobal.onRuntimeInitialized !== undefined) {
+            // نسخ قديمة — عبر onRuntimeInitialized
+            this.startInitAnimation();
+            this.armWatchdog(fail);
+            cvGlobal.onRuntimeInitialized = () => finish(cvGlobal);
+            return;
+          }
+
+          fail(new Error('فشل تفعيل محرك كشف البطاقة'));
         };
 
         script.onerror = () => {
@@ -133,7 +165,51 @@ class OpenCVLoader {
     });
   }
 
+  private startInitAnimation() {
+    this.stopInitAnimation();
+    let elapsed = 0;
+    const phase = (ms: number, pct: number) =>
+      ms < 9000 ? 'فك ترميز وحدة الحساب...'
+      : ms < 22000 ? 'تهيئة محرك البطاقة...'
+      : pct >= 99 ? 'المحرك جاهز تقريباً...'
+      : 'تحسين أداء المحرك — يستغرق قليلاً في أول تشغيل...';
+
+    // يتدرّج 92→99 ببطء حتى يكتمل التفعيل فعلياً (لا يبدو معلّقاً)
+    this.initTimer = window.setInterval(() => {
+      elapsed += 250;
+      const pct = Math.min(99, 92 + (elapsed / 45000) * 7);
+      this.report({ percent: pct, detail: phase(elapsed, pct) });
+    }, 250);
+  }
+
+  private armWatchdog(fail: (e: Error) => void) {
+    this.clearWatchdog();
+    this.watchdog = window.setTimeout(() => {
+      fail(new Error('استغرق تفعيل محرك كشف البطاقة وقتاً طويلاً — حاول مرة أخرى'));
+    }, 90000);
+  }
+
+  private stopInitAnimation() {
+    if (this.initTimer !== null) {
+      window.clearInterval(this.initTimer);
+      this.initTimer = null;
+    }
+  }
+
+  private clearWatchdog() {
+    if (this.watchdog !== null) {
+      window.clearTimeout(this.watchdog);
+      this.watchdog = null;
+    }
+  }
+
+  private clearInitTimers() {
+    this.stopInitAnimation();
+    this.clearWatchdog();
+  }
+
   reset() {
+    this.clearInitTimers();
     this._cv = null;
     this.loading = null;
     this.report({ percent: 0, detail: 'تهيئة محرك كشف البطاقة...' });
