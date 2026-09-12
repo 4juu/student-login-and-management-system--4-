@@ -2,10 +2,9 @@ import React, { useState, useEffect, lazy, Suspense, useCallback } from 'react';
 import { ref, set } from 'firebase/database';
 import { database, dbURL } from '../../firebase/config';
 import { AttendanceRecord, Student } from '../../types/student';
-import { RegistrationLink, IDExtractionResult } from '../../types/registration';
+import { RegistrationLink } from '../../types/registration';
 import { getRegistrationLink, validateLink } from '../../services/tokenService';
-import { findNameInOCRText } from '../../services/nameMatching';
-import { IDCardUpload } from './IDCardUpload';
+import { KycCardScan } from './KycCardScan';
 import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear, loadAttendanceRecords, loadSessions } from '../../firebase/dataService';
 import { decompressRecord } from '../../firebase/dataServiceCompressed';
@@ -13,7 +12,7 @@ import { SkeletonCard } from '../Skeleton';
 import { migrateToV5, parseAllSamples, checkForTampering, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
 import { useFaceAI } from '../../hooks/useFaceAI';
 import { EngineOverlay } from '../face/EngineOverlay';
-import { AlertTriangle, XCircle, CalendarDays, CheckCircle, Users, BookOpen, ArrowLeft, ScanFace, IdCard } from 'lucide-react';
+import { AlertTriangle, XCircle, CalendarDays, CheckCircle, Users, BookOpen, ArrowLeft, ScanFace } from 'lucide-react';
 
 const LazySelfCapture = lazy(() =>
   import('../face/SelfCaptureStep').then(m => ({ default: m.SelfCaptureStep }))
@@ -23,7 +22,6 @@ type Step =
   | 'loading'
   | 'invalid-link'
   | 'upload-id'
-  | 'name-mismatch'
   | 'confirm'
   | 'capture-face'
   | 'submitting'
@@ -79,7 +77,6 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   const [link, setLink] = useState<RegistrationLink | null>(null);
   const [expected, setExpected] = useState<Student | null>(null);
   const [stageStudents, setStageStudents] = useState<Student[]>([]);
-  const [idData, setIdData] = useState<IDExtractionResult | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [sessionNameMap, setSessionNameMap] = useState<Record<string, string>>({});
@@ -219,55 +216,27 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     return () => { mounted = false; clearTimeout(globalTimeout); };
   }, [token, goTo]);
 
-  const handleIdExtracted = async (result: IDExtractionResult) => {
-    setIdData(result);
+  const handleMatched = async (student: Student) => {
     if (!link) return;
 
+    // روابط البصمة/التحقق: المطابقة تمت داخل نافذة KYC — ننتقل لتأكيد البصمة
+    if (link.type !== 'attendance') {
+      goTo('confirm');
+      return;
+    }
+
+    // روابط الحضور: نجلب تقرير الطالب المطابق
+    setExpected(student);
     try {
-      // تسجيل البصمة: الاسم يجب أن يطابق اسم الطالب داخل الرابط حصراً
-      if (link.type !== 'attendance') {
-        const st = expected;
-        if (!st || !st.name) { setErrorMsg('بيانات الطالب غير متوفرة في الرابط'); goTo('invalid-link'); return; }
-
-        const nameOk = !!(result.ocrText && st.name && findNameInOCRText(st.name, result.ocrText).matched);
-        const qrOk = !!(result.qrId && st.qrCodeId && result.qrId === st.qrCodeId);
-
-        if (nameOk || qrOk) {
-          goTo('confirm');
-        } else {
-          goTo('name-mismatch');
-        }
-        return;
-      }
-
-      // الحضور: مطابقة على طلاب المرحلة
-      let found: Student | null = null;
-      if (result.ocrText) {
-        let bestConf = -1;
-        for (const s of stageStudents) {
-          const check = findNameInOCRText(s.name, result.ocrText);
-          if (check.matched && check.confidence > bestConf) { found = s; bestConf = check.confidence; }
-        }
-      }
-      if (!found && result.qrId) {
-        found = stageStudents.find(s =>
-          s.universityId === result.qrId ||
-          (s.qrCodeId && s.qrCodeId === result.qrId)
-        ) || null;
-      }
-
-      if (found) {
-        setExpected(found);
-        const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link, found.id);
-        setAttendanceRecords(records);
-        setSessionNameMap(namesMap);
-        goTo('attendance-report');
-      } else {
-        goTo('name-mismatch');
-      }
+      const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link, student.id);
+      setAttendanceRecords(records);
+      setSessionNameMap(namesMap);
+      goTo('attendance-report');
     } catch (e) {
-      console.error('❌ خطأ في معالجة الهوية:', e);
-      goTo('name-mismatch');
+      console.error('❌ تعذر تحميل تقرير الحضور:', e);
+      setErrorMsg('تعذر تحميل تقرير الحضور — حاول مرة أخرى');
+      setRetryStep('upload-id');
+      goTo('error');
     }
   };
 
@@ -315,7 +284,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
 
     try {
       const requestId = `${expected.id}_${Date.now()}`;
-      const qrCodeId = idData?.qrId || expected.qrCodeId || '';
+      const qrCodeId = expected.qrCodeId || '';
       await set(ref(database, `registrationSystem/pending/${link.adminUid}/${requestId}`), {
         id: requestId,
         adminUid: link.adminUid,
@@ -324,10 +293,10 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
         studentCode: expected.code || '',
         nameInSystem: expected.name,
         nameFromCard: expected.name,
-        nationalId: idData?.nationalId || '',
-        qrCodeUrl: idData?.qrUrl || '',
+        nationalId: '',
+        qrCodeUrl: '',
         qrCodeId,
-        qrVerified: !!idData?.qrId,
+        qrVerified: false,
         nameMatched: true,
         faceDescriptor: migrated,
         linkToken: link.token,
@@ -397,23 +366,15 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     return (
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
         <div className="w-full max-w-md">
-          {link?.type !== 'attendance' && expected && expected.name && (
-            <div className="text-center mb-5">
-              <div className="mx-auto w-14 h-14 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-3">
-                <ScanFace className="w-7 h-7 text-indigo-400" />
-              </div>
-              <h2 className="text-xl font-bold text-white">تسجيل بصمة الوجه الذاتي</h2>
-              <p className="text-sm text-white/50 mt-1">ارفع صورة الهوية الوطنية ليتحقق النظام من مطابقة الاسم</p>
-              <div className="mt-3 inline-flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/25 rounded-full px-4 py-1.5">
-                <IdCard className="w-4 h-4 text-indigo-300" />
-                <span className="text-sm font-bold text-indigo-200">{expected.name}</span>
-              </div>
-            </div>
-          )}
-          <IDCardUpload
-            student={expected || ({ id: '', name: '', code: '' } as Student)}
-            title={link?.type === 'attendance' && !expected ? 'ارفع صورتك للاطلاع على تقرير الحضور والغياب' : undefined}
-            onExtracted={handleIdExtracted}
+          <KycCardScan
+            roster={link?.type === 'attendance' ? stageStudents : []}
+            expected={link?.type === 'attendance' ? undefined : expected || undefined}
+            title={
+              link?.type === 'attendance'
+                ? 'صوّر بطاقتك الجامعية، نستخرج اسمك تلقائياً ونطابقه مع قاعدة البيانات للاطلاع على تقرير الحضور والغياب'
+                : undefined
+            }
+            onMatched={handleMatched}
             onCancel={onExit}
           />
         </div>
@@ -421,42 +382,10 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     );
   }
 
-  if (step === 'name-mismatch' && idData) {
-    return (
-      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
-        <div className="glass-card p-8 max-w-md w-full text-center">
-          <div className="mx-auto w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4">
-            <AlertTriangle className="w-8 h-8 text-amber-400" />
-          </div>
-          <h2 className="text-2xl font-bold text-white mb-2">تعذّر التحقق من الهوية</h2>
-          {expected?.name && link?.type !== 'attendance' && (
-            <div className="glass-card-sm p-3 mb-4">
-              <p className="text-sm text-white/50">الاسم المطلوب: <span className="text-white font-bold">{expected.name}</span></p>
-            </div>
-          )}
-          <div className="glass-card-sm p-4 mb-4 text-right space-y-2">
-            {idData.ocrText && (
-              <p className="text-sm text-white/50">النصوص المستخرجة: <span className="text-white/80 font-mono text-xs break-all">{idData.ocrText.slice(0, 300)}</span></p>
-            )}
-            {idData.qrId && (
-              <p className="text-sm text-white/50">رمز QR: <span className="text-white/80 font-mono text-xs">{idData.qrId}</span></p>
-            )}
-          </div>
-          <p className="text-sm text-white/60 mb-6">
-            تأكد أنك تصوّر هويتك أنت، وأن الاسم على البطاقة واضح ومطابق للمعروض أعلاه، ثم أعد المحاولة.
-          </p>
-          <button onClick={() => goTo('upload-id')} className="btn-base btn-secondary w-full py-3">
-            <XCircle className="w-4 h-4" /> إعادة تصوير الهوية
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   if (step === 'confirm' && expected) {
     const student = expected;
-    const barcode = idData?.qrId || student.qrCodeId || '';
-    const qrVerified = !!(idData?.qrId && barcode === idData.qrId);
+    const barcode = student.qrCodeId || '';
+    const qrVerified = false;
     return (
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
         <div className="glass-card p-8 max-w-md w-full text-center">
@@ -512,7 +441,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   }
 
   if (step === 'success' && expected) {
-    return <RegistrationSuccess student={expected} qrVerified={!!(idData?.qrId && (idData.qrId === expected.qrCodeId || !expected.qrCodeId))} onExit={onExit} />;
+    return <RegistrationSuccess student={expected} qrVerified={false} onExit={onExit} />;
   }
 
   if (step === 'error') {
