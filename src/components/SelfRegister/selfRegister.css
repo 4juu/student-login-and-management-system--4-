@@ -565,50 +565,6 @@
   50% { opacity: 0.45; }
 }
 
-/* عدسة التكبير: تُظهر منطقة الاسم من نفس البث مباشرةً */
-.sel-lens {
-  position: absolute;
-  z-index: 4;
-  left: 50%;
-  top: 40%;
-  width: min(10.5rem, 52vw);
-  height: min(10.5rem, 52vw);
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  overflow: hidden;
-  border: 3px solid rgba(107, 166, 245, 0.85);
-  box-shadow:
-    0 0 0 8px rgba(5, 12, 30, 0.5),
-    0 12px 34px rgba(0, 0, 0, 0.55),
-    inset 0 0 34px rgba(0, 0, 0, 0.4);
-  pointer-events: none;
-}
-
-.sel-lens::after {
-  content: '';
-  position: absolute;
-  inset: -5px;
-  border-radius: 50%;
-  border: 2px solid rgba(107, 166, 245, 0.35);
-  animation: sel-lens-breathe 2.2s ease-in-out infinite;
-}
-
-.sel-lens-video {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 32%;
-  transform: scale(2.4);
-  transform-origin: 50% 30%;
-}
-
-@keyframes sel-lens-breathe {
-  0%, 100% { transform: scale(1); opacity: 0.9; }
-  50% { transform: scale(1.08); opacity: 0.5; }
-}
-
 .sel-cam-pill {
   position: absolute;
   top: 1.1rem;
@@ -740,7 +696,6 @@
   .sel-pulse,
   .sel-shimmer,
   .sel-corner,
-  .sel-lens::after,
   .sel-fade {
     animation: none !important;
   }

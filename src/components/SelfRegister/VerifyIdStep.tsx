@@ -37,82 +37,22 @@ interface ProgressState {
   status: string;
 }
 
-// ── عقدتا Tesseract: العربية أولاً + (عربية+إنجليزي) احتياطياً فقط عند الحاجة ──
-let ocrAraWorker: any = null;
-let ocrMultiWorker: any = null;
-const ocrPromises: Partial<Record<string, Promise<any>>> = {};
+// ── عقدة Tesseract واحدة (عربية + إنجليزي) تُحمَّل من CDN كما كان معتمداً ──
+let ocrWorker: any = null;
 let ocrLogger: ((m: any) => void) | null = null;
 
-// نُفضّل قراءة ملفات اللغة من نفس الخادم (تخزين مؤقت بالمتصفح -> زيارة ثانية فورية)
-const LANG_PATH = '/tessdata';
-
-const getOcrWorker = async (langs: string = 'ara'): Promise<any> => {
-  const cached = langs === 'ara' ? ocrAraWorker : ocrMultiWorker;
-  if (cached) return cached;
-  if (ocrPromises[langs]) return ocrPromises[langs];
-
-  ocrPromises[langs] = (async () => {
-    const { createWorker } = await import('tesseract.js');
-    let worker: any = null;
-    try {
-      worker = await createWorker(langs, 1, {
-        langPath: LANG_PATH,
-        logger: (m: any) => ocrLogger?.(m),
-      });
-    } catch (e) {
-      console.warn('⚠️ تعذّر تحميل ملف اللغة محلياً — التحويل إلى CDN:', e);
-      worker = await createWorker(langs, 1, {
-        logger: (m: any) => ocrLogger?.(m),
-      });
-    }
-    await worker.setParameters({
-      tessedit_pageseg_mode: '3',
-      preserve_interword_spaces: '1',
-      user_defined_dpi: '300',
-    });
-    if (langs === 'ara') ocrAraWorker = worker;
-    else ocrMultiWorker = worker;
-    return worker;
-  })();
-  return ocrPromises[langs];
-};
-
-/** عدد الكلمات العربية المفيدة في النص المقروء */
-const countArabicWords = (text: string): number =>
-  text
-    .split(/[\s\n]+/)
-    .filter(w => /[\u0600-\u06FF]/.test(w) && w.length >= 2).length;
-
-/** هل النص المقروء ضعيف يستدعي إعادة محاولة؟ */
-const isOcrTextWeak = (text: string): boolean =>
-  countArabicWords(text) < 3 && !extractStudentName(text);
-
-/** معالجة مسبقة (رمادي + تباين + سطوع) لرفع جودة القراءة — تُعاد قراءة الصورة مرة واحدة */
-const preprocessForOCR = async (file: File): Promise<File | null> => {
-  try {
-    const img = new Image();
-    img.decoding = 'async';
-    img.src = URL.createObjectURL(file);
-    await img.decode();
-
-    const maxW = 1600;
-    const scale = Math.min(1, maxW / (img.naturalWidth || 1));
-    const w = Math.max(2, Math.round((img.naturalWidth || 2) * scale));
-    const h = Math.max(2, Math.round((img.naturalHeight || 2) * scale));
-
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d')!;
-    ctx.filter = 'grayscale(1) contrast(1.4) brightness(1.05)';
-    ctx.drawImage(img, 0, 0, w, h);
-    URL.revokeObjectURL(img.src);
-
-    const blob: Blob | null = await new Promise(res => canvas.toBlob(b => res(b), 'image/jpeg', 0.95));
-    return blob ? new File([blob], 'card-preprocessed.jpg', { type: 'image/jpeg' }) : null;
-  } catch {
-    return null;
-  }
+const getOcrWorker = async (): Promise<any> => {
+  if (ocrWorker) return ocrWorker;
+  const { createWorker } = await import('tesseract.js');
+  ocrWorker = await createWorker('ara+eng', 1, {
+    logger: (m: any) => ocrLogger?.(m),
+  });
+  await ocrWorker.setParameters({
+    tessedit_pageseg_mode: '3',
+    preserve_interword_spaces: '1',
+    user_defined_dpi: '300',
+  });
+  return ocrWorker;
 };
 
 const meetProgress = (m: any, set: (p: ProgressState) => void) => {
@@ -170,7 +110,6 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
   const [error, setError] = useState('');
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const lensVideoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const camViewRef = useRef<HTMLDivElement>(null);
   const camScreenRef = useRef<HTMLDivElement>(null);
@@ -222,12 +161,10 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
     streamRef.current = null;
   }, []);
 
-  // ── فتح الكاميرا الخلفية + تحميل محرك القراءة بالخلفية ──
+  // ── فتح الكاميرا الخلفية ──
   const openCamera = useCallback(async () => {
     setError('');
     setScreen('camera');
-    // نبدأ تجهيز عقدة OCR (تحميل ملف اللغة) أثناء فتح الكاميرا
-    getOcrWorker('ara').catch(() => null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
@@ -236,10 +173,6 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
-      }
-      if (lensVideoRef.current) {
-        lensVideoRef.current.srcObject = stream;
-        await lensVideoRef.current.play().catch(() => {});
       }
     } catch {
       setError('الكاميرا غير متاحة على هذا الجهاز');
@@ -325,30 +258,13 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
         return url;
       });
 
-      const runOcr = async (worker: any, img: File): Promise<string> => {
-        ocrLogger = (m: any) => meetProgress(m, setProgress);
-        const { data } = await worker.recognize(img);
-        ocrLogger = null;
-        return (data?.text as string) || '';
-      };
-
       try {
-        // المرحلة 1: العربية فقط (أصغر وأسرع تحميلاً)
-        let text = await runOcr(await getOcrWorker('ara'), file);
+        ocrLogger = (m: any) => meetProgress(m, setProgress);
+        const worker = await getOcrWorker();
+        const { data } = await worker.recognize(file);
+        ocrLogger = null;
 
-        // المرحلة 2: النص ضعيف → معالجة مسبقة (رمادي + تباين) وإعادة قراءة مرة واحدة
-        let preprocessed: File | null = null;
-        if (isOcrTextWeak(text)) {
-          preprocessed = await preprocessForOCR(file);
-          if (preprocessed) text = await runOcr(await getOcrWorker('ara'), preprocessed);
-        }
-
-        // المرحلة 3: ما زال ضعيفاً → عربية + إنجليزي (بطاقات تحتوي لاتينية/أرقام)
-        if (isOcrTextWeak(text)) {
-          const multi = await getOcrWorker('ara+eng');
-          text = await runOcr(multi, preprocessed || file);
-        }
-
+        const text: string = data?.text || '';
         setExtractedName(extractStudentName(text));
         setProgress({ percent: 100, status: 'تمت القراءة — جاري التطابق…' });
 
@@ -410,9 +326,6 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
             <span className="sel-corner sel-corner-bl" />
             <span className="sel-corner sel-corner-br" />
           </div>
-          <div className="sel-lens" aria-hidden="true">
-            <video ref={lensVideoRef} autoPlay playsInline muted className="sel-lens-video" />
-          </div>
           <div className="sel-cam-pill">
             <div className="sel-cam-pill-inner">
               <IdCard className="w-4 h-4" /> ضع البطاقة داخل الإطار مع وضوح الاسم
@@ -427,7 +340,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
           <button type="button" className="sel-shutter" onClick={captureAndScan} aria-label="التقاط الصورة">
             <span className="sel-shutter-inner" />
           </button>
-          <p className="sel-cam-hint">تأكد من إضاءة جيدة وإبعاد الكاميرا عن البطاقة قليلاً، ووضّح اسمك في العدسة العلوية</p>
+          <p className="sel-cam-hint">تأكد من إضاءة جيدة وإبعاد الكاميرا عن البطاقة قليلاً، ووضّح الاسم</p>
           {error && <p className="text-xs font-bold text-red-400 text-center">{error}</p>}
         </div>
       </div>
