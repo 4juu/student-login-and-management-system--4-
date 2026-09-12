@@ -1,0 +1,590 @@
+/* =========================================================
+   🪪 Self-Enroll — Government Light Theme (صفحة الطالب)
+   RTL · Mobile-first · Safe-area aware · Accessibility first
+   ========================================================= */
+
+.sel-bg {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background:
+    radial-gradient(1100px 460px at 50% -8%, rgba(37, 99, 235, 0.10), transparent 62%),
+    linear-gradient(165deg, #F5F9FF 0%, #E8F1FF 100%);
+  color: #10234B;
+}
+
+.sel-shell {
+  max-width: 30rem;
+  margin-inline: auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem 1.25rem 1.75rem;
+  padding-top: max(1.5rem, env(safe-area-inset-top));
+  padding-bottom: max(1.75rem, env(safe-area-inset-bottom));
+}
+
+/* ── الترويسة (الشعار) ─────────────────────────────────── */
+.sel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.sel-logo {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #1458E2, #2B7BFF);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 20px rgba(20, 88, 226, 0.28);
+  flex-shrink: 0;
+}
+
+.sel-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0D1B3D;
+  line-height: 1.35;
+}
+
+.sel-subtitle {
+  font-size: 0.8125rem;
+  color: #5A6D8A;
+  margin-top: 0.15rem;
+  line-height: 1.6;
+}
+
+/* ── مؤشر الخطوات ──────────────────────────────────────── */
+.sel-steps {
+  display: flex;
+  align-items: flex-start;
+  margin: 1.5rem 0 1.75rem;
+}
+
+.sel-step {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.sel-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  background: #D7E2F5;
+  z-index: 0;
+}
+
+.sel-step.done:not(:last-child)::after { background: #7AA8F0; }
+
+.sel-step-dot {
+  position: relative;
+  z-index: 1;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  border: 2px solid #C4D3EC;
+  background: #fff;
+  color: #7A8CA8;
+  transition: all 0.3s ease;
+}
+
+.sel-step.active .sel-step-dot {
+  border-color: #1458E2;
+  color: #1458E2;
+  box-shadow: 0 0 0 4px rgba(20, 88, 226, 0.12);
+}
+
+.sel-step.done .sel-step-dot {
+  background: #1458E2;
+  border-color: #1458E2;
+  color: #fff;
+}
+
+.sel-step-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #7A8CA8;
+  text-align: center;
+}
+
+.sel-step.active .sel-step-label,
+.sel-step.done .sel-step-label { color: #0D1B3D; }
+
+/* ── البطاقات والأزرار ─────────────────────────────────── */
+.sel-card {
+  background: #fff;
+  border: 1px solid #E2EAF8;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(12, 45, 110, 0.06);
+}
+
+.sel-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 52px;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  border: none;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+  user-select: none;
+}
+
+.sel-btn-primary {
+  background: linear-gradient(135deg, #1458E2, #2B7BFF);
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(20, 88, 226, 0.3);
+}
+
+.sel-btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 32px rgba(20, 88, 226, 0.38);
+}
+
+.sel-btn-primary:active:not(:disabled) { transform: scale(0.98); }
+.sel-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.sel-btn-ghost {
+  background: #F1F5FC;
+  color: #1458E2;
+  border: 1px solid #DCE7FA;
+}
+
+.sel-btn-ghost:hover { background: #E8F0FE; }
+.sel-btn-ghost:active { transform: scale(0.98); }
+
+.sel-btn-outline {
+  background: #fff;
+  color: #3C4E6E;
+  border: 1.5px solid #D5E2F5;
+}
+
+.sel-btn-outline:hover { border-color: #A9C3F0; background: #F7FAFF; }
+.sel-btn-outline:active { transform: scale(0.98); }
+
+.sel-btn-sm { min-height: 46px; padding: 0.5rem 1rem; }
+
+/* ── خانات الاختيار (تصوير / رفع) ─────────────────────── */
+.sel-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  text-align: right;
+  background: #fff;
+  border: 1.5px solid #DCE7FA;
+  border-radius: 16px;
+  padding: 1.1rem 1.25rem;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.sel-option:hover {
+  border-color: #7AA8F0;
+  box-shadow: 0 8px 20px rgba(13, 42, 90, 0.06);
+}
+
+.sel-option:active { transform: scale(0.99); }
+
+.sel-option-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #EEF4FF, #E3EDFF);
+  color: #1458E2;
+  flex-shrink: 0;
+}
+
+.sel-option-title { font-weight: 700; color: #0D1B3D; font-size: 0.9375rem; }
+.sel-option-desc { font-size: 0.75rem; color: #6B7F9F; margin-top: 0.15rem; line-height: 1.5; }
+
+/* ── الشارات ───────────────────────────────────────────── */
+.sel-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.sel-chip-blue { background: #E9F0FE; color: #1458E2; border: 1px solid #D4E2FB; }
+.sel-chip-violet { background: #F3EDFF; color: #6D28D9; border: 1px solid #E6D9FC; }
+.sel-chip-green { background: #E6F8F0; color: #0E9F6E; border: 1px solid #CBEEDF; }
+.sel-chip-amber { background: #FEF5E7; color: #B45309; border: 1px solid #FBE2BA; }
+.sel-chip-red { background: #FDEEEB; color: #DC2626; border: 1px solid #F9D6D0; }
+.sel-chip-gray { background: #F1F5FC; color: #52678A; border: 1px solid #E3EBF9; }
+
+/* ── ملاحظات الخصوصية / الثقة ─────────────────────────── */
+.sel-note {
+  display: flex;
+  gap: 0.6rem;
+  background: #F6F9FF;
+  border: 1px solid #E7EEFB;
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  color: #5A6D8A;
+  font-size: 0.8125rem;
+  line-height: 1.65;
+}
+
+.sel-note svg { color: #0E9F6E; flex-shrink: 0; margin-top: 0.1rem; }
+
+.sel-footer { margin-top: auto; padding-top: 2rem; }
+.sel-footer-inner { text-align: center; color: #8A9BB8; font-size: 0.75rem; line-height: 1.8; }
+
+/* ── شاشة النتائج ─────────────────────────────────────── */
+.sel-icon-circle {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-inline: auto;
+}
+
+.sel-ok { background: linear-gradient(135deg, #10B981, #0E9F6E); box-shadow: 0 14px 30px rgba(16, 185, 129, 0.28); color: #fff; }
+.sel-ok-soft { background: #E6F8F0; border: 1px solid #CBEEDF; color: #0E9F6E; }
+.sel-warn-soft { background: #FEF5E7; border: 1px solid #FBE2BA; color: #D97706; }
+.sel-err-soft { background: #FDEEEB; border: 1px solid #F9D6D0; color: #DC2626; }
+
+.sel-heading { font-size: 1.25rem; font-weight: 800; color: #0D1B3D; }
+.sel-muted { color: #5A6D8A; font-size: 0.875rem; line-height: 1.7; }
+
+.sel-identity {
+  background: linear-gradient(160deg, #F7FAFF, #EFF5FF);
+  border: 1px solid #E0EAF9;
+  border-radius: 16px;
+  padding: 1.1rem 1.25rem;
+  text-align: right;
+}
+
+.sel-identity-label { font-size: 0.75rem; color: #6B7F9F; font-weight: 600; }
+.sel-identity-name { font-size: 1.4rem; font-weight: 800; color: #0D1B3D; margin-top: 0.15rem; }
+.sel-identity-code {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 0.8125rem;
+  color: #52678A;
+  direction: ltr;
+  text-align: right;
+}
+
+/* ── المقترحات والكتابة اليدوية ───────────────────────── */
+.sel-suggestion {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  text-align: right;
+  background: #F7FAFF;
+  border: 1.5px solid #E3EBF9;
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sel-suggestion:hover { border-color: #9DBBF1; }
+
+.sel-suggestion.selected {
+  border-color: #1458E2;
+  background: #EAF1FF;
+  box-shadow: 0 0 0 3px rgba(20, 88, 226, 0.1);
+}
+
+.sel-radio {
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  border: 2px solid #C4D3EC;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.sel-suggestion.selected .sel-radio {
+  border-color: #1458E2;
+  background: #1458E2;
+}
+
+.sel-suggestion-score { font-size: 0.75rem; font-weight: 700; color: #6B7F9F; }
+
+.sel-input {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 14px;
+  border: 1.5px solid #D5E2F5;
+  background: #fff;
+  padding: 0.7rem 1rem;
+  font-size: 1rem;
+  color: #0D1B3D;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: inherit;
+}
+
+.sel-input:focus {
+  outline: none;
+  border-color: #7AA8F0;
+  box-shadow: 0 0 0 4px rgba(20, 88, 226, 0.08);
+}
+
+.sel-input::placeholder { color: #A7B6CE; }
+
+/* ── التقدم (OCR) ─────────────────────────────────────── */
+.sel-progress {
+  height: 10px;
+  border-radius: 999px;
+  background: #E7EEFB;
+  overflow: hidden;
+}
+
+.sel-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.18) 0 6px, transparent 6px 12px),
+    linear-gradient(90deg, #1458E2, #3B82F6);
+  background-size: 100% 100%, 22px 100%;
+  transition: width 0.4s ease;
+  animation: sel-stripes 1s linear infinite;
+}
+
+@keyframes sel-stripes {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 22px 0, 0 0; }
+}
+
+.sel-scan-wrap { position: relative; width: 4.5rem; height: 4.5rem; margin-inline: auto; }
+
+.sel-scan-icon {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1458E2, #2B7BFF);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 14px 30px rgba(20, 88, 226, 0.3);
+  position: relative;
+  z-index: 1;
+}
+
+.sel-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(20, 88, 226, 0.35);
+  animation: sel-pulse 1.7s ease-out infinite;
+}
+
+@keyframes sel-pulse {
+  0% { transform: scale(0.85); opacity: 1; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+/* ── الكاميرا ─────────────────────────────────────────── */
+.sel-camera-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: #0B1530;
+  display: flex;
+  flex-direction: column;
+}
+
+.sel-cam-top {
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  padding-top: max(0.7rem, env(safe-area-inset-top));
+  color: #0D1B3D;
+}
+
+.sel-cam-top-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 12px;
+  background: #F1F5FC;
+  border: 1px solid #E3EBF9;
+  color: #3C4E6E;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sel-cam-top-btn:hover { background: #E8F0FE; color: #1458E2; }
+
+.sel-cam-view { flex: 1; position: relative; overflow: hidden; background: #030712; }
+
+.sel-cam-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+.sel-cam-guide {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 82%;
+  max-width: 360px;
+  aspect-ratio: 85.6 / 53.98;
+  border: 1.5px dashed rgba(120, 167, 240, 0.9);
+  border-radius: 16px;
+}
+
+.sel-corner { position: absolute; width: 22px; height: 22px; border: 3px solid #6AA5F5; }
+.sel-corner-tl { top: -1px; right: -1px; border-right: none; border-bottom: none; border-top-right-radius: 10px; }
+.sel-corner-tr { top: -1px; left: -1px; border-left: none; border-bottom: none; border-top-left-radius: 10px; }
+.sel-corner-bl { bottom: -1px; right: -1px; border-right: none; border-top: none; border-bottom-right-radius: 10px; }
+.sel-corner-br { bottom: -1px; left: -1px; border-left: none; border-top: none; border-bottom-left-radius: 10px; }
+
+.sel-cam-pill {
+  position: absolute;
+  top: 1.1rem;
+  inset-inline: 0;
+  display: flex;
+  justify-content: center;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.sel-cam-pill-inner {
+  background: rgba(5, 12, 30, 0.55);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  padding: 0.5rem 1.1rem;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sel-cam-bottom {
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  padding: 0.9rem;
+  padding-bottom: max(0.9rem, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.sel-shutter {
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: 50%;
+  background: #fff;
+  border: 5px solid #1458E2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.sel-shutter:active { transform: scale(0.9); }
+.sel-shutter-inner { width: 3rem; height: 3rem; border-radius: 50%; background: #1458E2; }
+
+.sel-cam-hint { font-size: 0.75rem; color: #6B7F9F; text-align: center; line-height: 1.6; }
+
+/* ── تقرير الحضور ─────────────────────────────────────── */
+.sel-report-hero {
+  background: linear-gradient(135deg, #1458E2, #2B7BFF);
+  border-radius: 20px 20px 0 0;
+  padding: 1.5rem;
+  color: #fff;
+}
+
+.sel-stat {
+  border-radius: 16px;
+  padding: 1rem;
+  text-align: center;
+}
+
+.sel-stat-green { background: #E6F8F0; border: 1px solid #CBEEDF; }
+.sel-stat-red { background: #FDEEEC; border: 1px solid #F8D8D3; }
+.sel-stat-blue { background: #EAF1FF; border: 1px solid #D7E4FB; }
+
+.sel-stat-num { font-size: 1.75rem; font-weight: 800; }
+
+.sel-row-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: #F7FAFF;
+  border: 1px solid #E7EEFB;
+  border-radius: 14px;
+  padding: 0.8rem 1rem;
+}
+
+.sel-pill { padding: 0.28rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
+.sel-pill-green { background: #E6F8F0; color: #0E9F6E; }
+.sel-pill-red { background: #FDEEEC; color: #DC2626; }
+
+/* ── سكلتون / حركات ───────────────────────────────────── */
+.sel-skeleton {
+  border-radius: 20px;
+  background: #fff;
+  border: 1px solid #E2EAF8;
+  padding: 1.5rem;
+}
+
+.sel-shimmer {
+  background: linear-gradient(90deg, #EEF3FC 25%, #F7FAFF 50%, #EEF3FC 75%);
+  background-size: 200% 100%;
+  animation: sel-shimmer 1.4s infinite;
+  border-radius: 12px;
+}
+
+@keyframes sel-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.sel-fade { animation: sel-fade 0.3s ease; }
+
+@keyframes sel-fade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
