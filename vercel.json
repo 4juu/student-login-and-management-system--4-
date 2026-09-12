@@ -26,7 +26,7 @@
 
   "rewrites": [
     {
-      "source": "/((?!assets/).*)",
+      "source": "/((?!assets/|ort/|models/|mediapipe/).*)",
       "destination": "/index.html"
     }
   ]
