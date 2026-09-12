@@ -5,6 +5,8 @@ import { Student, AttendanceRecord, AttendanceSession, College, Stage } from './
 import { User } from './types/user';
 import { StudentManager } from './components/StudentManager';
 
+import './design-system.css';
+
 import { StudentsViewer } from './components/StudentsViewer';
 import { AttendanceLogin } from './components/AttendanceLogin';
 import { AttendanceRecords } from './components/AttendanceRecords';

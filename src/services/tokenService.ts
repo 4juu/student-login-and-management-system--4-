@@ -258,6 +258,9 @@ export const cleanExpiredLinks = async (adminUid: string): Promise<number> => {
 
 /**
  * ✅ التحقق من صلاحية الرابط
+ * ملاحظة: لا نرفض الرابط إذا كان «مستخدماً» — روابط الطلاب الفردية تبقى مفتوحة
+ * لنفس الطالب (بعد موافقة الأدمن أو أثناء التسجيل) بحيث يستطيع العودة لأول خطوة
+ * التحقق دائماً، ولا يُحوَّل لصفحة تسجيل الدخول أبداً.
  */
 export const validateLink = (link: RegistrationLink | null): {
   valid: boolean;
@@ -265,6 +268,5 @@ export const validateLink = (link: RegistrationLink | null): {
 } => {
   if (!link) return { valid: false, reason: 'الرابط غير موجود' };
   if (link.expiresAt < Date.now()) return { valid: false, reason: 'انتهت صلاحية الرابط' };
-  if (link.used) return { valid: false, reason: 'تم استخدام هذا الرابط مسبقاً' };
   return { valid: true };
 };

@@ -1,4 +1,9 @@
 import React, { useState, useEffect, lazy, Suspense, useCallback } from 'react';
+import '@fontsource/vazirmatn/400.css';
+import '@fontsource/vazirmatn/500.css';
+import '@fontsource/vazirmatn/600.css';
+import '@fontsource/vazirmatn/700.css';
+import '@fontsource/vazirmatn/800.css';
 import { ref, set } from 'firebase/database';
 import { database, dbURL } from '../../firebase/config';
 import { AttendanceRecord, Student } from '../../types/student';
@@ -69,6 +74,54 @@ export const loadStageStudentsPublic = async (
   return arr.filter(s => s && s.id && s.name) as Student[];
 };
 
+const STAGE_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 ساعات
+
+const stageCacheKey = (adminUid: string, year: string, stageId: string) =>
+  `stageStudents:${adminUid}:${year}:${stageId}`;
+
+/** تحميل طلاب المرحلة مع cache بالجلسة (فورياً عند العودة، وتحديث بالخلفية) */
+export const loadStageStudentsCached = async (
+  adminUid: string,
+  year: string,
+  stageId: string,
+): Promise<Student[]> => {
+  const key = stageCacheKey(adminUid, year, stageId);
+
+  const readCache = (): Student[] | null => {
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.students) || Date.now() - (parsed.t || 0) > STAGE_CACHE_TTL) {
+        sessionStorage.removeItem(key);
+        return null;
+      }
+      return parsed.students as Student[];
+    } catch {
+      return null;
+    }
+  };
+
+  const writeCache = (students: Student[]) => {
+    try {
+      sessionStorage.setItem(key, JSON.stringify({ t: Date.now(), students }));
+    } catch {}
+  };
+
+  const cached = readCache();
+  if (cached) {
+    // تحديث بالخلفية دون تعطيل الفورية
+    loadStageStudentsPublic(adminUid, year, stageId)
+      .then(list => { if (list?.length) writeCache(list); })
+      .catch(() => {});
+    return cached;
+  }
+
+  const list = await loadStageStudentsPublic(adminUid, year, stageId);
+  if (list?.length) writeCache(list);
+  return list;
+};
+
 const buildStudentFromLink = (lnk: RegistrationLink): Student => ({
   id: lnk.studentId || '',
   name: lnk.studentName || '',
@@ -101,6 +154,33 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   const { ready: engineReady, progress, error: engineError, retry: engineRetry } = useFaceAI(needsEngine);
 
   const goTo = useCallback((s: Step) => setStep(prev => (prev === s ? prev : s)), []);
+
+  // انتقال بين الشاشات عبر View Transitions API (مع احترام تقليل الحركة)
+  const transitionTo = useCallback(
+    (s: Step) => {
+      const apply = () => goTo(s);
+      try {
+        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduced || typeof (document as any).startViewTransition !== 'function') {
+          apply();
+          return;
+        }
+        (document as any).startViewTransition(apply);
+      } catch {
+        apply();
+      }
+    },
+    [goTo],
+  );
+
+  // العودة لأول خطوة التحقق لنفس الطالب — بلا تحويل لصفحة تسجيل الدخول
+  const restart = useCallback(() => {
+    setAttendanceRecords([]);
+    setSessionNameMap({});
+    setErrorMsg('');
+    setRetryStep('verify');
+    transitionTo('verify');
+  }, [transitionTo]);
 
   const loadStageRecordsForStudent = async (
     lnk: RegistrationLink, studentId: string, signal?: AbortSignal,
@@ -178,7 +258,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
           const ac = new AbortController();
           const st = setTimeout(() => ac.abort(), TIMEOUT);
           try {
-            const list = await loadStageStudentsPublic(linkData.adminUid, year, linkData.stageId);
+            const list = await loadStageStudentsCached(linkData.adminUid, year, linkData.stageId);
             if (!mounted) return;
             if (list.length === 0) {
               setErrorMsg('لم نجد بيانات طلاب لهذه المرحلة');
@@ -372,8 +452,9 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   }
 
   // ── شاشة النجاح (شاشة كاملة مستقلة) ──
+  // زر «تم» يعيد لأول خطوة التحقق لنفس الطالب — لا انتقال لتسجيل الدخول
   if (step === 'success' && expected) {
-    return <RegistrationSuccess student={expected} qrVerified={false} onExit={onExit} />;
+    return <RegistrationSuccess student={expected} qrVerified={false} onExit={restart} />;
   }
 
   // ═══════════ الشاشات ضمن الهيكل الحكومي الفاتح ═══════════
@@ -442,7 +523,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
                 expected={link?.type === 'attendance' ? undefined : expected}
                 linkType={link?.type}
                 onVerified={handleVerified}
-                onCancel={onExit}
+                onCancel={() => { setErrorMsg(''); transitionTo('verify'); }}
               />
             </div>
           )}

@@ -22,8 +22,6 @@ import {
 } from '../../services/cardMatch';
 import './selfRegister.css';
 
-const CARD_RATIO = 85.6 / 53.98;
-
 interface VerifyIdStepProps {
   roster: Student[];
   expected?: Student | null;
@@ -39,22 +37,82 @@ interface ProgressState {
   status: string;
 }
 
-// ── عقدة Tesseract واحدة يُعاد استخدامها (تُحمِّل العربية مرة واحدة فقط) ──
-let ocrWorker: any = null;
+// ── عقدتا Tesseract: العربية أولاً + (عربية+إنجليزي) احتياطياً فقط عند الحاجة ──
+let ocrAraWorker: any = null;
+let ocrMultiWorker: any = null;
+const ocrPromises: Partial<Record<string, Promise<any>>> = {};
 let ocrLogger: ((m: any) => void) | null = null;
 
-const getOcrWorker = async (): Promise<any> => {
-  if (ocrWorker) return ocrWorker;
-  const { createWorker } = await import('tesseract.js');
-  ocrWorker = await createWorker('ara+eng', 1, {
-    logger: (m: any) => ocrLogger?.(m),
-  });
-  await ocrWorker.setParameters({
-    tessedit_pageseg_mode: '3',
-    preserve_interword_spaces: '1',
-    user_defined_dpi: '300',
-  });
-  return ocrWorker;
+// نُفضّل قراءة ملفات اللغة من نفس الخادم (تخزين مؤقت بالمتصفح -> زيارة ثانية فورية)
+const LANG_PATH = '/tessdata';
+
+const getOcrWorker = async (langs: string = 'ara'): Promise<any> => {
+  const cached = langs === 'ara' ? ocrAraWorker : ocrMultiWorker;
+  if (cached) return cached;
+  if (ocrPromises[langs]) return ocrPromises[langs];
+
+  ocrPromises[langs] = (async () => {
+    const { createWorker } = await import('tesseract.js');
+    let worker: any = null;
+    try {
+      worker = await createWorker(langs, 1, {
+        langPath: LANG_PATH,
+        logger: (m: any) => ocrLogger?.(m),
+      });
+    } catch (e) {
+      console.warn('⚠️ تعذّر تحميل ملف اللغة محلياً — التحويل إلى CDN:', e);
+      worker = await createWorker(langs, 1, {
+        logger: (m: any) => ocrLogger?.(m),
+      });
+    }
+    await worker.setParameters({
+      tessedit_pageseg_mode: '3',
+      preserve_interword_spaces: '1',
+      user_defined_dpi: '300',
+    });
+    if (langs === 'ara') ocrAraWorker = worker;
+    else ocrMultiWorker = worker;
+    return worker;
+  })();
+  return ocrPromises[langs];
+};
+
+/** عدد الكلمات العربية المفيدة في النص المقروء */
+const countArabicWords = (text: string): number =>
+  text
+    .split(/[\s\n]+/)
+    .filter(w => /[\u0600-\u06FF]/.test(w) && w.length >= 2).length;
+
+/** هل النص المقروء ضعيف يستدعي إعادة محاولة؟ */
+const isOcrTextWeak = (text: string): boolean =>
+  countArabicWords(text) < 3 && !extractStudentName(text);
+
+/** معالجة مسبقة (رمادي + تباين + سطوع) لرفع جودة القراءة — تُعاد قراءة الصورة مرة واحدة */
+const preprocessForOCR = async (file: File): Promise<File | null> => {
+  try {
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = URL.createObjectURL(file);
+    await img.decode();
+
+    const maxW = 1600;
+    const scale = Math.min(1, maxW / (img.naturalWidth || 1));
+    const w = Math.max(2, Math.round((img.naturalWidth || 2) * scale));
+    const h = Math.max(2, Math.round((img.naturalHeight || 2) * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d')!;
+    ctx.filter = 'grayscale(1) contrast(1.4) brightness(1.05)';
+    ctx.drawImage(img, 0, 0, w, h);
+    URL.revokeObjectURL(img.src);
+
+    const blob: Blob | null = await new Promise(res => canvas.toBlob(b => res(b), 'image/jpeg', 0.95));
+    return blob ? new File([blob], 'card-preprocessed.jpg', { type: 'image/jpeg' }) : null;
+  } catch {
+    return null;
+  }
 };
 
 const meetProgress = (m: any, set: (p: ProgressState) => void) => {
@@ -112,7 +170,10 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
   const [error, setError] = useState('');
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const lensVideoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const camViewRef = useRef<HTMLDivElement>(null);
+  const camScreenRef = useRef<HTMLDivElement>(null);
 
   const isVerifyMode = !!expected;
 
@@ -125,15 +186,48 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // قفل التركيز داخل شاشة الكاميرا + إرجاعه بعد الخروج
+  useEffect(() => {
+    if (screen !== 'camera') return;
+    const prev = document.activeElement as HTMLElement | null;
+    const screenEl = camScreenRef.current;
+    screenEl?.querySelector<HTMLButtonElement>('button')?.focus();
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || !screenEl) return;
+      const focusables = Array.from(screenEl.querySelectorAll<HTMLElement>('button'));
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      prev?.focus?.();
+    };
+  }, [screen]);
+
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
   }, []);
 
-  // ── فتح الكاميرا الخلفية ──
+  // ── فتح الكاميرا الخلفية + تحميل محرك القراءة بالخلفية ──
   const openCamera = useCallback(async () => {
     setError('');
     setScreen('camera');
+    // نبدأ تجهيز عقدة OCR (تحميل ملف اللغة) أثناء فتح الكاميرا
+    getOcrWorker('ara').catch(() => null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
@@ -142,6 +236,10 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
+      }
+      if (lensVideoRef.current) {
+        lensVideoRef.current.srcObject = stream;
+        await lensVideoRef.current.play().catch(() => {});
       }
     } catch {
       setError('الكاميرا غير متاحة على هذا الجهاز');
@@ -154,10 +252,11 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
     setScreen('choice');
   }, [stopStream]);
 
-  // ── التقاط الإطار وقصّه حسب حدود إطار التوجيه ──
+  // ── التقاط الإطار وقصّه بدقة من حدود إطار التوجيه الفعلي ──
   const captureAndScan = useCallback(async () => {
     const video = videoRef.current;
-    if (!video || !video.videoWidth) return;
+    const guide = camViewRef.current?.querySelector('.sel-cam-guide');
+    if (!video || !video.videoWidth || !guide) return;
 
     const vw = video.videoWidth;
     const vh = video.videoHeight;
@@ -168,16 +267,39 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
     const fctx = full.getContext('2d', { willReadFrequently: true })!;
     fctx.drawImage(video, 0, 0, vw, vh);
 
-    const gw = vw * 0.82;
-    const gh = gw / CARD_RATIO;
-    const sx = (vw - gw) / 2;
-    const sy = Math.max(0, Math.min(vh - gh, (vh - gh) / 2));
+    // تحويل إحداثيات إطار التوجيه (CSS px) إلى إحداثيات البكسل الأصلية
+    // مع مراعاة object-fit: cover (قصّ الأطراف الزائدة)
+    const vRect = video.getBoundingClientRect();
+    const gRect = guide.getBoundingClientRect();
+    const cw = vRect.width || 1;
+    const ch = vRect.height || 1;
+    const viewA = cw / ch;
+    const srcA = vw / vh;
+
+    let sx = 0;
+    let sy = 0;
+    let sW = vw;
+    let sH = vh;
+    if (srcA > viewA) {
+      sW = vh * viewA;
+      sx = (vw - sW) / 2;
+    } else {
+      sH = vw / viewA;
+      sy = (vh - sH) / 2;
+    }
+
+    const gx = gRect.left - vRect.left;
+    const gy = gRect.top - vRect.top;
+    const cropX = sx + (gx / cw) * sW;
+    const cropY = sy + (gy / ch) * sH;
+    const cropW = (gRect.width / cw) * sW;
+    const cropH = (gRect.height / ch) * sH;
 
     const out = document.createElement('canvas');
-    out.width = Math.round(gw);
-    out.height = Math.round(gh);
+    out.width = Math.max(2, Math.round(cropW));
+    out.height = Math.max(2, Math.round(cropH));
     const octx = out.getContext('2d')!;
-    octx.drawImage(full, sx, sy, gw, gh, 0, 0, out.width, out.height);
+    octx.drawImage(full, cropX, cropY, cropW, cropH, 0, 0, out.width, out.height);
 
     stopStream();
 
@@ -203,13 +325,30 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
         return url;
       });
 
-      try {
+      const runOcr = async (worker: any, img: File): Promise<string> => {
         ocrLogger = (m: any) => meetProgress(m, setProgress);
-        const worker = await getOcrWorker();
-        const { data } = await worker.recognize(file);
+        const { data } = await worker.recognize(img);
         ocrLogger = null;
+        return (data?.text as string) || '';
+      };
 
-        const text: string = data?.text || '';
+      try {
+        // المرحلة 1: العربية فقط (أصغر وأسرع تحميلاً)
+        let text = await runOcr(await getOcrWorker('ara'), file);
+
+        // المرحلة 2: النص ضعيف → معالجة مسبقة (رمادي + تباين) وإعادة قراءة مرة واحدة
+        let preprocessed: File | null = null;
+        if (isOcrTextWeak(text)) {
+          preprocessed = await preprocessForOCR(file);
+          if (preprocessed) text = await runOcr(await getOcrWorker('ara'), preprocessed);
+        }
+
+        // المرحلة 3: ما زال ضعيفاً → عربية + إنجليزي (بطاقات تحتوي لاتينية/أرقام)
+        if (isOcrTextWeak(text)) {
+          const multi = await getOcrWorker('ara+eng');
+          text = await runOcr(multi, preprocessed || file);
+        }
+
         setExtractedName(extractStudentName(text));
         setProgress({ percent: 100, status: 'تمت القراءة — جاري التطابق…' });
 
@@ -242,7 +381,9 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
   };
 
   const confirmSelected = () => {
-    if (selected) onVerified(selected);
+    // في وضع التحقق (روابط البصمة) النتيجة تأتي من verify لا من selected
+    const student = isVerifyMode ? expected : selected;
+    if (student) onVerified(student);
   };
 
   const showStepper = screen !== 'camera';
@@ -250,7 +391,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
   // ═══════════════ الكاميرا (شاشة كاملة) ═══════════════
   if (screen === 'camera') {
     return (
-      <div className="sel-camera-screen sel-fade" dir="rtl">
+      <div className="sel-camera-screen sel-fade" dir="rtl" ref={camScreenRef}>
         <div className="sel-cam-top">
           <button type="button" className="sel-cam-top-btn" onClick={handleCancelCamera} aria-label="رجوع">
             <ArrowRight className="w-5 h-5" />
@@ -261,7 +402,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
           </button>
         </div>
 
-        <div className="sel-cam-view">
+        <div className="sel-cam-view" ref={camViewRef}>
           <video ref={videoRef} autoPlay playsInline muted className="sel-cam-video" />
           <div className="sel-cam-guide">
             <span className="sel-corner sel-corner-tl" />
@@ -269,9 +410,15 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
             <span className="sel-corner sel-corner-bl" />
             <span className="sel-corner sel-corner-br" />
           </div>
+          <div className="sel-lens" aria-hidden="true">
+            <video ref={lensVideoRef} autoPlay playsInline muted className="sel-lens-video" />
+          </div>
           <div className="sel-cam-pill">
             <div className="sel-cam-pill-inner">
               <IdCard className="w-4 h-4" /> ضع البطاقة داخل الإطار مع وضوح الاسم
+              <span className="mr-1 inline-flex items-center gap-1 text-[10px] font-extrabold text-white/80">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" /> LIVE
+              </span>
             </div>
           </div>
         </div>
@@ -280,8 +427,8 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
           <button type="button" className="sel-shutter" onClick={captureAndScan} aria-label="التقاط الصورة">
             <span className="sel-shutter-inner" />
           </button>
-          <p className="sel-cam-hint">تأكد من إضاءة جيدة وإبعاد الكاميرا عن البطاقة قليلاً</p>
-          {error && <p className="text-xs font-bold text-red-600 text-center">{error}</p>}
+          <p className="sel-cam-hint">تأكد من إضاءة جيدة وإبعاد الكاميرا عن البطاقة قليلاً، ووضّح اسمك في العدسة العلوية</p>
+          {error && <p className="text-xs font-bold text-red-400 text-center">{error}</p>}
         </div>
       </div>
     );
@@ -300,7 +447,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
             <div className="sel-pulse" />
           </div>
           <h2 className="sel-heading mt-5">جاري قراءة البطاقة…</h2>
-          <p className="sel-muted mt-1.5">{progress.status}</p>
+          <p className="sel-muted mt-1.5" aria-live="polite">{progress.status}</p>
           <div className="sel-progress mt-5" role="progressbar" aria-valuenow={progress.percent} aria-valuemin={0} aria-valuemax={100}>
             <div className="sel-progress-fill" style={{ width: `${Math.min(100, progress.percent)}%` }} />
           </div>
@@ -376,6 +523,13 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
 
   return (
     <div className="sel-fade">
+      <span role="status" aria-live="polite" className="sr-only">
+        {error
+          ? 'حصل خطأ أثناء قراءة البطاقة'
+          : strongMatch
+          ? 'تم التعرف على الهوية بنجاح'
+          : 'لم يتم التأكد من الاسم بشكل دقيق'}
+      </span>
       <Stepper current={strongMatch ? 3 : 2} />
       <div className="sel-card">
         {error ? (

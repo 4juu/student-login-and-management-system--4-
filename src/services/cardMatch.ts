@@ -137,16 +137,26 @@ export function nameSimilarity(a: string, b: string): number {
 
 // ─────────────────────────────────────────────────────────────
 // ترتيب طلاب القائمة حسب تطابق نص OCR
+// ممران: بوابة سريعة (أي جزء من الاسم موجود بالنص) ثم المطابق الفازي فقط للمرشحين
 // ─────────────────────────────────────────────────────────────
 export function rankStudents(ocrText: string, roster: Student[]): StudentMatch[] {
   if (!ocrText || !roster.length) return [];
 
+  const normText = normalizeArabic(ocrText);
+
   return roster
-    .map(s => ({
-      student: s,
-      score: Math.round((findNameInOCRText(s.name, ocrText).confidence || 0) * 100),
-    }))
-    .filter(m => m.score > 10)
+    .map(s => {
+      // بوابة سريعة: كلمة كاملة (مطّبعة) من اسم الطالب تظهر بالنص؟
+      const tokens = normalizeArabic(s.name)
+        .split(' ')
+        .filter(w => w.length >= 2);
+      if (!tokens.length || !tokens.some(t => normText.includes(t))) return null;
+      return {
+        student: s,
+        score: Math.round((findNameInOCRText(s.name, ocrText).confidence || 0) * 100),
+      };
+    })
+    .filter((m): m is StudentMatch => m !== null)
     .sort((a, b) => b.score - a.score)
     .slice(0, 6);
 }

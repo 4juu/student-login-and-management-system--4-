@@ -3,6 +3,7 @@ import { fileURLToPath } from "url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { compression } from "vite-plugin-compression2";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,7 +12,8 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    // �?O U,O USU^O�O_ viteSingleFile U�U+O!
+    // 🗜️ ضغط مسبق gzip + brotli لجميع الأصول المبنية
+    compression({ algorithms: ['gzip', 'brotliCompress'], threshold: 1024 }),
   ],
   publicDir: 'src/public',
   resolve: {
