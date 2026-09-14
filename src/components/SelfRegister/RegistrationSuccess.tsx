@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Student } from '../../types/student';
-import { Check, CheckCircle2, ClipboardList, Clock, Lock, PartyPopper, Smile } from 'lucide-react';
+import { Check, CheckCircle2, Clock, Lock, PartyPopper, Smile } from 'lucide-react';
 import './selfRegister.css';
 
 interface RegistrationSuccessProps {
@@ -67,28 +67,8 @@ export const RegistrationSuccess: React.FC<RegistrationSuccessProps> = ({
               <p className="font-bold text-[#FBBF24] mb-1 flex items-center gap-2">
                 <Clock className="w-5 h-5" /> بانتظار موافقة المشرف
               </p>
-              <p className="text-sm text-[#E5B768] leading-relaxed">
-                أُرسل طلب تسجيل وجهك للمراجعة. سيُفعَّل حسابك فور موافقة إدارة الكلية — وقد تلاحظ ذلك عبر إشعار الأدمن داخل النظام.
-              </p>
             </div>
           )}
-
-          <div className="rounded-2xl border border-[#24365A] bg-[#132041] p-4 mb-5 text-right">
-            <p className="text-xs font-bold text-[#93A5C8] mb-2 flex items-center gap-1.5">
-              <ClipboardList className="w-4 h-4 text-[#7AA8F0]" /> ما تم تسجيله:
-            </p>
-            <ul className="space-y-1.5 text-sm text-[#B7C6E2]">
-              <li className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-[#34D399]" /> السم الشخصي المطابق للسجل الرسمي
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-[#34D399]" /> بصمة الوجه (أرقام رياضية مشفّرة)
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-[#34D399]" /> ربط الهوية بملف الطالب
-              </li>
-            </ul>
-          </div>
 
           <div className="sel-note mb-6">
             <Lock className="w-4 h-4 shrink-0" />

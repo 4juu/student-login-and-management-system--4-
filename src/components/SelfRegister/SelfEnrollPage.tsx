@@ -462,7 +462,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   // ── شاشة النجاح (شاشة كاملة مستقلة) ──
   // زر «تم» يعيد لأول خطوة التحقق لنفس الطالب — لا انتقال لتسجيل الدخول
   if (step === 'success' && expected) {
-    return <RegistrationSuccess student={expected} qrVerified={false} onExit={restart} />;
+    return <RegistrationSuccess student={expected} qrVerified={!!qrResult?.verified} onExit={restart} />;
   }
 
   // ═══════════ الشاشات ضمن الهيكل الحكومي الفاتح ═══════════
