@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { ChunkLoadErrorBoundary } from './components/ChunkLoadErrorBoundary';
 import './index.css';
 
 const App = lazy(() => import('./App'));
@@ -31,9 +32,11 @@ const Entry = isStudentPath ? StudentEntry : App;
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ThemeProvider>
-      <Suspense fallback={<div className="min-h-screen bg-[#0B1220]" />}>
-        <Entry />
-      </Suspense>
+      <ChunkLoadErrorBoundary>
+        <Suspense fallback={<div className="min-h-screen bg-[#0B1220]" />}>
+          <Entry />
+        </Suspense>
+      </ChunkLoadErrorBoundary>
     </ThemeProvider>
   </React.StrictMode>
 );
