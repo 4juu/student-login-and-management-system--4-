@@ -136,6 +136,49 @@ const formatDateWithDay = (value?: string | Date | null): string => {
   return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
 };
 
+// ─────────────────────────────────────────────────────────────
+// مطابقة أسماء الطلاب — تسجيل حسب الدقة
+// ─────────────────────────────────────────────────────────────
+const scoreStudentMatch = (q: string, student: Student): number => {
+  const ql = q.toLowerCase().trim();
+  if (!ql) return 0;
+  const nameL = (student.name || '').toLowerCase();
+  const codeL = (student.code || '').toLowerCase();
+  const groupL = (student.group || '').toLowerCase();
+
+  let score = 0;
+  if (ql.includes(nameL)) score += 200;
+  if (nameL.includes(ql) && nameL.length < 60) score += 100;
+  if (codeL && (ql.includes(codeL) || codeL.includes(ql))) score += 50;
+  const nameWords = nameL.split(/\s+/).filter(w => w.length > 2);
+  score += nameWords.filter(w => ql.includes(w)).length * 15;
+  if (groupL && groupL.includes(ql)) score += 20;
+  return score;
+};
+
+const pickBestStudentMatch = (q: string, students: Student[]): Student | null => {
+  const ql = q.toLowerCase().trim();
+  if (!ql || !students.length) return null;
+  let best: Student | null = null;
+  let bestScore = 0;
+  for (const s of students) {
+    const nameL = (s.name || '').toLowerCase();
+    const codeL = (s.code || '').toLowerCase();
+    const firstName = nameL.split(' ')[0];
+    const basicMatch =
+      ql.includes(nameL) ||
+      (firstName.length > 2 && ql.includes(firstName)) ||
+      (codeL && ql.includes(codeL));
+    if (!basicMatch) continue;
+    const sc = scoreStudentMatch(q, s);
+    if (sc > bestScore) {
+      bestScore = sc;
+      best = s;
+    }
+  }
+  return best;
+};
+
 const getGeminiText = (data: any): string => {
   const parts = data?.candidates?.[0]?.content?.parts;
   if (!Array.isArray(parts)) return '';
@@ -506,11 +549,12 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     }
 
     const q = query.trim().toLowerCase();
-    const matches = scope.students.filter(s =>
-      s.name.toLowerCase().includes(q) ||
-      s.code?.toLowerCase().includes(q) ||
-      s.group?.toLowerCase().includes(q)
-    ).slice(0, 15);
+    const matches = scope.students
+      .map(s => ({ s, score: scoreStudentMatch(q, s) }))
+      .filter(x => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 15)
+      .map(x => x.s);
 
     setStudentSuggestions(matches);
     setShowSuggestions(matches.length > 0);
@@ -795,22 +839,16 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       return hint;
     }
 
-    for (const student of students) {
-      const firstName = student.name.split(' ')[0];
-      const matches = question.includes(student.name) ||
-        (firstName.length > 2 && question.includes(firstName)) ||
-        question.includes(student.code);
-      if (matches) {
-        const studentRecords = records.filter(r => r.studentId === student.id);
-        const attendedSessionIds = new Set(studentRecords.filter(r => r.status === 'present').map(r => r.sessionId));
-        const absentSessionIds = new Set(studentRecords.filter(r => r.status === 'absent').map(r => r.sessionId));
-        const attendedCount = attendedSessionIds.size;
-        const absentCount = absentSessionIds.size;
-        const percentage = (attendedCount + absentCount) > 0 ? ((attendedCount / (attendedCount + absentCount)) * 100).toFixed(1) : '0';
-        const isPresentToday = presentIds.has(student.id);
-        hint += `\n\n[🚨 الطالب "${student.name}": كود ${student.code} | كروب ${student.group || '-'} | حضور ${attendedCount}/${sessions.length} | غياب ${absentCount} | نسبة ${percentage}% | اليوم: ${isPresentToday ? '✅ حاضر' : '❌ غائب'}]`;
-        break;
-      }
+    const bestStudent = pickBestStudentMatch(question, students);
+    if (bestStudent) {
+      const studentRecords = records.filter(r => r.studentId === bestStudent.id);
+      const attendedSessionIds = new Set(studentRecords.filter(r => r.status === 'present').map(r => r.sessionId));
+      const absentSessionIds = new Set(studentRecords.filter(r => r.status === 'absent').map(r => r.sessionId));
+      const attendedCount = attendedSessionIds.size;
+      const absentCount = absentSessionIds.size;
+      const percentage = (attendedCount + absentCount) > 0 ? ((attendedCount / (attendedCount + absentCount)) * 100).toFixed(1) : '0';
+      const isPresentToday = presentIds.has(bestStudent.id);
+      hint += `\n\n[🚨 الطالب "${bestStudent.name}": كود ${bestStudent.code} | كروب ${bestStudent.group || '-'} | حضور ${attendedCount}/${sessions.length} | غياب ${absentCount} | نسبة ${percentage}% | اليوم: ${isPresentToday ? '✅ حاضر' : '❌ غائب'}]`;
     }
 
     return hint;
@@ -858,11 +896,9 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     }
 
     // 2) بحث عن طالب بالاسم أو الكود (رقم الطالب)
-    for (const student of scStudents) {
-      const firstName = student.name.split(' ')[0];
-      const nameMatch = q.includes(student.name) || (firstName.length > 2 && q.includes(firstName));
-      const codeMatch = !!student.code && q.includes(student.code);
-      if (!nameMatch && !codeMatch) continue;
+    const bestStudent = pickBestStudentMatch(q, scStudents);
+    if (bestStudent) {
+      const student = bestStudent;
 
       const sRecs = scRecords.filter(r => r.studentId === student.id);
       const presentSessionIds = new Set(sRecs.filter(r => r.status === 'present').map(r => r.sessionId));
@@ -1200,7 +1236,7 @@ ${dataContext}`;
       {isOpen && (
         <div
           key="chat-window"
-          className="fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-50 overflow-hidden border border-white/10 shadow-2xl max-w-[calc(100vw-1.5rem)] sm:max-w-[calc(100vw-3rem)] max-h-[calc(100vh-3rem)] overscroll-contain animate-modalUp"
+          className="fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-50 overflow-hidden border border-white/10 shadow-2xl max-w-[calc(100vw-1.5rem)] sm:max-w-[calc(100vw-3rem)] h-[min(560px,calc(100vh-3rem))] max-h-[calc(100vh-3rem)] overscroll-contain animate-modalUp"
           style={{ backgroundColor: '#0f172a' }}
           onKeyDown={e => { e.stopPropagation(); }}
           onKeyUp={e => { e.stopPropagation(); }}
@@ -1458,7 +1494,7 @@ ${dataContext}`;
               )}
 
               {/* 💬 الرسائل */}
-              <div className="flex-1 overflow-y-auto pb-4 space-y-3 px-3 overscroll-contain" style={{ backgroundColor: '#0f172a' }}>
+              <div className="flex-1 min-h-0 overflow-y-auto pb-4 space-y-3 px-3 overscroll-contain" style={{ backgroundColor: '#0f172a' }}>
                 {messages.map((msg) => (
                     <div
                       key={msg.id}
