@@ -33,6 +33,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import './selfRegister.css';
+import { TextScramble } from '../TextScramble';
 
 const LazySelfCapture = lazy(() =>
   import('../face/SelfCaptureStep').then(m => ({ default: m.SelfCaptureStep }))
@@ -613,7 +614,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
           <div className="sel-footer-inner">
             بياناتك محمية ومشفّرة · تُحذف الصور بعد المعالجة
             <br />
-            البوابة الرقمية الرسمية للكلية — جامعة واسط
+            <div className="mt-1"><TextScramble text="ph.mujtabahaitham" /></div>
           </div>
         </footer>
       </div>
