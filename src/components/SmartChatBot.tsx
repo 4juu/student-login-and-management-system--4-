@@ -15,6 +15,7 @@ import {
 import { User } from '../types/user';
 import { MorphPanel } from './MorphPanel';
 import { ArrowUp, ChevronLeft, CircleCheck, CircleX, ClipboardList, MessageCircle, Mic, Search, Sparkles, Square } from 'lucide-react';
+import { normalizeArabic } from '../services/nameMatching';
 
 interface Message {
   id: string;
@@ -146,28 +147,34 @@ const scoreStudentMatch = (q: string, student: Student): number => {
   const codeL = (student.code || '').toLowerCase();
   const groupL = (student.group || '').toLowerCase();
 
+  const qN = normalizeArabic(ql);
+  const nameN = normalizeArabic(nameL);
+
   let score = 0;
-  if (ql.includes(nameL)) score += 200;
-  if (nameL.includes(ql) && nameL.length < 60) score += 100;
+  if (qN === nameN) score += 250;
+  else if (qN.includes(nameN)) score += 200;
+  if (nameN.includes(qN) && nameN.length < 60) score += 100;
   if (codeL && (ql.includes(codeL) || codeL.includes(ql))) score += 50;
-  const nameWords = nameL.split(/\s+/).filter(w => w.length > 2);
-  score += nameWords.filter(w => ql.includes(w)).length * 15;
   if (groupL && groupL.includes(ql)) score += 20;
+  const nameWords = nameL.split(/\s+/).filter(w => normalizeArabic(w).length > 2);
+  score += nameWords.filter(w => qN.includes(normalizeArabic(w))).length * 15;
   return score;
 };
 
 const pickBestStudentMatch = (q: string, students: Student[]): Student | null => {
   const ql = q.toLowerCase().trim();
   if (!ql || !students.length) return null;
+  const qN = normalizeArabic(ql);
   let best: Student | null = null;
   let bestScore = 0;
   for (const s of students) {
     const nameL = (s.name || '').toLowerCase();
+    const nameN = normalizeArabic(nameL);
     const codeL = (s.code || '').toLowerCase();
-    const firstName = nameL.split(' ')[0];
+    const firstName = normalizeArabic(nameL.split(' ')[0]);
     const basicMatch =
-      ql.includes(nameL) ||
-      (firstName.length > 2 && ql.includes(firstName)) ||
+      (nameN && qN.includes(nameN)) ||
+      (firstName.length > 2 && qN.includes(firstName)) ||
       (codeL && ql.includes(codeL));
     if (!basicMatch) continue;
     const sc = scoreStudentMatch(q, s);
