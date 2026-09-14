@@ -291,18 +291,24 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
 
     stopStream();
 
-    const blob: Blob | null = await new Promise(res => out.toBlob(b => res(b), 'image/jpeg', 0.95));
+    const [blob, fullBlob] = await Promise.all([
+      new Promise<Blob | null>(res => out.toBlob(b => res(b), 'image/jpeg', 0.95)),
+      new Promise<Blob | null>(res => full.toBlob(b => res(b), 'image/jpeg', 0.92)),
+    ]);
     if (!blob) {
       setError('تعذّر التقاط الصورة — حاول مرة أخرى');
       setScreen('choice');
       return;
     }
-    void scanImage(new File([blob], 'card-camera.jpg', { type: 'image/jpeg' }));
+    void scanImage(
+      new File([blob], 'card-camera.jpg', { type: 'image/jpeg' }),
+      fullBlob ? new File([fullBlob], 'card-full.jpg', { type: 'image/jpeg' }) : null,
+    );
   }, [stopStream]);
 
   // ── قراءة النص + الاستخراج + المطابقة ──
   const scanImage = useCallback(
-    async (file: File) => {
+    async (file: File, fullFile?: File | null) => {
       setError('');
       setScreen('processing');
       setProgress({ percent: 2, status: 'تحضير الصورة…' });
@@ -315,11 +321,12 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
 
       try {
         ocrLogger = (m: any) => meetProgress(m, setProgress);
+        // الاسم: من القصّة المركزية · رمز QR: من الصورة الكاملة (QR بطرف البطاقة لا يُقص)
         const [workerPromise, qrPromise] = [
           getOcrWorker().then(w => w.recognize(file)),
-          decodeQrFromImage(file),
+          decodeQrFromImage(fullFile || file),
         ];
-        const [{ data }, qr] = await Promise.all([workerPromise, qrPromise]);
+        const [{ data }, qr] = await Promise.all([workerPromise as Promise<any>, qrPromise]);
         ocrLogger = null;
 
         const text: string = data?.text || '';
