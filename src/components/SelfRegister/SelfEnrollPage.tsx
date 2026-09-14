@@ -566,11 +566,6 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
                 </ul>
               </div>
 
-              <div className="sel-note mb-5">
-                <ShieldCheck className="w-4 h-4 shrink-0" />
-                <span>لا تُرفع إطارات وجهك، بل أرقام رياضية مشفّرة فقط للمطابقة الآمنة. تُحذف الكاميرا والصور بعد العملية.</span>
-              </div>
-
               <div className="space-y-2">
                 <button type="button" className="sel-btn sel-btn-primary" onClick={() => goTo('capture-face')}>
                   <ScanFace className="w-5 h-5" /> بدء التقاط البصمة

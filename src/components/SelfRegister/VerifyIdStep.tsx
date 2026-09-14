@@ -27,6 +27,8 @@ export interface QrScanResult {
   qrCodeUrl: string;
   qrCodeId: string;
   verified: boolean;
+  /** هل الرمز المقروء يطابق رمزاً محفوظاً بمستند الطالب؟ (قد يكون غير محفوظ أصلاً) */
+  matchedWithRecord?: boolean;
 }
 
 interface VerifyIdStepProps {
@@ -333,13 +335,17 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
         setExtractedName(extractStudentName(text));
         setProgress({ percent: 100, status: 'تمت القراءة — جاري التطابق…' });
 
-        // ✅ سحب رمز QR من صورة البطاقة (إن وُجد) — يطابقه مع سجل الطالب
+        // ✅ سحب رمز QR من صورة البطاقة (إن وُجد) — يُعتبر متحققاً لأنه مقروء من البطاقة نفسها
         if (qr) {
-          const verified =
+          const matchedWithRecord =
             !!isVerifyMode &&
             !!expected?.qrCodeId &&
             expected.qrCodeId.trim().toLowerCase() === qr.qrCodeId.toLowerCase();
-          setQrResult({ ...qr, verified });
+          setQrResult({
+            ...qr,
+            verified: true,
+            matchedWithRecord,
+          });
         } else {
           setQrResult(null);
         }
@@ -468,7 +474,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
           </div>
 
           <p className="sel-muted mb-5">
-            صوّر بطاقتك الجامعية مباشرة — نستخرج اسمك ونطابقه مع قاعدة البيانات. الخطوة الأولى من ثلاث.
+            صوّر بطاقتك الجامعية مباشرة لنطابق بياناتك.
           </p>
 
           {isVerifyMode && expected?.name && (
@@ -499,7 +505,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
 
           <div className="sel-note mt-5">
             <ShieldCheck className="w-4 h-4 shrink-0" />
-            <span>تُعالج الصورة داخل جهازك وتُحذف فوراً. لا نخزّن أي صور على خوادمنا، ويبقى المطابقة النهائية بانتظار موافقة الأدمن عند الاقتضاء.</span>
+            <span>تُعالج الصورة داخل جهازك وتُحذف فوراً. لا نخزّن أي صور على خوادمنا.</span>
           </div>
         </div>
       </div>
@@ -573,15 +579,19 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
         {!error && qrResult && (
           <div
             className={`mt-4 flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-bold ${
-              qrResult.verified
+              qrResult?.matchedWithRecord
                 ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
                 : 'bg-amber-500/10 text-amber-300 border border-amber-500/30'
             }`}
           >
             <QrCode className="w-4 h-4 shrink-0" />
             <span className="truncate">
-              {qrResult.verified
-                ? 'تم التحقق من رمز QR في البطاقة ✓'
+              {qrResult?.verified
+                ? qrResult?.matchedWithRecord
+                  ? 'تم التحقق من رمز QR في البطاقة ✓'
+                  : isVerifyMode
+                  ? 'تم قراءة رمز QR من البطاقة — سجّل جديد دون رمز محفوظ مسبقاً'
+                  : 'تم قراءة رمز QR من البطاقة'
                 : isVerifyMode
                 ? 'اُكتشف رمز QR بالبطاقة لكنه غير مطابق لهذا السجل — يعتمد التحقق على الاسم'
                 : 'تم قراءة رمز QR من البطاقة'}
