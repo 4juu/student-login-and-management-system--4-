@@ -9,7 +9,7 @@ import { database, dbURL } from '../../firebase/config';
 import { AttendanceRecord, Student } from '../../types/student';
 import { RegistrationLink } from '../../types/registration';
 import { getRegistrationLink, validateLink } from '../../services/tokenService';
-import { VerifyIdStep } from './VerifyIdStep';
+import { VerifyIdStep, type QrScanResult } from './VerifyIdStep';
 import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear, loadAttendanceRecords, loadSessions } from '../../firebase/dataService';
 import { decompressRecord } from '../../firebase/dataServiceCompressed';
@@ -150,6 +150,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [sessionNameMap, setSessionNameMap] = useState<Record<string, string>>({});
   const [retryStep, setRetryStep] = useState<Step>('verify');
+  const [qrResult, setQrResult] = useState<QrScanResult | null>(null);
 
   const needsEngine = step === 'capture-face';
   const { ready: engineReady, progress, error: engineError, retry: engineRetry } = useFaceAI(needsEngine);
@@ -178,6 +179,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   const restart = useCallback(() => {
     setAttendanceRecords([]);
     setSessionNameMap({});
+    setQrResult(null);
     setErrorMsg('');
     setRetryStep('verify');
     transitionTo('verify');
@@ -310,8 +312,9 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     return () => { mounted = false; clearTimeout(globalTimeout); };
   }, [token, goTo]);
 
-  const handleVerified = async (student: Student) => {
+  const handleVerified = async (student: Student, qr?: QrScanResult | null) => {
     if (!link) return;
+    setQrResult(qr ?? null);
 
     // روابط البصمة/التحقق: المطابقة تمت داخل نافذة التحقق — ننتقل لتأكيد البصمة
     if (link.type !== 'attendance') {
@@ -376,7 +379,11 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
 
     try {
       const requestId = `${expected.id}_${Date.now()}`;
-      const qrCodeId = expected.qrCodeId || '';
+      const cardQrId = qrResult?.qrCodeId || '';
+      const qrCodeUrl = qrResult?.qrCodeUrl || '';
+      const qrVerified = !!qrResult?.verified;
+      // رمز البطاقة إن لم يُطابق سجل الطالب يُعلَّق مطابقته بالاسم فقط — نُخطر الأدمن بالرمز المستخرج
+      const qrCodeId = cardQrId || expected.qrCodeId || '';
       await set(ref(database, `registrationSystem/pending/${link.adminUid}/${requestId}`), {
         id: requestId,
         adminUid: link.adminUid,
@@ -386,9 +393,9 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
         nameInSystem: expected.name,
         nameFromCard: expected.name,
         nationalId: '',
-        qrCodeUrl: '',
+        qrCodeUrl,
         qrCodeId,
-        qrVerified: false,
+        qrVerified,
         nameMatched: true,
         faceDescriptor: migrated,
         linkToken: link.token,

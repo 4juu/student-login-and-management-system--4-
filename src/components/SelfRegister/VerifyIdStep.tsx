@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   IdCard,
+  QrCode,
   RefreshCw,
   ScanLine,
   ShieldCheck,
@@ -22,11 +23,17 @@ import {
 } from '../../services/cardMatch';
 import './selfRegister.css';
 
+export interface QrScanResult {
+  qrCodeUrl: string;
+  qrCodeId: string;
+  verified: boolean;
+}
+
 interface VerifyIdStepProps {
   roster: Student[];
   expected?: Student | null;
   linkType?: string;
-  onVerified: (student: Student) => void;
+  onVerified: (student: Student, qr?: QrScanResult | null) => void;
   onCancel: () => void;
 }
 
@@ -71,6 +78,53 @@ const meetProgress = (m: any, set: (p: ProgressState) => void) => {
   );
 };
 
+// ── سحب رمز QR من صورة البطاقة عن طريق html5-qrcode (بدون كاميرا) ──
+const extractQrInfo = (raw: string): { qrCodeUrl: string; qrCodeId: string } | null => {
+  const text = (raw || '').trim();
+  if (!text) return null;
+  let qrCodeId = '';
+  try {
+    const u = new URL(text);
+    const id = u.searchParams.get('id');
+    if (id) qrCodeId = id.trim();
+  } catch {
+    // ليس رابطاً — قد يكون JSON أو نصاً بسيطاً
+  }
+  if (!qrCodeId) {
+    try {
+      const o = JSON.parse(text);
+      const v = o?.qrCodeId || o?.qrId || o?.id || o?.studentId || o?.universityId || o?.code;
+      if (v) qrCodeId = String(v).trim();
+    } catch {
+      // ليس JSON — يمكن أن يكون نصاً عادياً
+    }
+  }
+  if (!qrCodeId && /^[A-Za-z0-9_-]{3,100}$/.test(text)) qrCodeId = text;
+  if (!qrCodeId) return null;
+  return { qrCodeUrl: text, qrCodeId };
+};
+
+let qrScannerCleanup: (() => void) | null = null;
+
+const decodeQrFromImage = async (file: File): Promise<{ qrCodeUrl: string; qrCodeId: string } | null> => {
+  try {
+    const { Html5Qrcode } = await import('html5-qrcode');
+    const host = document.createElement('div');
+    host.id = 'sel-idcard-qr-decode';
+    host.style.display = 'none';
+    document.body.appendChild(host);
+    qrScannerCleanup = () => { try { host.remove(); } catch {}; qrScannerCleanup = null; };
+
+    const scanner = new Html5Qrcode('sel-idcard-qr-decode', { verbose: false });
+    const text: string = await scanner.scanFile(file, false);
+    return extractQrInfo(text);
+  } catch {
+    return null;
+  } finally {
+    qrScannerCleanup?.();
+  }
+};
+
 const Stepper = ({ current }: { current: 1 | 2 | 3 }) => {
   const steps = ['صوّر البطاقة', 'تأكيد الاسم', 'المتابعة'];
   return (
@@ -105,6 +159,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
   const [matches, setMatches] = useState<StudentMatch[]>([]);
   const [selected, setSelected] = useState<Student | null>(null);
   const [verify, setVerify] = useState<{ matched: boolean; confidence: number } | null>(null);
+  const [qrResult, setQrResult] = useState<QrScanResult | null>(null);
 
   const [progress, setProgress] = useState<ProgressState>({ percent: 0, status: '' });
   const [error, setError] = useState('');
@@ -260,13 +315,27 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
 
       try {
         ocrLogger = (m: any) => meetProgress(m, setProgress);
-        const worker = await getOcrWorker();
-        const { data } = await worker.recognize(file);
+        const [workerPromise, qrPromise] = [
+          getOcrWorker().then(w => w.recognize(file)),
+          decodeQrFromImage(file),
+        ];
+        const [{ data }, qr] = await Promise.all([workerPromise, qrPromise]);
         ocrLogger = null;
 
         const text: string = data?.text || '';
         setExtractedName(extractStudentName(text));
         setProgress({ percent: 100, status: 'تمت القراءة — جاري التطابق…' });
+
+        // ✅ سحب رمز QR من صورة البطاقة (إن وُجد) — يطابقه مع سجل الطالب
+        if (qr) {
+          const verified =
+            !!isVerifyMode &&
+            !!expected?.qrCodeId &&
+            expected.qrCodeId.trim().toLowerCase() === qr.qrCodeId.toLowerCase();
+          setQrResult({ ...qr, verified });
+        } else {
+          setQrResult(null);
+        }
 
         if (isVerifyMode && expected) {
           const r = findNameInOCRText(expected.name, text);
@@ -293,13 +362,14 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
     setMatches([]);
     setSelected(null);
     setVerify(null);
+    setQrResult(null);
     setError('');
   };
 
   const confirmSelected = () => {
     // في وضع التحقق (روابط البصمة) النتيجة تأتي من verify لا من selected
     const student = isVerifyMode ? expected : selected;
-    if (student) onVerified(student);
+    if (student) onVerified(student, qrResult);
   };
 
   const showStepper = screen !== 'camera';
@@ -491,6 +561,25 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
             onContinue={confirmSelected}
             onRetry={handleReset}
           />
+        )}
+
+        {!error && qrResult && (
+          <div
+            className={`mt-4 flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-bold ${
+              qrResult.verified
+                ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
+                : 'bg-amber-500/10 text-amber-300 border border-amber-500/30'
+            }`}
+          >
+            <QrCode className="w-4 h-4 shrink-0" />
+            <span className="truncate">
+              {qrResult.verified
+                ? 'تم التحقق من رمز QR في البطاقة ✓'
+                : isVerifyMode
+                ? 'اُكتشف رمز QR بالبطاقة لكنه غير مطابق لهذا السجل — يعتمد التحقق على الاسم'
+                : 'تم قراءة رمز QR من البطاقة'}
+            </span>
+          </div>
         )}
 
         {capturedUrl && !error && !isVerifyMode && !strongMatch && (
