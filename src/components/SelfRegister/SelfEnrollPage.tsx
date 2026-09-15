@@ -194,41 +194,39 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   ): Promise<{ records: AttendanceRecord[]; sessions: AttendanceSession[]; sessionNameMap: Record<string, string> }> => {
     let year = lnk.academicYear || '';
     if (!year) { try { year = await getActiveAcademicYear(); } catch { year = ''; } }
-    if (!year) return { records: [], sessions: [], sessionNameMap: {} };
+if (!year) return { records: [], sessions: [], sessionNameMap: {} };
 
-    // نقرأ سجلات مادة التدريسي الذي أرسل الرابط فقط (لا سجلات كل المدرّسين)،
-    // مباشرة من السنة الخاصة بالرابط (لا الكاش المحلي/السنة الحالية)
-    const teacherId = lnk.teacherId || lnk.adminUid;
-    const base = `academicYears/${year}/userData/${lnk.adminUid}/stageData/${lnk.stageId}/teacherRecords/${teacherId}`;
-    const t = await dbFetch<any>(base, signal);
+    // نجمع سجلات وجلسات الطالب من كل المدرّسين في المرحلة —
+    // السجلات قد تُحفظ بحساب من يسجّل الحضور فعلياً (ليس بالضرورة مُرسل الرابط)
+    const senderTeacherId = lnk.teacherId || lnk.adminUid;
+    const allTeachersPath = `academicYears/${year}/userData/${lnk.adminUid}/stageData/${lnk.stageId}/teacherRecords`;
+    const all = await dbFetch<any>(allTeachersPath, signal);
 
-    // فلاش باك: إذا كان مسار مرسل الرابط فارغاً (مثلاً حُفظت السجلات بحساب معلم آخر)،
-    // نفحص كل المدرّسين في نفس المرحلة ونجمع سجلاتهم وجلساتهم
-    const ownHasContent = !!t && typeof t === 'object' && Object.keys(t).length > 0;
-    const datasets: any[] = ownHasContent ? [t] : [];
-
-    if (!ownHasContent) {
-      const allPath = `academicYears/${year}/userData/${lnk.adminUid}/stageData/${lnk.stageId}/teacherRecords`;
-      const all = await dbFetch<any>(allPath, signal);
-      if (all && typeof all === 'object' && !Array.isArray(all)) {
-        const tids = Object.keys(all);
-        for (const tid of tids) {
-          const td = all[tid];
-          if (tid === teacherId || !td || typeof td !== 'object') continue;
-          if (Object.keys(td).length > 0) datasets.push(td);
-        }
+    const datasets: any[] = [];
+    if (all && typeof all === 'object' && !Array.isArray(all)) {
+      for (const tid of Object.keys(all)) {
+        const td = all[tid];
+        if (td && typeof td === 'object' && Object.keys(td).length > 0) datasets.push(td);
       }
+    }
+    if (datasets.length === 0) {
+      const own = await dbFetch<any>(`${allTeachersPath}/${senderTeacherId}`, signal);
+      if (own && typeof own === 'object' && Object.keys(own).length > 0) datasets.push(own);
     }
 
     const records: AttendanceRecord[] = [];
     const sessions: AttendanceSession[] = [];
     const seenRecords = new Set<string>();
+    const seenSessions = new Set<string>();
 
     for (const ds of datasets) {
       if (ds.sessions) {
         const sessArr: any[] = Array.isArray(ds.sessions) ? ds.sessions : Object.values(ds.sessions);
         for (const s of sessArr) {
-          if (s && s.id) sessions.push(s as AttendanceSession);
+          if (s && s.id && !seenSessions.has(s.id)) {
+            seenSessions.add(s.id);
+            sessions.push(s as AttendanceSession);
+          }
         }
       }
 
@@ -453,41 +451,45 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     const emptyStats = { present: 0, absent: 0, total: 0, records: [] as AttendanceRecord[] };
     if (!expected) return emptyStats;
 
-    // عدّاد الحضور/الغياب لكل جلسة (مثل طريقة عرض الأدمن) — الغياب يُحسب لأي جلسة بلا حضور مسجّل
-    if (attendanceSessions.length > 0) {
-      const presentSet = new Set<string>();
-      for (const r of attendanceRecords) {
-        if (r?.status === 'present' && r.sessionId) presentSet.add(r.sessionId);
+    // خريطة الحضور: أي جلسة لها سجل present نحتسبها حاضراً
+    const presentSessionIds = new Set<string>();
+    const recBySession = new Map<string, AttendanceRecord>();
+    for (const r of attendanceRecords) {
+      if (r?.status === 'present' && r.sessionId) {
+        presentSessionIds.add(r.sessionId);
+        if (!recBySession.has(r.sessionId)) recBySession.set(r.sessionId, r);
       }
-
-      const sorted = [...attendanceSessions].sort((a, b) =>
-        normalizeDate(b.date || '').localeCompare(normalizeDate(a.date || '')),
-      );
-
-      let present = 0;
-      let absent = 0;
-      const rows: AttendanceRecord[] = [];
-
-      for (const s of sorted) {
-        const presentRecord = attendanceRecords.find(r => r.sessionId === s.id && r.status === 'present');
-        if (presentRecord) {
-          rows.push(presentRecord);
-          present++;
-        } else {
-          const stub = { ...s, id: `session_${s.id}`, status: 'absent', time: '' } as unknown as AttendanceRecord;
-          rows.push(stub);
-          absent++;
-        }
-      }
-
-      return { present, absent, total: present + absent, records: rows };
     }
 
-    // بدون جلسات مسجلة — نعتمد السجلات المخزنة فقط
-    const present = attendanceRecords.filter(r => r.status === 'present').length;
-    const absent = attendanceRecords.filter(r => r.status === 'absent').length;
-    const sortedRecords = [...attendanceRecords].sort((a, b) => normalizeDate(b.date).localeCompare(normalizeDate(a.date)));
-    return { present, absent, total: present + absent, records: sortedRecords };
+    const rows: AttendanceRecord[] = [];
+    const seenIds = new Set<string>();
+
+    // ① جلسات حاضر/غياب مرتبطة بجلسات مسجّلة في النظام
+    const sortedSessions = [...attendanceSessions].sort((a, b) =>
+      normalizeDate(b.date || '').localeCompare(normalizeDate(a.date || '')),
+    );
+    for (const s of sortedSessions) {
+      const rec = recBySession.get(s.id);
+      if (rec && !seenIds.has(rec.id)) {
+        rows.push(rec);
+        seenIds.add(rec.id);
+      } else if (!presentSessionIds.has(s.id)) {
+        rows.push({ ...s, id: `session_${s.id}`, status: 'absent', time: '' } as unknown as AttendanceRecord);
+      }
+    }
+
+    // ② سجلات حضور قديمة بدون جلسة حالية في النظام (جلسات حُذفت أو من مصدر آخر)
+    const sortedRecords = [...attendanceRecords]
+      .filter(r => r?.status === 'present' && !seenIds.has(r.id))
+      .sort((a, b) => normalizeDate(b.date).localeCompare(normalizeDate(a.date)));
+    for (const r of sortedRecords) rows.push(r);
+
+    // ترتيب نهائي حسب التاريخ
+    rows.sort((a, b) => normalizeDate(b.date).localeCompare(normalizeDate(a.date)));
+
+    const present = rows.filter(r => r.status === 'present').length;
+    const absent = rows.filter(r => r.status === 'absent').length;
+    return { present, absent, total: present + absent, records: rows };
   };
 
   const subjectName = link?.subjectName || 'المادة';

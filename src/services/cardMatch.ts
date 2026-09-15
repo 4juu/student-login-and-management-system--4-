@@ -151,9 +151,13 @@ export function rankStudents(ocrText: string, roster: Student[]): StudentMatch[]
         .split(' ')
         .filter(w => w.length >= 2);
       if (!tokens.length || !tokens.some(t => normText.includes(t))) return null;
+      // النتيجة: أقصى قيمة بين التشابه النصي (يسمح بوجود كلمات زائدة في النص —
+      // مثل «مجتبى هيثم محمد محسن» مقابل «مجتبى هيثم») ودقة مطابقة OCR
+      const simScore = nameSimilarity(s.name, ocrText);
+      const ocrScore = Math.round((findNameInOCRText(s.name, ocrText).confidence || 0) * 100);
       return {
         student: s,
-        score: Math.round((findNameInOCRText(s.name, ocrText).confidence || 0) * 100),
+        score: Math.max(simScore, ocrScore),
       };
     })
     .filter((m): m is StudentMatch => m !== null)

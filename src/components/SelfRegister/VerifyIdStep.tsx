@@ -4,7 +4,6 @@ import {
   BadgeCheck,
   Camera,
   Check,
-  CheckCircle2,
   AlertTriangle,
   IdCard,
   QrCode,
@@ -357,11 +356,10 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
           const r = findNameInOCRText(expected.name, text);
           setVerify({ matched: r.matched, confidence: Math.round(r.confidence * 100) });
         } else if (roster.length) {
-          let ranked = rankStudents(text, roster);
-          // إذا النص الخام ضجيج وما لقى أي تطابق، نعيد المحاولة بالاسم المستخرج مباشرةً
-          if (ranked.length === 0 && extractedNameVal) {
-            ranked = rankStudents(extractedNameVal, roster);
-          }
+          // المطابقة بالأساس من الاسم المستخرج النظيف (الاسم الفعلي للبطاقة)،
+          // وإن لم يُستخرج نعتمد النص الخام — يسمح بتطابق الأسماء ذات الكلمات الزائدة
+          let ranked = extractedNameVal ? rankStudents(extractedNameVal, roster) : [];
+          if (ranked.length === 0) ranked = rankStudents(text, roster);
           setMatches(ranked);
           setSelected(ranked[0] && ranked[0].score >= ROSTER_AUTO_THRESHOLD ? ranked[0].student : null);
         }
@@ -574,11 +572,8 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
             <p className="sel-cam-hint mt-4">تأكد من وضع الإضاءة والوضوح — أو راجع إدارة الكلية إذا استمرت المشكلة</p>
           </div>
         ) : (
-          <ResultRoster
-            matches={matches}
-            selected={selected}
-            setSelected={setSelected}
-            onContinue={confirmSelected}
+          <ResultNoMatch
+            extractedName={extractedName}
             onRetry={handleReset}
           />
         )}
@@ -663,63 +658,26 @@ const ResultMatch: React.FC<{
 );
 
 /* ──────────────────────────────────────── */
-/*  روابط الحضور: اختيار الاسم من المقترحات */
+/*  حاله عدم التطابق — إعادة التصوير فقط    */
 /* ──────────────────────────────────────── */
-const ResultRoster: React.FC<{
-  matches: StudentMatch[];
-  selected: Student | null;
-  setSelected: (s: Student) => void;
-  onContinue: () => void;
+const ResultNoMatch: React.FC<{
+  extractedName: string | null;
   onRetry: () => void;
-}> = ({ matches, selected, setSelected, onContinue, onRetry }) => (
-  <div>
-    <div className="text-center mb-5">
-      <div className="sel-icon-circle sel-warn-soft mx-auto"><AlertTriangle className="w-8 h-8" /></div>
-      <h2 className="sel-heading mt-4 mb-2">تعذّر التحقق من الاسم بدقة</h2>
-      <p className="sel-muted">انقر على الاسم الصحيح أدناه للمتابعة.</p>
-    </div>
-
-    {matches.length > 0 ? (
-      <div className="space-y-2.5 mb-5">
-        {matches.slice(0, 4).map(m => (
-          <button
-            key={m.student.id}
-            type="button"
-            className={`sel-suggestion ${selected?.id === m.student.id ? 'selected' : ''}`}
-            onClick={() => setSelected(m.student)}
-          >
-            <span className="flex items-center gap-3 min-w-0">
-              <span className="sel-radio"><Check className="w-2.5 h-2.5" /></span>
-              <span className="text-right min-w-0">
-                <span className="block text-sm font-bold text-[#F3F7FF] truncate">{m.student.name}</span>
-                {m.student.code && (
-                  <span className="block text-[11px] text-[#93A5C8] tabular-nums" style={{ direction: 'ltr', textAlign: 'right' }}>
-                    كود: {m.student.code}
-                  </span>
-                )}
-              </span>
-            </span>
-            <span className="sel-suggestion-score">{m.score}%</span>
-          </button>
-        ))}
-      </div>
+}> = ({ extractedName, onRetry }) => (
+  <div className="text-center">
+    <div className="sel-icon-circle sel-warn-soft mx-auto"><AlertTriangle className="w-8 h-8" /></div>
+    <h2 className="sel-heading mt-4 mb-2">تعذّر التحقق من الاسم بدقة</h2>
+    {extractedName ? (
+      <p className="sel-muted mb-5">
+        الاسم المقروء: <span className="font-bold text-[#F3F7FF]">{extractedName}</span>
+      </p>
     ) : (
-      <p className="sel-muted text-center mb-5">لم نعثر على أسماء مطابقة — أعد التصوير بإضاءة أوضح.</p>
+      <p className="sel-muted mb-5">لم نتمكن من قراءة الاسم من البطاقة — تأكد من وضوح الإضاءة والصورة.</p>
     )}
-
-    <div className="grid grid-cols-2 gap-2">
-      <button type="button" className="sel-btn sel-btn-ghost sel-btn-sm" onClick={onRetry}>
-        <RefreshCw className="w-4 h-4" /> إعادة
-      </button>
-      <button
-        type="button"
-        className="sel-btn sel-btn-primary sel-btn-sm"
-        onClick={onContinue}
-        disabled={!selected}
-      >
-        <CheckCircle2 className="w-4 h-4" /> متابعة
-      </button>
-    </div>
+    <button type="button" className="sel-btn sel-btn-primary" onClick={onRetry}>
+      <RefreshCw className="w-5 h-5" /> إعادة التصوير
+    </button>
+    <p className="sel-cam-hint mt-4">تأكد من وضوح الاسم على البطاقة ثم أعد الالتقاط.</p>
   </div>
 );
 
