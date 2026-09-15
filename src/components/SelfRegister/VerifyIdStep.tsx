@@ -479,7 +479,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
           </div>
 
           <p className="sel-muted mb-5">
-            صوّر بطاقتك الجامعية مباشرة لنطابق بياناتك.
+            صوّر بطاقتك الجامعية مباشرة.
           </p>
 
           {isVerifyMode && expected?.name && (
