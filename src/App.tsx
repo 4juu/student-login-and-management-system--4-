@@ -1334,19 +1334,21 @@ function App() {
       </div>
 
       {/* ✨ الشات بوت الذكي */}
-      <Suspense fallback={null}>
-        <SmartChatBot
-          user={currentUser} colleges={colleges} stages={stages}
-          currentCollegeId={selectedCollegeId} currentStageId={selectedStageId}
-          students={students} records={attendanceRecords} sessions={sessions}
-          activeSessionId={activeSessionId}
-          allTeachers={isMainAdmin ? allTeachers : []}
-          allStagesData={isMainAdmin && universityDataLoaded ? allStagesData : {}}
-          onRequestUniversityData={isAdmin ? loadAllAdminData : undefined}
-          universityDataLoaded={universityDataLoaded}
-          universityDataLoading={universityDataLoading}
-        />
-      </Suspense>
+      {(!(currentUser?.role === 'teacher') || !!selectedStageId) && (
+        <Suspense fallback={null}>
+          <SmartChatBot
+            user={currentUser} colleges={colleges} stages={stages}
+            currentCollegeId={selectedCollegeId} currentStageId={selectedStageId}
+            students={students} records={attendanceRecords} sessions={sessions}
+            activeSessionId={activeSessionId}
+            allTeachers={isMainAdmin ? allTeachers : []}
+            allStagesData={isMainAdmin && universityDataLoaded ? allStagesData : {}}
+            onRequestUniversityData={isAdmin ? loadAllAdminData : undefined}
+            universityDataLoaded={universityDataLoaded}
+            universityDataLoading={universityDataLoading}
+          />
+        </Suspense>
+      )}
 
       {showSendLink && currentUser && isMainAdmin && (
         <Suspense fallback={null}>
