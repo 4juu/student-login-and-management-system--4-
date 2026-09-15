@@ -1,20 +1,15 @@
-import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, useReducer, lazy, Suspense } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref as dbRef, onValue, off } from 'firebase/database';
 import { Student, AttendanceRecord, AttendanceSession, College, Stage } from './types/student';
 import { User } from './types/user';
-import { StudentManager } from './components/StudentManager';
-
 import './design-system.css';
 
 import { StudentsViewer } from './components/StudentsViewer';
-import { AttendanceLogin } from './components/AttendanceLogin';
-import { AttendanceRecords } from './components/AttendanceRecords';
 import { PwaInstallButton } from './components/PwaInstallButton';
 import { OfflineModal } from './components/OfflineModal';
 import { OfflineWarningIcon } from './components/OfflineWarningIcon';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
-import { SessionManager } from './components/SessionManager';
 import { Login } from './components/Login';
 import { StageSelector } from './components/StageSelector';
 import { Masthead } from './components/Masthead';
@@ -56,6 +51,20 @@ const LazyPendingRegistrations = lazy(() =>
   import('./components/Admin/PendingRegistrations').then(m => ({ default: m.PendingRegistrations }))
 );
 
+// 🚀 شاشات المرحلة الثقيلة (مسح QR + الوجوه + جداول Excel) تُحمَّل عند فتح التبويب فقط
+const LazyAttendanceLogin = lazy(() =>
+  import('./components/AttendanceLogin').then(m => ({ default: m.AttendanceLogin }))
+);
+const LazyStudentManager = lazy(() =>
+  import('./components/StudentManager').then(m => ({ default: m.StudentManager }))
+);
+const LazyAttendanceRecords = lazy(() =>
+  import('./components/AttendanceRecords').then(m => ({ default: m.AttendanceRecords }))
+);
+const LazySessionManager = lazy(() =>
+  import('./components/SessionManager').then(m => ({ default: m.SessionManager }))
+);
+
 import { auth, database } from './firebase/config';
 import { signIn, signOut } from './firebase/authService';
 import { TelegramConfig, AbsenceSendLogEntry, GroupSendProgress } from './types/telegram';
@@ -77,6 +86,7 @@ import {
   cancelAllPendingSaves,
   getCurrentAcademicYear,
   loadSystemTitle,
+  loadAdminStageData,
 } from './firebase/dataService';
 import { getCachedStageData, setCachedStageData } from './lib/stageCache';
 
@@ -118,6 +128,74 @@ interface AllStagesData {
   };
 }
 
+// 📤 حالة إرسال الغيابات (useReducer: تحديث واحد ذري بدل 7 حالات متفرقة)
+interface SendProgressState {
+  open: boolean;
+  subjectName: string;
+  groups: GroupSendProgress[];
+  isSending: boolean;
+  doneCount: number;
+  totalGroups: number;
+  currentSessionId: string | null;
+}
+
+type SendAction =
+  | { type: 'OPEN'; subjectName: string; groups: GroupSendProgress[]; total: number }
+  | { type: 'SESSION'; sessionId: string }
+  | { type: 'PROGRESS'; items: Array<{ groupName: string; status: 'sent' | 'failed' | 'pending' | 'sending' }>; done: number }
+  | { type: 'DONE' }
+  | { type: 'NO_SESSION' }
+  | { type: 'CLOSE' };
+
+const initialSendState: SendProgressState = {
+  open: false,
+  subjectName: '',
+  groups: [],
+  isSending: false,
+  doneCount: 0,
+  totalGroups: 0,
+  currentSessionId: null,
+};
+
+const sendReducer = (state: SendProgressState, action: SendAction): SendProgressState => {
+  switch (action.type) {
+    case 'OPEN':
+      return {
+        ...state,
+        open: true,
+        subjectName: action.subjectName,
+        groups: action.groups,
+        isSending: true,
+        doneCount: 0,
+        totalGroups: action.total,
+      };
+    case 'SESSION':
+      return { ...state, currentSessionId: action.sessionId };
+    case 'PROGRESS':
+      return {
+        ...state,
+        doneCount: action.done,
+        groups: state.groups.map(g => {
+          const item = action.items.find(i => i.groupName === g.groupName);
+          if (!item) return g;
+          return {
+            ...g,
+            channels: g.channels.map(ch => ({ ...ch, status: item.status })),
+            allDone: item.status === 'sent' || item.status === 'failed',
+          };
+        }),
+      };
+    case 'DONE':
+      return { ...state, isSending: false };
+    case 'NO_SESSION':
+      return { ...state, currentSessionId: null };
+    case 'CLOSE':
+      return { ...state, open: false };
+    default:
+      return state;
+  }
+};
+
 function App() {
   // 🆕 كشف توكن التسجيل الذاتي من URL - بطرق متعددة لدعم كل المتصفحات
   const [registerToken, setRegisterToken] = useState<string | null>(null);
@@ -157,6 +235,8 @@ function App() {
 
   const [universityDataLoading, setUniversityDataLoading] = useState(false);
   const [universityDataLoaded, setUniversityDataLoaded] = useState(false);
+  const [stageLoadProgress, setStageLoadProgress] = useState<{ loaded: number; total: number } | null>(null);
+  const stageListenerRefs = useRef<Array<() => void>>([]);
 
   const [activeTab, setActiveTab] = useState<Tab>('stage-selector');
 
@@ -169,15 +249,9 @@ function App() {
   // 🤖 تهيئة التلغرام
   const [telegramConfig, setTelegramConfig] = useState<TelegramConfig | null>(null);
 
-  // 🚀 حالة إرسال الغيابات
-  const [sendModalOpen, setSendModalOpen] = useState(false);
-  const [sendGroups, setSendGroups] = useState<GroupSendProgress[]>([]);
-  const [sendSubjectName, setSendSubjectName] = useState('');
-  const [isSending, setIsSending] = useState(false);
-  const [sendDoneCount, setSendDoneCount] = useState(0);
-  const [sendTotalGroups, setSendTotalGroups] = useState(0);
+  // 🚀 حالة إرسال الغيابات (useReducer)
+  const [sendState, dispatchSend] = useReducer(sendReducer, initialSendState);
   const sendAbortRef = useRef<AbortController | null>(null);
-  const [currentSendingSessionId, setCurrentSendingSessionId] = useState<string | null>(null);
 
   // 📋 سجل إرسال الغيابات (جلسة فقط)
   const [absenceSendLogs, setAbsenceSendLogs] = useState<AbsenceSendLogEntry[]>([]);
@@ -374,60 +448,99 @@ function App() {
     }
   };
 
-  const loadAllAdminData = async () => {
+  const loadAllAdminData = useCallback(async () => {
     if (!currentUser || currentUser.role !== 'admin') return;
+    if (universityDataLoading) return;
     setUniversityDataLoading(true);
     try {
-      const { ref: dbRefImport, get } = await import('firebase/database');
       const adminUid = currentUser.uid;
       const allUserIds = [adminUid, ...allTeachers.map(t => t.uid)];
-      const stagesDataMap: AllStagesData = {};
-      const yearPath = `academicYears/${currentAcademicYear}/userData/${adminUid}`;
+      const total = stages.length;
 
-      await Promise.all(
-        stages.map(async (stage) => {
-          try {
-            const studentsSnap = await get(dbRefImport(database, `${yearPath}/stageData/${stage.id}/students`));
-            let stageStudents: Student[] = [];
-            if (studentsSnap.exists()) {
-              const data = studentsSnap.val();
-              stageStudents = Array.isArray(data) ? data : Object.values(data);
-            }
+      // ⚡ تحميل تدريجي: مرحلة بعد مرحلة (تسلسلي) بدل كل المراحل دفعة واحدة
+      // → الواجهة تبقى حيوية وتظهر نسبة التقدم الحقيقية
+      setStageLoadProgress({ loaded: 0, total });
+      for (let i = 0; i < stages.length; i++) {
+        const stage = stages[i];
+        const stageData = await loadAdminStageData(
+          adminUid,
+          currentAcademicYear,
+          stage.id,
+          allUserIds
+        );
+        setAllStagesData(prev => ({ ...prev, [stage.id]: stageData }));
+        setStageLoadProgress({ loaded: i + 1, total });
+      }
 
-            const allRecords: AttendanceRecord[] = [];
-            const allSessions: AttendanceSession[] = [];
-
-            await Promise.all(
-              allUserIds.map(async (userId) => {
-                try {
-                  const recSnap = await get(dbRefImport(database, `${yearPath}/stageData/${stage.id}/teacherRecords/${userId}/records`));
-                  if (recSnap.exists()) {
-                    const data = recSnap.val();
-                    allRecords.push(...(Array.isArray(data) ? data : Object.values(data)));
-                  }
-                  const sesSnap = await get(dbRefImport(database, `${yearPath}/stageData/${stage.id}/teacherRecords/${userId}/sessions`));
-                  if (sesSnap.exists()) {
-                    const data = sesSnap.val();
-                    allSessions.push(...(Array.isArray(data) ? data : Object.values(data)));
-                  }
-                } catch (e) { console.warn(`فشل جلب بيانات المستخدم ${userId}`); }
-              })
-            );
-
-            stagesDataMap[stage.id] = { students: stageStudents, records: allRecords, sessions: allSessions };
-          } catch (e) { console.warn(`فشل تحميل بيانات المرحلة ${stage.id}`); }
-        })
-      );
-
-      setAllStagesData(stagesDataMap);
       setUniversityDataLoaded(true);
+      attachStageListeners(adminUid);
     } catch (error) {
       console.error('❌ خطأ في تحميل بيانات الأدمن الشاملة:', error);
       alert('❌ فشل تحميل بيانات الجامعة. حاول مرة ثانية.');
     } finally {
       setUniversityDataLoading(false);
     }
+  }, [currentUser, allTeachers, stages, universityDataLoading, currentAcademicYear]);
+
+  // 📡 اشتراك مباشر (Realtime) ببيانات كل مرحلة بعد تحميلها:
+  // أي تغيير من التدريسيين أو من تبويب آخر ينعكس فوراً في لوحة الأدمن الشاملة
+  const detachStageListeners = () => {
+    stageListenerRefs.current.forEach(unsub => unsub());
+    stageListenerRefs.current = [];
   };
+
+  const attachStageListeners = useCallback((adminUid: string) => {
+    detachStageListeners();
+    if (!stages.length) return;
+    const yearPath = `academicYears/${currentAcademicYear}/userData/${adminUid}/stageData`;
+
+    stages.forEach((stage) => {
+      const stageRef = dbRef(database, `${yearPath}/${stage.id}`);
+      const unsub = onValue(
+        stageRef,
+        async (snapshot) => {
+          if (!snapshot.exists()) return;
+          const node = snapshot.val();
+          const studentsData = node?.students;
+          const students: Student[] = Array.isArray(studentsData)
+            ? studentsData
+            : studentsData
+            ? Object.values(studentsData)
+            : [];
+
+          const records: AttendanceRecord[] = [];
+          const sessions: AttendanceSession[] = [];
+          const teacherRecords = node?.teacherRecords;
+          if (teacherRecords) {
+            for (const teacher of Object.values(teacherRecords) as Array<Record<string, unknown>>) {
+              const ses = teacher.sessions as unknown;
+              const recCompressed = teacher.recordsCompressed as unknown;
+              const recLegacy = teacher.records as unknown;
+              if (ses) {
+                sessions.push(...(Array.isArray(ses) ? ses : Object.values(ses as Record<string, AttendanceSession>)));
+              }
+              if (recCompressed) {
+                try {
+                  const { decompressRecord } = await import('./firebase/dataServiceCompressed');
+                  const raw = Array.isArray(recCompressed)
+                    ? recCompressed
+                    : Object.values(recCompressed as Record<string, unknown>);
+                  records.push(...raw.map(c => decompressRecord(c as any)));
+                } catch {
+                  // تجاهل فشل فك الضغط
+                }
+              } else if (recLegacy) {
+                records.push(...(Array.isArray(recLegacy) ? recLegacy : Object.values(recLegacy as Record<string, AttendanceRecord>)));
+              }
+            }
+          }
+          setAllStagesData(prev => ({ ...prev, [stage.id]: { students, records, sessions } }));
+        },
+        (error) => console.warn('⚠️ فشل الاستماع لبيانات المرحلة:', error)
+      );
+      stageListenerRefs.current.push(unsub);
+    });
+  }, [stages, currentAcademicYear]);
 
   const handleSelectStage = useCallback(async (collegeId: string, stageId: string) => {
     setSelectedCollegeId(collegeId);
@@ -492,6 +605,7 @@ function App() {
   };
 
   const resetData = () => {
+    detachStageListeners();
     setDataLoaded(false);
     setColleges([]);
     setStages([]);
@@ -508,6 +622,8 @@ function App() {
   };
 
   const handleResetComplete = useCallback(() => resetData(), []);
+
+  useEffect(() => () => detachStageListeners(), []);
 
   useEffect(() => {
     if (currentUser?.role === 'admin' && dataLoaded) {
@@ -852,34 +968,17 @@ function App() {
         allDone: false,
       }));
 
-      setSendSubjectName(subjectName);
-      setSendGroups(progressGroups);
-      setSendDoneCount(0);
-      setSendTotalGroups(groupDataList.length);
-      setSendModalOpen(true);
-      setIsSending(true);
-      setCurrentSendingSessionId(sessionId);
+      dispatchSend({ type: 'OPEN', subjectName, groups: progressGroups, total: groupDataList.length });
+      dispatchSend({ type: 'SESSION', sessionId });
 
       const controller = new AbortController();
       sendAbortRef.current = controller;
 
       sendQueuedMessages(queue, telegramConfig.botToken, (updatedItems) => {
         const done = updatedItems.filter(i => i.status === 'sent' || i.status === 'failed').length;
-        setSendDoneCount(done);
-        setSendGroups(prev => prev.map(g => {
-          const item = updatedItems.find(i => i.groupName === g.groupName);
-          if (!item) return g;
-          return {
-            ...g,
-            channels: g.channels.map(ch => ({
-              ...ch,
-              status: item.status,
-            })),
-            allDone: item.status === 'sent' || item.status === 'failed',
-          };
-        }));
+        dispatchSend({ type: 'PROGRESS', items: updatedItems, done });
       }, controller.signal).then(() => {
-        setIsSending(false);
+        dispatchSend({ type: 'DONE' });
         if (!controller.signal.aborted) {
           const allSent = queue.filter(i => i.status === 'sent').length;
           const logEntry: AbsenceSendLogEntry = {
@@ -908,10 +1007,10 @@ function App() {
           });
           setCompletedGroupData(prev => ({ ...prev, [sessionId]: completedGroups }));
         }
-        setCurrentSendingSessionId(null);
+        dispatchSend({ type: 'NO_SESSION' });
       }).catch(() => {
-        setIsSending(false);
-        setCurrentSendingSessionId(null);
+        dispatchSend({ type: 'DONE' });
+        dispatchSend({ type: 'NO_SESSION' });
       });
     }
   }, [stages, selectedStageId, currentUser, students, attendanceRecords, telegramConfig]);
@@ -997,6 +1096,12 @@ function App() {
 
   const selectedStage = stages.find(s => s.id === selectedStageId);
   const selectedCollege = colleges.find(c => c.id === selectedCollegeId);
+
+  // 🎯 الجلسة النشطة + حضورها (useMemo: ثبات المرجع حتى لا يعيد رسم شاشة الحضور بدون داعٍ)
+  const activeSession = useMemo(
+    () => sessions.find(s => s.id === activeSessionId) || null,
+    [sessions, activeSessionId]
+  );
 
   return (
     <div className="min-h-screen bg-[#0B1220]" dir="rtl">
@@ -1158,8 +1263,10 @@ function App() {
                     <div>
                       <h3 className="font-bold text-white">بيانات الجامعة الشاملة</h3>
                       <p className="text-xs text-white/60">
-                        {universityDataLoaded
-                          ? `✅ تم تحميل بيانات ${Object.keys(allStagesData).length} مرحلة`
+                        {universityDataLoading && stageLoadProgress
+                          ? `⏳ جاري التحميل (${stageLoadProgress.loaded}/${stageLoadProgress.total} مرحلة)…`
+                          : universityDataLoaded
+                          ? `✅ تم تحميل بيانات ${Object.keys(allStagesData).length} مرحلة — محدّثة مباشرة`
                           : 'حمّل بيانات كل الكليات والمراحل للتحليلات والتقارير الشاملة'}
                       </p>
                     </div>
@@ -1262,64 +1369,66 @@ function App() {
             </div>
 
             <div key={`stage-tab-${activeTab}`} className="animate-pageEnter">
-              {activeTab === 'sessions' && (
-                <SessionManager
-                  sessions={sessions} activeSessionId={activeSessionId}
-                  onCreateSession={handleCreateSession} onSelectSession={handleSelectSession}
-                  onDeleteSession={handleDeleteSession} onRenameSession={handleRenameSession}
-                  students={students} records={attendanceRecords} onMarkAbsent={handleMarkAbsent}
-                  absenceSendLogs={absenceSendLogs}
-                  isSending={isSending}
-                  currentSendingSessionId={currentSendingSessionId}
-                  sendGroups={sendGroups}
-                  sendDoneCount={sendDoneCount}
-                  sendTotalGroups={sendTotalGroups}
-                  completedGroupData={completedGroupData}
-                />
-              )}
-              {activeTab === 'login' && (
-                <div className="max-w-lg mx-auto">
-                  {!activeSessionId ? (
-                    <div className="glass-card-sm p-6 text-center">
-                      <p className="text-amber-300 font-medium mb-4">لا يوجد سجل نشط!</p>
-                      <button onClick={() => setActiveTab('sessions')} className="btn-base btn-primary px-6 py-2">
-                        انتقل لإدارة السجلات
-                      </button>
-                    </div>
-                  ) : students.length === 0 ? (
-                    <div className="glass-card-sm p-6 text-center">
-                      <p className="text-amber-300 font-medium">لا يوجد طلاب في هذه المرحلة</p>
-                    </div>
-                  ) : (
-                    <AttendanceLogin
-                      students={students} activeSessionId={activeSessionId}
-                      activeSession={sessions.find(s => s.id === activeSessionId) || null}
-                      records={attendanceRecords} onAttendanceRecord={handleAttendanceRecord}
-                      onUpdateStudent={handleUpdateStudent} currentUser={currentUser}
-                    />
-                  )}
-                </div>
-              )}
-              {activeTab === 'manage' && (
-                canEditStudents ? (
-                  <StudentManager
-                    students={students} onAddStudent={handleAddStudent}
-                    onAddMultipleStudents={handleAddMultipleStudents} onUpdateStudent={handleUpdateStudent}
-                    onDeleteStudent={handleDeleteStudent} onDeleteSelectedStudents={handleDeleteSelectedStudents}
-                    onSortByName={handleSortByName} onSortByGroup={handleSortByGroup}
-                    onOpenProfile={setProfileStudent}
+              <Suspense fallback={<TabFallback />}>
+                {activeTab === 'sessions' && (
+                  <LazySessionManager
+                    sessions={sessions} activeSessionId={activeSessionId}
+                    onCreateSession={handleCreateSession} onSelectSession={handleSelectSession}
+                    onDeleteSession={handleDeleteSession} onRenameSession={handleRenameSession}
+                    students={students} records={attendanceRecords} onMarkAbsent={handleMarkAbsent}
+                    absenceSendLogs={absenceSendLogs}
+                    isSending={sendState.isSending}
+                    currentSendingSessionId={sendState.currentSessionId}
+                    sendGroups={sendState.groups}
+                    sendDoneCount={sendState.doneCount}
+                    sendTotalGroups={sendState.totalGroups}
+                    completedGroupData={completedGroupData}
                   />
-                ) : (
-                  <StudentsViewer students={students} onOpenProfile={setProfileStudent} />
-                )
-              )}
-              {activeTab === 'records' && (
-                <AttendanceRecords
-                  records={attendanceRecords} sessions={sessions} students={students}
-                  activeSessionId={activeSessionId} onClearRecords={handleClearRecords}
-                  onUpdateRecord={handleUpdateRecord} onDeleteRecord={handleDeleteRecord}
-                />
-              )}
+                )}
+                {activeTab === 'login' && (
+                  <div className="max-w-lg mx-auto">
+                    {!activeSessionId ? (
+                      <div className="glass-card-sm p-6 text-center">
+                        <p className="text-amber-300 font-medium mb-4">لا يوجد سجل نشط!</p>
+                        <button onClick={() => setActiveTab('sessions')} className="btn-base btn-primary px-6 py-2">
+                          انتقل لإدارة السجلات
+                        </button>
+                      </div>
+                    ) : students.length === 0 ? (
+                      <div className="glass-card-sm p-6 text-center">
+                        <p className="text-amber-300 font-medium">لا يوجد طلاب في هذه المرحلة</p>
+                      </div>
+                    ) : (
+                      <LazyAttendanceLogin
+                        students={students} activeSessionId={activeSessionId}
+                        activeSession={activeSession}
+                        records={attendanceRecords} onAttendanceRecord={handleAttendanceRecord}
+                        onUpdateStudent={handleUpdateStudent} currentUser={currentUser}
+                      />
+                    )}
+                  </div>
+                )}
+                {activeTab === 'manage' && (
+                  canEditStudents ? (
+                    <LazyStudentManager
+                      students={students} onAddStudent={handleAddStudent}
+                      onAddMultipleStudents={handleAddMultipleStudents} onUpdateStudent={handleUpdateStudent}
+                      onDeleteStudent={handleDeleteStudent} onDeleteSelectedStudents={handleDeleteSelectedStudents}
+                      onSortByName={handleSortByName} onSortByGroup={handleSortByGroup}
+                      onOpenProfile={setProfileStudent}
+                    />
+                  ) : (
+                    <StudentsViewer students={students} onOpenProfile={setProfileStudent} />
+                  )
+                )}
+                {activeTab === 'records' && (
+                  <LazyAttendanceRecords
+                    records={attendanceRecords} sessions={sessions} students={students}
+                    activeSessionId={activeSessionId} onClearRecords={handleClearRecords}
+                    onUpdateRecord={handleUpdateRecord} onDeleteRecord={handleDeleteRecord}
+                  />
+                )}
+              </Suspense>
             </div>
           </div>
         )}
@@ -1389,13 +1498,13 @@ function App() {
 
       {/* 🚀 نافذة إرسال الغيابات */}
       <SendProgressModal
-        isOpen={sendModalOpen}
-        subjectName={sendSubjectName}
-        groups={sendGroups}
-        onHide={() => setSendModalOpen(false)}
-        isSending={isSending}
-        totalDone={sendDoneCount}
-        totalGroups={sendTotalGroups}
+        isOpen={sendState.open}
+        subjectName={sendState.subjectName}
+        groups={sendState.groups}
+        onHide={() => dispatchSend({ type: 'CLOSE' })}
+        isSending={sendState.isSending}
+        totalDone={sendState.doneCount}
+        totalGroups={sendState.totalGroups}
       />
 
       {/* 📋 ملف الطالب (يُحمَّل عند الطلب) */}

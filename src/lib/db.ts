@@ -77,3 +77,27 @@ export const dbDelete = async (key: string): Promise<void> => {
     // تجاهل
   }
 };
+
+export const dbDeleteWhere = async (predicate: (key: string) => boolean): Promise<void> => {
+  try {
+    const db = await openDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      const store = tx.objectStore(STORE);
+      const req = store.openCursor();
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (cursor) {
+          if (predicate(String(cursor.key))) {
+            cursor.delete();
+          }
+          cursor.continue();
+        }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    // تجاهل
+  }
+};
