@@ -41,9 +41,33 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>
 );
 
-// 🅿️ تسجيل Service Worker للتثبيت (PWA) بدون أي كاش
+// 🅿️ تسجيل Service Worker للتثبيت (PWA) + تحديث فوري عند كل نشر جديد
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  window.addEventListener('load', async () => {
+    try {
+      await navigator.serviceWorker.register('/sw.js');
+      // نتحقق من إصدار أحدث عند كل عودة للتطبيق وظهور التبويب
+      const checkForUpdate = () => {
+        navigator.serviceWorker
+          .getRegistration()
+          .then((reg) => reg?.update?.())
+          .catch(() => {});
+      };
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') checkForUpdate();
+      });
+      window.setInterval(checkForUpdate, 60 * 60 * 1000);
+    } catch {
+      /* بيئة لا تدعم SW — يُهمل */
+    }
   });
+
+  // عند تفعيل SW جديد (skipWaiting) ينتقل التحكم ويعيد تحميل الصفحة لتعرض النسخة الجديدة
+  let refreshing = false;
+  const reloadOnce = () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  };
+  navigator.serviceWorker.addEventListener('controllerchange', reloadOnce);
 }

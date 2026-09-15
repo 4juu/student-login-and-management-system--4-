@@ -14,6 +14,19 @@
       ]
     },
     {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, must-revalidate"
+        },
+        {
+          "key": "content-type",
+          "value": "application/javascript"
+        }
+      ]
+    },
+    {
       "source": "/assets/(.*)",
       "headers": [
         {
@@ -26,7 +39,7 @@
 
   "rewrites": [
     {
-      "source": "/((?!assets/|ort/|models/|mediapipe/).*)",
+      "source": "/((?!assets/|ort/|models/|mediapipe/|sw\\.js$).*)",
       "destination": "/index.html"
     }
   ]
