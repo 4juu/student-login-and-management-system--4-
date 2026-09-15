@@ -334,7 +334,8 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
         ocrLogger = null;
 
         const text: string = data?.text || '';
-        setExtractedName(extractStudentName(text));
+        const extractedNameVal = extractStudentName(text);
+        setExtractedName(extractedNameVal);
         setProgress({ percent: 100, status: 'تمت القراءة — جاري التطابق…' });
 
         // ✅ سحب رمز QR من صورة البطاقة (إن وُجد) — يُعتبر متحققاً لأنه مقروء من البطاقة نفسها
@@ -356,7 +357,11 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
           const r = findNameInOCRText(expected.name, text);
           setVerify({ matched: r.matched, confidence: Math.round(r.confidence * 100) });
         } else if (roster.length) {
-          const ranked = rankStudents(text, roster);
+          let ranked = rankStudents(text, roster);
+          // إذا النص الخام ضجيج وما لقى أي تطابق، نعيد المحاولة بالاسم المستخرج مباشرةً
+          if (ranked.length === 0 && extractedNameVal) {
+            ranked = rankStudents(extractedNameVal, roster);
+          }
           setMatches(ranked);
           setSelected(ranked[0] && ranked[0].score >= ROSTER_AUTO_THRESHOLD ? ranked[0].student : null);
         }
