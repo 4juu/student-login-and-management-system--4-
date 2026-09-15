@@ -58,14 +58,14 @@ export const RegistrationSuccess: React.FC<RegistrationSuccessProps> = ({
           {qrVerified ? (
             <div className="rounded-2xl border border-[#1D5A45] bg-[#0F3A2C] p-4 mb-5">
               <div className="flex items-center gap-2 text-[#34D399] font-bold mb-1">
-                <CheckCircle2 className="w-5 h-5" /> تم التحقق من رمز QR في البطاقة
+                <CheckCircle2 className="w-5 h-5" /> تم إرسال الطلب بنجاح
               </div>
-              <p className="text-sm text-[#34D399]">يمكنك الآن استخدام الهوية والوجه والرمز داخل الكلية</p>
+              <p className="text-sm text-[#34D399]">بانتظار موافقة مسجل الكلية</p>
             </div>
           ) : (
             <div className="rounded-2xl border border-[#5C4520] bg-[#33270F] p-4 mb-5 text-right">
               <p className="font-bold text-[#FBBF24] mb-1 flex items-center gap-2">
-                <Clock className="w-5 h-5" /> بانتظار موافقة المشرف
+                <Clock className="w-5 h-5" /> بانتظار موافقة مسجل الكلية
               </p>
             </div>
           )}
@@ -73,7 +73,7 @@ export const RegistrationSuccess: React.FC<RegistrationSuccessProps> = ({
           <div className="sel-note mb-6">
             <Lock className="w-4 h-4 shrink-0" />
             <span>
-              <strong>تم حذف جميع الصور</strong> من جهازك ومن النظام. ما يُحفظ هو معلومات تعرّف رقمية فقط.
+              <strong>تم حذف صورة الوجه والهوية</strong> من النظام.
             </span>
           </div>
 
