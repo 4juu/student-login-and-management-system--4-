@@ -471,8 +471,8 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   const headerCfg =
     step === 'verify'
       ? link?.type === 'attendance'
-        ? { title: 'رابط تقرير الحضور والغياب', subtitle: 'تحقق من هويتك عبر بطاقتك الجامعية لعرض تقريرك' }
-        : { title: 'تسجيل بصمة الوجه', subtitle: 'تحقق من هويتك عبر بطاقتك الجامعية ثم سجّل بصمتك الذاتية' }
+        ? { title: 'رابط معرفة الحضور اليومي الخاص بالطلبة', subtitle: 'تحقق من هويتك عبر بطاقتك الجامعية لعرض تقريرك' }
+        : { title: 'تسجيل بصمة الوجه ورمز QR code', subtitle: 'تحقق من هويتك عبر بطاقتك الجامعية ثم سجّل بصمتك الذاتية' }
       : step === 'confirm'
       ? { title: 'تأكيد هويتك', subtitle: `الطالب: ${expected?.name || ''}` }
       : step === 'report'
