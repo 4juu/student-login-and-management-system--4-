@@ -310,9 +310,7 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
             <p className="text-sm font-bold text-indigo-200">
               السنة الأكاديمية: {currentAcademicYear.replace('_', ' - ')}
             </p>
-            <p className="text-xs text-indigo-300">
-              جميع السجلات تنتمي لهذه السنة
-            </p>
+            
           </div>
         </div>
         <div className="text-xs bg-white/10 px-3 py-1 rounded-full border border-indigo-400/30 text-indigo-200 flex items-center gap-1">
