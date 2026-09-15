@@ -7,7 +7,7 @@
  * - عند التفعيل: نمسح كل كاشات الإصدارات القديمة (يكسر SW عالق)
  * ============================================================ */
 
-const VERSION = 'v2026.09.15.2';
+const VERSION = 'v2026.09.15.3';
 const SHELL_CACHE = `att-shell-${VERSION}`;
 const ASSET_CACHE = `att-assets-${VERSION}`;
 
@@ -22,14 +22,11 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
+  // نمسح كل الكاشات بلا استثناء — يكسر أي نسخة قديمة عالقة من أي إصدار سابق
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(
-        keys
-          .filter((k) => k !== SHELL_CACHE && k !== ASSET_CACHE)
-          .map((k) => caches.delete(k)),
-      );
+      await Promise.all(keys.map((k) => caches.delete(k)));
       await self.clients.claim();
     })(),
   );
