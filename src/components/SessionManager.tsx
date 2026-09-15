@@ -4,7 +4,7 @@ import { useModalBehavior } from '../hooks/useModalBehavior';
 import { AttendanceSession, Student, AttendanceRecord } from '../types/student';
 import { getCurrentAcademicYear } from '../firebase/dataService';
 import { AbsenceSendLogEntry, GroupSendProgress } from '../types/telegram';
-import { Calendar, ChartColumn, Circle, CircleCheck, ClipboardList, GraduationCap, Library, Pencil, TriangleAlert } from 'lucide-react';
+import { Calendar, ChartColumn, Check, Circle, CircleCheck, ClipboardList, GraduationCap, Library, Pencil, TriangleAlert } from 'lucide-react';
 
 interface SessionManagerProps {
   sessions: AttendanceSession[];
@@ -410,9 +410,20 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
                               }
                               if (e.key === 'Escape') setEditingSessionId(null);
                             }}
-                            onBlur={() => setEditingSessionId(null)}
                             dir="rtl"
                           />
+                          <button
+                            onClick={() => {
+                              if (editSessionName.trim()) {
+                                onRenameSession?.(session.id, editSessionName.trim());
+                                setEditingSessionId(null);
+                              }
+                            }}
+                            className="text-green-400 hover:text-green-300 shrink-0"
+                            title="حفظ الاسم"
+                          >
+                            <Check className="w-5 h-5" />
+                          </button>
                         </div>
                       ) : (
                         <span>{session.name}</span>
