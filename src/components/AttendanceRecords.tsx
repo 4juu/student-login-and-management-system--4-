@@ -358,7 +358,11 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
         const year = d.getFullYear();
         const formattedDate = `${year}/${month}/${day}`;
 
-        return `${dayName}\n${formattedDate}`;
+        const sessionName = (s.name || '').trim();
+        const isDefaultName = !sessionName || sessionName === dayName || sessionName.includes(dayName);
+        const headerName = isDefaultName ? dayName : sessionName;
+
+        return `${headerName}\n${formattedDate}`;
       } catch {
         return s.name || s.date;
       }
