@@ -1,6 +1,9 @@
 /// <reference types="vite/client" />
 /// <reference types="vite-plugin-pwa/client" />
 
+// ✅ إصدار البناء الفريد (يُحقن من vite.config.ts عبر define)
+declare const __APP_VERSION__: string;
+
 interface ImportMetaEnv {
   readonly VITE_HF_TOKEN: string;
   readonly VITE_GEMINI_KEY: string;

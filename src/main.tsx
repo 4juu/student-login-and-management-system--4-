@@ -7,6 +7,54 @@ import './index.css';
 const App = lazy(() => import('./App'));
 const StudentEntry = lazy(() => import('./studentEntry'));
 
+// 🆕 فحص الإصدار القسري: كل بناء جديد يحمل إصداراً فريداً.
+// لو نسخة الجهاز أقدم من المنشورة، نمسح كاشات SW القديمة، نلغي تسجيلاتها العالقة،
+// ونعيد تحميلاً طازجاً — وهذا يضمن وصول أي تحديث للنسخة المثبّتة دون أي انتظار.
+const APP_VERSION = __APP_VERSION__;
+
+function forceFreshState() {
+  try {
+    if ('caches' in window) {
+      caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).catch(() => {});
+    }
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((regs) => Promise.all(regs.map((r) => Promise.resolve(r.unregister()).then(() => true).catch(() => false))))
+        .then(() => {
+          localStorage.setItem('appVersion', APP_VERSION);
+          window.location.reload();
+        })
+        .catch(() => {
+          localStorage.setItem('appVersion', APP_VERSION);
+          window.location.reload();
+        });
+    } else {
+      localStorage.setItem('appVersion', APP_VERSION);
+      window.location.reload();
+    }
+  } catch {
+    try {
+      localStorage.setItem('appVersion', APP_VERSION);
+    } catch {}
+    window.location.reload();
+  }
+}
+
+try {
+  // فحص الإصدار الإجباري يعمل في الإنتاج فقط — أي بناء جديد ⟵ إعادة تحميل طازج
+  if (import.meta.env.PROD) {
+    const prev = localStorage.getItem('appVersion');
+    if (prev && prev !== APP_VERSION) {
+      forceFreshState();
+    } else {
+      localStorage.setItem('appVersion', APP_VERSION);
+    }
+  }
+} catch {
+  /* تجاهل — بيئة بدون localStorage */
+}
+
 // 📱 صفحة الطالب (رابط تسجيل ذاتي) تُفتح بمدخل خفيف دون تحميل لوحة التحكم كاملة
 function hasRegToken(): boolean {
   try {
@@ -45,7 +93,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
-      await navigator.serviceWorker.register('/sw.js');
+      // updateViaCache: 'none' → المتصفح لا يستعمل أي HTTP cache عند تحديث سكربت الـ SW
+      await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
       // نتحقق من إصدار أحدث عند كل عودة للتطبيق وظهور التبويب
       const checkForUpdate = () => {
         navigator.serviceWorker
