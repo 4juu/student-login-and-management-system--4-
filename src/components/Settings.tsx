@@ -359,7 +359,6 @@ export const Settings: React.FC<SettingsProps> = ({
             <Landmark className="w-9 h-9 text-blue-700 shrink-0" />
             <div>
               <h3 className="font-bold text-blue-900">هوية النظام</h3>
-              <p className="text-sm text-blue-700">العنوان الظاهر في الترويسة الرسمية أعلى الموقع</p>
             </div>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
