@@ -202,29 +202,47 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     const base = `academicYears/${year}/userData/${lnk.adminUid}/stageData/${lnk.stageId}/teacherRecords/${teacherId}`;
     const t = await dbFetch<any>(base, signal);
 
+    // فلاش باك: إذا كان مسار مرسل الرابط فارغاً (مثلاً حُفظت السجلات بحساب معلم آخر)،
+    // نفحص كل المدرّسين في نفس المرحلة ونجمع سجلاتهم وجلساتهم
+    const ownHasContent = !!t && typeof t === 'object' && Object.keys(t).length > 0;
+    const datasets: any[] = ownHasContent ? [t] : [];
+
+    if (!ownHasContent) {
+      const allPath = `academicYears/${year}/userData/${lnk.adminUid}/stageData/${lnk.stageId}/teacherRecords`;
+      const all = await dbFetch<any>(allPath, signal);
+      if (all && typeof all === 'object' && !Array.isArray(all)) {
+        const tids = Object.keys(all);
+        for (const tid of tids) {
+          const td = all[tid];
+          if (tid === teacherId || !td || typeof td !== 'object') continue;
+          if (Object.keys(td).length > 0) datasets.push(td);
+        }
+      }
+    }
+
     const records: AttendanceRecord[] = [];
     const sessions: AttendanceSession[] = [];
     const seenRecords = new Set<string>();
 
-    if (t && typeof t === 'object') {
-      if (t.sessions) {
-        const sessArr: any[] = Array.isArray(t.sessions) ? t.sessions : Object.values(t.sessions);
+    for (const ds of datasets) {
+      if (ds.sessions) {
+        const sessArr: any[] = Array.isArray(ds.sessions) ? ds.sessions : Object.values(ds.sessions);
         for (const s of sessArr) {
           if (s && s.id) sessions.push(s as AttendanceSession);
         }
       }
 
       const shapes: any[] = [];
-      if (t.recordsCompressed) {
-        const arr: any[] = Array.isArray(t.recordsCompressed) ? t.recordsCompressed : Object.values(t.recordsCompressed);
+      if (ds.recordsCompressed) {
+        const arr: any[] = Array.isArray(ds.recordsCompressed) ? ds.recordsCompressed : Object.values(ds.recordsCompressed);
         for (const c of arr) {
           if (!c || typeof c !== 'object') continue;
           if (c.id) { shapes.push(c); continue; }
           try { const rec = decompressRecord(c); if (rec?.id) shapes.push(rec); } catch {}
         }
       }
-      if (t.records) {
-        const raw: any[] = Array.isArray(t.records) ? t.records : Object.values(t.records);
+      if (ds.records) {
+        const raw: any[] = Array.isArray(ds.records) ? ds.records : Object.values(ds.records);
         shapes.push(...raw.filter(r => r && typeof r === 'object' && r.id));
       }
       for (const rec of shapes) {
@@ -343,6 +361,8 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
       setAttendanceRecords(records);
       setAttendanceSessions(sessions);
       setSessionNameMap(namesMap);
+      // بعد إتمام التقرير، يخرج تحديث الصفحة لتسجيل الدخول بدلاً من إعادة خطوة التحقق
+      sessionStorage.setItem('selfEnrollDoneToken', link.token);
       goTo('report');
     } catch (e) {
       console.error('❌ تعذر تحميل تقرير الحضور:', e);

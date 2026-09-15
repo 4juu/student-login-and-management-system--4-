@@ -237,8 +237,18 @@ function App() {
         if (!token) token = sessionStorage.getItem('pendingRegToken');
 
         if (token) {
-          sessionStorage.setItem('pendingRegToken', token);
-          setRegisterToken(token);
+          // رابط أُنجز التقرير فيه مسبقاً → ننظفه ونعرض صفحة الدخول بدلاً من إعادة خطوة التحقق
+          const doneToken = sessionStorage.getItem('selfEnrollDoneToken');
+          if (doneToken && doneToken === token) {
+            sessionStorage.removeItem('pendingRegToken');
+            const url = new URL(window.location.href);
+            url.searchParams.delete('reg');
+            url.hash = '';
+            window.history.replaceState({}, '', url.toString());
+          } else {
+            sessionStorage.setItem('pendingRegToken', token);
+            setRegisterToken(token);
+          }
         }
 
         setTokenChecked(true);
