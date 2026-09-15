@@ -16,7 +16,6 @@ import {
 import type { Student } from '../../types/student';
 import { findNameInOCRText } from '../../services/nameMatching';
 import {
-  MATCH_THRESHOLD,
   extractStudentName,
   rankStudents,
   type StudentMatch,
@@ -172,6 +171,9 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
   const camScreenRef = useRef<HTMLDivElement>(null);
 
   const isVerifyMode = !!expected;
+
+  // روابط الحضور: نقبل التطابق بدقة 50%+ تلقائياً (بدلاً من 80%) — لا نُلزم الطالب باختيار يدوی
+  const ROSTER_AUTO_THRESHOLD = 50;
 
   useEffect(() => {
     return () => {
@@ -356,7 +358,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
         } else if (roster.length) {
           const ranked = rankStudents(text, roster);
           setMatches(ranked);
-          setSelected(ranked[0] && ranked[0].score >= MATCH_THRESHOLD ? ranked[0].student : null);
+          setSelected(ranked[0] && ranked[0].score >= ROSTER_AUTO_THRESHOLD ? ranked[0].student : null);
         }
 
         setScreen('result');
@@ -514,7 +516,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
 
   // ═══════════════ النتيجة ═══════════════
   const topResult = matches[0];
-  const autoMatch = topResult && topResult.score >= MATCH_THRESHOLD;
+  const autoMatch = topResult && topResult.score >= ROSTER_AUTO_THRESHOLD;
   const strongMatch = isVerifyMode ? !!verify?.matched : !!autoMatch;
 
   return (
@@ -668,8 +670,8 @@ const ResultRoster: React.FC<{
   <div>
     <div className="text-center mb-5">
       <div className="sel-icon-circle sel-warn-soft mx-auto"><AlertTriangle className="w-8 h-8" /></div>
-      <h2 className="sel-heading mt-4 mb-2">تعذّر تحديد اسمك بدقة</h2>
-      <p className="sel-muted">اختر اسمك من المقترحات أدناه للمتابعة.</p>
+      <h2 className="sel-heading mt-4 mb-2">تعذّر التحقق من الاسم بدقة</h2>
+      <p className="sel-muted">انقر على الاسم الصحيح أدناه للمتابعة.</p>
     </div>
 
     {matches.length > 0 ? (

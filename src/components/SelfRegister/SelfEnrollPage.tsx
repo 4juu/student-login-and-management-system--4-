@@ -6,12 +6,12 @@ import '@fontsource/vazirmatn/700.css';
 import '@fontsource/vazirmatn/800.css';
 import { ref, set } from 'firebase/database';
 import { database, dbURL } from '../../firebase/config';
-import { AttendanceRecord, Student } from '../../types/student';
+import { AttendanceRecord, AttendanceSession, Student } from '../../types/student';
 import { RegistrationLink } from '../../types/registration';
 import { getRegistrationLink, validateLink } from '../../services/tokenService';
 import { VerifyIdStep, type QrScanResult } from './VerifyIdStep';
 import { RegistrationSuccess } from './RegistrationSuccess';
-import { getActiveAcademicYear, loadAttendanceRecords, loadSessions } from '../../firebase/dataService';
+import { getActiveAcademicYear } from '../../firebase/dataService';
 import { decompressRecord } from '../../firebase/dataServiceCompressed';
 import { migrateToV5, parseAllSamples, checkForTampering, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
 import { useFaceAI } from '../../hooks/useFaceAI';
@@ -148,6 +148,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   const [stageStudents, setStageStudents] = useState<Student[]>([]);
   const [errorMsg, setErrorMsg] = useState('');
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSession[]>([]);
   const [sessionNameMap, setSessionNameMap] = useState<Record<string, string>>({});
   const [retryStep, setRetryStep] = useState<Step>('verify');
   const [qrResult, setQrResult] = useState<QrScanResult | null>(null);
@@ -178,6 +179,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   // العودة لأول خطوة التحقق لنفس الطالب — بلا تحويل لصفحة تسجيل الدخول
   const restart = useCallback(() => {
     setAttendanceRecords([]);
+    setAttendanceSessions([]);
     setSessionNameMap({});
     setQrResult(null);
     setErrorMsg('');
@@ -186,45 +188,57 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   }, [transitionTo]);
 
   const loadStageRecordsForStudent = async (
-    lnk: RegistrationLink, studentId: string, signal?: AbortSignal,
-  ): Promise<{ records: AttendanceRecord[]; sessionNameMap: Record<string, string> }> => {
+    lnk: RegistrationLink,
+    studentId: string,
+    signal?: AbortSignal,
+  ): Promise<{ records: AttendanceRecord[]; sessions: AttendanceSession[]; sessionNameMap: Record<string, string> }> => {
     let year = lnk.academicYear || '';
     if (!year) { try { year = await getActiveAcademicYear(); } catch { year = ''; } }
-    if (!year) return { records: [], sessionNameMap: {} };
+    if (!year) return { records: [], sessions: [], sessionNameMap: {} };
 
+    // نقرأ سجلات مادة التدريسي الذي أرسل الرابط فقط (لا سجلات كل المدرّسين)،
+    // مباشرة من السنة الخاصة بالرابط (لا الكاش المحلي/السنة الحالية)
     const teacherId = lnk.teacherId || lnk.adminUid;
-    const [teacherRecords, teacherSessions] = await Promise.all([
-      loadAttendanceRecords(lnk.adminUid, lnk.stageId, teacherId),
-      loadSessions(lnk.adminUid, lnk.stageId, teacherId),
-    ]);
+    const base = `academicYears/${year}/userData/${lnk.adminUid}/stageData/${lnk.stageId}/teacherRecords/${teacherId}`;
+    const t = await dbFetch<any>(base, signal);
 
-    const sNameMap: Record<string, string> = {};
-    for (const s of teacherSessions) { if (s?.id && s.name) sNameMap[s.id] = s.name; }
-    let records = teacherRecords.filter(r => r?.studentId === studentId);
+    const records: AttendanceRecord[] = [];
+    const sessions: AttendanceSession[] = [];
+    const seenRecords = new Set<string>();
 
-    if (records.length === 0) {
-      const base = `academicYears/${year}/userData/${lnk.adminUid}/stageData/${lnk.stageId}`;
-      const teachersData = await dbFetch<any>(`${base}/teacherRecords`, signal);
-      if (teachersData) {
-        const teachers: any[] = Array.isArray(teachersData) ? teachersData : Object.values(teachersData);
-        const all: AttendanceRecord[] = [];
-        for (const t of teachers) {
-          if (!t || typeof t !== 'object') continue;
-          const arr: any[] = t.recordsCompressed ? (Array.isArray(t.recordsCompressed) ? t.recordsCompressed : Object.values(t.recordsCompressed)) : [];
-          for (const c of arr) {
-            if (!c || typeof c !== 'object') continue;
-            if (c.id) { all.push(c as AttendanceRecord); continue; }
-            try { const rec = decompressRecord(c); if (rec?.id) all.push(rec); } catch {}
-          }
-          if (t.records) {
-            const raw: any[] = Array.isArray(t.records) ? t.records : Object.values(t.records);
-            all.push(...raw.filter(r => r && typeof r === 'object' && r.id));
-          }
+    if (t && typeof t === 'object') {
+      if (t.sessions) {
+        const sessArr: any[] = Array.isArray(t.sessions) ? t.sessions : Object.values(t.sessions);
+        for (const s of sessArr) {
+          if (s && s.id) sessions.push(s as AttendanceSession);
         }
-        records = all.filter(r => r.studentId === studentId);
+      }
+
+      const shapes: any[] = [];
+      if (t.recordsCompressed) {
+        const arr: any[] = Array.isArray(t.recordsCompressed) ? t.recordsCompressed : Object.values(t.recordsCompressed);
+        for (const c of arr) {
+          if (!c || typeof c !== 'object') continue;
+          if (c.id) { shapes.push(c); continue; }
+          try { const rec = decompressRecord(c); if (rec?.id) shapes.push(rec); } catch {}
+        }
+      }
+      if (t.records) {
+        const raw: any[] = Array.isArray(t.records) ? t.records : Object.values(t.records);
+        shapes.push(...raw.filter(r => r && typeof r === 'object' && r.id));
+      }
+      for (const rec of shapes) {
+        if (rec?.studentId === studentId && rec.id && !seenRecords.has(rec.id)) {
+          seenRecords.add(rec.id);
+          records.push(rec as AttendanceRecord);
+        }
       }
     }
-    return { records, sessionNameMap: sNameMap };
+
+    const sessionNameMap: Record<string, string> = {};
+    for (const s of sessions) { if (s.id && s.name) sessionNameMap[s.id] = s.name; }
+
+    return { records, sessions, sessionNameMap };
   };
 
   useEffect(() => {
@@ -325,8 +339,9 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     // روابط الحضور: نجلب تقرير الطالب المطابق
     setExpected(student);
     try {
-      const { records, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link, student.id);
+      const { records, sessions, sessionNameMap: namesMap } = await loadStageRecordsForStudent(link, student.id);
       setAttendanceRecords(records);
+      setAttendanceSessions(sessions);
       setSessionNameMap(namesMap);
       goTo('report');
     } catch (e) {
@@ -415,7 +430,40 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   };
 
   const getAttendanceStats = () => {
-    if (!expected) return { present: 0, absent: 0, total: 0, records: [] as AttendanceRecord[] };
+    const emptyStats = { present: 0, absent: 0, total: 0, records: [] as AttendanceRecord[] };
+    if (!expected) return emptyStats;
+
+    // عدّاد الحضور/الغياب لكل جلسة (مثل طريقة عرض الأدمن) — الغياب يُحسب لأي جلسة بلا حضور مسجّل
+    if (attendanceSessions.length > 0) {
+      const presentSet = new Set<string>();
+      for (const r of attendanceRecords) {
+        if (r?.status === 'present' && r.sessionId) presentSet.add(r.sessionId);
+      }
+
+      const sorted = [...attendanceSessions].sort((a, b) =>
+        normalizeDate(b.date || '').localeCompare(normalizeDate(a.date || '')),
+      );
+
+      let present = 0;
+      let absent = 0;
+      const rows: AttendanceRecord[] = [];
+
+      for (const s of sorted) {
+        const presentRecord = attendanceRecords.find(r => r.sessionId === s.id && r.status === 'present');
+        if (presentRecord) {
+          rows.push(presentRecord);
+          present++;
+        } else {
+          const stub = { ...s, id: `session_${s.id}`, status: 'absent', time: '' } as unknown as AttendanceRecord;
+          rows.push(stub);
+          absent++;
+        }
+      }
+
+      return { present, absent, total: present + absent, records: rows };
+    }
+
+    // بدون جلسات مسجلة — نعتمد السجلات المخزنة فقط
     const present = attendanceRecords.filter(r => r.status === 'present').length;
     const absent = attendanceRecords.filter(r => r.status === 'absent').length;
     const sortedRecords = [...attendanceRecords].sort((a, b) => normalizeDate(b.date).localeCompare(normalizeDate(a.date)));
