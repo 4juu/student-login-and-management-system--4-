@@ -474,7 +474,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
         rows.push(rec);
         seenIds.add(rec.id);
       } else if (!presentSessionIds.has(s.id)) {
-        rows.push({ ...s, id: `session_${s.id}`, status: 'absent', time: '' } as unknown as AttendanceRecord);
+        rows.push({ ...s, id: `session_${s.id}`, sessionName: s.name, status: 'absent', time: '' } as unknown as AttendanceRecord);
       }
     }
 
@@ -677,7 +677,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
               subjectName={subjectName}
               stats={getAttendanceStats()}
               sessionNameMap={sessionNameMap}
-              onExit={onExit}
+              onRestart={restart}
             />
           )}
         </main>
@@ -702,8 +702,8 @@ const ReportStep: React.FC<{
   subjectName: string;
   stats: { present: number; absent: number; total: number; records: AttendanceRecord[] };
   sessionNameMap: Record<string, string>;
-  onExit: () => void;
-}> = ({ expected, subjectName, stats, sessionNameMap, onExit }) => (
+  onRestart: () => void;
+}> = ({ expected, subjectName, stats, sessionNameMap, onRestart }) => (
   <div className="sel-fade">
     <div className="sel-report-hero">
       <div className="flex items-center gap-3 mb-2">
@@ -784,8 +784,8 @@ const ReportStep: React.FC<{
         </div>
       )}
 
-      <button type="button" className="sel-btn sel-btn-primary mt-6" onClick={onExit}>
-        <ArrowLeft className="w-5 h-5" /> العودة للرئيسية
+      <button type="button" className="sel-btn sel-btn-primary mt-6" onClick={onRestart}>
+        <ScanFace className="w-5 h-5" /> إعادة تصوير الهوية
       </button>
     </div>
   </div>
