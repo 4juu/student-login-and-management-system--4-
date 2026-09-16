@@ -373,7 +373,14 @@ export const loadStudents = async (adminUid: string, stageId: string): Promise<S
       const data = snap.val();
       const arr: Student[] = Array.isArray(data) ? data : Object.values(data);
       if (arr.length > 0 || local.length === 0) {
-        saveLocal(LS.students(adminUid, stageId), arr);
+        // كاش localStorage الصغير (~5MB) ينفجر مع المراحل الكبيرة ويخنق البيانات الجديدة —
+        // نتجاوز الكتابة عليه للقوائم الكبيرة ونعتمد على كاش IndexedDB الأساسي
+        try {
+          const size = JSON.stringify(arr).length;
+          if (size < 1_500_000) saveLocal(LS.students(adminUid, stageId), arr);
+        } catch {
+          /* تجاهل — الكاش الرئيسي (IndexedDB) يتولى الحفظ */
+        }
         return arr;
       }
       return local;
