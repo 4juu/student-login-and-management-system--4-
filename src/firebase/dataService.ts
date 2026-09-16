@@ -4,7 +4,6 @@ import { Student, AttendanceRecord, AttendanceSession, Stage, College } from "..
 import { User } from "../types/user";
 import { TelegramConfig } from "../types/telegram";
 import { queueOutbox, getOutboxEntries, removeOutboxEntry, hasOutboxEntries } from "../lib/offlineOutbox";
-import { dbGet, dbSet, dbDeleteWhere } from "../lib/db";
 
 // ============================================================
 // 🔄 SAVE QUEUE مع Retry تلقائي (3 محاولات مع Exponential Backoff)
@@ -141,7 +140,7 @@ const getStagesPath = (year: string, adminUid: string) =>
   `${getYearBasePath(year, adminUid)}/stages`;
 
 // ============================================================
-// 🗄️ LOCAL STORAGE (IndexedDB أولاً + localStorage كاحتياط/هجرة)
+// 💾 LOCAL STORAGE (نفس الكود السابق)
 // ============================================================
 const LS = {
   colleges: (uid: string) => `colleges_${uid}`,
@@ -152,28 +151,15 @@ const LS = {
   activeSession: (uid: string, sid: string, tid: string) => `activeSession_${uid}_${sid}_${tid}`,
 };
 
-// 💾 كتابة مزدوجة: IndexedDB أساسي (سعة عالية + فتح فوري) مع نسخة احتياطي في localStorage
-const saveLocal = async (key: string, data: unknown): Promise<void> => {
+const saveLocal = (key: string, data: unknown): void => {
   try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
-  await dbSet(key, data);
 };
 
-// 📖 قراءة من IndexedDB أولاً، فإن لم توجد → هجرة من localStorage (النسخ السابقة)
-const loadLocal = async <T,>(key: string, fallback: T): Promise<T> => {
-  const fromDb = await dbGet<T>(key);
-  if (fromDb !== undefined) {
-    try { localStorage.setItem(key, JSON.stringify(fromDb)); } catch {}
-    return fromDb;
-  }
+const loadLocal = <T,>(key: string, fallback: T): T => {
   try {
-    const raw = localStorage.getItem(key);
-    if (raw !== null) {
-      const parsed = JSON.parse(raw) as T;
-      await dbSet(key, parsed);
-      return parsed;
-    }
-  } catch {}
-  return fallback;
+    const data = localStorage.getItem(key);
+    return data ? JSON.parse(data) : fallback;
+  } catch { return fallback; }
 };
 
 const isDangerousEmpty = (newData: unknown[]): boolean => {
@@ -273,7 +259,7 @@ export const saveColleges = async (
     }
   }
 
-  await saveLocal(LS.colleges(adminUid), colleges);
+  saveLocal(LS.colleges(adminUid), colleges);
 
   const year = await getActiveAcademicYear();
   const saveKey = `colleges_${adminUid}`;
@@ -284,7 +270,7 @@ export const saveColleges = async (
 };
 
 export const loadColleges = async (adminUid: string): Promise<College[]> => {
-  const local = await loadLocal<College[]>(LS.colleges(adminUid), []);
+  const local = loadLocal<College[]>(LS.colleges(adminUid), []);
   try {
     const year = await getActiveAcademicYear();
     const snap = await get(ref(database, getCollegesPath(year, adminUid)));
@@ -292,7 +278,7 @@ export const loadColleges = async (adminUid: string): Promise<College[]> => {
       const data = snap.val();
       const arr: College[] = Array.isArray(data) ? data : Object.values(data);
       if (arr.length > 0 || local.length === 0) {
-        await saveLocal(LS.colleges(adminUid), arr);
+        saveLocal(LS.colleges(adminUid), arr);
       }
       return arr;
     }
@@ -318,7 +304,7 @@ export const saveStages = async (
     }
   }
 
-  await saveLocal(LS.stages(adminUid), stages);
+  saveLocal(LS.stages(adminUid), stages);
 
   const year = await getActiveAcademicYear();
   const saveKey = `stages_${adminUid}`;
@@ -329,7 +315,7 @@ export const saveStages = async (
 };
 
 export const loadStages = async (adminUid: string): Promise<Stage[]> => {
-  const local = await loadLocal<Stage[]>(LS.stages(adminUid), []);
+  const local = loadLocal<Stage[]>(LS.stages(adminUid), []);
   try {
     const year = await getActiveAcademicYear();
     const snap = await get(ref(database, getStagesPath(year, adminUid)));
@@ -337,7 +323,7 @@ export const loadStages = async (adminUid: string): Promise<Stage[]> => {
       const data = snap.val();
       const arr: Stage[] = Array.isArray(data) ? data : Object.values(data);
       if (arr.length > 0 || local.length === 0) {
-        await saveLocal(LS.stages(adminUid), arr);
+        saveLocal(LS.stages(adminUid), arr);
       }
       return arr;
     }
@@ -364,7 +350,7 @@ export const saveStudents = async (
     }
   }
 
-  await saveLocal(LS.students(adminUid, stageId), students);
+  saveLocal(LS.students(adminUid, stageId), students);
 
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     void queueOutbox(`students_${adminUid}_${stageId}`, students);
@@ -379,7 +365,7 @@ export const saveStudents = async (
 };
 
 export const loadStudents = async (adminUid: string, stageId: string): Promise<Student[]> => {
-  const local = await loadLocal<Student[]>(LS.students(adminUid, stageId), []);
+  const local = loadLocal<Student[]>(LS.students(adminUid, stageId), []);
   try {
     const year = await getActiveAcademicYear();
     const snap = await get(ref(database, getStagePath(year, adminUid, stageId, 'students')));
@@ -387,7 +373,7 @@ export const loadStudents = async (adminUid: string, stageId: string): Promise<S
       const data = snap.val();
       const arr: Student[] = Array.isArray(data) ? data : Object.values(data);
       if (arr.length > 0 || local.length === 0) {
-        await saveLocal(LS.students(adminUid, stageId), arr);
+        saveLocal(LS.students(adminUid, stageId), arr);
         return arr;
       }
       return local;
@@ -416,7 +402,7 @@ export const saveAttendanceRecords = async (
     }
   }
 
-  await saveLocal(LS.records(adminUid, stageId, teacherId), records);
+  saveLocal(LS.records(adminUid, stageId, teacherId), records);
 
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     void queueOutbox(`records_${adminUid}_${stageId}_${teacherId}`, records);
@@ -443,7 +429,7 @@ export const loadAttendanceRecords = async (
   stageId: string,
   teacherId: string
 ): Promise<AttendanceRecord[]> => {
-  const local = await loadLocal<AttendanceRecord[]>(LS.records(adminUid, stageId, teacherId), []);
+  const local = loadLocal<AttendanceRecord[]>(LS.records(adminUid, stageId, teacherId), []);
   try {
     const year = await getActiveAcademicYear();
     
@@ -457,7 +443,7 @@ export const loadAttendanceRecords = async (
       const compressed = Array.isArray(data) ? data : Object.values(data);
       const decompressed = compressed.map((c: any) => decompressRecord(c));
       if (decompressed.length > 0 || local.length === 0) {
-        await saveLocal(LS.records(adminUid, stageId, teacherId), decompressed);
+        saveLocal(LS.records(adminUid, stageId, teacherId), decompressed);
       }
       return decompressed;
     }
@@ -470,7 +456,7 @@ export const loadAttendanceRecords = async (
       const data = oldSnap.val();
       const arr: AttendanceRecord[] = Array.isArray(data) ? data : Object.values(data);
       if (arr.length > 0 || local.length === 0) {
-        await saveLocal(LS.records(adminUid, stageId, teacherId), arr);
+        saveLocal(LS.records(adminUid, stageId, teacherId), arr);
       }
       return arr;
     }
@@ -499,7 +485,7 @@ export const saveSessions = async (
     }
   }
 
-  await saveLocal(LS.sessions(adminUid, stageId, teacherId), sessions);
+  saveLocal(LS.sessions(adminUid, stageId, teacherId), sessions);
 
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     void queueOutbox(`sessions_${adminUid}_${stageId}_${teacherId}`, sessions);
@@ -521,7 +507,7 @@ export const loadSessions = async (
   stageId: string,
   teacherId: string
 ): Promise<AttendanceSession[]> => {
-  const local = await loadLocal<AttendanceSession[]>(LS.sessions(adminUid, stageId, teacherId), []);
+  const local = loadLocal<AttendanceSession[]>(LS.sessions(adminUid, stageId, teacherId), []);
   try {
     const year = await getActiveAcademicYear();
     const snap = await get(
@@ -531,7 +517,7 @@ export const loadSessions = async (
       const data = snap.val();
       const arr: AttendanceSession[] = Array.isArray(data) ? data : Object.values(data);
       if (arr.length > 0 || local.length === 0) {
-        await saveLocal(LS.sessions(adminUid, stageId, teacherId), arr);
+        saveLocal(LS.sessions(adminUid, stageId, teacherId), arr);
       }
       return arr;
     }
@@ -551,7 +537,7 @@ export const saveActiveSession = async (
   teacherId: string,
   sessionId: string | null
 ): Promise<void> => {
-  await saveLocal(LS.activeSession(adminUid, stageId, teacherId), sessionId);
+  saveLocal(LS.activeSession(adminUid, stageId, teacherId), sessionId);
   try {
     const year = await getActiveAcademicYear();
     if (sessionId) {
@@ -574,7 +560,7 @@ export const loadActiveSession = async (
   stageId: string,
   teacherId: string
 ): Promise<string | null> => {
-  const local = await loadLocal<string | null>(LS.activeSession(adminUid, stageId, teacherId), null);
+  const local = loadLocal<string | null>(LS.activeSession(adminUid, stageId, teacherId), null);
   try {
     const year = await getActiveAcademicYear();
     const snap = await get(
@@ -582,7 +568,7 @@ export const loadActiveSession = async (
     );
     if (snap.exists()) {
       const value = snap.val();
-      await saveLocal(LS.activeSession(adminUid, stageId, teacherId), value);
+      saveLocal(LS.activeSession(adminUid, stageId, teacherId), value);
       return value;
     }
     return local;
@@ -609,59 +595,6 @@ export const loadStageData = async (
   return { students, records, sessions, activeSessionId };
 };
 
-/**
- * 📦 تحميل بيانات مرحلة كاملة للأدمن الرئيسي (كل الطلاب + سجلات كل التدريسيين)
- * يستخدم للوحة الجامعة الشاملة — تُقرأ السجلات المضغوطة أولاً ثم القديمة احتياطاً
- */
-export const loadAdminStageData = async (
-  adminUid: string,
-  year: string,
-  stageId: string,
-  userIds: string[]
-): Promise<{ students: Student[]; records: AttendanceRecord[]; sessions: AttendanceSession[] }> => {
-  const yearPath = `${getYearBasePath(year, adminUid)}/stageData/${stageId}`;
-
-  const studentsSnap = await get(ref(database, `${yearPath}/students`));
-  let students: Student[] = [];
-  if (studentsSnap.exists()) {
-    const data = studentsSnap.val();
-    students = Array.isArray(data) ? data : Object.values(data);
-  }
-
-  const records: AttendanceRecord[] = [];
-  const sessions: AttendanceSession[] = [];
-
-  await Promise.all(
-    userIds.map(async (userId) => {
-      try {
-        const trPath = `${yearPath}/teacherRecords/${userId}`;
-        const compressedSnap = await get(ref(database, `${trPath}/recordsCompressed`));
-        if (compressedSnap.exists()) {
-          const { decompressRecord } = await import('./dataServiceCompressed');
-          const data = compressedSnap.val();
-          const raw = Array.isArray(data) ? data : Object.values(data);
-          records.push(...raw.map(c => decompressRecord(c as any)));
-        } else {
-          const recSnap = await get(ref(database, `${trPath}/records`));
-          if (recSnap.exists()) {
-            const data = recSnap.val();
-            records.push(...(Array.isArray(data) ? data : Object.values(data)));
-          }
-        }
-        const sesSnap = await get(ref(database, `${trPath}/sessions`));
-        if (sesSnap.exists()) {
-          const data = sesSnap.val();
-          sessions.push(...(Array.isArray(data) ? data : Object.values(data)));
-        }
-      } catch {
-        // تجاهل صمت - مرحلة خالية أو بيانات مفقودة
-      }
-    })
-  );
-
-  return { students, records, sessions };
-};
-
 // ============================================================
 // 🗑️ DELETE STAGE
 // ============================================================
@@ -682,12 +615,6 @@ export const deleteStageData = async (adminUid: string, stageId: string): Promis
     const year = await getActiveAcademicYear();
     await remove(ref(database, `${getYearBasePath(year, adminUid)}/stageData/${stageId}`));
     localStorage.removeItem(LS.students(adminUid, stageId));
-    await dbDeleteWhere(key =>
-      key === LS.students(adminUid, stageId) ||
-      key.startsWith(`records_${adminUid}_${stageId}_`) ||
-      key.startsWith(`sessions_${adminUid}_${stageId}_`) ||
-      key.startsWith(`activeSession_${adminUid}_${stageId}_`)
-    );
 
     Object.keys(localStorage).forEach((k) => {
       if (
@@ -906,8 +833,8 @@ export const resetAcademicYear = async (
     // 5️⃣ تعطيل صلاحيات كل التدريسيين (الحسابات تبقى)
     await deactivateAllTeachers(adminUid);
     
-    // 6️⃣ امسح LocalStorage + IndexedDB بالكامل (إلا الإعدادات الشخصية)
-    await clearAllLocalData(adminUid);
+    // 6️⃣ امسح LocalStorage بالكامل (إلا الإعدادات الشخصية)
+    clearAllLocalData(adminUid);
     
     // 7️⃣ حدّث السنة الأكاديمية الحالية
     await setActiveAcademicYear(newYear);
@@ -964,9 +891,9 @@ const deactivateAllTeachers = async (adminUid: string): Promise<void> => {
 };
 
 /**
- * 🧹 مسح كل البيانات المحلية (IndexedDB + LocalStorage)
+ * 🧹 مسح كل البيانات المحلية (LocalStorage)
  */
-const clearAllLocalData = async (adminUid: string): Promise<void> => {
+const clearAllLocalData = (adminUid: string): void => {
   const keysToRemove: string[] = [];
   
   Object.keys(localStorage).forEach((key) => {
@@ -983,19 +910,7 @@ const clearAllLocalData = async (adminUid: string): Promise<void> => {
   });
   
   keysToRemove.forEach(k => localStorage.removeItem(k));
-
-  // 🗄️ امسح نفس المفاتيح من IndexedDB أيضاً
-  await dbDeleteWhere(key =>
-    key.startsWith(`colleges_${adminUid}`) ||
-    key.startsWith(`stages_${adminUid}`) ||
-    key.startsWith(`students_${adminUid}_`) ||
-    key.startsWith(`records_${adminUid}_`) ||
-    key.startsWith(`sessions_${adminUid}_`) ||
-    key.startsWith(`activeSession_${adminUid}_`) ||
-    key === `telegramConfig_${adminUid}`
-  );
-
-  console.log(`🧹 تم مسح ${keysToRemove.length} عنصر من LocalStorage + IndexedDB`);
+  console.log(`🧹 تم مسح ${keysToRemove.length} عنصر من LocalStorage`);
 };
 
 // ============================================================
@@ -1109,7 +1024,7 @@ export const saveTelegramConfig = async (
   const year = await getActiveAcademicYear();
   const path = `${getYearBasePath(year, adminUid)}/telegramConfig`;
   await set(ref(database, path), config);
-  await saveLocal(`telegramConfig_${adminUid}`, config);
+  saveLocal(`telegramConfig_${adminUid}`, config);
 };
 
 export const loadTelegramConfig = async (
@@ -1121,7 +1036,7 @@ export const loadTelegramConfig = async (
     const snap = await get(ref(database, path));
     if (snap.exists()) {
       const config = snap.val() as TelegramConfig;
-      await saveLocal(`telegramConfig_${adminUid}`, config);
+      saveLocal(`telegramConfig_${adminUid}`, config);
       return config;
     }
   } catch (e) {
