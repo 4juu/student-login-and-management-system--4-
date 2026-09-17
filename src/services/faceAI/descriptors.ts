@@ -53,7 +53,7 @@ export function parseAllSamples(input: unknown): Float32Array[] {
 }
 
 /** أدنى نسبة ثقة مقبولة للتعرف أثناء الحضور (62% → 55%) — يوسّع نطاق القبول من قريب/بعيد مع بقاء حارس الهامش يحمي الدقة */
-export const MIN_RECOG_CONFIDENCE = 55;
+export const MIN_RECOG_CONFIDENCE = 65;
 
 export interface MatchCandidate {
   id: string;
