@@ -512,13 +512,23 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
             const student = rosterRef.current.find(s => s.id === cache.cachedMatchId);
 
             if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE) {
-              // طالب مسجَّل (هذه الجلسة أو جلسة الحضور نفسها) — أزل إطاره ليكمل النظام لغيره
-              if (doneStudentsRef.current.has(student.id) || presentRef.current.has(student.id)) {
-                doneStudentsRef.current.add(student.id);
+              // طالب سُجِّل حضور الآن في هذه الجلسة — لا نعيده، أزل إطاره
+              if (doneStudentsRef.current.has(student.id)) {
                 trackerRef.current.removeTrack(t.trackId);
                 suppressZone(boxInVideo);
                 continue;
               }
+
+              // طالب مسجَّل مسبقاً في جلسة الحضور — يُعرض كإطار أخضر ويوضع في السجل
+              if (presentRef.current.has(student.id)) {
+                if (!loggedIdsRef.current.has(student.id)) {
+                  loggedIdsRef.current.add(student.id);
+                  pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'already', confidence: cache.cachedConfidence });
+                }
+                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'مسجل ✓', color: '#34d399' });
+                continue;
+              }
+
               liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], color: '#818cf8' });
             } else {
               liveBoxes.push({ box: boxInVideo, label: 'غير معروف', color: '#fbbf24' });
