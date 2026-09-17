@@ -49,7 +49,7 @@ const RECOGNITION_COOLDOWN = 30_000;
 const MIN_FACE_PX = 22;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
-const MAX_FACES_PER_FRAME = 20;
+const MAX_FACES_PER_FRAME = 10;
 const REEMBED_MIN_INTERVAL = 350;
 const REEMBED_MOVE_THRESHOLD = 0.08;
 // مدة كبت منطقة وجه مسجَّل حضوره حتى لا يعاد اكتشافه/رسمه فور انتهائه
