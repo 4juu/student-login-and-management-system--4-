@@ -870,23 +870,6 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
     const scSessions = scope.sessions;
 
     const fixedSessions = scSessions.map(s => ({ ...s, _normalizedDate: fixDate((s as any).date) }));
-    const sessionById = new Map(fixedSessions.map(s => [s.id, s]));
-
-    const dayReportFor = (student: Student): { attendedDays: string[]; absentDays: string[] } => {
-      const sRecs = scRecords.filter(r => r.studentId === student.id);
-      const attendedDates = new Set<string>();
-      const absentDates = new Set<string>();
-      sRecs.forEach(r => {
-        const sess = sessionById.get(r.sessionId);
-        if (!sess?._normalizedDate) return;
-        if (r.status === 'present') attendedDates.add(sess._normalizedDate);
-        else if (r.status === 'absent') absentDates.add(sess._normalizedDate);
-      });
-      return {
-        attendedDays: [...attendedDates].sort().reverse(),
-        absentDays: [...absentDates].sort().reverse(),
-      };
-    };
 
     const todaySessions = fixedSessions.filter(s => s._normalizedDate === todayKey);
     const todaySessionIdSet = new Set(todaySessions.map(s => s.id));
@@ -913,7 +896,6 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       const attendedCount = presentSessionIds.size;
       const absentCount = absentSessionIds.size;
       const pct = (attendedCount + absentCount) > 0 ? ((attendedCount / (attendedCount + absentCount)) * 100).toFixed(1) : '0';
-      const { attendedDays, absentDays } = dayReportFor(student);
 
       let todayStatus = '';
       if (todaySessions.length === 0) todayStatus = 'لا توجد محاضرات اليوم';
@@ -921,16 +903,25 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = ({
       else if (todayAbsentIds.has(student.id)) todayStatus = '❌ غائب';
       else todayStatus = 'غير مسجل اليوم';
 
+      // كل السجلات بأسمائها الفعلية (حاضر / غائب / غير مسجل)
+      const allSessions = [...fixedSessions].sort((a, b) => {
+        if (a._normalizedDate !== b._normalizedDate) return a._normalizedDate.localeCompare(b._normalizedDate);
+        return String(a.name || '').localeCompare(String(b.name || ''), 'ar');
+      });
+
       let text = `📋 الطالب: **${student.name}**\n`;
       text += `🆔 الكود: ${student.code || '-'} | كروب: ${student.group || '-'}\n`;
       text += `📅 اليوم: ${todayStatus}\n\n`;
-      text += `✅ أيام الحضور (${attendedDays.length}):\n`;
-      if (attendedDays.length === 0) text += `  لا يوجد\n`;
-      attendedDays.forEach(d => { text += `  • ${formatDateWithDay(d)}\n`; });
-      text += `\n❌ أيام الغياب (${absentDays.length}):\n`;
-      if (absentDays.length === 0) text += `  لا يوجد\n`;
-      absentDays.forEach(d => { text += `  • ${formatDateWithDay(d)}\n`; });
-      text += `\n📊 النسبة: **${pct}%** (حضور ${attendedCount} / غياب ${absentCount})`;
+      text += `📅 كل السجلات (${allSessions.length}):\n`;
+      if (allSessions.length === 0) text += `  لا يوجد\n`;
+      allSessions.forEach(s => {
+        const isPresent = presentSessionIds.has(s.id);
+        const isAbsent = absentSessionIds.has(s.id);
+        const mark = isPresent ? '✅' : isAbsent ? '❌' : '⬜';
+        const state = isPresent ? 'حاضر' : isAbsent ? 'غائب' : 'غير مسجل';
+        text += `  ${mark} ${s.name || 'سجل بدون اسم'} — ${formatDateWithDay(s._normalizedDate)} (${state})\n`;
+      });
+      text += `\n📊 النسبة: **${pct}%** (حضور ${attendedCount} سجل / غياب ${absentCount} سجل)`;
       return { handled: true, text };
     }
 
