@@ -101,8 +101,6 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   const trackerRef = useRef(new FaceTracker());
   const updateRef = useRef(onUpdateStudent);
   updateRef.current = onUpdateStudent;
-  const frameCountRef = useRef(0);
-  const isMobileRef = useRef(typeof window !== 'undefined' && window.innerWidth < 768);
 
   // ── تطبيق التقريب العتادي إن كان مدعوماً ──
   const digitalZoom = hasHwZoom ? 1 : zoom;
@@ -270,29 +268,23 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
       g.restore();
     };
 
-    const tick = async () => {
-      if (!runningRef.current || !mountedRef.current) return;
-      const video = videoRef.current;
-      if (!video || video.readyState < 2 || busyRef.current) {
-        loopTimerRef.current = window.setTimeout(tick, 100);
-        return;
-      }
+  const tick = async () => {
+    if (!runningRef.current || !mountedRef.current) return;
+    const video = videoRef.current;
+    if (!video || video.readyState < 2 || busyRef.current) {
+      loopTimerRef.current = window.setTimeout(tick, 50);
+      return;
+    }
 
-      const interval = performance.now() - lastSeenRef.current < 1500 ? 200 : 400;
-      const nowTs = performance.now();
-      if (nowTs - lastTickRef.current < interval) {
-        loopTimerRef.current = window.setTimeout(tick, 20);
-        return;
-      }
-      lastTickRef.current = nowTs;
-      busyRef.current = true;
-
-      frameCountRef.current++;
-      if (isMobileRef.current && frameCountRef.current % 3 !== 0) {
-        busyRef.current = false;
-        loopTimerRef.current = window.setTimeout(tick, 50);
-        return;
-      }
+    // ⚡ أسرع: كشف كل 100ms عند وجود وجه، 200ms بدون وجه
+    const interval = performance.now() - lastSeenRef.current < 1500 ? 100 : 200;
+    const nowTs = performance.now();
+    if (nowTs - lastTickRef.current < interval) {
+      loopTimerRef.current = window.setTimeout(tick, 10);
+      return;
+    }
+    lastTickRef.current = nowTs;
+    busyRef.current = true;
 
       let liveBoxes: Array<{ box: Box; label?: string; color: string; sub?: string }> = [];
 
@@ -483,7 +475,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
       } finally {
         busyRef.current = false;
         if (runningRef.current && mountedRef.current) {
-          loopTimerRef.current = window.setTimeout(tick, 50);
+          loopTimerRef.current = window.setTimeout(tick, 16); // ~60fps
         }
       }
     };

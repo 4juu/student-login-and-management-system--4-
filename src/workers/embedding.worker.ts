@@ -104,7 +104,7 @@ async function embed(bmp: ImageBitmap, box: Box): Promise<EmbedOut> {
 
 async function init() {
   ort.env.wasm.wasmPaths = WASM_PREFIX;
-  ort.env.wasm.numThreads = 1;
+  ort.env.wasm.numThreads = 2;
   ort.env.wasm.simd = true;
 
   post({ type: 'progress', stage: 'model', percent: 20, detail: 'تحميل موديل البصمة...' });
@@ -142,13 +142,13 @@ self.onmessage = async (ev: MessageEvent<Msg>) => {
         break;
       }
       case 'embedBatch': {
-        const results: Array<EmbedOut & { box: Box }> = [];
-        for (const box of msg.boxes) {
+        const promises = msg.boxes.map(async (box) => {
           try {
             const r = await embed(msg.bitmap, box);
-            results.push({ ...r, box });
-          } catch { /* وجه صغير جداً — تجاهل */ }
-        }
+            return { ...r, box };
+          } catch { return null; }
+        });
+        const results = (await Promise.all(promises)).filter(Boolean);
         msg.bitmap.close();
         post({ type: 'result', id: msg.id, ok: true, data: results });
         break;

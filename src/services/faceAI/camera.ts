@@ -1,13 +1,8 @@
 export type FacingMode = 'user' | 'environment';
 
 export async function openCameraStream(facing: FacingMode = 'user'): Promise<MediaStream> {
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
   return navigator.mediaDevices.getUserMedia({
-    video: {
-      facingMode: facing,
-      width: { ideal: isMobile ? 640 : 1280 },
-      height: { ideal: isMobile ? 480 : 720 },
-    },
+    video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } },
     audio: false,
   });
 }

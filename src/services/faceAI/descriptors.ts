@@ -16,7 +16,41 @@ export const MATCH_STRICT = 0.32;
 export const MATCH_LOOSE = 0.42;
 export const MIN_MARGIN = 0.06;
 export const TAMPER_THRESHOLD = 0.30;
-export const CONFIRM_FRAMES = 3;
+export const CONFIRM_FRAMES = 2;
+
+// 🗄️ Cache for parsed samples (key: JSON string of descriptor, value: Float32Array[])
+const parsedSamplesCache = new Map<string, Float32Array[]>();
+const CACHE_MAX = 200;
+
+function getCacheKey(input: unknown): string | null {
+  if (!input || typeof input !== 'object') return null;
+  try {
+    return JSON.stringify(input);
+  } catch { return null; }
+}
+
+/** جميع العينات القابلة للمقارنة — مع كاش بسيط */
+export function parseAllSamples(input: unknown): Float32Array[] {
+  if (!isGalleryDescriptor(input)) return [];
+  
+  const key = getCacheKey(input);
+  if (key) {
+    const cached = parsedSamplesCache.get(key);
+    if (cached) return cached;
+  }
+  
+  const result = parseGallerySamples(input);
+  
+  if (key) {
+    if (parsedSamplesCache.size >= CACHE_MAX) {
+      const firstKey = parsedSamplesCache.keys().next().value;
+      if (firstKey) parsedSamplesCache.delete(firstKey);
+    }
+    parsedSamplesCache.set(key, result);
+  }
+  
+  return result;
+}
 
 /** أدنى نسبة ثقة مقبولة للتعرف أثناء الحضور (62% → 55%) — يوسّع نطاق القبول من قريب/بعيد مع بقاء حارس الهامش يحمي الدقة */
 export const MIN_RECOG_CONFIDENCE = 55;
@@ -139,12 +173,6 @@ export function parseStoredDescriptor(input: unknown): Float32Array | null {
     if (p) return p;
   }
   return null;
-}
-
-/** جميع العينات القابلة للمقارنة */
-export function parseAllSamples(input: unknown): Float32Array[] {
-  if (!isGalleryDescriptor(input)) return [];
-  return parseGallerySamples(input);
 }
 
 /** كل عينات المعرض: عينات التسجيل + العناقيد المكتسبة */
