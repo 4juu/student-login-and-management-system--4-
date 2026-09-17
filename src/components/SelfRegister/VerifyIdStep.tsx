@@ -607,6 +607,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
               src={capturedUrl}
               alt="مُصغّر البطاقة المقرؤة"
               className="h-20 w-auto rounded-xl border border-[#22334F] shadow-sm"
+              loading="lazy"
             />
           </div>
         )}

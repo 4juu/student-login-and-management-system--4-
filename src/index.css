@@ -975,6 +975,15 @@
   animation: pulse-badge 0.5s ease-in-out 3;
 }
 
+/* == انتقال أنيق لأزرار التبويب == */
+.tab-btn {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tab-btn.active {
+  transform: translateY(-1px);
+}
+
 /* == Page Transitions (fade + translateY) == */
 @keyframes pageEnter {
   from { opacity: 0; transform: translateY(12px); }
@@ -1037,6 +1046,15 @@
   animation: rowFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* == تأثير hover على صفوف الجدول == */
+.animate-rowFadeIn tr {
+  transition: background-color 0.2s ease;
+}
+
+.animate-rowFadeIn tr:hover {
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
 /* == توهج الحد النشط للجلسة == */
 @keyframes sessionGlow {
   0%, 100% { box-shadow: 0 0 8px rgba(59, 130, 246, 0.3), inset 0 0 8px rgba(59, 130, 246, 0.05); }
@@ -1093,6 +1111,20 @@ button {
 button:not(:disabled):active {
   transform: scale(0.98);
   transition-duration: 0.08s;
+}
+
+/* == نبضة توهج الزر عند hover == */
+@keyframes buttonHoverPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+}
+
+.btn-base:hover {
+  animation: buttonHoverPulse 1.5s ease-in-out infinite;
+}
+
+.btn-base:active {
+  animation: none;
 }
 
 @keyframes scanLine {

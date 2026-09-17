@@ -510,23 +510,28 @@ function App() {
   const handleResetComplete = useCallback(() => resetData(), []);
 
   useEffect(() => {
-    if (currentUser?.role === 'admin' && dataLoaded) {
+    if (!(currentUser?.role === 'admin' && dataLoaded)) return;
+    const timeoutId = setTimeout(() => {
       const force = intentionalDeleteRef.current.colleges;
       saveColleges(currentUser.uid, colleges, force);
       if (force) intentionalDeleteRef.current.colleges = false;
-    }
+    }, 500);
+    return () => clearTimeout(timeoutId);
   }, [colleges, currentUser, dataLoaded]);
 
   useEffect(() => {
-    if (currentUser?.role === 'admin' && dataLoaded) {
+    if (!(currentUser?.role === 'admin' && dataLoaded)) return;
+    const timeoutId = setTimeout(() => {
       const force = intentionalDeleteRef.current.stages;
       saveStages(currentUser.uid, stages, force);
       if (force) intentionalDeleteRef.current.stages = false;
-    }
+    }, 500);
+    return () => clearTimeout(timeoutId);
   }, [stages, currentUser, dataLoaded]);
 
   useEffect(() => {
-    if (currentUser && dataLoaded && selectedStageId && (currentUser.role === 'admin' || currentUser.role === 'college_admin')) {
+    if (!(currentUser && dataLoaded && selectedStageId && (currentUser.role === 'admin' || currentUser.role === 'college_admin'))) return;
+    const timeoutId = setTimeout(() => {
       const force = intentionalDeleteRef.current.students;
       saveStudents(getAdminUid(), selectedStageId, students, force);
       if (force) intentionalDeleteRef.current.students = false;
@@ -536,11 +541,13 @@ function App() {
           [selectedStageId]: { ...(prev[selectedStageId] || { records: [], sessions: [] }), students },
         }));
       }
-    }
+    }, 500);
+    return () => clearTimeout(timeoutId);
   }, [students, currentUser, dataLoaded, selectedStageId, universityDataLoaded]);
 
   useEffect(() => {
-    if (currentUser && dataLoaded && selectedStageId) {
+    if (!(currentUser && dataLoaded && selectedStageId)) return;
+    const timeoutId = setTimeout(() => {
       const force = intentionalDeleteRef.current.records;
       saveAttendanceRecords(getAdminUid(), selectedStageId, getTeacherId(), attendanceRecords, force);
       if (force) intentionalDeleteRef.current.records = false;
@@ -550,11 +557,13 @@ function App() {
           [selectedStageId]: { ...(prev[selectedStageId] || { students: [], sessions: [] }), records: attendanceRecords },
         }));
       }
-    }
+    }, 500);
+    return () => clearTimeout(timeoutId);
   }, [attendanceRecords, currentUser, dataLoaded, selectedStageId, universityDataLoaded]);
 
   useEffect(() => {
-    if (currentUser && dataLoaded && selectedStageId) {
+    if (!(currentUser && dataLoaded && selectedStageId)) return;
+    const timeoutId = setTimeout(() => {
       const force = intentionalDeleteRef.current.sessions;
       saveSessions(getAdminUid(), selectedStageId, getTeacherId(), sessions, force);
       if (force) intentionalDeleteRef.current.sessions = false;
@@ -564,7 +573,8 @@ function App() {
           [selectedStageId]: { ...(prev[selectedStageId] || { students: [], records: [] }), sessions },
         }));
       }
-    }
+    }, 500);
+    return () => clearTimeout(timeoutId);
   }, [sessions, currentUser, dataLoaded, selectedStageId, universityDataLoaded]);
 
   useEffect(() => {

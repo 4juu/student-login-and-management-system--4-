@@ -101,6 +101,8 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   const trackerRef = useRef(new FaceTracker());
   const updateRef = useRef(onUpdateStudent);
   updateRef.current = onUpdateStudent;
+  const frameCountRef = useRef(0);
+  const isMobileRef = useRef(typeof window !== 'undefined' && window.innerWidth < 768);
 
   // ── تطبيق التقريب العتادي إن كان مدعوماً ──
   const digitalZoom = hasHwZoom ? 1 : zoom;
@@ -284,6 +286,13 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
       }
       lastTickRef.current = nowTs;
       busyRef.current = true;
+
+      frameCountRef.current++;
+      if (isMobileRef.current && frameCountRef.current % 3 !== 0) {
+        busyRef.current = false;
+        loopTimerRef.current = window.setTimeout(tick, 50);
+        return;
+      }
 
       let liveBoxes: Array<{ box: Box; label?: string; color: string; sub?: string }> = [];
 

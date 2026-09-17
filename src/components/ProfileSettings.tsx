@@ -165,6 +165,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                     src={photoURL}
                     alt={displayName}
                     className="w-full h-full object-cover"
+                    loading="lazy"
                     onError={(e) => {
                       e.currentTarget.src = '';
                     }}
