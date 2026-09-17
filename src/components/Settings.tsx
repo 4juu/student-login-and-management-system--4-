@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalBehavior } from '../hooks/useModalBehavior';
 import { Student, AttendanceRecord, Stage, College } from '../types/student';
@@ -33,7 +33,7 @@ interface SettingsProps {
   onSystemTitleChange?: (title: string) => void;
 }
 
-export const Settings: React.FC<SettingsProps> = ({
+export const Settings: React.FC<SettingsProps> = React.memo(({
   currentUser,
   onResetComplete,
   stages = [],
@@ -81,10 +81,10 @@ export const Settings: React.FC<SettingsProps> = ({
   const [botVerified, setBotVerified] = useState(false);
   const [botUsername, setBotUsername] = useState('');
 
-  const currentAcademicYear = getCurrentAcademicYear();
-  const isAdmin = currentUser?.role === 'admin';
+  const currentAcademicYear = useMemo(() => getCurrentAcademicYear(), []);
+  const isAdmin = useMemo(() => currentUser?.role === 'admin', [currentUser?.role]);
 
-  const handleSystemTitleSave = async () => {
+  const handleSystemTitleSave = useCallback(async () => {
     const title = systemTitleDraft.trim();
     if (!title) {
       setSystemTitleMessage({ type: 'error', text: 'الرجاء إدخال عنوان النظام' });
@@ -101,10 +101,10 @@ export const Settings: React.FC<SettingsProps> = ({
     } finally {
       setSystemTitleSaving(false);
     }
-  };
+  }, [systemTitleDraft, onSystemTitleChange]);
 
   // ✅ دالة عرض الحجم بشكل ذكي
-  const formatSize = (kb: number): string => {
+  const formatSize = useCallback((kb: number): string => {
     if (kb < 1024) {
       return `${kb.toFixed(1)} KB`;
     } else if (kb < 1024 * 1024) {
@@ -112,12 +112,12 @@ export const Settings: React.FC<SettingsProps> = ({
     } else {
       return `${(kb / (1024 * 1024)).toFixed(2)} GB`;
     }
-  };
+  }, []);
 
   // ✅ حساب صحيح للنسبة (تحويل الوحدات)
-  const firebaseQuotaMB = 1024; // 1 GB = 1024 MB
-  const firebaseQuotaKB = firebaseQuotaMB * 1024; // = 1,048,576 KB
-  const usagePercent = stats ? (stats.totalSizeKB / firebaseQuotaKB) * 100 : 0;
+  const firebaseQuotaMB = 1024;
+  const firebaseQuotaKB = firebaseQuotaMB * 1024;
+  const usagePercent = useMemo(() => stats ? (stats.totalSizeKB / firebaseQuotaKB) * 100 : 0, [stats?.totalSizeKB]);
 
   useEffect(() => {
     if (isAdmin && currentUser) {
@@ -142,13 +142,13 @@ export const Settings: React.FC<SettingsProps> = ({
     });
   }, [currentUser]);
 
-  const getAdminUid = (): string => {
+  const getAdminUid = useCallback((): string => {
     if (!currentUser) return '';
     if (currentUser.role === 'admin') return currentUser.uid;
     return currentUser.adminId || currentUser.uid;
-  };
+  }, [currentUser]);
 
-  const handleTelegramSave = async () => {
+  const handleTelegramSave = useCallback(async () => {
     if (!currentUser) return;
     if (!telegramBotToken.trim()) {
       setTelegramMessage({ type: 'error', text: 'الرجاء إدخال توكن البوت' });
@@ -173,9 +173,9 @@ export const Settings: React.FC<SettingsProps> = ({
     } finally {
       setTelegramSaving(false);
     }
-  };
+  }, [currentUser, telegramBotToken, telegramConfig, getAdminUid, onTelegramConfigChange]);
 
-  const handleVerifyBot = async () => {
+  const handleVerifyBot = useCallback(async () => {
     if (!telegramBotToken.trim()) {
       setTelegramMessage({ type: 'error', text: 'الرجاء إدخال التوكن أولاً' });
       return;
@@ -191,22 +191,22 @@ export const Settings: React.FC<SettingsProps> = ({
       setBotUsername('');
       setTelegramMessage({ type: 'error', text: (result.error || 'توكن غير صحيح') });
     }
-  };
+  }, [telegramBotToken]);
 
-  const channelDefaults = {
+  const channelDefaults = useMemo(() => ({
     enabled: true,
     notifyOnAttendance: false,
     notifyOnAbsence: true,
     sendDailyReport: false,
-  };
+  }), []);
 
-  const getTelegramConfig = () => telegramConfig || {
+  const getTelegramConfig = useCallback(() => telegramConfig || {
     botToken: telegramBotToken,
     channels: {},
     updatedAt: new Date().toISOString(),
-  };
+  }, [telegramConfig, telegramBotToken]);
 
-  const handleChannelToggle = (stageId: string, field: keyof typeof channelDefaults, value: boolean) => {
+  const handleChannelToggle = useCallback((stageId: string, field: keyof typeof channelDefaults, value: boolean) => {
     setTelegramConfig(prev => {
       const config = prev || getTelegramConfig();
       return {
@@ -220,9 +220,9 @@ export const Settings: React.FC<SettingsProps> = ({
         },
       };
     });
-  };
+  }, [getTelegramConfig]);
 
-  const handleChannelChatId = (stageId: string, chatId: string) => {
+  const handleChannelChatId = useCallback((stageId: string, chatId: string) => {
     setTelegramConfig(prev => {
       const config = prev || getTelegramConfig();
       const stage = stages.find(s => s.id === stageId);
@@ -239,9 +239,9 @@ export const Settings: React.FC<SettingsProps> = ({
         },
       };
     });
-  };
+  }, [getTelegramConfig, stages, channelDefaults]);
 
-  const handleTestChannel = async (stageId: string) => {
+  const handleTestChannel = useCallback(async (stageId: string) => {
     if (!telegramConfig) return;
     setTelegramMessage(null);
     const ok = await sendTestMessage(telegramConfig, stageId);
@@ -250,14 +250,14 @@ export const Settings: React.FC<SettingsProps> = ({
     } else {
       setTelegramMessage({ type: 'error', text: 'فشل الإرسال. تأكد من Chat ID والبوت مضاف كأدمن في القناة' });
     }
-  };
+  }, [telegramConfig]);
 
-  const hasTelegramChanges = (): boolean => {
+  const hasTelegramChanges = useCallback((): boolean => {
     if (!telegramConfig) return !!telegramBotToken.trim();
     return telegramConfig.botToken !== telegramBotToken.trim();
-  };
+  }, [telegramConfig, telegramBotToken]);
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     if (!currentUser) return;
     setLoadingStats(true);
     try {
@@ -271,18 +271,18 @@ export const Settings: React.FC<SettingsProps> = ({
     } finally {
       setLoadingStats(false);
     }
-  };
+  }, [currentUser]);
 
-  const loadYears = async () => {
+  const loadYears = useCallback(async () => {
     try {
       const years = await listAllAcademicYears();
       setAcademicYears(years);
     } catch (e) {
       console.warn('فشل تحميل السنوات:', e);
     }
-  };
+  }, []);
 
-  const handleResetAcademicYear = () => {
+  const handleResetAcademicYear = useCallback(() => {
     if (!currentUser || currentUser.role !== 'admin') return;
 
     const targetYear = newYearDraft.trim();
@@ -299,9 +299,9 @@ export const Settings: React.FC<SettingsProps> = ({
 
     setResetTypedConfirm('');
     setResetDialog({ type: 'confirm' });
-  };
+  }, [currentUser, newYearDraft, currentAcademicYear]);
 
-  const confirmReset = async () => {
+  const confirmReset = useCallback(async () => {
     if (!currentUser) return;
     setResetDialog(null);
     setResetting(true);
@@ -317,35 +317,35 @@ export const Settings: React.FC<SettingsProps> = ({
     } finally {
       setResetting(false);
     }
-  };
+  }, [currentUser, newYearDraft, onResetComplete]);
 
-  const closeResetDialog = () => {
+  const closeResetDialog = useCallback(() => {
     if (resetDialog?.type === 'success') {
       window.location.reload();
       return;
     }
     setResetDialog(null);
-  };
+  }, [resetDialog?.type]);
 
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800 flex items-center gap-2"><SettingsIcon className="w-6 h-6" /> الإعدادات</h2>
+    <div className="bg-slate-900 rounded-lg shadow-md p-6">
+      <h2 className="text-2xl font-bold mb-6 text-white flex items-center gap-2"><SettingsIcon className="w-6 h-6" /> الإعدادات</h2>
 
       {/* شريط السنة الأكاديمية */}
-      <div className="mb-6 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-xl">
+      <div className="mb-6 p-4 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border-2 border-indigo-400/30 rounded-xl">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
-            <GraduationCap className="w-9 h-9 text-indigo-600 shrink-0" />
+            <GraduationCap className="w-9 h-9 text-indigo-400 shrink-0" />
             <div>
-              <h3 className="font-bold text-indigo-900">السنة الأكاديمية الحالية</h3>
-              <p className="text-2xl font-bold text-indigo-700">
+              <h3 className="font-bold text-indigo-300">السنة الأكاديمية الحالية</h3>
+              <p className="text-2xl font-bold text-indigo-300">
                 {currentAcademicYear.replace('_', ' - ')}
               </p>
             </div>
           </div>
           {academicYears.length > 0 && (
-            <div className="text-sm text-indigo-700 bg-white px-3 py-2 rounded-lg border border-indigo-200 flex items-center gap-1.5">
+            <div className="text-sm text-indigo-300 bg-white/5 px-3 py-2 rounded-lg border border-indigo-400/20 flex items-center gap-1.5">
               <Library className="w-4 h-4" /> {academicYears.length} سنة في النظام
             </div>
           )}
@@ -354,11 +354,11 @@ export const Settings: React.FC<SettingsProps> = ({
 
       {/* 🏛️ هوية النظام - للأدمن الرئيسي فقط */}
       {isAdmin && (
-        <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-300 rounded-xl">
+        <div className="mb-6 p-4 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border-2 border-blue-400/30 rounded-xl">
           <div className="flex items-center gap-3 mb-3">
-            <Landmark className="w-9 h-9 text-blue-700 shrink-0" />
+            <Landmark className="w-9 h-9 text-blue-400 shrink-0" />
             <div>
-              <h3 className="font-bold text-blue-900">هوية النظام</h3>
+              <h3 className="font-bold text-blue-300">هوية النظام</h3>
             </div>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
@@ -379,7 +379,7 @@ export const Settings: React.FC<SettingsProps> = ({
             </button>
           </div>
           {systemTitleMessage && (
-            <p className={`mt-2 text-sm ${systemTitleMessage.type === 'success' ? 'text-green-700' : 'text-red-600'}`}>
+            <p className={`mt-2 text-sm ${systemTitleMessage.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
               {systemTitleMessage.text}
             </p>
           )}
@@ -390,21 +390,21 @@ export const Settings: React.FC<SettingsProps> = ({
       {isAdmin && (
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold text-gray-700 flex items-center gap-2"><ChartColumn className="w-5 h-5" /> استخدام Firebase</h3>
+            <h3 className="text-lg font-semibold text-slate-300 flex items-center gap-2"><ChartColumn className="w-5 h-5" /> استخدام Firebase</h3>
             <button
               onClick={loadStats}
               disabled={loadingStats}
-              className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1.5"
+              className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1.5"
             >
               {loadingStats ? <><LoaderCircle className="w-4 h-4 animate-spin" /> ...</> : <><RefreshCw className="w-4 h-4" /> تحديث</>}
             </button>
           </div>
 
           {stats ? (
-            <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-xl p-4">
+            <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-2 border-blue-400/20 rounded-xl p-4">
               {/* شريط الاستخدام - ✅ مصحح */}
               <div className="mb-4">
-                <div className="flex justify-between text-sm font-medium text-gray-700 mb-2">
+                <div className="flex justify-between text-sm font-medium text-slate-300 mb-2">
                   <span>الحجم المستخدم</span>
                   <span className={
                     usagePercent > 70 ? 'text-red-600' : 
@@ -414,7 +414,7 @@ export const Settings: React.FC<SettingsProps> = ({
                     {formatSize(stats.totalSizeKB)} من 1 GB ({usagePercent.toFixed(4)}%)
                   </span>
                 </div>
-                <div className="w-full bg-white rounded-full h-3 overflow-hidden border border-blue-200">
+                <div className="w-full bg-slate-700 rounded-full h-3 overflow-hidden border border-blue-400/20">
                   <div
                     className={`h-full rounded-full transition-all ${
                       usagePercent > 70 ? 'bg-red-500' : 
@@ -428,32 +428,32 @@ export const Settings: React.FC<SettingsProps> = ({
 
               {/* الإحصائيات */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center shadow-sm">
-                  <div className="text-2xl font-bold text-blue-700 dark:text-blue-400">{stats.totalStudents}</div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1"><UserIcon className="w-3.5 h-3.5" /> طالب</div>
+                <div className="bg-slate-800 rounded-lg p-3 text-center shadow-sm">
+                  <div className="text-2xl font-bold text-blue-400">{stats.totalStudents}</div>
+                  <div className="text-xs text-slate-400 flex items-center justify-center gap-1"><UserIcon className="w-3.5 h-3.5" /> طالب</div>
                 </div>
-                <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center shadow-sm">
-                  <div className="text-2xl font-bold text-purple-700 dark:text-purple-400">{stats.totalRecords}</div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1"><SquarePen className="w-3.5 h-3.5" /> سجل حضور</div>
+                <div className="bg-slate-800 rounded-lg p-3 text-center shadow-sm">
+                  <div className="text-2xl font-bold text-purple-400">{stats.totalRecords}</div>
+                  <div className="text-xs text-slate-400 flex items-center justify-center gap-1"><SquarePen className="w-3.5 h-3.5" /> سجل حضور</div>
                 </div>
-                <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center shadow-sm">
-                  <div className="text-2xl font-bold text-pink-700 dark:text-pink-400">{stats.totalSessions}</div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1"><ClipboardList className="w-3.5 h-3.5" /> جلسة</div>
+                <div className="bg-slate-800 rounded-lg p-3 text-center shadow-sm">
+                  <div className="text-2xl font-bold text-pink-400">{stats.totalSessions}</div>
+                  <div className="text-xs text-slate-400 flex items-center justify-center gap-1"><ClipboardList className="w-3.5 h-3.5" /> جلسة</div>
                 </div>
-                <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center shadow-sm">
-                  <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{stats.totalTeachers}</div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1"><GraduationCap className="w-3.5 h-3.5" /> مدرس</div>
+                <div className="bg-slate-800 rounded-lg p-3 text-center shadow-sm">
+                  <div className="text-2xl font-bold text-emerald-400">{stats.totalTeachers}</div>
+                  <div className="text-xs text-slate-400 flex items-center justify-center gap-1"><GraduationCap className="w-3.5 h-3.5" /> مدرس</div>
                 </div>
-                <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center shadow-sm">
-                  <div className="text-2xl font-bold text-amber-700 dark:text-amber-400">{stats.totalFaceDescriptors}</div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1"><Smile className="w-3.5 h-3.5" /> بصمة وجه</div>
+                <div className="bg-slate-800 rounded-lg p-3 text-center shadow-sm">
+                  <div className="text-2xl font-bold text-amber-400">{stats.totalFaceDescriptors}</div>
+                  <div className="text-xs text-slate-400 flex items-center justify-center gap-1"><Smile className="w-3.5 h-3.5" /> بصمة وجه</div>
                 </div>
               </div>
 
 
             </div>
           ) : (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center text-gray-500 flex items-center justify-center gap-2">
+            <div className="bg-slate-800/30 border border-white/10 rounded-lg p-4 text-center text-slate-500 flex items-center justify-center gap-2">
               {loadingStats ? <><LoaderCircle className="w-4 h-4 animate-spin" /> جاري تحميل الإحصائيات...</> : 'اضغط "تحديث" لعرض الإحصائيات'}
             </div>
           )}
@@ -465,16 +465,16 @@ export const Settings: React.FC<SettingsProps> = ({
       {/* منطقة الخطر */}
       {isAdmin && (
         <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-3 text-red-700 flex items-center gap-2">
+          <h3 className="text-lg font-semibold mb-3 text-red-400 flex items-center gap-2">
             <TriangleAlert className="w-5 h-5" /> منطقة الخطر
           </h3>
-          <div className="bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-300 rounded-xl p-5">
+          <div className="bg-gradient-to-br from-red-500/10 to-orange-500/10 border-2 border-red-400/30 rounded-xl p-5">
             <div className="flex items-start gap-3 mb-4">
-              <RefreshCw className="w-10 h-10 text-red-600 shrink-0" />
+              <RefreshCw className="w-10 h-10 text-red-400 shrink-0" />
               <div className="flex-1">
-                <h4 className="font-bold text-red-900 text-lg mb-2">بدء سنة أكاديمية جديدة</h4>
-                <div className="bg-white border border-red-200 rounded-lg p-3 text-sm">
-                  <p className="text-red-700 flex items-start gap-2">
+                <h4 className="font-bold text-red-300 text-lg mb-2">بدء سنة أكاديمية جديدة</h4>
+                <div className="bg-slate-800/30 border border-red-400/20 rounded-lg p-3 text-sm">
+                  <p className="text-red-400 flex items-start gap-2">
                     <TriangleAlert className="w-4 h-4 shrink-0 mt-0.5" />
                     ملاحظة: سيتم حذف جميع الطلاب وسجلات الحضور فقط، وتبقى الكليات والمراحل والتدريسيون.
                   </p>
@@ -483,7 +483,7 @@ export const Settings: React.FC<SettingsProps> = ({
             </div>
 
             <div className="mb-4">
-              <label className="block text-sm font-bold text-red-800 mb-2 flex items-center gap-1.5">
+              <label className="block text-sm font-bold text-red-300 mb-2 flex items-center gap-1.5">
                 <CalendarDays className="w-4 h-4" /> السنة الجديدة (قابلة للتعديل)
               </label>
               <input
@@ -492,9 +492,9 @@ export const Settings: React.FC<SettingsProps> = ({
                 onChange={(e) => setNewYearDraft(e.target.value)}
                 placeholder={getNextAcademicYear(currentAcademicYear)}
                 dir="ltr"
-                className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 font-mono text-sm text-center"
+                className="w-full px-3 sm:px-4 py-2 border border-white/15 rounded-md focus:ring-2 focus:ring-red-500 font-mono text-sm text-center"
               />
-              <p className="text-xs text-red-600 mt-1.5">الصيغة: 2025_2026</p>
+              <p className="text-xs text-red-400 mt-1.5">الصيغة: 2025_2026</p>
             </div>
 
             <button
@@ -509,7 +509,7 @@ export const Settings: React.FC<SettingsProps> = ({
               )}
             </button>
 
-            <p className="text-xs text-red-600 mt-2 text-center font-medium flex items-center justify-center gap-1.5">
+            <p className="text-xs text-red-400 mt-2 text-center font-medium flex items-center justify-center gap-1.5">
               <TriangleAlert className="w-3.5 h-3.5" /> هذه العملية لا يمكن التراجع عنها
             </p>
           </div>
@@ -519,16 +519,16 @@ export const Settings: React.FC<SettingsProps> = ({
       {/* قائمة السنوات الأكاديمية */}
       {isAdmin && academicYears.length > 0 && (
         <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-3 text-gray-700 flex items-center gap-2"><Library className="w-5 h-5" /> السنوات الأكاديمية</h3>
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <h3 className="text-lg font-semibold mb-3 text-slate-300 flex items-center gap-2"><Library className="w-5 h-5" /> السنوات الأكاديمية</h3>
+          <div className="bg-slate-800/30 border border-white/10 rounded-lg p-4">
             <div className="flex flex-wrap gap-2">
               {academicYears.map(year => (
                 <span
                   key={year}
                   className={`px-3 py-1.5 rounded-full text-sm font-medium border ${
                     year === currentAcademicYear
-                      ? 'bg-green-100 text-green-800 border-green-400'
-                      : 'bg-white text-gray-700 border-gray-300'
+                      ? 'bg-green-500/15 text-green-300 border-green-400/40'
+                      : 'bg-slate-800/30 text-slate-300 border-white/15'
                   }`}
                 >
                   {year === currentAcademicYear && <CircleCheck className="w-4 h-4 text-green-600 inline-block align-middle ml-1" />}
@@ -542,30 +542,30 @@ export const Settings: React.FC<SettingsProps> = ({
 
       {/* 🤖 قسم التلغرام */}
       <div className="mb-8">
-        <h3 className="text-base sm:text-lg font-semibold mb-3 text-gray-700 flex items-center gap-2">
+        <h3 className="text-base sm:text-lg font-semibold mb-3 text-slate-300 flex items-center gap-2">
           <Bot className="w-5 h-5" /> بوت التلغرام (إشعارات الحضور)
         </h3>
 
-        <div className="bg-gradient-to-br from-sky-50 to-blue-50 border-2 border-sky-300 rounded-xl p-4 sm:p-5 mb-4">
+        <div className="bg-gradient-to-br from-sky-500/10 to-blue-500/10 border-2 border-sky-400/30 rounded-xl p-4 sm:p-5 mb-4">
           <div className="flex items-start gap-2 sm:gap-3 mb-4">
-            <Megaphone className="w-8 h-8 sm:w-10 sm:h-10 text-sky-600 shrink-0" />
+            <Megaphone className="w-8 h-8 sm:w-10 sm:h-10 text-sky-400 shrink-0" />
             <div className="flex-1 min-w-0">
-              <h4 className="font-bold text-sky-900 text-base sm:text-lg mb-1">إعدادات البوت</h4>
-              <p className="text-xs sm:text-sm text-sky-700">
+              <h4 className="font-bold text-sky-300 text-base sm:text-lg mb-1">إعدادات البوت</h4>
+              <p className="text-xs sm:text-sm text-sky-300">
                 أرسل إشعارات الحضور والغياب تلقائياً إلى قنوات التلغرام لكل مادة
               </p>
             </div>
           </div>
 
-          <div className="bg-white border border-sky-200 rounded-lg p-3 sm:p-4 mb-4">
-            <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5"><KeyRound className="w-4 h-4" /> توكن البوت (Bot Token)</label>
+          <div className="bg-slate-800/30 border border-sky-400/20 rounded-lg p-3 sm:p-4 mb-4">
+            <label className="block text-xs sm:text-sm font-bold text-slate-300 mb-2 flex items-center gap-1.5"><KeyRound className="w-4 h-4" /> توكن البوت (Bot Token)</label>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="text"
                 value={telegramBotToken}
                 onChange={e => { setTelegramBotToken(e.target.value); setBotVerified(false); setTelegramMessage(null); }}
                 placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
-                className="flex-1 px-3 sm:px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-sky-500 font-mono text-xs sm:text-sm"
+                className="flex-1 px-3 sm:px-4 py-2 border border-white/15 rounded-md focus:ring-2 focus:ring-sky-500 font-mono text-xs sm:text-sm"
                 dir="ltr"
               />
               <button
@@ -576,27 +576,27 @@ export const Settings: React.FC<SettingsProps> = ({
               </button>
             </div>
             {botVerified && (
-              <p className="text-xs sm:text-sm text-green-700 mt-2 font-medium flex items-center gap-1.5"><CircleCheck className="w-4 h-4" /> البوت موثوق: @{botUsername}</p>
+              <p className="text-xs sm:text-sm text-green-400 mt-2 font-medium flex items-center gap-1.5"><CircleCheck className="w-4 h-4" /> البوت موثوق: @{botUsername}</p>
             )}
-            <div className="mt-2 bg-gray-50 border border-gray-200 rounded-lg p-2 sm:p-3 text-[10px] sm:text-xs text-gray-600">
+            <div className="mt-2 bg-slate-800/30 border border-white/10 rounded-lg p-2 sm:p-3 text-[10px] sm:text-xs text-slate-400">
               <p className="font-bold mb-1 flex items-center gap-1.5"><Info className="w-4 h-4" /> كيفية الحصول على التوكن:</p>
               <ol className="list-decimal list-inside space-y-1 mr-2">
-                <li>افتح <a href="https://t.me/BotFather" target="_blank" className="text-blue-600 underline">@BotFather</a> في تلغرام</li>
-                <li>أرسل <code className="bg-gray-200 px-1 rounded">/newbot</code> واتبع التعليمات</li>
+                <li>افتح <a href="https://t.me/BotFather" target="_blank" className="text-blue-400 underline">@BotFather</a> في تلغرام</li>
+                <li>أرسل <code className="bg-white/10 px-1 rounded">/newbot</code> واتبع التعليمات</li>
                 <li>انسخ التوكن وألصقه هنا</li>
               </ol>
             </div>
           </div>
 
           {/* ربط القنوات */}
-          <div className="bg-white border border-sky-200 rounded-lg p-3 sm:p-4">
-            <h4 className="font-bold text-gray-700 mb-3 text-sm sm:text-base flex items-center gap-2"><Megaphone className="w-4 h-4 text-sky-600" /> ربط القنوات حسب المادة</h4>
-            <p className="text-[10px] sm:text-xs text-gray-500 mb-3">
+          <div className="bg-slate-800/30 border border-sky-400/20 rounded-lg p-3 sm:p-4">
+            <h4 className="font-bold text-slate-300 mb-3 text-sm sm:text-base flex items-center gap-2"><Megaphone className="w-4 h-4 text-sky-400" /> ربط القنوات حسب المادة</h4>
+            <p className="text-[10px] sm:text-xs text-slate-500 mb-3">
               لكل مادة (مرحلة)، أدخل Chat ID القناة الخاصة بها
             </p>
 
             {stages.length === 0 ? (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs sm:text-sm text-yellow-700 text-center flex items-center justify-center gap-2">
+              <div className="bg-yellow-500/10 border border-yellow-400/20 rounded-lg p-3 text-xs sm:text-sm text-yellow-400 text-center flex items-center justify-center gap-2">
                 <TriangleAlert className="w-4 h-4 shrink-0" /> لا توجد مراحل مضافة. أضف المراحل أولاً من صفحة إدارة الكليات.
               </div>
             ) : (
@@ -607,14 +607,14 @@ export const Settings: React.FC<SettingsProps> = ({
                   const chatId = channel?.chatId || '';
 
                   return (
-                    <div key={stage.id} className="border border-gray-200 rounded-lg p-3 hover:border-sky-300 transition">
+                    <div key={stage.id} className="border border-white/10 rounded-lg p-3 hover:border-sky-400/30 transition">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-lg shrink-0">{college?.icon || <Library className="w-4 h-4" />}</span>
                           <div className="min-w-0">
-                            <span className="font-bold text-gray-800 text-sm sm:text-base truncate block">{stage.name}</span>
+                            <span className="font-bold text-white text-sm sm:text-base truncate block">{stage.name}</span>
                             {college && (
-                              <span className="text-[10px] sm:text-xs text-gray-500 block truncate">{college.name}</span>
+                              <span className="text-[10px] sm:text-xs text-slate-500 block truncate">{college.name}</span>
                             )}
                           </div>
                         </div>
@@ -634,7 +634,7 @@ export const Settings: React.FC<SettingsProps> = ({
                           value={chatId}
                           onChange={e => handleChannelChatId(stage.id, e.target.value)}
                           placeholder="-1001234567890"
-                          className="flex-1 px-3 py-1.5 border border-gray-300 rounded-md text-xs sm:text-sm font-mono focus:ring-2 focus:ring-sky-500"
+                          className="flex-1 px-3 py-1.5 border border-white/15 rounded-md text-xs sm:text-sm font-mono focus:ring-2 focus:ring-sky-500"
                           dir="ltr"
                         />
                         <button
@@ -646,7 +646,7 @@ export const Settings: React.FC<SettingsProps> = ({
                         </button>
                       </div>
                       {chatId && (
-                        <div className="flex flex-wrap gap-2 sm:gap-3 mt-2 text-[10px] sm:text-xs text-gray-500">
+                        <div className="flex flex-wrap gap-2 sm:gap-3 mt-2 text-[10px] sm:text-xs text-slate-500">
                           <label className="flex items-center gap-1">
                             <input type="checkbox" checked={channel?.notifyOnAbsence ?? true}
                               onChange={e => handleChannelToggle(stage.id, 'notifyOnAbsence', e.target.checked)}
@@ -662,12 +662,12 @@ export const Settings: React.FC<SettingsProps> = ({
             )}
 
             {stages.length > 0 && (
-              <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-2 sm:p-3 text-[10px] sm:text-xs text-gray-600">
+              <div className="mt-3 bg-slate-800/30 border border-white/10 rounded-lg p-2 sm:p-3 text-[10px] sm:text-xs text-slate-400">
                 <p className="font-bold mb-1 flex items-center gap-1.5"><Info className="w-4 h-4" /> كيفية الحصول على Chat ID:</p>
                 <ol className="list-decimal list-inside space-y-1 mr-2">
                   <li>أضف البوت كأدمن في القناة</li>
                   <li>أرسل رسالة في القناة</li>
-                  <li>افتح <a href="https://t.me/GetChatID_Bot" target="_blank" className="text-blue-600 underline">@GetChatID_Bot</a></li>
+                  <li>افتح <a href="https://t.me/GetChatID_Bot" target="_blank" className="text-blue-400 underline">@GetChatID_Bot</a></li>
                   <li>انسخ الرقم (يبدأ بـ -100) وألصقه هنا</li>
                 </ol>
               </div>
@@ -677,8 +677,8 @@ export const Settings: React.FC<SettingsProps> = ({
           {telegramMessage && (
             <div className={`mt-3 p-3 rounded-lg text-xs sm:text-sm font-medium ${
               telegramMessage.type === 'success'
-                ? 'bg-green-100 text-green-800 border border-green-300'
-                : 'bg-red-100 text-red-800 border border-red-300'
+                ? 'bg-green-500/15 text-green-300 border border-green-400/30'
+                : 'bg-red-500/15 text-red-300 border border-red-400/30'
             }`}>
               {telegramMessage.text}
             </div>
@@ -706,14 +706,14 @@ export const Settings: React.FC<SettingsProps> = ({
         >
           <div
             ref={modalBehaviorRef}
-            className="modal-panel bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center"
+            className="modal-panel bg-slate-900 rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center"
             onClick={e => e.stopPropagation()}
             dir="rtl"
           >
             {resetDialog.type === 'confirm' && (
               <>
-                <h3 className="text-lg font-bold text-gray-800 mb-2">تحذير خطير</h3>
-                <p className="text-sm text-gray-600 mb-4 whitespace-pre-line text-right">
+                <h3 className="text-lg font-bold text-white mb-2">تحذير خطير</h3>
+                <p className="text-sm text-slate-400 mb-4 whitespace-pre-line text-right">
                   {`السنة الجديدة: ${newYearDraft}\n\n` +
                    `سيتم حذف جميع الطلاب وسجلات الحضور والجلسات\n` +
                    `سيتم تعطيل صلاحيات جميع التدريسيين (الحسابات تبقى)\n\n` +
@@ -721,7 +721,7 @@ export const Settings: React.FC<SettingsProps> = ({
                    `الكليات والمراحل كما هي\n` +
                    `حسابك (الأدمن) وحسابات التدريسيين`}
                 </p>
-                <label className="block text-xs font-bold text-gray-700 mb-2 text-right">
+                <label className="block text-xs font-bold text-slate-300 mb-2 text-right">
                   للتأكيد النهائي، اكتب: "تصفير"
                 </label>
                 <input
@@ -729,7 +729,7 @@ export const Settings: React.FC<SettingsProps> = ({
                   value={resetTypedConfirm}
                   onChange={e => setResetTypedConfirm(e.target.value)}
                   placeholder="تصفير"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 text-sm text-center mb-4"
+                  className="w-full px-3 py-2 border border-white/15 rounded-md focus:ring-2 focus:ring-red-500 text-sm text-center mb-4"
                 />
                 <div className="flex gap-2">
                   <button
@@ -741,7 +741,7 @@ export const Settings: React.FC<SettingsProps> = ({
                   </button>
                   <button
                     onClick={() => setResetDialog(null)}
-                    className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-3 px-4 rounded-lg transition"
+                    className="bg-white/10 hover:bg-white/15 text-slate-300 font-medium py-3 px-4 rounded-lg transition"
                   >
                     إلغاء
                   </button>
@@ -752,7 +752,7 @@ export const Settings: React.FC<SettingsProps> = ({
             {resetDialog.type === 'success' && (
               <>
                 <h3 className="text-lg font-bold text-green-700 mb-2">تم بدء السنة الجديدة بنجاح!</h3>
-                <p className="text-sm text-gray-600 mb-6 whitespace-pre-line text-right">
+                <p className="text-sm text-slate-400 mb-6 whitespace-pre-line text-right">
                   {`السنة السابقة: ${resetDialog.oldYear}\n` +
                    `السنة الجديدة: ${resetDialog.newYear}\n\n` +
                    `تم حذف الطلاب وسجلات الحضور\n` +
@@ -770,7 +770,7 @@ export const Settings: React.FC<SettingsProps> = ({
             {resetDialog.type === 'error' && (
               <>
                 <h3 className="text-lg font-bold text-red-700 mb-2">فشل العملية</h3>
-                <p className="text-sm text-gray-600 mb-6 whitespace-pre-line">{resetDialog.message}</p>
+                <p className="text-sm text-slate-400 mb-6 whitespace-pre-line">{resetDialog.message}</p>
                 <button
                   onClick={() => setResetDialog(null)}
                   className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition"
@@ -786,4 +786,4 @@ export const Settings: React.FC<SettingsProps> = ({
 
     </div>
   );
-};
+});

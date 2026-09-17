@@ -44,6 +44,14 @@ export const CollegeManager: React.FC<CollegeManagerProps> = React.memo(({
     { name: 'pink', class: 'from-pink-500 to-pink-700', label: 'وردي' },
     { name: 'teal', class: 'from-teal-500 to-teal-700', label: 'فيروزي' },
     { name: 'indigo', class: 'from-indigo-500 to-indigo-700', label: 'نيلي' },
+    { name: 'emerald', class: 'from-emerald-500 to-emerald-700', label: 'زمردي' },
+    { name: 'amber', class: 'from-amber-500 to-amber-700', label: 'كهرماني' },
+    { name: 'cyan', class: 'from-cyan-500 to-cyan-700', label: 'سماوي' },
+    { name: 'rose', class: 'from-rose-500 to-rose-700', label: 'قرمزي' },
+    { name: 'lime', class: 'from-lime-500 to-lime-700', label: 'ليموني' },
+    { name: 'fuchsia', class: 'from-fuchsia-500 to-fuchsia-700', label: 'فوشي' },
+    { name: 'sky', class: 'from-sky-500 to-sky-700', label: 'أزرق فاتح' },
+    { name: 'violet', class: 'from-violet-500 to-violet-700', label: 'بنفسجي فاتح' },
   ];
 
   const iconOptions = ['🏛️', '💊', '⚕️', '🏥', '🦷', '👁️', '🧪', '🔬', '🔍', '⚖️', '💻', '🎓'];
