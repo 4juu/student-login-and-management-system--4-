@@ -1104,7 +1104,15 @@ ${dataContext}`;
   const sendMessageRef = useRef(sendMessage);
   sendMessageRef.current = sendMessage;
 
-  const handleSend = useCallback(() => sendMessage(input), [input, sendMessage]);
+  const handleSend = useCallback(() => {
+    // إيقاف التسجيل الصوتي تلقائياً عند الإرسال (بدون الحاجة لزر الإيقاف)
+    if (isListening) {
+      manualStopRef.current = true;
+      try { recognitionRef.current?.stop(); } catch { /* ignore */ }
+      setIsListening(false);
+    }
+    sendMessage(input);
+  }, [input, sendMessage, isListening]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
