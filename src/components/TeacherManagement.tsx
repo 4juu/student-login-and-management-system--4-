@@ -807,7 +807,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">كلمة المرور</label>
-              <input type="text" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full p-2 border border-slate-600 bg-slate-800 text-white rounded-md focus:ring-2 focus:ring-blue-500" placeholder="6 أحرف على الأقل" dir="ltr" disabled={loading} />
+              <input type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full p-2 border border-slate-600 bg-slate-800 text-white rounded-md focus:ring-2 focus:ring-blue-500" placeholder="6 أحرف على الأقل" dir="ltr" disabled={loading} />
             </div>
           </div>
           {(isMainAdmin && !selectedCollegeId) && colleges.length > 0 && (
@@ -1020,7 +1020,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
             <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><KeyRound className="w-5 h-5" /> تغيير كلمة المرور - {selectedTeacher.displayName}</h3>
             <div className="mb-4">
               <label className="block text-sm font-medium text-slate-300 mb-2">كلمة المرور الجديدة</label>
-              <input type="text" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full px-4 py-2 border border-slate-600 bg-slate-800 text-white rounded-md focus:ring-2 focus:ring-blue-500" placeholder="6 أحرف على الأقل" dir="ltr" autoFocus />
+              <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full px-4 py-2 border border-slate-600 bg-slate-800 text-white rounded-md focus:ring-2 focus:ring-blue-500" placeholder="6 أحرف على الأقل" dir="ltr" autoFocus />
             </div>
             {error && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/40 text-red-300 rounded text-sm">{error}</div>}
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-3 mb-4 text-sm text-yellow-300 flex items-start gap-2"><TriangleAlert className="w-4 h-4 shrink-0 mt-0.5" /> تأكد من حفظ كلمة المرور وإبلاغها للتدريسي</div>
