@@ -110,7 +110,9 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     const range = hwZoomRange.current;
     const track = streamRef.current?.getVideoTracks()[0];
     if (!track || !range) return;
-    const target = range.min + ((range.max - range.min) * (zoom - 1)) / (MAX_ZOOM - 1);
+    // الزوم العتادي يبدأ من المستوى الطبيعي ×1 وليس من range.min —
+    // بعض الكاميرات الخلفية نطاقها يبدأ من 0.5 (واسعة جداً) فكانت تظهر 0.5 رغم كتابة 1
+    const target = 1 + ((range.max - 1) * (zoom - 1)) / (MAX_ZOOM - 1);
     track.applyConstraints({
       advanced: [{ zoom: Math.min(range.max, Math.max(range.min, target)) } as unknown as MediaTrackConstraintSet],
     }).catch(() => {});
