@@ -49,9 +49,13 @@ const RECOGNITION_COOLDOWN = 30_000;
 const MIN_FACE_PX = 22;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
-const MAX_FACES_PER_FRAME = 3;
+const MAX_FACES_PER_FRAME = 20;
 const REEMBED_MIN_INTERVAL = 350;
 const REEMBED_MOVE_THRESHOLD = 0.08;
+// مدة كبت منطقة وجه مسجَّل حضوره حتى لا يعاد اكتشافه/رسمه فور انتهائه
+const SUPPRESS_ZONE_TTL = 6_000;
+// نسبة تداخل جديدة ليُعتبَر الوجه ضمن منطقة مكبوتة (يتم تجاهله)
+const SUPPRESS_ZONE_OVERLAP = 0.55;
 
 const AVATAR_COLORS = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-cyan-500', 'bg-violet-500'];
 
@@ -101,6 +105,11 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   const trackerRef = useRef(new FaceTracker());
   const updateRef = useRef(onUpdateStudent);
   updateRef.current = onUpdateStudent;
+
+  // مناطق "منتهية" (طلاب سُجّل حضورهم) — تُكبت مؤقتاً كي لا يلتصق الإطار بهم ويترك المجال لغيرهم
+  const suppressZonesRef = useRef<Array<{ box: Box; until: number }>>([]);
+  // طلاب تم تسجيل حضورهم في هذه الجلسة — لا نعيد مطابقتهم نهائياً
+  const doneStudentsRef = useRef(new Set<string>());
 
   // ── تطبيق التقريب العتادي إن كان مدعوماً ──
   const digitalZoom = hasHwZoom ? 1 : zoom;
@@ -198,6 +207,35 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     }, ...prev].slice(0, 40));
   }, []);
 
+  // ── أداة تداخل صناديق (IoU تقريبي) لتحديد ما إذا كان الوجه ضمن منطقة مكبوتة ──
+  const zoneOverlap = (a: Box, b: Box): number => {
+    const ix = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
+    const iy = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+    const inter = ix * iy;
+    const union = a.width * a.height + b.width * b.height - inter;
+    return union <= 0 ? 0 : inter / union;
+  };
+
+  // ── كبت منطقة وجه مسجَّل — يمنع رسم إطاره وإعادة اكتشافه لمدّة TTL ──
+  const suppressZone = useCallback((box: Box) => {
+    const now = performance.now();
+    const zones = suppressZonesRef.current.filter(z => z.until > now);
+    zones.push({ box: { ...box }, until: now + SUPPRESS_ZONE_TTL });
+    suppressZonesRef.current = zones.length > 60 ? zones.slice(-40) : zones;
+  }, []);
+
+  // ── تطهير المناطق المكبوتة المنتهية ──
+  const pruneSuppressZones = useCallback(() => {
+    const now = performance.now();
+    const zones = suppressZonesRef.current.filter(z => z.until > now);
+    if (zones.length !== suppressZonesRef.current.length) suppressZonesRef.current = zones;
+  }, []);
+
+  // ── هل الوجه داخل منطقة مكبوتة؟ ──
+  const isSuppressed = useCallback((box: Box): boolean => {
+    return suppressZonesRef.current.some(z => zoneOverlap(z.box, box) >= SUPPRESS_ZONE_OVERLAP);
+  }, []);
+
   // ── حلقة المسح ──
   useEffect(() => {
     if (!engineReady || !cameraReady) return;
@@ -285,6 +323,8 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     }
     lastTickRef.current = nowTs;
     busyRef.current = true;
+    // تنظيف مناطق الكبت المنتهية في كل دورة
+    pruneSuppressZones();
 
       let liveBoxes: Array<{ box: Box; label?: string; color: string; sub?: string }> = [];
 
@@ -323,7 +363,9 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
         }
 
         const targets = detections;
-        const bigEnough = targets
+        // تجاهل الوجوه داخل مناطق مكبوتة (طلاب سُجّلوا للتو) في الفريم نفسه
+        const newTargets = targets.filter(d => !isSuppressed(d.box));
+        const bigEnough = newTargets
           .filter(d => d.box.width >= MIN_FACE_PX && d.box.height >= MIN_FACE_PX)
           .slice(0, MAX_FACES_PER_FRAME);
 
@@ -383,6 +425,14 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               }
 
               const student = match.item;
+
+              // طالب سُجّل حضوراً في هذه الجلسة — حتى لو تحرك مكانه، يختفي إطاره فوراً
+              if (doneStudentsRef.current.has(student.id)) {
+                trackerRef.current.removeTrack(trackId);
+                suppressZone(boxInVideo);
+                continue;
+              }
+
               const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id);
 
               if (confirmCount < CONFIRM_FRAMES) {
@@ -394,7 +444,10 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               const lastHit = cooldowns.current.get(student.id) ?? 0;
 
               if (alreadyMarked || now - lastHit < RECOGNITION_COOLDOWN) {
-                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: alreadyMarked ? 'مسجل ✓' : undefined, color: '#34d399' });
+                // تسجيل مسبق أو في فترة التهدئة — نُنهي إطاره فوراً ونترك المجال لغيره
+                doneStudentsRef.current.add(student.id);
+                trackerRef.current.removeTrack(trackId);
+                suppressZone(boxInVideo);
                 if (alreadyMarked && !loggedIdsRef.current.has(student.id)) {
                   loggedIdsRef.current.add(student.id);
                   pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'already', confidence: match.confidence });
@@ -404,7 +457,11 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
 
               cooldowns.current.set(student.id, now);
               markedAny = true;
-              liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'حاضر ✓', color: '#34d399' });
+              // الأهم: بعد تسجيل الحضور يُزال المسار وتُكبت منطقته — يختفي الإطار في نفس الثانية
+              doneStudentsRef.current.add(student.id);
+              trackerRef.current.removeTrack(trackId);
+              suppressZone(boxInVideo);
+
               if (!loggedIdsRef.current.has(student.id)) {
                 loggedIdsRef.current.add(student.id);
                 pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'marked', confidence: match.confidence });
@@ -439,6 +496,8 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
           // ✅ الوجوه اللي ما احتاجت إعادة حساب — استخدم النتيجة المخزّنة بالـ cache
           for (const t of tracked) {
             if (needEmbed.some(n => n.trackId === t.trackId)) continue;
+            // مسار أُزيل للتو (بعد التسجيل) — نتجاهله كأنه لم يكن
+            if (!trackerRef.current.hasTrack(t.trackId)) continue;
             const cache = trackerRef.current.getCache(t.trackId);
             if (!cache || !cache.cachedMatchId) {
               liveBoxes.push({ box: t.box, color: 'rgba(255,255,255,0.3)' });
@@ -451,8 +510,14 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
             const student = rosterRef.current.find(s => s.id === cache.cachedMatchId);
 
             if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE) {
-              const alreadyMarked = presentRef.current.has(student.id);
-              liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: alreadyMarked ? 'مسجل ✓' : undefined, color: alreadyMarked ? '#34d399' : '#818cf8' });
+              // طالب مسجَّل (هذه الجلسة أو جلسة الحضور نفسها) — أزل إطاره ليكمل النظام لغيره
+              if (doneStudentsRef.current.has(student.id) || presentRef.current.has(student.id)) {
+                doneStudentsRef.current.add(student.id);
+                trackerRef.current.removeTrack(t.trackId);
+                suppressZone(boxInVideo);
+                continue;
+              }
+              liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], color: '#818cf8' });
             } else {
               liveBoxes.push({ box: boxInVideo, label: 'غير معروف', color: '#fbbf24' });
               anyUnknown = true;
@@ -493,9 +558,13 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     return () => { mountedRef.current = false; };
   }, []);
 
-  // تنظيف المتتبّع عند الخروج
+  // تنظيف المتتبّع وحالة المسح عند الخروج
   useEffect(() => {
-    return () => { trackerRef.current.reset(); };
+    return () => {
+      trackerRef.current.reset();
+      suppressZonesRef.current = [];
+      doneStudentsRef.current.clear();
+    };
   }, []);
 
   // إعادة تعيين عدّاد الفراغ عند جاهزية المحرك بعد إعادة تهيئة

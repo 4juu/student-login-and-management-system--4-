@@ -132,6 +132,7 @@ export class FaceTracker {
     if (t) { t.cachedMatchId = matchId; t.cachedConfidence = confidence; }
   }
 
+  /** عداد تأكيد المطابقة لنفس الطالب عبر فريمات متتالية */
   bumpConfirm(trackId: number, matchId: string): number {
     const t = this.tracks.find(tr => tr.id === trackId);
     if (!t) return 0;
@@ -140,5 +141,16 @@ export class FaceTracker {
     return t.confirmCount;
   }
 
+  /** أزل مساراً من المتابعة نهائياً — يُستخدم فور تسجيل حضور الطالب لتلاشي إطاره والانتقال لغيره */
+  removeTrack(trackId: number) {
+    this.tracks = this.tracks.filter(t => t.id !== trackId);
+  }
+
+  /** هل ما زال المسار موجوداً؟ */
+  hasTrack(trackId: number): boolean {
+    return this.tracks.some(t => t.id === trackId);
+  }
+
+  /** أزل جميع المسارات وأعد العدّاد */
   reset() { this.tracks = []; this.nextId = 1; }
 }
