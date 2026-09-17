@@ -376,13 +376,13 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
           <p className="text-sm text-slate-400">انقر على "سجل جديد" لإنشاء سجل حضور لليوم</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3 animate-staggerFadeIn">
           {sessions.map((session) => (
             <div
               key={session.id}
               className={`p-3 sm:p-4 rounded-lg border-2 transition-all ${
                 session.id === activeSessionId
-                  ? 'border-green-500/50 bg-green-500/10'
+                  ? 'session-active-glow border-blue-500/50 bg-blue-500/10'
                   : 'border-white/10 bg-white/5 hover:border-white/20'
               }`}
             >

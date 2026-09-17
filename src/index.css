@@ -1027,6 +1027,58 @@
   animation: modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* == دخول صفوف الجدول == */
+@keyframes rowFadeIn {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-rowFadeIn {
+  animation: rowFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* == توهج الحد النشط للجلسة == */
+@keyframes sessionGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(59, 130, 246, 0.3), inset 0 0 8px rgba(59, 130, 246, 0.05); }
+  50% { box-shadow: 0 0 16px rgba(59, 130, 246, 0.5), inset 0 0 12px rgba(59, 130, 246, 0.1); }
+}
+
+.session-active-glow {
+  animation: sessionGlow 2s ease-in-out infinite;
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+/* == إغلاق المودال == */
+@keyframes modalFadeOut {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.95); }
+}
+
+.animate-modalFadeOut {
+  animation: modalFadeOut 0.2s ease-in forwards;
+}
+
+/* == دخول متتالي للعناصر == */
+@keyframes staggerFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-staggerFadeIn > * {
+  animation: staggerFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-staggerFadeIn > *:nth-child(1) { animation-delay: 0ms; }
+.animate-staggerFadeIn > *:nth-child(2) { animation-delay: 40ms; }
+.animate-staggerFadeIn > *:nth-child(3) { animation-delay: 80ms; }
+.animate-staggerFadeIn > *:nth-child(4) { animation-delay: 120ms; }
+.animate-staggerFadeIn > *:nth-child(5) { animation-delay: 160ms; }
+.animate-staggerFadeIn > *:nth-child(6) { animation-delay: 200ms; }
+.animate-staggerFadeIn > *:nth-child(7) { animation-delay: 240ms; }
+.animate-staggerFadeIn > *:nth-child(8) { animation-delay: 280ms; }
+.animate-staggerFadeIn > *:nth-child(9) { animation-delay: 320ms; }
+.animate-staggerFadeIn > *:nth-child(10) { animation-delay: 360ms; }
+
 /* ============================================ */
 /* ✨ Interaction States — هادئة أكاديمية        */
 /* ============================================ */
