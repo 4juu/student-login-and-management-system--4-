@@ -594,15 +594,15 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
           <table className="glass-table min-w-[640px]">
             <thead>
               <tr>
-                <th className="!text-center whitespace-nowrap">
+                <th scope="col" className="!text-center whitespace-nowrap">
                   <QrCode className="w-4 h-4 inline-block text-emerald-400" />
                 </th>
-                <th className="whitespace-nowrap">الطالب</th>
-                <th className="!text-center whitespace-nowrap">الجلسة</th>
-                <th className="!text-center whitespace-nowrap">الوقت</th>
-                <th className="!text-center whitespace-nowrap">الحالة</th>
+                <th scope="col" className="whitespace-nowrap">الطالب</th>
+                <th scope="col" className="!text-center whitespace-nowrap">الجلسة</th>
+                <th scope="col" className="!text-center whitespace-nowrap">الوقت</th>
+                <th scope="col" className="!text-center whitespace-nowrap">الحالة</th>
                 {(onUpdateRecord || onDeleteRecord) && (
-                  <th className="!text-center whitespace-nowrap">إجراءات</th>
+                  <th scope="col" className="!text-center whitespace-nowrap">إجراءات</th>
                 )}
               </tr>
             </thead>

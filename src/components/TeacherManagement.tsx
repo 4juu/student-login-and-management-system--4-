@@ -839,11 +839,11 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
         <table className="min-w-full divide-y divide-white/10">
           <thead className="bg-white/5">
             <tr>
-              <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase">التدريسي</th>
-              <th className="hidden sm:table-cell px-3 sm:px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase">البريد</th>
-              <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase">الحالة</th>
-              <th className="hidden sm:table-cell px-3 sm:px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase">الصلاحيات</th>
-              <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase">إجراءات</th>
+              <th scope="col" className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase">التدريسي</th>
+              <th scope="col" className="hidden sm:table-cell px-3 sm:px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase">البريد</th>
+              <th scope="col" className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase">الحالة</th>
+              <th scope="col" className="hidden sm:table-cell px-3 sm:px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase">الصلاحيات</th>
+              <th scope="col" className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase">إجراءات</th>
             </tr>
           </thead>
           <tbody className="bg-white/5 divide-y divide-white/10">

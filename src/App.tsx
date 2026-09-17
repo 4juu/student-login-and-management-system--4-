@@ -1000,6 +1000,9 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#0B1220]" dir="rtl">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[9999] focus:bg-white focus:text-black focus:px-4 focus:py-2 focus:rounded-lg focus:font-bold">
+        تخطي إلى المحتوى الرئيسي
+      </a>
       <div className="container mx-auto px-3 md:px-4 py-3 md:py-6">
         <div className="mb-8">
           <div className="flex items-center justify-between gap-3 mb-6">
@@ -1073,6 +1076,7 @@ function App() {
           )}
         </div>
 
+        <main id="main-content">
         {!selectedStageId && (
           <div className="max-w-6xl mx-auto">
             <div className="overflow-x-auto scrollbar-none">
@@ -1323,6 +1327,8 @@ function App() {
             </div>
           </div>
         )}
+
+        </main>
 
         {/* ✨ Footer */}
         <div className="mt-12 pt-6 border-t border-white/10 text-center text-slate-500">

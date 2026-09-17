@@ -111,6 +111,11 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
       return;
     }
 
+    if (students.some(s => s.name.trim() === name.trim())) {
+      setError('هذا الاسم مستخدم بالفعل لطالب آخر');
+      return;
+    }
+
     if (universityId.trim() && students.some(s => s.universityId === universityId.trim())) {
       setError('هذا الرقم الجامعي مستخدم بالفعل');
       return;
@@ -954,27 +959,27 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-white/10">
           <thead className="bg-white/5">
-            <tr>
-              <th className="px-4 py-3 text-center">
-                {paginatedStudents.length > 0 && (
-                  <input
-                    type="checkbox"
-                    checked={allInPageSelected}
-                    onChange={toggleSelectAllInPage}
-                    className="w-5 h-5 cursor-pointer accent-blue-600"
-                    title="تحديد طلاب الصفحة الحالية"
-                  />
-                )}
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">#</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">الرمز</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">الاسم</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">الكروب</th>
-              <th className="hidden md:table-cell px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><IdCard className="w-3.5 h-3.5" /> الرقم الجامعي</span></th>
-              <th className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> رمز QR</span></th>
-              <th className="hidden sm:table-cell px-4 py-3 text-center text-xs font-medium text-slate-400 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><Smile className="w-3.5 h-3.5" /> الوجه</span></th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">إجراءات</th>
-            </tr>
+              <tr>
+                <th scope="col" className="px-4 py-3 text-center">
+                  {paginatedStudents.length > 0 && (
+                    <input
+                      type="checkbox"
+                      checked={allInPageSelected}
+                      onChange={toggleSelectAllInPage}
+                      className="w-5 h-5 cursor-pointer accent-blue-600"
+                      title="تحديد طلاب الصفحة الحالية"
+                    />
+                  )}
+                </th>
+                <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">#</th>
+                <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">الرمز</th>
+                <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">الاسم</th>
+                <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">الكروب</th>
+                <th scope="col" className="hidden md:table-cell px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><IdCard className="w-3.5 h-3.5" /> الرقم الجامعي</span></th>
+                <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> رمز QR</span></th>
+                <th scope="col" className="hidden sm:table-cell px-4 py-3 text-center text-xs font-medium text-slate-400 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><Smile className="w-3.5 h-3.5" /> الوجه</span></th>
+                <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">إجراءات</th>
+              </tr>
           </thead>
           <tbody className="bg-white/5 divide-y divide-white/10">
             {paginatedStudents.length === 0 ? (

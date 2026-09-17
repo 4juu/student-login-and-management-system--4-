@@ -1,9 +1,4 @@
 import React, { useState, useEffect, lazy, Suspense, useCallback } from 'react';
-import '@fontsource/vazirmatn/400.css';
-import '@fontsource/vazirmatn/500.css';
-import '@fontsource/vazirmatn/600.css';
-import '@fontsource/vazirmatn/700.css';
-import '@fontsource/vazirmatn/800.css';
 import { ref, set } from 'firebase/database';
 import { database, dbURL } from '../../firebase/config';
 import { AttendanceRecord, AttendanceSession, Student } from '../../types/student';
