@@ -7,7 +7,7 @@ import {
   User as FirebaseUser
 } from "firebase/auth";
 import { ref, set, get, update, remove } from "firebase/database";
-import { auth, database } from "./config";
+import { auth, database, secondaryAuth } from "./config";
 import { User, TeacherPermissions } from "../types/user";
 
 // ⚠️ غيّر هذا الايميل لايميل الأدمن الجديد
@@ -340,23 +340,57 @@ export const getAllTeachersForCollege = async (collegeId: string): Promise<User[
 // ============================================================
 export const updateTeacherPassword = async (
   uid: string,
-  newPassword: string
+  newPassword: string,
+  currentPassword?: string
 ): Promise<void> => {
   try {
+    // نجلب البريد وكلمة السر الحالية المحفوظة (الأدمن يملك صلاحية القراءة)
+    const accountSnap = await get(ref(database, `teacherAccounts/${uid}`));
+    const accountData = accountSnap.exists() ? accountSnap.val() : {};
+    const userSnap = await get(ref(database, `users/${uid}`));
+    const userData = userSnap.exists() ? userSnap.val() : {};
+
+    const email: string | undefined = accountData.email || userData.email;
+    if (!email) {
+      throw new Error('تعذّر إيجاد بريد التدريسي');
+    }
+
+    const oldPassword: string | undefined =
+      (currentPassword && currentPassword.trim()) || accountData.storedPassword;
+    if (!oldPassword) {
+      throw new Error('لا توجد كلمة مرور حالية محفوظة — اكتب كلمة السر الحالية للتدريسي ثم أعد المحاولة');
+    }
+
+    // تنظيف أي جلسة سابقة على التطبيق الثانوي قبل الدخول بحساب التدريسي
+    try { await firebaseSignOut(secondaryAuth); } catch { /* تجاهل */ }
+
+    // ندخل بحساب التدريسي على التطبيق الثانوي (منفصل عن جلسة الأدمن) لتغيير كلمة السر فعلياً
+    const cred = await signInWithEmailAndPassword(secondaryAuth, email, oldPassword).catch(() => {
+      throw new Error('كلمة السر الحالية للتدريسي غير صحيحة — اكتبها يدوياً ثم أعد المحاولة');
+    });
+
+    try {
+      await updatePassword(cred.user, newPassword);
+    } finally {
+      try { await firebaseSignOut(secondaryAuth); } catch { /* تجاهل */ }
+    }
+
+    // مزامنة النسخة المحفوظة مع كلمة السر الجديدة الحقيقية
     await update(ref(database, `teacherAccounts/${uid}`), {
-      newPassword: newPassword,
+      newPassword: null,
+      storedPassword: newPassword,
       passwordLastReset: new Date().toISOString(),
       passwordResetBy: 'admin'
     });
-    
+
     await update(ref(database, `users/${uid}`), {
       passwordLastReset: new Date().toISOString()
     });
-    
-    console.log('✅ تم تحديث كلمة المرور');
+
+    console.log('✅ تم تحديث كلمة المرور في Firebase Auth');
   } catch (error: any) {
     console.error("❌ خطأ تحديث كلمة المرور:", error);
-    throw new Error('حدث خطأ أثناء تحديث كلمة المرور');
+    throw new Error(error?.message || 'حدث خطأ أثناء تحديث كلمة المرور');
   }
 };
 

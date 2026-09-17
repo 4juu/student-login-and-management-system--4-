@@ -32,6 +32,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
   const [showMigrationModal, setShowMigrationModal] = useState(false);
   const [selectedTeacher, setSelectedTeacher] = useState<User | null>(null);
   const [newPassword, setNewPassword] = useState('');
+  const [currentTeacherPassword, setCurrentTeacherPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -278,6 +279,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
   const handleOpenPasswordModal = (teacher: User) => {
     setSelectedTeacher(teacher);
     setNewPassword('');
+    setCurrentTeacherPassword('');
     setShowPasswordModal(true);
     setError('');
   };
@@ -290,10 +292,11 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
     }
     setLoading(true);
     try {
-      await updateTeacherPassword(selectedTeacher.uid, newPassword);
+      await updateTeacherPassword(selectedTeacher.uid, newPassword, currentTeacherPassword || undefined);
       setSuccess(`تم تغيير كلمة مرور ${selectedTeacher.displayName}\n\nالكلمة الجديدة: ${newPassword}`);
       setShowPasswordModal(false);
       setNewPassword('');
+      setCurrentTeacherPassword('');
       setSelectedTeacher(null);
       setTimeout(() => setSuccess(''), 8000);
     } catch (err: any) {
@@ -1022,10 +1025,15 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
               <label className="block text-sm font-medium text-slate-300 mb-2">كلمة المرور الجديدة</label>
               <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full px-4 py-2 border border-slate-600 bg-slate-800 text-white rounded-md focus:ring-2 focus:ring-blue-500" placeholder="6 أحرف على الأقل" dir="ltr" autoFocus />
             </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-slate-300 mb-2">كلمة السر الحالية للتدريسي (اختياري)</label>
+              <input type="password" value={currentTeacherPassword} onChange={(e) => setCurrentTeacherPassword(e.target.value)} className="w-full px-4 py-2 border border-slate-600 bg-slate-800 text-white rounded-md focus:ring-2 focus:ring-blue-500" placeholder="اتركها فارغة إن لم تكن معروفة" dir="ltr" />
+              <p className="text-xs text-slate-400 mt-1">تُطلب فقط إذا تغيّرت كلمة السر من Firebase ولم يدخل التدريسي بعد.</p>
+            </div>
             {error && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/40 text-red-300 rounded text-sm">{error}</div>}
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-3 mb-4 text-sm text-yellow-300 flex items-start gap-2"><TriangleAlert className="w-4 h-4 shrink-0 mt-0.5" /> تأكد من حفظ كلمة المرور وإبلاغها للتدريسي</div>
             <div className="flex gap-2 justify-end">
-              <button onClick={() => { setShowPasswordModal(false); setNewPassword(''); setError(''); }} disabled={loading} className="bg-white/10 hover:bg-white/20 text-white font-medium py-2 px-4 rounded">إلغاء</button>
+              <button onClick={() => { setShowPasswordModal(false); setNewPassword(''); setCurrentTeacherPassword(''); setError(''); }} disabled={loading} className="bg-white/10 hover:bg-white/20 text-white font-medium py-2 px-4 rounded">إلغاء</button>
               <button onClick={handleChangePassword} disabled={loading} className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-4 rounded">{loading ? 'جارٍ التغيير...' : 'تغيير'}</button>
             </div>
           </div>
