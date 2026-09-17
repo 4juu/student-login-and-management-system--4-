@@ -52,6 +52,8 @@ const ZOOM_STEP = 0.25;
 const MAX_FACES_PER_FRAME = 10;
 const REEMBED_MIN_INTERVAL = 350;
 const REEMBED_MOVE_THRESHOLD = 0.08;
+// حارس الجودة المرن: يرفض فقط الفريمات الضبابية/المظلمة جداً دون المس بالمسح الطبيعي
+const MIN_FRAME_QUALITY = 0.40;
 // مدة كبت منطقة وجه مسجَّل حضوره حتى لا يعاد اكتشافه/رسمه فور انتهائه
 const SUPPRESS_ZONE_TTL = 6_000;
 // نسبة تداخل جديدة ليُعتبَر الوجه ضمن منطقة مكبوتة (يتم تجاهله)
@@ -417,7 +419,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               const vbx = res.box.x / scale, vby = res.box.y / scale;
               const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
 
-              if (!match || match.confidence < MIN_RECOG_CONFIDENCE) {
+              if (!match || match.confidence < MIN_RECOG_CONFIDENCE || res.quality.composite < MIN_FRAME_QUALITY) {
                 anyUnknown = true;
                 const smallFace = res.box.width < MIN_FACE_PX * 1.7;
                 liveBoxes.push({ box: boxInVideo, label: smallFace ? 'اقترب قليلاً' : 'غير معروف', color: '#fbbf24' });
