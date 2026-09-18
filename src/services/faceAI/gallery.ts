@@ -2,7 +2,7 @@
 // فهرس المعرض المُعرَّف مسبقاً — يُبنى مرة واحدة عند تغيّر الطلاب
 // يُغني عن parseAllSamples كل فريم ويوسّع نطاق المطابقة ضد كل العينات
 // ─────────────────────────────────────────────────────────────
-import { parseAllSamples, descriptorDistance, MIN_MARGIN } from './descriptors';
+import { descriptorDistance, MIN_MARGIN, isGalleryDescriptor, normalizeClusters, parseOneSample } from './descriptors';
 
 interface GalleryItem {
   id: string;
@@ -17,14 +17,46 @@ export function buildGallery<T extends { id: string; faceDescriptor?: unknown }>
 ): GalleryItem[] {
   const gallery: GalleryItem[] = [];
   for (const item of items) {
-    const samples = parseAllSamples(item.faceDescriptor);
-    if (samples.length === 0) continue;
+    const fd = item.faceDescriptor;
+    if (!isGalleryDescriptor(fd)) continue;
 
-    // centroid: متوسط L2-normalized لكل العينات
-    const dim = samples[0].length;
+    // ── #3: Weighted centroid — weight clusters by quality ──
+    const enrollmentSamples: Float32Array[] = [];
+    const clusterSamples: Array<{ vec: Float32Array; weight: number }> = [];
+
+    for (const s of fd.enrollment) {
+      const p = parseOneSample(s);
+      if (p) enrollmentSamples.push(p);
+    }
+
+    for (const c of normalizeClusters(fd.clusters)) {
+      const p = parseOneSample(c.vector);
+      if (p) clusterSamples.push({ vec: p, weight: Math.max(0.5, c.quality) });
+    }
+
+    const allSamples = [
+      ...enrollmentSamples,
+      ...clusterSamples.map(c => c.vec),
+    ];
+    if (allSamples.length === 0) continue;
+
+    // Weighted centroid: enrollment = weight 1.0, clusters = weight by quality
+    const dim = allSamples[0].length;
     const avg = new Float32Array(dim);
-    for (const s of samples) for (let i = 0; i < dim; i++) avg[i] += s[i];
-    for (let i = 0; i < dim; i++) avg[i] /= samples.length;
+    let totalWeight = 0;
+
+    for (const s of enrollmentSamples) {
+      for (let i = 0; i < dim; i++) avg[i] += s[i];
+      totalWeight += 1;
+    }
+    for (const c of clusterSamples) {
+      for (let i = 0; i < dim; i++) avg[i] += c.vec[i] * c.weight;
+      totalWeight += c.weight;
+    }
+
+    if (totalWeight > 0) {
+      for (let i = 0; i < dim; i++) avg[i] /= totalWeight;
+    }
     let norm = 0;
     for (let i = 0; i < dim; i++) norm += avg[i] * avg[i];
     norm = Math.sqrt(norm) || 1;
@@ -33,16 +65,16 @@ export function buildGallery<T extends { id: string; faceDescriptor?: unknown }>
     // primary: العينة الأقرب للـ centroid (أعلى جودة تمثيلاً)
     let bestDist = Infinity;
     let bestIdx = 0;
-    for (let i = 0; i < samples.length; i++) {
-      const d = descriptorDistance(avg, samples[i]);
+    for (let i = 0; i < allSamples.length; i++) {
+      const d = descriptorDistance(avg, allSamples[i]);
       if (d < bestDist) { bestDist = d; bestIdx = i; }
     }
 
     gallery.push({
       id: item.id,
-      allSamples: samples,
+      allSamples,
       centroid: norm > 0 ? avg : null,
-      primary: samples[bestIdx],
+      primary: allSamples[bestIdx],
     });
   }
   return gallery;

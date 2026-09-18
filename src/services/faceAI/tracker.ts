@@ -4,7 +4,10 @@
 // لكل وجه على حدة حتى لو كان في عدة وجوه بنفس اللحظة
 // ─────────────────────────────────────────────────────────────
 
-export interface TrackBox { x: number; y: number; width: number; height: number; }
+export interface TrackBox {
+  x: number; y: number; width: number; height: number;
+  keypoints?: { x: number; y: number }[];
+}
 
 interface Track {
   id: number;
@@ -17,6 +20,10 @@ interface Track {
   cachedMatchId: string | null;
   cachedConfidence: number;
   confirmCount: number;
+  // ── #6: Velocity prediction ──
+  velocityX: number;
+  velocityY: number;
+  lastBoxTime: number;
 }
 
 function iou(a: TrackBox, b: TrackBox): number {
@@ -53,6 +60,24 @@ export class FaceTracker {
     const matched = new Set<number>();
     const results: Array<{ trackId: number; box: TrackBox; isNew: boolean }> = [];
 
+    // ── #6: Predict positions for missed tracks ──
+    const now = performance.now();
+    for (const track of this.tracks) {
+      if (track.missedFrames > 0 && track.lastBoxTime > 0) {
+        const dt = (now - track.lastBoxTime) / 1000;
+        const predicted: TrackBox = {
+          x: track.box.x + track.velocityX * dt,
+          y: track.box.y + track.velocityY * dt,
+          width: track.box.width,
+          height: track.box.height,
+        };
+        // Use predicted box for IOU matching when face is lost
+        if (track.missedFrames <= 3) {
+          track.box = { ...predicted, keypoints: track.box.keypoints };
+        }
+      }
+    }
+
     for (const track of this.tracks) {
       let bestIdx = -1, bestScore = this.IOU_THRESHOLD;
       for (let i = 0; i < detections.length; i++) {
@@ -62,8 +87,16 @@ export class FaceTracker {
       }
       if (bestIdx >= 0) {
         matched.add(bestIdx);
+        // ── #6: Update velocity ──
+        const dt = track.lastBoxTime > 0 ? Math.max(0.016, (now - track.lastBoxTime) / 1000) : 0.05;
+        const dx = detections[bestIdx].x - track.box.x;
+        const dy = detections[bestIdx].y - track.box.y;
+        track.velocityX = dx / dt * 0.3 + track.velocityX * 0.7; // exponential smoothing
+        track.velocityY = dy / dt * 0.3 + track.velocityY * 0.7;
+
         track.box = detections[bestIdx];
         track.missedFrames = 0;
+        track.lastBoxTime = now;
         results.push({ trackId: track.id, box: track.box, isNew: false });
       } else {
         track.missedFrames++;
@@ -85,6 +118,9 @@ export class FaceTracker {
         cachedMatchId: null,
         cachedConfidence: 0,
         confirmCount: 0,
+        velocityX: 0,
+        velocityY: 0,
+        lastBoxTime: now,
       };
       this.tracks.push(track);
       results.push({ trackId: track.id, box: track.box, isNew: true });

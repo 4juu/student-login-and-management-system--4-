@@ -25,7 +25,7 @@ declare module 'onnxruntime-web/wasm' {
     run(feeds: Record<string, any>): Promise<Record<string, { data: Float32Array }>>;
   }
   export const InferenceSession: {
-    create(model: string, opts?: any): Promise<InferenceSession>;
+    create(model: string | ArrayBuffer, opts?: any): Promise<InferenceSession>;
   };
 }
 

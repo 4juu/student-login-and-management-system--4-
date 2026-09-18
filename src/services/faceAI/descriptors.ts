@@ -85,7 +85,7 @@ export interface FaceGalleryDescriptor {
 // 2) parseOneSample
 // ══════════════════════════════════════════════════════════════
 
-function parseOneSample(arr: unknown): Float32Array | null {
+export function parseOneSample(arr: unknown): Float32Array | null {
   if (!Array.isArray(arr) || arr.length !== DESC_DIM) return null;
   const f = new Float32Array(DESC_DIM);
   let norm = 0;
@@ -119,7 +119,7 @@ export function isGalleryDescriptor(fd: unknown): fd is FaceGalleryDescriptor {
 }
 
 /** Firebase يحوّل المصفوفات الفارغة [] إلى كائنات {} — نعوّض تلقائياً */
-function normalizeClusters(clusters: unknown): PoseCluster[] {
+export function normalizeClusters(clusters: unknown): PoseCluster[] {
   if (Array.isArray(clusters)) return clusters;
   return [];
 }

@@ -50,7 +50,7 @@ const MIN_FACE_PX = 22;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
 const MAX_FACES_PER_FRAME = 10;
-const REEMBED_MIN_INTERVAL = 350;
+const REEMBED_MIN_INTERVAL = 150;
 const REEMBED_MOVE_THRESHOLD = 0.08;
 // حارس الجودة المرن: يرفض فقط الفريمات الضبابية/المظلمة جداً دون المس بالمسح الطبيعي
 const MIN_FRAME_QUALITY = 0.40;
@@ -74,6 +74,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const loopTimerRef = useRef<number>(0);
+  const rafRef = useRef<number>(0);
   const busyRef = useRef(false);
   const runningRef = useRef(false);
   const mountedRef = useRef(true);
@@ -96,6 +97,9 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   const roster = useMemo(() => students.filter(s => hasValidDescriptor(s.faceDescriptor)), [students]);
   const rosterRef = useRef(roster);
   rosterRef.current = roster;
+  const rosterMap = useMemo(() => new Map(roster.map(s => [s.id, s])), [roster]);
+  const rosterMapRef = useRef(rosterMap);
+  rosterMapRef.current = rosterMap;
   const galleryIndex = useMemo(() => buildGallery(roster), [roster]);
   const galleryRef = useRef(galleryIndex);
   galleryRef.current = galleryIndex;
@@ -106,7 +110,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
 
   const cooldowns = useRef(new Map<string, number>());
   const hwZoomRange = useRef<{ min: number; max: number; step: number } | null>(null);
-  const loggedIdsRef = useRef(new Set<string>());
+  const loggedIdsRef = useRef(new Map<string, boolean>());
   const trackerRef = useRef(new FaceTracker());
   const updateRef = useRef(onUpdateStudent);
   updateRef.current = onUpdateStudent;
@@ -261,7 +265,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
       trackerRef.current.removeTrack(trackId);
       suppressZone(boxInVideo);
       if (!loggedIdsRef.current.has(student.id)) {
-        loggedIdsRef.current.add(student.id);
+        loggedIdsRef.current.set(student.id, true);
         pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'already', confidence: matchConfidence });
       }
       return;
@@ -281,7 +285,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     suppressZone(boxInVideo);
 
     if (!loggedIdsRef.current.has(student.id)) {
-      loggedIdsRef.current.add(student.id);
+      loggedIdsRef.current.set(student.id, true);
       pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'marked', confidence: matchConfidence });
     }
 
@@ -362,7 +366,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     if (!runningRef.current || !mountedRef.current) return;
     const video = videoRef.current;
     if (!video || video.readyState < 2 || busyRef.current) {
-      loopTimerRef.current = window.setTimeout(tick, 50);
+      rafRef.current = requestAnimationFrame(() => { loopTimerRef.current = window.setTimeout(tick, 50); });
       return;
     }
 
@@ -370,7 +374,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     const interval = performance.now() - lastSeenRef.current < 1500 ? 50 : 200;
     const nowTs = performance.now();
     if (nowTs - lastTickRef.current < interval) {
-      loopTimerRef.current = window.setTimeout(tick, 10);
+      rafRef.current = requestAnimationFrame(() => { loopTimerRef.current = window.setTimeout(tick, 10); });
       return;
     }
     lastTickRef.current = nowTs;
@@ -427,7 +431,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
           drawBoxes(liveBoxes);
         } else {
           // ✅ اربط الصناديق بمساراتها (IOU tracking)
-          const boxes: TrackBox[] = bigEnough.map(d => d.box);
+          const boxes: TrackBox[] = bigEnough.map(d => ({ ...d.box, keypoints: d.keypoints }));
           const tracked = trackerRef.current.update(boxes);
 
           // ✅ حدّد فقط الوجوه اللي فعلاً تستحق إعادة حساب embedding
@@ -451,6 +455,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                 y: t.box.y * scale,
                 width: t.box.width * scale,
                 height: t.box.height * scale,
+                keypoints: t.box.keypoints?.map(kp => ({ x: kp.x * scale, y: kp.y * scale })),
               })),
             );
             if (!runningRef.current || !mountedRef.current) return;
@@ -475,7 +480,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                 continue;
               }
 
-              const student = rosterRef.current.find(s => s.id === match.item.id);
+              const student = rosterMapRef.current.get(match.item.id);
               if (!student) continue;
 
               // طالب سُجّل حضوراً في هذه الجلسة — حتى لو تحرك مكانه، يختفي إطاره فوراً
@@ -534,7 +539,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
             const vbw = t.box.width, vbh = t.box.height;
             const vbx = t.box.x, vby = t.box.y;
             const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
-            const student = rosterRef.current.find(s => s.id === cache.cachedMatchId);
+            const student = rosterMapRef.current.get(cache.cachedMatchId ?? '');
 
             if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE) {
               if (doneStudentsRef.current.has(student.id)) {
@@ -545,7 +550,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
 
               if (presentRef.current.has(student.id)) {
                 if (!loggedIdsRef.current.has(student.id)) {
-                  loggedIdsRef.current.add(student.id);
+                  loggedIdsRef.current.set(student.id, true);
                   pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'already', confidence: cache.cachedConfidence });
                 }
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'مسجل ✓', color: '#34d399' });
@@ -585,7 +590,9 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
       } finally {
         busyRef.current = false;
         if (runningRef.current && mountedRef.current) {
-          loopTimerRef.current = window.setTimeout(tick, 16); // ~60fps
+          rafRef.current = requestAnimationFrame(() => {
+            loopTimerRef.current = window.setTimeout(tick, 16);
+          });
         }
       }
     };
@@ -594,6 +601,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     return () => {
       runningRef.current = false;
       if (loopTimerRef.current) clearTimeout(loopTimerRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engineReady, cameraReady, digitalZoom, celebrate, pushLog]);
