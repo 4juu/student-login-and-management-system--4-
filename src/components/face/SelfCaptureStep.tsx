@@ -29,17 +29,17 @@ const SAMPLES_NEEDED = 10;
 const MIN_REL_SIZE = 0.14;
 
 type CapturePhase = 'front' | 'right' | 'left' | 'up' | 'down' | 'front_close' | 'front_far' | 'smile' | 'natural' | 'light';
-const CAPTURE_PHASES: { key: CapturePhase; instruction: string; icon: string }[] = [
-  { key: 'front', instruction: 'وجّه وجهك للأمام', icon: '👤' },
-  { key: 'right', instruction: 'أمال وجهك لليمين قليلاً', icon: '👉' },
-  { key: 'left', instruction: 'أمال وجهك لليسار قليلاً', icon: '👈' },
-  { key: 'up', instruction: 'ارفع رأسك قليلاً للأعلى', icon: '👆' },
-  { key: 'down', instruction: 'أنزل رأسك قليلاً للأسفل', icon: '👇' },
-  { key: 'front_close', instruction: 'اقترب قليلاً من الكاميرا', icon: '🔍' },
-  { key: 'front_far', instruction: 'ابتعد قليلاً عن الكاميرا', icon: '📐' },
-  { key: 'smile', instruction: 'ابتسم قليلاً', icon: '😊' },
-  { key: 'natural', instruction: 'انظر بشكل طبيعي', icon: '😌' },
-  { key: 'light', instruction: 'وجّه وجهك ناحية الإضاءة', icon: '💡' },
+const CAPTURE_PHASES: { key: CapturePhase; instruction: string }[] = [
+  { key: 'front', instruction: 'أمام' },
+  { key: 'right', instruction: 'يمين' },
+  { key: 'left', instruction: 'يسار' },
+  { key: 'up', instruction: 'أعلى' },
+  { key: 'down', instruction: 'أسفل' },
+  { key: 'front_close', instruction: 'اقترب' },
+  { key: 'front_far', instruction: 'ابتعد' },
+  { key: 'smile', instruction: 'ابتسم' },
+  { key: 'natural', instruction: 'طبيعي' },
+  { key: 'light', instruction: 'إضاءة' },
 ];
 
 export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allStudents, onCaptured, onCancel }) => {
@@ -331,7 +331,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
 
           {/* توجيه الزاوية — أعلى الكاميرا وبخط كبير */}
           <div className="mb-4 rounded-2xl bg-gradient-to-l from-indigo-500/15 to-violet-500/15 border border-indigo-400/30 p-4 text-center">
-            <div className="text-4xl mb-1 leading-none">{CAPTURE_PHASES[samples]?.icon ?? '👤'}</div>
+            <div className="text-4xl mb-1 leading-none">{CAPTURE_PHASES[samples]?.instruction ?? 'أمام'}</div>
             <p className="text-xl font-extrabold text-white leading-snug">{CAPTURE_PHASES[samples]?.instruction ?? 'وجّه وجهك للأمام'}</p>
             <p className="text-[11px] text-indigo-200/80 mt-1.5">زر «التقاط» مفعل دائماً — التقط فور ظهور وجهك</p>
           </div>
@@ -398,7 +398,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
                     active ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-indigo-400/40' :
                     'bg-white/5 text-slate-500'
                   }`}>
-                    <span>{done ? '✓' : p.icon}</span>
+                    <span>{done ? '✓' : (i + 1)}</span>
                     <span className="hidden sm:inline">{p.instruction}</span>
                   </div>
                 );
@@ -416,7 +416,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
                   : 'bg-white/10 text-slate-300 hover:bg-white/15 cursor-pointer border border-white/10'
               }`}
             >
-              📸 التقاط — {CAPTURE_PHASES[samples].instruction} ({samples + 1}/{SAMPLES_NEEDED})
+              التقاط — {CAPTURE_PHASES[samples].instruction} ({samples + 1}/{SAMPLES_NEEDED})
             </button>
           )}
 
