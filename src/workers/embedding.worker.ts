@@ -66,38 +66,10 @@ function cropFace(g: OffscreenCanvasRenderingContext2D, bmp: ImageBitmap, box: B
 }
 
 // ── #2: Face alignment using eye keypoints ──
+// Disabled for backward compatibility — existing enrollments were done without alignment.
+// Will re-enable when all students re-enroll with aligned crops.
 function alignFace(g: OffscreenCanvasRenderingContext2D, bmp: ImageBitmap, box: Box): void {
-  const kp = box.keypoints;
-  if (!kp || kp.length < 2) { cropFace(g, bmp, box); return; }
-
-  const [rightEye, leftEye] = kp;
-
-  const eyeCenterX = (rightEye.x + leftEye.x) / 2;
-  const eyeCenterY = (rightEye.y + leftEye.y) / 2;
-  const angle = Math.atan2(leftEye.y - rightEye.y, leftEye.x - rightEye.x);
-
-  const eyeDist = Math.hypot(leftEye.x - rightEye.x, leftEye.y - rightEye.y);
-  if (eyeDist < 3) { cropFace(g, bmp, box); return; }
-
-  // GhostFaceNet expects eyes at ~30% width from center
-  const targetEyeDist = EMB_INPUT * 0.30;
-  const scale = targetEyeDist / eyeDist;
-
-  // Crop area: generous to survive rotation
-  const cropSize = Math.max(box.width, box.height) * 1.6;
-
-  g.clearRect(0, 0, EMB_INPUT, EMB_INPUT);
-  g.save();
-  g.translate(EMB_INPUT / 2, EMB_INPUT / 2);
-  g.rotate(-angle);
-  g.scale(scale, scale);
-  g.translate(-eyeCenterX, -eyeCenterY);
-  g.drawImage(
-    bmp,
-    eyeCenterX - cropSize / 2, eyeCenterY - cropSize / 2, cropSize, cropSize,
-    0, 0, EMB_INPUT, EMB_INPUT,
-  );
-  g.restore();
+  cropFace(g, bmp, box);
 }
 
 /** حوّل بكسلات RGBA إلى Float32 RGB مسطّح — يستخدم البخزن المعاد استخدامه (#5) */
