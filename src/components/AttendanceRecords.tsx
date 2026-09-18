@@ -13,6 +13,7 @@ interface AttendanceRecordsProps {
   onClearRecords: () => void;
   onUpdateRecord?: (recordId: string, updates: Partial<AttendanceRecord>) => void;
   onDeleteRecord?: (recordId: string) => void;
+  teacherBio?: string;
 }
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
@@ -26,6 +27,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
   onClearRecords,
   onUpdateRecord,
   onDeleteRecord,
+  teacherBio = '',
 }) => {
   // 🆕 السنة الأكاديمية الحالية (للعرض)
   const currentAcademicYear = useMemo(() => getCurrentAcademicYear(), []);
@@ -485,13 +487,36 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
     XLSX.utils.book_append_sheet(wb, ws1, 'سجل أبجدي كلي');
     XLSX.utils.book_append_sheet(wb, ws2, 'سجل جميع الكروبات');
 
-    // 🆕 اسم الملف يحتوي على السنة الأكاديمية
-    let fileName = `سجل_الحضور_${currentAcademicYear}_`;
-    if (exportType === 'single') {
-      fileName += singleDate;
-    } else {
-      fileName += `من_${startDate}_الى_${endDate}`;
+    // 🆕 اسم الملف = وصف حساب التدريسي (bio) + التاريخ
+    const sanitizeFilePart = (value: string): string =>
+      (value || '')
+        .replace(/[\\/:*?"<>|\r\n\t]+/g, '_')
+        .replace(/\s+/g, ' ')
+        .replace(/_+/g, '_')
+        .replace(/^[_\s]+|[_\s]+$/g, '');
+
+    const formatDatePart = (isoDate: string, withYear: boolean): string => {
+      const [year, month, day] = isoDate.split('-');
+      if (!year || !month || !day) return isoDate;
+      return withYear ? `${day}-${month}-${year}` : `${day}-${month}`;
+    };
+
+    const distinctDates = [...new Set(targetSessions.map(s => normalizeDate(s.date)))]
+      .filter(Boolean)
+      .sort();
+
+    let datePart = '';
+    if (distinctDates.length === 1) {
+      datePart = formatDatePart(distinctDates[0], true);
+    } else if (distinctDates.length > 1) {
+      const first = distinctDates[0];
+      const last = distinctDates[distinctDates.length - 1];
+      const sameYear = first.slice(0, 4) === last.slice(0, 4);
+      datePart = `من ${formatDatePart(first, !sameYear)} إلى ${formatDatePart(last, !sameYear)}`;
     }
+
+    const baseName = sanitizeFilePart(teacherBio) || 'سجل_الحضور';
+    const fileName = datePart ? `${baseName}_${datePart}` : baseName;
 
     XLSX.writeFile(wb, `${fileName}.xlsx`);
     return true;

@@ -1332,6 +1332,7 @@ function App() {
                   records={attendanceRecords} sessions={sessions} students={students}
                   activeSessionId={activeSessionId} onClearRecords={handleClearRecords}
                   onUpdateRecord={handleUpdateRecord} onDeleteRecord={handleDeleteRecord}
+                  teacherBio={currentUser?.bio || currentUser?.displayName || ''}
                 />
               )}
             </div>
