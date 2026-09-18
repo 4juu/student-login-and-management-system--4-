@@ -50,7 +50,7 @@ const MIN_FACE_PX = 22;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
 const MAX_FACES_PER_FRAME = 10;
-const REEMBED_MIN_INTERVAL = 350;
+const REEMBED_MIN_INTERVAL = 150;
 const REEMBED_MOVE_THRESHOLD = 0.08;
 // حارس الجودة المرن: يرفض فقط الفريمات الضبابية/المظلمة جداً دون المس بالمسح الطبيعي
 const MIN_FRAME_QUALITY = 0.40;
@@ -74,7 +74,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const loopTimerRef = useRef<number>(0);
-  const busyRef = useRef(false);
+  const embedBusyRef = useRef(false);
   const runningRef = useRef(false);
   const mountedRef = useRef(true);
   const lastTickRef = useRef(0);
@@ -361,20 +361,19 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   const tick = async () => {
     if (!runningRef.current || !mountedRef.current) return;
     const video = videoRef.current;
-    if (!video || video.readyState < 2 || busyRef.current) {
+    if (!video || video.readyState < 2) {
       loopTimerRef.current = window.setTimeout(tick, 50);
       return;
     }
 
-    // ⚡ أسرع: كشف كل 50ms عند وجود وجه، 200ms بدون وجه
-    const interval = performance.now() - lastSeenRef.current < 1500 ? 50 : 200;
+    // ⚡ أسرع: كشف كل 33ms عند وجود وجه، 200ms بدون وجه
+    const interval = performance.now() - lastSeenRef.current < 1500 ? 33 : 200;
     const nowTs = performance.now();
     if (nowTs - lastTickRef.current < interval) {
       loopTimerRef.current = window.setTimeout(tick, 10);
       return;
     }
     lastTickRef.current = nowTs;
-    busyRef.current = true;
     // تنظيف مناطق الكبت المنتهية في كل دورة
     pruneSuppressZones();
 
@@ -438,86 +437,72 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
           let anyUnknown = false;
           let markedAny = false;
 
-          // حساب الوجوه اللي تحتاج حساب embedding
-          if (needEmbed.length > 0) {
+          // ⚡ التوازي: تشغيل embed في الخلفية بدون حجب الكشف
+          if (needEmbed.length > 0 && !embedBusyRef.current) {
+            embedBusyRef.current = true;
             const currentMaxWidth = faceEmbedder.recommendedMaxWidth;
-            const bmp = await grabVideoFrame(video, currentMaxWidth);
-            if (!bmp) { drawBoxes(liveBoxes); return; }
-            const scale = bmp.width / video.videoWidth;
-            const results = await faceEmbedder.embedBatch(
-              bmp,
-              needEmbed.map(t => ({
+            grabVideoFrame(video, currentMaxWidth).then(bmp => {
+              if (!bmp || !runningRef.current || !mountedRef.current) { embedBusyRef.current = false; return; }
+              const scale = bmp.width / video.videoWidth;
+              const embedBoxes = needEmbed.map(t => ({
                 x: t.box.x * scale,
                 y: t.box.y * scale,
                 width: t.box.width * scale,
                 height: t.box.height * scale,
-              })),
-            );
-            if (!runningRef.current || !mountedRef.current) return;
+              }));
+              const frameBigEnough = [...bigEnough];
+              const frameNowTs = nowTs;
+              return faceEmbedder.embedBatch(bmp, embedBoxes).then(results => {
+                if (!runningRef.current || !mountedRef.current) return;
+                for (let i = 0; i < results.length; i++) {
+                  const res = results[i];
+                  const trackId = needEmbed[i].trackId;
+                  const raw = new Float32Array(res.descriptor);
+                  const smoothed = trackerRef.current.addEmbedding(trackId, raw, frameNowTs);
 
-            for (let i = 0; i < results.length; i++) {
-              const res = results[i];
-              const trackId = needEmbed[i].trackId;
-              const raw = new Float32Array(res.descriptor);
-              const smoothed = trackerRef.current.addEmbedding(trackId, raw, nowTs);
+                  const match = findBestMatchIndexed(smoothed, galleryRef.current, MATCH_LOOSE, res.quality.composite);
+                  trackerRef.current.setCache(trackId, match?.item.id ?? null, match?.confidence ?? 0);
 
-              const match = findBestMatchIndexed(smoothed, galleryRef.current, MATCH_LOOSE, res.quality.composite);
-              trackerRef.current.setCache(trackId, match?.item.id ?? null, match?.confidence ?? 0);
+                  const vbw = res.box.width / scale, vbh = res.box.height / scale;
+                  const vbx = res.box.x / scale, vby = res.box.y / scale;
+                  const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
 
-              const vbw = res.box.width / scale, vbh = res.box.height / scale;
-              const vbx = res.box.x / scale, vby = res.box.y / scale;
-              const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
+                  if (!match || match.confidence < MIN_RECOG_CONFIDENCE || res.quality.composite < MIN_FRAME_QUALITY) continue;
 
-              if (!match || match.confidence < MIN_RECOG_CONFIDENCE || res.quality.composite < MIN_FRAME_QUALITY) {
-                anyUnknown = true;
-                const smallFace = res.box.width < MIN_FACE_PX * 1.7;
-                liveBoxes.push({ box: boxInVideo, label: smallFace ? 'اقترب قليلاً' : 'غير معروف', color: '#fbbf24' });
-                continue;
-              }
+                  const student = rosterRef.current.find(s => s.id === match.item.id);
+                  if (!student) continue;
+                  if (doneStudentsRef.current.has(student.id)) {
+                    trackerRef.current.removeTrack(trackId);
+                    suppressZone(boxInVideo);
+                    continue;
+                  }
 
-              const student = rosterRef.current.find(s => s.id === match.item.id);
-              if (!student) continue;
+                  const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id);
+                  if (confirmCount < CONFIRM_FRAMES) continue;
 
-              // طالب سُجّل حضوراً في هذه الجلسة — حتى لو تحرك مكانه، يختفي إطاره فوراً
-              if (doneStudentsRef.current.has(student.id)) {
-                trackerRef.current.removeTrack(trackId);
-                suppressZone(boxInVideo);
-                continue;
-              }
+                  finalizeTrack(student, match.confidence, boxInVideo, trackId);
 
-              const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id);
-
-              if (confirmCount < CONFIRM_FRAMES) {
-                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
-                continue;
-              }
-
-              // ✅ تأكيد كامل — نُسجّل الحضور عبر الدالة المشتركة
-              markedAny = true;
-              finalizeTrack(student, match.confidence, boxInVideo, trackId);
-
-              // ✅ Pose Grid: تحسين البصمة تدريجياً عبر شبكة الزوايا (فقط عند التضمين الجديد)
-              try {
-                const origDet = bigEnough.find(d =>
-                  Math.abs(d.box.x - needEmbed[i].box.x) < 1 &&
-                  Math.abs(d.box.y - needEmbed[i].box.y) < 1
-                );
-                const pose = estimatePose(origDet?.keypoints);
-
-                if (pose) {
-                  const bin = poseToBin(pose);
-                  if (!isGalleryDescriptor(student.faceDescriptor)) continue;
-
-                  const result = updateGallery(student.faceDescriptor, smoothed, res.quality.composite, bin);
-
-                  if (result.action === 'merged' || result.action === 'created') {
-                    updateRef.current(student.id, { faceDescriptor: result.gallery });
+                  try {
+                    const origDet = frameBigEnough.find(d =>
+                      Math.abs(d.box.x - needEmbed[i].box.x) < 1 &&
+                      Math.abs(d.box.y - needEmbed[i].box.y) < 1
+                    );
+                    const pose = estimatePose(origDet?.keypoints);
+                    if (pose) {
+                      const bin = poseToBin(pose);
+                      if (isGalleryDescriptor(student.faceDescriptor)) {
+                        const result = updateGallery(student.faceDescriptor, smoothed, res.quality.composite, bin);
+                        if (result.action === 'merged' || result.action === 'created') {
+                          updateRef.current(student.id, { faceDescriptor: result.gallery });
+                        }
+                      }
+                    }
+                  } catch (e) {
+                    console.warn('[face-scanner] فشل تحديث معرض الزوايا:', e);
                   }
                 }
-              } catch (e) {
-                console.warn('[face-scanner] فشل تحديث معرض الزوايا:', e);
-              }
-            }
+              });
+            }).catch(() => {}).finally(() => { embedBusyRef.current = false; });
           }
 
           // ✅ الوجوه اللي ما احتاجت إعادة حساب — استخدم النتيجة المخزّنة بالـ cache
@@ -583,7 +568,6 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
       } catch (e) {
         console.warn('[face-scanner] خطأ في دورة المسح:', e);
       } finally {
-        busyRef.current = false;
         if (runningRef.current && mountedRef.current) {
           loopTimerRef.current = window.setTimeout(tick, 16); // ~60fps
         }

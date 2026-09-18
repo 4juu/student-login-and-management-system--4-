@@ -109,7 +109,7 @@ async function init() {
 
   post({ type: 'progress', stage: 'model', percent: 20, detail: 'تحميل موديل البصمة...' });
   session = await ort.InferenceSession.create(MODEL_URL, {
-    executionProviders: ['wasm'],
+    executionProviders: ['webgl', 'wasm'],
     graphOptimizationLevel: 'all',
   });
   inputName = session.inputNames[0];
