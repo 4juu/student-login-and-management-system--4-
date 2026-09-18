@@ -270,3 +270,55 @@ export const validateLink = (link: RegistrationLink | null): {
   if (link.expiresAt < Date.now()) return { valid: false, reason: 'انتهت صلاحية الرابط' };
   return { valid: true };
 };
+
+// ============================================================
+// 🔍 روابط اختبار البصمة
+// ============================================================
+
+const TEST_LINKS_PATH = 'testLinks';
+
+export interface TestLinkData {
+  token: string;
+  adminUid: string;
+  stageId: string;
+  createdAt: string;
+  expiresAt: number;
+}
+
+/** إنشاء رابط اختبار بصمة لمرحلة واحدة */
+export const createTestLink = async (
+  adminUid: string,
+  stageId: string,
+  expiryDays: number = 7,
+): Promise<{ token: string; url: string }> => {
+  const token = nanoid(20);
+  const now = Date.now();
+  const linkData: TestLinkData = {
+    token,
+    adminUid,
+    stageId,
+    createdAt: new Date().toISOString(),
+    expiresAt: now + expiryDays * 24 * 60 * 60 * 1000,
+  };
+  await set(ref(database, `${TEST_LINKS_PATH}/${token}`), linkData);
+  const url = `${window.location.origin}${window.location.pathname}?test=${token}`;
+  return { token, url };
+};
+
+/** قراءة بيانات رابط الاختبار */
+export const getTestLink = async (token: string): Promise<TestLinkData | null> => {
+  try {
+    const snap = await get(ref(database, `${TEST_LINKS_PATH}/${token}`));
+    if (!snap.exists()) return null;
+    return snap.val() as TestLinkData;
+  } catch {
+    return null;
+  }
+};
+
+/** التحقق من صلاحية رابط الاختبار */
+export const validateTestLink = (link: TestLinkData | null): { valid: boolean; reason?: string } => {
+  if (!link) return { valid: false, reason: 'الرابط غير موجود' };
+  if (link.expiresAt < Date.now()) return { valid: false, reason: 'انتهت صلاحية الرابط' };
+  return { valid: true };
+};

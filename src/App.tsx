@@ -50,6 +50,12 @@ const SendEnrollLink = lazy(() =>
 const SendAttendanceLink = lazy(() =>
   import('./components/Admin/SendAttendanceLink').then(m => ({ default: m.SendAttendanceLink }))
 );
+const SendTestLink = lazy(() =>
+  import('./components/Admin/SendTestLink').then(m => ({ default: m.SendTestLink }))
+);
+const FaceTestPage = lazy(() =>
+  import('./components/face/FaceTestPage').then(m => ({ default: m.FaceTestPage }))
+);
 
 // 🚀 طلبات التسجيل تُحمَّل عند فتحها فقط (تحتوي مكتبة الوجوه)
 const LazyPendingRegistrations = lazy(() =>
@@ -121,6 +127,7 @@ interface AllStagesData {
 function App() {
   // 🆕 كشف توكن التسجيل الذاتي من URL - بطرق متعددة لدعم كل المتصفحات
   const [registerToken, setRegisterToken] = useState<string | null>(null);
+  const [testToken, setTestToken] = useState<string | null>(null);
   const [tokenChecked, setTokenChecked] = useState(false);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -162,6 +169,7 @@ function App() {
 
   // 🆕 نظام التسجيل الذاتي - حالات الأدمن
   const [showSendLink, setShowSendLink] = useState(false);
+  const [showTestLink, setShowTestLink] = useState(false);
   const [showAttendanceLink, setShowAttendanceLink] = useState(false);
   const [showPendingRegistrations, setShowPendingRegistrations] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -250,6 +258,19 @@ function App() {
             setRegisterToken(token);
           }
         }
+
+        // كشف توكن اختبار البصمة
+        let testTkn: string | null = null;
+        testTkn = params.get('test');
+        if (!testTkn && window.location.hash) {
+          const hashStr2 = window.location.hash.replace(/^#\/?/, '');
+          testTkn = new URLSearchParams(hashStr2).get('test');
+        }
+        if (!testTkn) {
+          const match2 = window.location.href.match(/[?&#]test=([^&#]+)/);
+          if (match2?.[1]) testTkn = decodeURIComponent(match2[1]);
+        }
+        if (testTkn) setTestToken(testTkn);
 
         setTokenChecked(true);
       } catch (e) {
@@ -986,6 +1007,30 @@ function App() {
     );
   }
 
+  if (testToken) {
+    return (
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center bg-[#0B1220]">
+          <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }>
+        <FaceTestPage
+          testToken={testToken}
+          onExit={() => { setTestToken(null); window.history.replaceState({}, '', window.location.pathname); }}
+          onReEnroll={(stageId, adminUid) => {
+            setTestToken(null);
+            // نسوي رابط تسجيل جديد لهذه المرحلة
+            import('./services/tokenService').then(({ createSingleRegistrationLink }) => {
+              createSingleRegistrationLink(adminUid, stageId, '', 7).then(({ url }) => {
+                window.location.href = url;
+              });
+            });
+          }}
+        />
+      </Suspense>
+    );
+  }
+
   if (loading || !tokenChecked) {
     return (
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4">
@@ -1126,6 +1171,12 @@ function App() {
                       className="btn-base btn-primary shrink-0"
                     >
                         إرسال رابط تسجيل بصمة
+                    </button>
+                    <button
+                      onClick={() => setShowTestLink(true)}
+                      className="btn-base btn-secondary shrink-0"
+                    >
+                        اختبار بصمة
                     </button>
                   </>
                 )}
@@ -1375,6 +1426,17 @@ function App() {
             stages={stages}
             loadStudents={async (stageId: string) => loadStudentsForStage(getAdminUid(), stageId)}
             onClose={() => setShowSendLink(false)}
+          />
+        </Suspense>
+      )}
+
+      {showTestLink && currentUser && isMainAdmin && (
+        <Suspense fallback={null}>
+          <SendTestLink
+            adminUid={currentUser.uid}
+            colleges={colleges}
+            stages={stages}
+            onClose={() => setShowTestLink(false)}
           />
         </Suspense>
       )}

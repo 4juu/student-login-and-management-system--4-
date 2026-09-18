@@ -4,49 +4,57 @@ import './components/SelfRegister/selfRegister.css';
 const SelfEnrollPage = lazy(() =>
   import('./components/SelfRegister/SelfEnrollPage').then(m => ({ default: m.SelfEnrollPage }))
 );
+const FaceTestPage = lazy(() =>
+  import('./components/face/FaceTestPage').then(m => ({ default: m.FaceTestPage }))
+);
 
 /** صرف مدخل خفيف لصفحة الطالب — دون تحميل لوحة التحكم كاملة */
-function detectRegToken(): string | null {
+function detectToken(): { reg: string | null; test: string | null } {
   try {
-    let token: string | null = null;
+    let reg: string | null = null;
+    let test: string | null = null;
     const params = new URLSearchParams(window.location.search);
-    token = params.get('reg');
+    reg = params.get('reg');
+    test = params.get('test');
 
-    if (!token && window.location.hash) {
+    if (!reg && !test && window.location.hash) {
       const hashStr = window.location.hash.replace(/^#\/?/, '');
-      token = new URLSearchParams(hashStr).get('reg');
+      const hp = new URLSearchParams(hashStr);
+      reg = hp.get('reg');
+      test = hp.get('test');
     }
 
-    if (!token) {
-      const match = window.location.href.match(/[?&#]reg=([^&#]+)/);
-      if (match?.[1]) token = decodeURIComponent(match[1]);
+    if (!reg && !test) {
+      const m1 = window.location.href.match(/[?&#]reg=([^&#]+)/);
+      if (m1?.[1]) reg = decodeURIComponent(m1[1]);
+      const m2 = window.location.href.match(/[?&#]test=([^&#]+)/);
+      if (m2?.[1]) test = decodeURIComponent(m2[1]);
     }
 
-    if (!token) token = sessionStorage.getItem('pendingRegToken');
-    if (token) sessionStorage.setItem('pendingRegToken', token);
-    return token;
+    if (!reg) reg = sessionStorage.getItem('pendingRegToken');
+    if (reg) sessionStorage.setItem('pendingRegToken', reg);
+    return { reg, test };
   } catch {
-    return sessionStorage.getItem('pendingRegToken');
+    return { reg: sessionStorage.getItem('pendingRegToken'), test: null };
   }
 }
 
 export default function StudentEntry() {
-  const [token, setToken] = useState<string | null>(null);
+  const [tokens, setTokens] = useState<{ reg: string | null; test: string | null }>({ reg: null, test: null });
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    setToken(detectRegToken());
+    setTokens(detectToken());
     setChecked(true);
   }, []);
 
   const handleExit = () => {
-    try {
-      sessionStorage.removeItem('pendingRegToken');
-    } catch {}
+    try { sessionStorage.removeItem('pendingRegToken'); } catch {}
     try {
       const url = new URL(window.location.href);
       url.searchParams.delete('reg');
-      window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+      url.searchParams.delete('test');
+      window.history.replaceState({}, '', `${url.pathname}`);
     } catch {}
   };
 
@@ -54,7 +62,8 @@ export default function StudentEntry() {
     return <div className="min-h-screen" style={{ background: '#0A1224' }} />;
   }
 
-  if (!token) {
+  // لا يوجد أي توكن
+  if (!tokens.reg && !tokens.test) {
     return (
       <div dir="rtl" className="sel-bg flex items-center justify-center p-6">
         <div className="w-full max-w-sm text-center">
@@ -74,15 +83,27 @@ export default function StudentEntry() {
     );
   }
 
-  return (
-    <Suspense
-      fallback={
+  // صفحة اختبار البصمة
+  if (tokens.test) {
+    return (
+      <Suspense fallback={
         <div className="flex min-h-screen items-center justify-center" style={{ background: '#0A1224' }}>
           <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-blue-500 border-t-transparent" />
         </div>
-      }
-    >
-      <SelfEnrollPage token={token} onExit={handleExit} />
+      }>
+        <FaceTestPage testToken={tokens.test} onExit={handleExit} onReEnroll={() => handleExit()} />
+      </Suspense>
+    );
+  }
+
+  // صفحة التسجيل الذاتي
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center" style={{ background: '#0A1224' }}>
+        <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-blue-500 border-t-transparent" />
+      </div>
+    }>
+      <SelfEnrollPage token={tokens.reg!} onExit={handleExit} />
     </Suspense>
   );
 }
