@@ -16,8 +16,7 @@ interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
 
-// ✅ onnxruntime-web/webgpu (الإصدار لا يصدّر تصريح أنواع للوحدة الفرعية)
-declare module 'onnxruntime-web/webgpu' {
+declare module 'onnxruntime-web/wasm' {
   export const env: any;
   export const Tensor: any;
   export interface InferenceSession {
