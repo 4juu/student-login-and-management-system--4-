@@ -80,7 +80,6 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   const mountedRef = useRef(true);
   const lastTickRef = useRef(0);
   const lastSeenRef = useRef(0);
-  const staleCountRef = useRef(0);
   const engineWasBrokenRef = useRef(false);
 
   const [cameraReady, setCameraReady] = useState(false);
@@ -391,7 +390,6 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
         // ═══ استعادة تلقائية: إذا المحرك تعطّل أثناء التشغيل ═══
         if (!faceDetectorService.ready) {
           engineWasBrokenRef.current = true;
-          staleCountRef.current = 0;
           retry();
           if (runningRef.current && mountedRef.current) {
             loopTimerRef.current = window.setTimeout(tick, 200);
@@ -401,21 +399,6 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
 
         if (detections.length > 0) {
           lastSeenRef.current = nowTs;
-          staleCountRef.current = 0;
-        } else {
-          staleCountRef.current++;
-        }
-
-        // ═══ استعادة تلقائية: كشف فارغ طويل despite الكاميرا جاهزة ═══
-        if (staleCountRef.current > 40 && cameraReady) {
-          console.warn('[face-scanner] كشف فارغ متواصل — إعادة تهيئة المحرك');
-          staleCountRef.current = 0;
-          engineWasBrokenRef.current = true;
-          retry();
-          if (runningRef.current && mountedRef.current) {
-            loopTimerRef.current = window.setTimeout(tick, 200);
-          }
-          return;
         }
 
         const targets = detections;
@@ -623,7 +606,6 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   // إعادة تعيين عدّاد الفراغ عند جاهزية المحرك بعد إعادة تهيئة
   useEffect(() => {
     if (engineReady) {
-      staleCountRef.current = 0;
       engineWasBrokenRef.current = false;
     }
   }, [engineReady]);
