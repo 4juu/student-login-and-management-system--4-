@@ -13,6 +13,18 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(new Date().toISOString()),
   },
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'credentialless',
+    },
+  },
+  preview: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'credentialless',
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),
@@ -32,7 +44,7 @@ export default defineConfig({
         manualChunks: {
           'react-vendor': ['react', 'react-dom'],
           'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/database'],
-          'face-engine': ['onnxruntime-web/wasm'],
+          'face-engine': ['onnxruntime-web/webgpu'],
           'xlsx': ['xlsx-js-style'],
           'icons': ['lucide-react'],
         },
