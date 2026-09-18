@@ -25,16 +25,21 @@ interface SelfCaptureStepProps {
   onCancel: () => void;
 }
 
-const SAMPLES_NEEDED = 5;
+const SAMPLES_NEEDED = 10;
 const MIN_REL_SIZE = 0.14;
 
-type CapturePhase = 'front' | 'right' | 'left' | 'up' | 'down';
+type CapturePhase = 'front' | 'right' | 'left' | 'up' | 'down' | 'front_close' | 'front_far' | 'smile' | 'natural' | 'light';
 const CAPTURE_PHASES: { key: CapturePhase; instruction: string; icon: string }[] = [
   { key: 'front', instruction: 'وجّه وجهك للأمام', icon: '👤' },
   { key: 'right', instruction: 'أمال وجهك لليمين قليلاً', icon: '👉' },
   { key: 'left', instruction: 'أمال وجهك لليسار قليلاً', icon: '👈' },
   { key: 'up', instruction: 'ارفع رأسك قليلاً للأعلى', icon: '👆' },
   { key: 'down', instruction: 'أنزل رأسك قليلاً للأسفل', icon: '👇' },
+  { key: 'front_close', instruction: 'اقترب قليلاً من الكاميرا', icon: '🔍' },
+  { key: 'front_far', instruction: 'ابتعد قليلاً عن الكاميرا', icon: '📐' },
+  { key: 'smile', instruction: 'ابتسم قليلاً', icon: '😊' },
+  { key: 'natural', instruction: 'انظر بشكل طبيعي', icon: '😌' },
+  { key: 'light', instruction: 'وجّه وجهك ناحية الإضاءة', icon: '💡' },
 ];
 
 export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allStudents, onCaptured, onCancel }) => {
@@ -228,22 +233,14 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
       try { navigator.vibrate?.(30); } catch {}
 
       // الانتقال للزاوية التالية
-      if (sampleCount === 1) {
-        setCapturePhase('right');
-        setFeedback('تم — الآن أمال لليمين');
-      } else if (sampleCount === 2) {
-        setCapturePhase('left');
-        setFeedback('تم — الآن أمال لليسار');
-      } else if (sampleCount === 3) {
-        setCapturePhase('up');
-        setFeedback('تم — الآن ارفع رأسك قليلاً');
-      } else if (sampleCount === 4) {
-        setCapturePhase('down');
-        setFeedback('تم — الآن أنزل رأسك قليلاً');
+      const nextPhase = CAPTURE_PHASES[sampleCount]?.key;
+      if (nextPhase) {
+        setCapturePhase(nextPhase);
+        setFeedback(`تم — الآن: ${CAPTURE_PHASES[sampleCount].instruction}`);
       }
 
       if (sampleCount >= SAMPLES_NEEDED) {
-        // دمج العينات الخمس ثم تطبيع L2
+        // دمج العينات ثم تطبيع L2
         const dim = samplesDataRef.current[0].length;
         const avg = new Float32Array(dim);
         for (const s of samplesDataRef.current) for (let i = 0; i < dim; i++) avg[i] += s[i];
@@ -329,7 +326,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
           {/* رأس */}
           <div className="text-center mb-4">
             <h2 className="text-xl font-bold text-white">تسجيل بصمة الوجه</h2>
-            <p className="text-xs text-white/50 mt-1">مرحباً <span className="font-bold text-indigo-300">{student.name}</span> — التقط من 5 زوايا</p>
+            <p className="text-xs text-white/50 mt-1">مرحباً <span className="font-bold text-indigo-300">{student.name}</span> — التقط من 10 زوايا</p>
           </div>
 
           {/* توجيه الزاوية — أعلى الكاميرا وبخط كبير */}
