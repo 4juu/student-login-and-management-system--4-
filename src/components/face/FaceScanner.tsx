@@ -19,7 +19,7 @@ import {
   MIN_RECOG_CONFIDENCE,
   CONFIRM_FRAMES,
 } from '../../services/faceAI/descriptors';
-import { buildGallery, findBestMatchIndexed } from '../../services/faceAI/gallery';
+import { buildGallery, findBestMatchIndexed, findNearMissCandidate } from '../../services/faceAI/gallery';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { estimatePose, poseToBin } from '../../services/faceAI/pose';
 
@@ -474,6 +474,37 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
 
               if (!match || match.confidence < MIN_RECOG_CONFIDENCE || res.quality.composite < MIN_FRAME_QUALITY) {
+                // #3: Near-miss learning — لو المسافة قريبة من الحد، نتعلم بدون دمج
+                if (match === null && res.quality.composite >= MIN_FRAME_QUALITY) {
+                  try {
+                    const nearMiss = findNearMissCandidate(smoothed, galleryRef.current);
+                    if (nearMiss) {
+                      const nmStudent = rosterMapRef.current.get(nearMiss.studentId);
+                      if (nmStudent && isGalleryDescriptor(nmStudent.faceDescriptor)) {
+                        const origDet = bigEnough.find(d =>
+                          Math.abs(d.box.x - needEmbed[i].box.x) < 1 &&
+                          Math.abs(d.box.y - needEmbed[i].box.y) < 1
+                        );
+                        const pose = estimatePose(origDet?.keypoints);
+                        if (pose) {
+                          const bin = poseToBin(pose);
+                          const result = updateGallery(nmStudent.faceDescriptor, smoothed, res.quality.composite, bin, true);
+                          if (result.action === 'created') {
+                            updateRef.current(nmStudent.id, { faceDescriptor: result.gallery });
+                            const updated = { ...nmStudent, faceDescriptor: result.gallery };
+                            const newGallery = buildGallery(
+                              rosterRef.current.map(s => s.id === nmStudent.id ? updated : s)
+                            );
+                            galleryRef.current = newGallery;
+                          }
+                        }
+                      }
+                    }
+                  } catch (e) {
+                    console.warn('[face-scanner] فشل near-miss learning:', e);
+                  }
+                }
+
                 anyUnknown = true;
                 const smallFace = res.box.width < MIN_FACE_PX * 1.7;
                 liveBoxes.push({ box: boxInVideo, label: smallFace ? 'اقترب قليلاً' : 'غير معروف', color: '#fbbf24' });
@@ -490,6 +521,37 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                 continue;
               }
 
+              // #1: التعلم من كل فريم فيه مطابقة قوية (حتى قبل التأكيد)
+              // شرط: ثقة >= 80% + جودة >= 0.50 — يضمن بصمة قوية بما يكفي للتعلم
+              if (match.confidence >= MIN_RECOG_CONFIDENCE + 5 && res.quality.composite >= MIN_FRAME_QUALITY) {
+                try {
+                  const origDet = bigEnough.find(d =>
+                    Math.abs(d.box.x - needEmbed[i].box.x) < 1 &&
+                    Math.abs(d.box.y - needEmbed[i].box.y) < 1
+                  );
+                  const pose = estimatePose(origDet?.keypoints);
+
+                  if (pose) {
+                    const bin = poseToBin(pose);
+                    if (isGalleryDescriptor(student.faceDescriptor)) {
+                      const result = updateGallery(student.faceDescriptor, smoothed, res.quality.composite, bin);
+
+                      if (result.action === 'merged' || result.action === 'created') {
+                        // #2: حدث Firebase + الفهرس مباشرة (بدون انتظار React)
+                        updateRef.current(student.id, { faceDescriptor: result.gallery });
+                        const updated = { ...student, faceDescriptor: result.gallery };
+                        const newGallery = buildGallery(
+                          rosterRef.current.map(s => s.id === student.id ? updated : s)
+                        );
+                        galleryRef.current = newGallery;
+                      }
+                    }
+                  }
+                } catch (e) {
+                  console.warn('[face-scanner] فشل تحديث معرض الزوايا:', e);
+                }
+              }
+
               const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id);
 
               if (confirmCount < CONFIRM_FRAMES) {
@@ -500,28 +562,6 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               // ✅ تأكيد كامل — نُسجّل الحضور عبر الدالة المشتركة
               markedAny = true;
               finalizeTrack(student, match.confidence, boxInVideo, trackId);
-
-              // ✅ Pose Grid: تحسين البصمة تدريجياً عبر شبكة الزوايا (فقط عند التضمين الجديد)
-              try {
-                const origDet = bigEnough.find(d =>
-                  Math.abs(d.box.x - needEmbed[i].box.x) < 1 &&
-                  Math.abs(d.box.y - needEmbed[i].box.y) < 1
-                );
-                const pose = estimatePose(origDet?.keypoints);
-
-                if (pose) {
-                  const bin = poseToBin(pose);
-                  if (!isGalleryDescriptor(student.faceDescriptor)) continue;
-
-                  const result = updateGallery(student.faceDescriptor, smoothed, res.quality.composite, bin);
-
-                  if (result.action === 'merged' || result.action === 'created') {
-                    updateRef.current(student.id, { faceDescriptor: result.gallery });
-                  }
-                }
-              } catch (e) {
-                console.warn('[face-scanner] فشل تحديث معرض الزوايا:', e);
-              }
             }
           }
 

@@ -2,7 +2,7 @@
 // فهرس المعرض المُعرَّف مسبقاً — يُبنى مرة واحدة عند تغيّر الطلاب
 // يُغني عن parseAllSamples كل فريم ويوسّع نطاق المطابقة ضد كل العينات
 // ─────────────────────────────────────────────────────────────
-import { descriptorDistance, MIN_MARGIN, isGalleryDescriptor, normalizeClusters, parseOneSample } from './descriptors';
+import { descriptorDistance, MIN_MARGIN, MATCH_LOOSE, isGalleryDescriptor, normalizeClusters, parseOneSample, NEAR_MISS_THRESHOLD, NEAR_MISS_MIN_MARGIN } from './descriptors';
 
 interface GalleryItem {
   id: string;
@@ -136,4 +136,41 @@ export function findBestMatchIndexed(
     sampleCount: first.sampleCount,
     margin: Math.round(margin * 100) / 100,
   };
+}
+
+// #3: Near-miss — أقرب طالب بمسافة قريبة من الحد لكن فوقه (0.42-0.55)
+export interface NearMissResult {
+  studentId: string;
+  distance: number;
+  margin: number;
+}
+
+export function findNearMissCandidate(
+  embedding: Float32Array,
+  galleryIndex: GalleryItem[],
+): NearMissResult | null {
+  const perItem: { id: string; bestDist: number }[] = [];
+
+  for (const entry of galleryIndex) {
+    let bestDist = Infinity;
+    for (const sample of entry.allSamples) {
+      const d = descriptorDistance(embedding, sample);
+      if (d < bestDist) bestDist = d;
+    }
+    perItem.push({ id: entry.id, bestDist: bestDist });
+  }
+
+  if (perItem.length === 0) return null;
+
+  perItem.sort((a, b) => a.bestDist - b.bestDist);
+  const first = perItem[0];
+  const second = perItem[1];
+  const margin = second ? second.bestDist - first.bestDist : 1;
+
+  // المسافة بين الحد العلوي للمطابقة (0.42) والحد الأقصى للتعلم (0.55)
+  // والفارق عن ثاني أقرب طالب كبير بما يكفي
+  if (first.bestDist <= MATCH_LOOSE || first.bestDist > NEAR_MISS_THRESHOLD) return null;
+  if (margin < NEAR_MISS_MIN_MARGIN) return null;
+
+  return { studentId: first.id, distance: first.bestDist, margin };
 }

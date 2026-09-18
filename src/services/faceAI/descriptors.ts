@@ -61,9 +61,14 @@ export interface MatchCandidate {
 
 export const MAX_CLUSTERS = 18;
 export const MAX_MERGES_PER_CLUSTER = 12;
-export const MIN_CLUSTER_QUALITY = 0.60;
+// #4: خفض الحد الأدنى للجودة من 0.60 إلى 0.50 — يطابق حد التسجيل
+export const MIN_CLUSTER_QUALITY = 0.50;
 export const MAX_NEW_CLUSTER_DISTANCE = 0.40;
 export const MAX_CLUSTER_MERGE_DISTANCE = MATCH_STRICT;
+
+// #3: Near-miss learning — مسافة قريبة من الحد لكن فوقه
+export const NEAR_MISS_THRESHOLD = 0.55;
+export const NEAR_MISS_MIN_MARGIN = 0.10;
 
 export interface PoseCluster {
   bin: string;
@@ -336,6 +341,7 @@ export function updateGallery(
   newSample: Float32Array,
   quality: number,
   bin: string,
+  nearMiss = false,
 ): ClusterUpdateResult {
   if (quality < MIN_CLUSTER_QUALITY) {
     return { gallery: current, action: 'rejected' };
@@ -349,13 +355,14 @@ export function updateGallery(
     const d = descriptorDistance(newSample, ref);
     if (d < nearestDistance) nearestDistance = d;
   }
-  if (allRefs.length > 0 && nearestDistance > MAX_NEW_CLUSTER_DISTANCE) {
+  const maxDist = nearMiss ? NEAR_MISS_THRESHOLD : MAX_NEW_CLUSTER_DISTANCE;
+  if (allRefs.length > 0 && nearestDistance > maxDist) {
     return { gallery: current, action: 'rejected' };
   }
 
   const clusters = [...normalizeClusters(current.clusters)];
 
-  if (sameBinIdx >= 0) {
+  if (sameBinIdx >= 0 && !nearMiss) {
     const cluster = clusters[sameBinIdx];
     const existingVec = parseOneSample(cluster.vector);
     if (existingVec && cluster.mergeCount < MAX_MERGES_PER_CLUSTER) {
