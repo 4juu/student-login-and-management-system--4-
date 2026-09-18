@@ -24,6 +24,10 @@ interface Track {
   velocityX: number;
   velocityY: number;
   lastBoxTime: number;
+  // #1.4: Motion tracking — كشف الوجوه الساكنة (صور/جدران)
+  positionHistory: Array<{ cx: number; cy: number }>;
+  // #1.5: حماية من المطابقة المزدوجة — عدد مرات تغيّر المطابقة
+  matchChanges: number;
 }
 
 function iou(a: TrackBox, b: TrackBox): number {
@@ -97,6 +101,11 @@ export class FaceTracker {
         track.box = detections[bestIdx];
         track.missedFrames = 0;
         track.lastBoxTime = now;
+        // #1.4: سجل الموضع في السجل (آخر 8 فريمات)
+        const cx = track.box.x + track.box.width / 2;
+        const cy = track.box.y + track.box.height / 2;
+        track.positionHistory.push({ cx, cy });
+        if (track.positionHistory.length > 8) track.positionHistory.shift();
         results.push({ trackId: track.id, box: track.box, isNew: false });
       } else {
         track.missedFrames++;
@@ -121,6 +130,8 @@ export class FaceTracker {
         velocityX: 0,
         velocityY: 0,
         lastBoxTime: now,
+        positionHistory: [],
+        matchChanges: 0,
       };
       this.tracks.push(track);
       results.push({ trackId: track.id, box: track.box, isNew: true });
@@ -172,8 +183,23 @@ export class FaceTracker {
   bumpConfirm(trackId: number, matchId: string): number {
     const t = this.tracks.find(tr => tr.id === trackId);
     if (!t) return 0;
-    if (t.cachedMatchId === matchId) t.confirmCount++;
-    else { t.cachedMatchId = matchId; t.confirmCount = 1; }
+    if (t.cachedMatchId === matchId) {
+      // #1.4: لو الوجه ساكن تماماً → تأكيد أبطأ (احتمال صورة)
+      if (this.isStatic(trackId)) {
+        t.confirmCount = Math.max(0, t.confirmCount - 1);
+      } else {
+        t.confirmCount++;
+      }
+    } else {
+      // #1.5: لو المطابقة تغيّرت لأكثر من 3 مرات → مسار غير موثوق
+      t.matchChanges++;
+      if (t.matchChanges > 3) {
+        t.confirmCount = 0;
+        return 0;
+      }
+      t.cachedMatchId = matchId;
+      t.confirmCount = 1;
+    }
     return t.confirmCount;
   }
 
@@ -185,6 +211,25 @@ export class FaceTracker {
   /** هل ما زال المسار موجوداً؟ */
   hasTrack(trackId: number): boolean {
     return this.tracks.some(t => t.id === trackId);
+  }
+
+  // #1.4: هل الوجه ساكن تماماً (احتمال صورة/شاشة)؟
+  // يتحقق من تباين موضعمركز الوجه آخر 8 فريمات
+  isStatic(trackId: number): boolean {
+    const t = this.tracks.find(tr => tr.id === trackId);
+    if (!t || t.positionHistory.length < 5) return false;
+    const hist = t.positionHistory;
+    let sumCx = 0, sumCy = 0;
+    for (const p of hist) { sumCx += p.cx; sumCy += p.cy; }
+    const meanCx = sumCx / hist.length;
+    const meanCy = sumCy / hist.length;
+    let varCx = 0, varCy = 0;
+    for (const p of hist) {
+      varCx += (p.cx - meanCx) * (p.cx - meanCx);
+      varCy += (p.cy - meanCy) * (p.cy - meanCy);
+    }
+    const variance = (varCx + varCy) / hist.length;
+    return variance < 0.003;
   }
 
   /** أزل جميع المسارات وأعد العدّاد */

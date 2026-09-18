@@ -12,6 +12,7 @@ import {
   checkForTampering,
   hasValidDescriptor,
   l2Normalize,
+  bootstrapClusters,
   DESC_DIM,
   DESC_VERSION_GALLERY,
   type FaceGalleryDescriptor,
@@ -255,14 +256,15 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
           return;
         }
 
-        // حفظ البصمة بصيغة v5 مباشرة
+        // حفظ البصمة بصيغة v5 مباشرة — مع bootstrap clusters من التسجيل
         const quality = Math.round(((res.quality.composite + 0.8) / 2) * 100) / 100;
+        const clusters = bootstrapClusters(samplesDataRef.current, quality);
         const galleryDescriptor: FaceGalleryDescriptor = {
           version: DESC_VERSION_GALLERY,
           enrollment: samplesDataRef.current.map(s =>
             Array.from(l2Normalize(s)).map(v => Math.round(v * 1e5) / 1e5)
           ),
-          clusters: [],
+          clusters,
           samples: SAMPLES_NEEDED,
           quality,
         };

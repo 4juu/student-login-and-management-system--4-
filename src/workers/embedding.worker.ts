@@ -86,24 +86,34 @@ function computeQuality(
   box: { x: number; y: number; width: number; height: number },
   bmpW: number, bmpH: number,
 ) {
-  let sum = 0, n = 0;
+  // brightness + texture variance في نفس المرور
+  let sum = 0, sumSq = 0, n = 0;
   for (let j = 0; j < data.length; j += 64) {
-    sum += 0.299 * data[j] + 0.587 * data[j + 1] + 0.114 * data[j + 2];
+    const gray = 0.299 * data[j] + 0.587 * data[j + 1] + 0.114 * data[j + 2];
+    sum += gray;
+    sumSq += gray * gray;
     n++;
   }
   const brightness = sum / n / 255;
+  // texture: الانحراف المعياري — وجوه حقيقية تكسيتها عالية، صور/جدران مسطحة
+  const mean = sum / n;
+  const variance = sumSq / n - mean * mean;
+  const stdDev = Math.sqrt(Math.max(0, variance));
+  const textureScore = Math.min(1, stdDev / 30);
+
   const relSize = box.width / bmpW;
   const sizeScore = relSize < 0.07 ? relSize / 0.07 : relSize > 0.75 ? Math.max(0, 1 - (relSize - 0.75) / 0.25) : 1;
   const fcx = box.x + box.width / 2, fcy = box.y + box.height / 2;
   const off = Math.hypot(fcx - bmpW / 2, fcy - bmpH / 2) / (Math.min(bmpW, bmpH) / 2);
   const centerScore = Math.max(0, 1 - off * 0.8);
   const brightScore = brightness < 0.25 ? brightness / 0.25 : brightness > 0.92 ? Math.max(0, 1 - (brightness - 0.92) / 0.08) : 1;
-  const composite = Math.max(0, Math.min(1, sizeScore * 0.35 + centerScore * 0.3 + brightScore * 0.35));
+  const composite = Math.max(0, Math.min(1, sizeScore * 0.25 + centerScore * 0.25 + brightScore * 0.25 + textureScore * 0.25));
 
   return {
     brightness: Math.round(brightness * 100) / 100,
     sizeScore: Math.round(sizeScore * 100) / 100,
     centerScore: Math.round(centerScore * 100) / 100,
+    textureScore: Math.round(textureScore * 100) / 100,
     composite: Math.round(composite * 100) / 100,
   };
 }

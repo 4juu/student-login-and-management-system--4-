@@ -9,6 +9,7 @@ export interface EmbedQuality {
   brightness: number;
   sizeScore: number;
   centerScore: number;
+  textureScore: number;
   composite: number;
 }
 

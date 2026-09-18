@@ -59,14 +59,14 @@ class FaceDetectionService {
           this.detector = await FaceDetector.createFromOptions(fileset, {
             baseOptions: { modelAssetPath: MODEL_PATH, delegate: 'GPU' },
             runningMode: 'VIDEO',
-            minDetectionConfidence: 0.3,
+            minDetectionConfidence: 0.55,
           });
         } catch (gpuErr) {
           console.warn('[face-detector] GPU غير متاح، التحويل إلى CPU:', gpuErr);
           this.detector = await FaceDetector.createFromOptions(fileset, {
             baseOptions: { modelAssetPath: MODEL_PATH, delegate: 'CPU' },
             runningMode: 'VIDEO',
-            minDetectionConfidence: 0.3,
+            minDetectionConfidence: 0.55,
           });
         }
 
@@ -97,7 +97,7 @@ class FaceDetectionService {
       for (const det of result.detections ?? []) {
         const bb = det.boundingBox;
         const score = det.categories?.[0]?.score ?? 0;
-        if (!bb || score < 0.3) continue;
+        if (!bb || score < 0.55) continue;
         const x = Math.max(0, bb.originX);
         const y = Math.max(0, bb.originY);
         const width = Math.min(video.videoWidth - x, bb.width);

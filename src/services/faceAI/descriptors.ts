@@ -16,7 +16,7 @@ export const MATCH_STRICT = 0.32;
 export const MATCH_LOOSE = 0.42;
 export const MIN_MARGIN = 0.06;
 export const TAMPER_THRESHOLD = 0.30;
-export const CONFIRM_FRAMES = 2;
+export const CONFIRM_FRAMES = 3;
 
 // 🗄️ Cache for parsed samples (key: JSON string of descriptor, value: Float32Array[])
 const parsedSamplesCache = new Map<string, Float32Array[]>();
@@ -415,6 +415,63 @@ export function getCoveragePercent(fd: unknown): number {
   if (!isGalleryDescriptor(fd)) return 0;
   const len = normalizeClusters(fd.clusters).length;
   return Math.min(100, Math.round((len / MAX_CLUSTERS) * 100));
+}
+
+// ── Bootstrap Clusters من عينات التسجيل ──
+// يأخذ 10 عينات تسجيل ويُنشئ حتى 5 عناقيد — كل طالب يبدأ بـ5 عناقيد من اليوم الأول
+
+const BOOTSTRAP_MAX_CLUSTERS = 5;
+const BOOTSTRAP_MERGE_DISTANCE = 0.30;
+
+export function bootstrapClusters(
+  enrollmentSamples: Float32Array[],
+  quality: number,
+): PoseCluster[] {
+  if (enrollmentSamples.length === 0) return [];
+
+  // كل عينة = عنقيد مؤقت نبدأ به
+  type TempCluster = { vec: Float32Array; count: number; sum: Float32Array };
+  const temps: TempCluster[] = [];
+
+  for (const sample of enrollmentSamples) {
+    // أقرب عنقيد موجود؟
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    for (let i = 0; i < temps.length; i++) {
+      const avg = new Float32Array(sample.length);
+      for (let j = 0; j < sample.length; j++) avg[j] = temps[i].sum[j] / temps[i].count;
+      const d = descriptorDistance(sample, avg);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+
+    if (bestIdx >= 0 && bestDist < BOOTSTRAP_MERGE_DISTANCE && temps.length <= BOOTSTRAP_MAX_CLUSTERS) {
+      // دمج — أضف للعنقيد الموجود
+      for (let j = 0; j < sample.length; j++) temps[bestIdx].sum[j] += sample[j];
+      temps[bestIdx].count++;
+    } else if (temps.length < BOOTSTRAP_MAX_CLUSTERS) {
+      // عنقيد جديد
+      const sum = new Float32Array(sample.length);
+      for (let j = 0; j < sample.length; j++) sum[j] = sample[j];
+      temps.push({ vec: sample, count: 1, sum });
+    }
+  }
+
+  // حوّل إلى PoseCluster[] مع bin افتراضي
+  return temps.map((t, i) => {
+    const avg = new Float32Array(t.vec.length);
+    for (let j = 0; j < t.vec.length; j++) avg[j] = t.sum[j] / t.count;
+    let norm = 0;
+    for (let j = 0; j < avg.length; j++) norm += avg[j] * avg[j];
+    norm = Math.sqrt(norm) || 1;
+    for (let j = 0; j < avg.length; j++) avg[j] /= norm;
+    return {
+      bin: `e${i}`,
+      vector: Array.from(avg).map(v => Math.round(v * 1e5) / 1e5),
+      mergeCount: t.count,
+      quality,
+      updatedAt: Date.now(),
+    };
+  });
 }
 
 // ── تنظيف العناقيد القديمة (Cluster Decay) ──
