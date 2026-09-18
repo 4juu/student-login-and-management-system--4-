@@ -4,7 +4,7 @@
 // يستقبل ImageBitmap + مربعات الوجوه القادمة من MediaPipe، يقصّها ويستخرج 512 قيمة
 // كل الاستدلال الثقيل هنا → الخيط الرئيسي بلا تجمد
 // ─────────────────────────────────────────────────────────────
-import * as ort from 'onnxruntime-web/wasm';
+import * as ort from 'onnxruntime-web/webgpu';
 
 const BASE = import.meta.env.BASE_URL || '/';
 const MODEL_URL = BASE + 'models/ghostfacenet.onnx';
@@ -109,7 +109,7 @@ async function init() {
 
   post({ type: 'progress', stage: 'model', percent: 20, detail: 'تحميل موديل البصمة...' });
   session = await ort.InferenceSession.create(MODEL_URL, {
-    executionProviders: ['webgl', 'wasm'],
+    executionProviders: ['webgpu', 'wasm'],
     graphOptimizationLevel: 'all',
   });
   inputName = session.inputNames[0];

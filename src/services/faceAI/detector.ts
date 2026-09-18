@@ -148,7 +148,7 @@ export async function grabVideoFrame(video: HTMLVideoElement, maxWidth = 480): P
   const h = Math.max(2, Math.round(vh * scale));
   if (!grabCanvas) grabCanvas = document.createElement('canvas');
   grabCanvas.width = w; grabCanvas.height = h;
-  const g = grabCanvas.getContext('2d', { willReadFrequently: true })!;
+  const g = grabCanvas.getContext('2d')!;
   g.drawImage(video, 0, 0, w, h);
   try {
     return await createImageBitmap(grabCanvas);
