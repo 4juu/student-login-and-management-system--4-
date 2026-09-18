@@ -154,7 +154,7 @@ class EmbeddingClient {
     }
   }
 
-  private request<T>(msg: Record<string, unknown>, timeoutMs = REQ_TIMEOUT): Promise<T> {
+  private request<T>(msg: Record<string, unknown>, timeoutMs = REQ_TIMEOUT, transfer?: Transferable[]): Promise<T> {
     if (!this.worker || !this._ready) return Promise.reject(new Error('المحرك غير جاهز'));
     const id = this.seq++;
     return new Promise<T>((resolve, reject) => {
@@ -163,7 +163,7 @@ class EmbeddingClient {
         reject(new Error('انتهت مهلة المعالجة'));
       }, timeoutMs);
       this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
-      this.worker!.postMessage({ ...msg, id });
+      this.worker!.postMessage({ ...msg, id }, transfer ?? []);
     });
   }
 
@@ -190,7 +190,7 @@ class EmbeddingClient {
   async embedBatch(bitmap: ImageBitmap, boxes: Box[]): Promise<Array<EmbedResult & { box: Box }>> {
     const start = performance.now();
     try {
-      const res = await this.request<Array<EmbedResult & { box: Box }>>({ type: 'embedBatch', bitmap, boxes });
+      const res = await this.request<Array<EmbedResult & { box: Box }>>({ type: 'embedBatch', bitmap, boxes }, REQ_TIMEOUT, [bitmap]);
       this.recordLatency((performance.now() - start) / Math.max(1, boxes.length));
       return res;
     } catch (e) {

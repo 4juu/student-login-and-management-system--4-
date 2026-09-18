@@ -104,7 +104,7 @@ async function embed(bmp: ImageBitmap, box: Box): Promise<EmbedOut> {
 
 async function init() {
   ort.env.wasm.wasmPaths = WASM_PREFIX;
-  ort.env.wasm.numThreads = 2;
+  ort.env.wasm.numThreads = typeof globalThis.crossOriginIsolated !== 'undefined' && globalThis.crossOriginIsolated ? 4 : 2;
   ort.env.wasm.simd = true;
 
   post({ type: 'progress', stage: 'model', percent: 20, detail: 'تحميل موديل البصمة...' });

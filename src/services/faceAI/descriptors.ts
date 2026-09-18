@@ -52,8 +52,8 @@ export function parseAllSamples(input: unknown): Float32Array[] {
   return result;
 }
 
-/** أدنى نسبة ثقة مقبولة للتعرف أثناء الحضور (62% → 55%) — يوسّع نطاق القبول من قريب/بعيد مع بقاء حارس الهامش يحمي الدقة */
-export const MIN_RECOG_CONFIDENCE = 70;
+/** أدنى نسبة ثقة مقبولة للتعرف أثناء الحضور — حارس الدقة الرئيسي */
+export const MIN_RECOG_CONFIDENCE = 75;
 
 export interface MatchCandidate {
   id: string;

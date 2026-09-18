@@ -12,7 +12,6 @@ import { openCameraStream, waitVideoDimensionsStable } from '../../services/face
 import { faceEmbedder, type Box } from '../../services/faceAI/embedder';
 import { FaceTracker, type TrackBox } from '../../services/faceAI/tracker';
 import {
-  findBestMatch,
   hasValidDescriptor,
   isGalleryDescriptor,
   updateGallery,
@@ -20,6 +19,7 @@ import {
   MIN_RECOG_CONFIDENCE,
   CONFIRM_FRAMES,
 } from '../../services/faceAI/descriptors';
+import { buildGallery, findBestMatchIndexed } from '../../services/faceAI/gallery';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { estimatePose, poseToBin } from '../../services/faceAI/pose';
 
@@ -96,6 +96,9 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   const roster = useMemo(() => students.filter(s => hasValidDescriptor(s.faceDescriptor)), [students]);
   const rosterRef = useRef(roster);
   rosterRef.current = roster;
+  const galleryIndex = useMemo(() => buildGallery(roster), [roster]);
+  const galleryRef = useRef(galleryIndex);
+  galleryRef.current = galleryIndex;
   const presentRef = useRef(alreadyPresentIds);
   presentRef.current = alreadyPresentIds;
   const markRef = useRef(onMarkAttendance);
@@ -238,6 +241,53 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     return suppressZonesRef.current.some(z => zoneOverlap(z.box, box) >= SUPPRESS_ZONE_OVERLAP);
   }, []);
 
+  // ── تحميل حضور طالب واحد — مشترك بين مسار التضمين ومسار الكاش ──
+  const finalizeTrack = useCallback((
+    student: Student,
+    matchConfidence: number,
+    boxInVideo: Box,
+    trackId: number,
+  ) => {
+    const now = Date.now();
+
+    if (doneStudentsRef.current.has(student.id)) {
+      trackerRef.current.removeTrack(trackId);
+      suppressZone(boxInVideo);
+      return;
+    }
+
+    if (presentRef.current.has(student.id)) {
+      doneStudentsRef.current.add(student.id);
+      trackerRef.current.removeTrack(trackId);
+      suppressZone(boxInVideo);
+      if (!loggedIdsRef.current.has(student.id)) {
+        loggedIdsRef.current.add(student.id);
+        pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'already', confidence: matchConfidence });
+      }
+      return;
+    }
+
+    const lastHit = cooldowns.current.get(student.id) ?? 0;
+    if (now - lastHit < RECOGNITION_COOLDOWN) {
+      doneStudentsRef.current.add(student.id);
+      trackerRef.current.removeTrack(trackId);
+      suppressZone(boxInVideo);
+      return;
+    }
+
+    cooldowns.current.set(student.id, now);
+    doneStudentsRef.current.add(student.id);
+    trackerRef.current.removeTrack(trackId);
+    suppressZone(boxInVideo);
+
+    if (!loggedIdsRef.current.has(student.id)) {
+      loggedIdsRef.current.add(student.id);
+      pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'marked', confidence: matchConfidence });
+    }
+
+    Promise.resolve(markRef.current(student)).catch(e => console.error('[face-scanner] فشل تسجيل الحضور:', e));
+  }, [suppressZone, pushLog]);
+
   // ── حلقة المسح ──
   useEffect(() => {
     if (!engineReady || !cameraReady) return;
@@ -316,8 +366,8 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
       return;
     }
 
-    // ⚡ أسرع: كشف كل 100ms عند وجود وجه، 200ms بدون وجه
-    const interval = performance.now() - lastSeenRef.current < 1500 ? 100 : 200;
+    // ⚡ أسرع: كشف كل 50ms عند وجود وجه، 200ms بدون وجه
+    const interval = performance.now() - lastSeenRef.current < 1500 ? 50 : 200;
     const nowTs = performance.now();
     if (nowTs - lastTickRef.current < interval) {
       loopTimerRef.current = window.setTimeout(tick, 10);
@@ -385,7 +435,6 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
             trackerRef.current.shouldReembed(t.trackId, nowTs, REEMBED_MIN_INTERVAL, REEMBED_MOVE_THRESHOLD)
           );
 
-          const now = Date.now();
           let anyUnknown = false;
           let markedAny = false;
 
@@ -412,7 +461,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               const raw = new Float32Array(res.descriptor);
               const smoothed = trackerRef.current.addEmbedding(trackId, raw, nowTs);
 
-              const match = findBestMatch(smoothed, rosterRef.current, MATCH_LOOSE, res.quality.composite);
+              const match = findBestMatchIndexed(smoothed, galleryRef.current, MATCH_LOOSE, res.quality.composite);
               trackerRef.current.setCache(trackId, match?.item.id ?? null, match?.confidence ?? 0);
 
               const vbw = res.box.width / scale, vbh = res.box.height / scale;
@@ -426,7 +475,8 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                 continue;
               }
 
-              const student = match.item;
+              const student = rosterRef.current.find(s => s.id === match.item.id);
+              if (!student) continue;
 
               // طالب سُجّل حضوراً في هذه الجلسة — حتى لو تحرك مكانه، يختفي إطاره فوراً
               if (doneStudentsRef.current.has(student.id)) {
@@ -442,36 +492,11 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                 continue;
               }
 
-              const alreadyMarked = presentRef.current.has(student.id);
-              const lastHit = cooldowns.current.get(student.id) ?? 0;
-
-              if (alreadyMarked || now - lastHit < RECOGNITION_COOLDOWN) {
-                // تسجيل مسبق أو في فترة التهدئة — نُنهي إطاره فوراً ونترك المجال لغيره
-                doneStudentsRef.current.add(student.id);
-                trackerRef.current.removeTrack(trackId);
-                suppressZone(boxInVideo);
-                if (alreadyMarked && !loggedIdsRef.current.has(student.id)) {
-                  loggedIdsRef.current.add(student.id);
-                  pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'already', confidence: match.confidence });
-                }
-                continue;
-              }
-
-              cooldowns.current.set(student.id, now);
+              // ✅ تأكيد كامل — نُسجّل الحضور عبر الدالة المشتركة
               markedAny = true;
-              // الأهم: بعد تسجيل الحضور يُزال المسار وتُكبت منطقته — يختفي الإطار في نفس الثانية
-              doneStudentsRef.current.add(student.id);
-              trackerRef.current.removeTrack(trackId);
-              suppressZone(boxInVideo);
+              finalizeTrack(student, match.confidence, boxInVideo, trackId);
 
-              if (!loggedIdsRef.current.has(student.id)) {
-                loggedIdsRef.current.add(student.id);
-                pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'marked', confidence: match.confidence });
-              }
-
-              Promise.resolve(markRef.current(student)).catch(e => console.error('[face-scanner] فشل تسجيل الحضور:', e));
-
-              // ✅ Pose Grid: تحسين البصمة تدريجياً عبر شبكة الزوايا
+              // ✅ Pose Grid: تحسين البصمة تدريجياً عبر شبكة الزوايا (فقط عند التضمين الجديد)
               try {
                 const origDet = bigEnough.find(d =>
                   Math.abs(d.box.x - needEmbed[i].box.x) < 1 &&
@@ -512,14 +537,12 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
             const student = rosterRef.current.find(s => s.id === cache.cachedMatchId);
 
             if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE) {
-              // طالب سُجِّل حضور الآن في هذه الجلسة — لا نعيده، أزل إطاره
               if (doneStudentsRef.current.has(student.id)) {
                 trackerRef.current.removeTrack(t.trackId);
                 suppressZone(boxInVideo);
                 continue;
               }
 
-              // طالب مسجَّل مسبقاً في جلسة الحضور — يُعرض كإطار أخضر ويوضع في السجل
               if (presentRef.current.has(student.id)) {
                 if (!loggedIdsRef.current.has(student.id)) {
                   loggedIdsRef.current.add(student.id);
@@ -529,7 +552,17 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                 continue;
               }
 
-              liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], color: '#818cf8' });
+              // ⚡ الإطار الثاني المجاني: bumpConfirm على الكاش → تأكيد فوري بدون انتظار re-embed
+              const confirmCount = trackerRef.current.bumpConfirm(t.trackId, student.id);
+
+              if (confirmCount >= CONFIRM_FRAMES) {
+                // ✅ تأكيد كامل — نُسجّل الحضور فوراً (نفس الثانية)
+                markedAny = true;
+                finalizeTrack(student, cache.cachedConfidence, boxInVideo, t.trackId);
+                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التسجيل', color: '#34d399' });
+              } else {
+                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
+              }
             } else {
               liveBoxes.push({ box: boxInVideo, label: 'غير معروف', color: '#fbbf24' });
               anyUnknown = true;
