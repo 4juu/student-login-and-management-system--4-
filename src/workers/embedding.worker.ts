@@ -7,7 +7,7 @@
 import * as ort from 'onnxruntime-web/wasm';
 
 const BASE = import.meta.env.BASE_URL || '/';
-const MODEL_URL = BASE + 'models/ghostfacenet_int8.onnx';
+const MODEL_URL = BASE + 'models/ghostfacenet.onnx';
 const WASM_PREFIX = BASE + 'ort/';
 console.info('[face-embed] base =', BASE);
 
