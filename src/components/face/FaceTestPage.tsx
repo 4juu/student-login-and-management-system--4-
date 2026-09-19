@@ -81,10 +81,15 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
         }
         setLinkData(link);
         const year = await getActiveAcademicYear();
+        console.log('[face-test] link.stageId:', link.stageId, 'year:', year, 'adminUid:', link.adminUid);
         const s = await loadStageStudentsCached(link.adminUid, year, link.stageId);
         if (cancelled) return;
         studentsRef.current = s;
         const approved = s.filter(st => hasValidDescriptor(st.faceDescriptor) && st.selfRegistrationApproved === true);
+        console.log('[face-test] total students:', s.length, 'approved with face:', approved.length);
+        if (approved.length > 0) {
+          console.log('[face-test] first approved:', approved[0].name, 'has descriptor:', !!approved[0].faceDescriptor, 'approved:', approved[0].selfRegistrationApproved);
+        }
         galleryRef.current = buildGallery(approved);
         setPhase('ready');
       } catch {
