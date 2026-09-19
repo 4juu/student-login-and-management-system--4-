@@ -275,8 +275,6 @@ export const validateLink = (link: RegistrationLink | null): {
 // 🔍 روابط اختبار البصمة
 // ============================================================
 
-const TEST_LINKS_PATH = 'registrationSystem/testLinks';
-
 export interface TestLinkData {
   token: string;
   adminUid: string;
@@ -285,7 +283,7 @@ export interface TestLinkData {
   expiresAt: number;
 }
 
-/** إنشاء رابط اختبار بصمة لمرحلة واحدة */
+/** إنشاء رابط اختبار بصمة لمرحلة واحدة — يُخزّن كـ RegistrationLink بtype: 'test' */
 export const createTestLink = async (
   adminUid: string,
   stageId: string,
@@ -293,14 +291,21 @@ export const createTestLink = async (
 ): Promise<{ token: string; url: string }> => {
   const token = nanoid(20);
   const now = Date.now();
-  const linkData: TestLinkData = {
+  let academicYear = '';
+  try { academicYear = await getActiveAcademicYear(); } catch {}
+
+  const linkData: RegistrationLink = {
     token,
     adminUid,
     stageId,
+    type: 'test',
+    createdBy: adminUid,
     createdAt: new Date().toISOString(),
     expiresAt: now + expiryDays * 24 * 60 * 60 * 1000,
+    used: false,
+    academicYear: academicYear || undefined,
   };
-  await set(ref(database, `${TEST_LINKS_PATH}/${token}`), linkData);
+  await set(ref(database, `${LINKS_PATH}/${token}`), stripUndefined(linkData));
   const url = `${window.location.origin}${window.location.pathname}?test=${token}`;
   return { token, url };
 };
@@ -308,9 +313,11 @@ export const createTestLink = async (
 /** قراءة بيانات رابط الاختبار */
 export const getTestLink = async (token: string): Promise<TestLinkData | null> => {
   try {
-    const snap = await get(ref(database, `${TEST_LINKS_PATH}/${token}`));
+    const snap = await get(ref(database, `${LINKS_PATH}/${token}`));
     if (!snap.exists()) return null;
-    return snap.val() as TestLinkData;
+    const data = snap.val() as RegistrationLink;
+    if (data.type !== 'test') return null;
+    return { token: data.token, adminUid: data.adminUid, stageId: data.stageId, createdAt: data.createdAt, expiresAt: data.expiresAt };
   } catch {
     return null;
   }
