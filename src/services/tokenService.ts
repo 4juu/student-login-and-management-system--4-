@@ -275,7 +275,7 @@ export const validateLink = (link: RegistrationLink | null): {
 // 🔍 روابط اختبار البصمة
 // ============================================================
 
-const TEST_LINKS_PATH = 'testLinks';
+const TEST_LINKS_PATH = 'registrationSystem/testLinks';
 
 export interface TestLinkData {
   token: string;
