@@ -8,6 +8,23 @@ import { compression } from "vite-plugin-compression2";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// 🌐 رابط الموقع الكامل لوسوم المعاينة (og:image لازم رابط مطلق)
+// الأولوية: VITE_SITE_URL ثم CF_PAGES_URL (يوفّرها Cloudflare Pages وقت البناء)
+const SITE_URL = (
+  process.env.VITE_SITE_URL ||
+  process.env.CF_PAGES_URL ||
+  ''
+).replace(/\/+$/, '');
+
+function injectSiteUrl() {
+  return {
+    name: 'inject-site-url',
+    transformIndexHtml(html: string) {
+      return html.replace(/%SITE_URL%/g, SITE_URL);
+    },
+  };
+}
+
 export default defineConfig({
   // 🆕 إصدار فريد لكل بناء — يقارن التطبيق به لكشف أي نشر جديد قسرياً
   define: {
@@ -28,6 +45,7 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    injectSiteUrl(),
     // 🗜️ ضغط مسبق gzip + brotli لجميع الأصول المبنية
     compression({ algorithms: ['gzip', 'brotliCompress'], threshold: 1024 }),
   ],
