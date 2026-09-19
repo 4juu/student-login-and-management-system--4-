@@ -13,14 +13,17 @@ import { faceEmbedder, type Box } from '../../services/faceAI/embedder';
 import { FaceTracker, type TrackBox } from '../../services/faceAI/tracker';
 import {
   hasValidDescriptor,
+  isGalleryDescriptor,
+  updateGallery,
   MATCH_LOOSE,
   MIN_RECOG_CONFIDENCE,
   CONFIRM_FRAMES,
 } from '../../services/faceAI/descriptors';
 import { buildGallery, findBestMatchIndexed } from '../../services/faceAI/gallery';
+import { estimatePose, poseToBin } from '../../services/faceAI/pose';
 import { getTestLink, validateTestLink, formatRemainingMs, getServerNow } from '../../services/tokenService';
 import { loadStageStudentsCached } from '../SelfRegister/SelfEnrollPage';
-import { getActiveAcademicYear } from '../../firebase/dataService';
+import { getActiveAcademicYear, saveStudents } from '../../firebase/dataService';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface FaceTestPageProps {
@@ -28,12 +31,14 @@ interface FaceTestPageProps {
   onExit: () => void;
 }
 
-type TestPhase = 'loading' | 'invalid' | 'ready' | 'scanning' | 'success';
+type TestPhase = 'loading' | 'invalid' | 'ready' | 'scanning' | 'enhancing' | 'success';
 
 const MIN_FACE_PX = 22;
 const MAX_FACES_PER_FRAME = 10;
 const REEMBED_MIN_INTERVAL = 150;
 const REEMBED_MOVE_THRESHOLD = 0.08;
+
+const ENHANCE_DURATION_MS = 10_000;
 
 export const FaceTestPage: React.FC<FaceTestPageProps> = ({
   testToken,
@@ -59,13 +64,21 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
   const [noMatchOverlay, setNoMatchOverlay] = useState(false);
   const [expiresAt, setExpiresAt] = useState<number>(0);
   const [remainingMs, setRemainingMs] = useState<number>(0);
+  const [enhanceCountdown, setEnhanceCountdown] = useState<number>(10);
 
-  useBodyScrollLock(phase === 'scanning');
+  useBodyScrollLock(phase === 'scanning' || phase === 'enhancing');
 
   const studentsRef = useRef<Student[]>([]);
   const galleryRef = useRef<ReturnType<typeof buildGallery>>([]);
   const trackerRef = useRef(new FaceTracker());
   const faceSeenRef = useRef(0);
+
+  // ── refs للتحسين التلقائي ──
+  const enhancingRef = useRef(false);
+  const enhanceStartRef = useRef(0);
+  const enhancedCountRef = useRef(0);
+  const savedDescriptorRef = useRef<any>(null);
+  const linkDataRef = useRef<{ adminUid: string; stageId: string } | null>(null);
 
   // ── تحميل بيانات الرابط وطلاب المرحلة ──
   useEffect(() => {
@@ -80,6 +93,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
         }
         setExpiresAt(link.expiresAt);
         setRemainingMs(link.expiresAt - getServerNow());
+        linkDataRef.current = { adminUid: link.adminUid, stageId: link.stageId };
         const year = await getActiveAcademicYear();
         const s = await loadStageStudentsCached(link.adminUid, year, link.stageId);
         if (cancelled) return;
@@ -114,7 +128,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
 
   // ── فتح/إغلاق الكاميرا ──
   useEffect(() => {
-    if (phase !== 'scanning' || !engineReady) return;
+    if ((phase !== 'scanning' && phase !== 'enhancing') || !engineReady) return;
     let localStream: MediaStream | null = null;
     let cancelled = false;
     (async () => {
@@ -178,7 +192,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
 
   // ── حلقة المسح ──
   useEffect(() => {
-    if (phase !== 'scanning' || !engineReady || !cameraReady) return;
+    if ((phase !== 'scanning' && phase !== 'enhancing') || !engineReady || !cameraReady) return;
     runningRef.current = true;
 
     const drawBoxes = (
@@ -284,7 +298,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
             trackerRef.current.shouldReembed(t.trackId, nowTs, REEMBED_MIN_INTERVAL, REEMBED_MOVE_THRESHOLD)
           );
 
-          if (needEmbed.length > 0) {
+            if (needEmbed.length > 0) {
             const currentMaxWidth = faceEmbedder.recommendedMaxWidth;
             const bmp = await grabVideoFrame(video, currentMaxWidth);
             if (!bmp) { drawBoxes(liveBoxes); return; }
@@ -317,6 +331,28 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               const vbx = res.box.x / scale, vby = res.box.y / scale;
               const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
 
+              // ── وضع التحسين: حفظ العناقيد للمطابق ──
+              if (enhancingRef.current && matchedStudent && match && match.item.id === matchedStudent.id) {
+                try {
+                  const origDet = detections.find(d =>
+                    Math.abs(d.box.x - needEmbed[i].box.x) < 1 &&
+                    Math.abs(d.box.y - needEmbed[i].box.y) < 1
+                  );
+                  const pose = estimatePose(origDet?.keypoints);
+                  if (pose && savedDescriptorRef.current && isGalleryDescriptor(savedDescriptorRef.current)) {
+                    const bin = poseToBin(pose);
+                    const result = updateGallery(savedDescriptorRef.current, smoothed, res.quality.composite, bin);
+                    if (result.action === 'merged' || result.action === 'created') {
+                      savedDescriptorRef.current = result.gallery;
+                      enhancedCountRef.current += 1;
+                    }
+                  }
+                } catch { /* تجاهل */ }
+
+                liveBoxes.push({ box: boxInVideo, label: matchedStudent.name.split(' ')[0], sub: 'تحسين البصمة', color: '#34d399' });
+                continue;
+              }
+
               if (!match || match.confidence < MIN_RECOG_CONFIDENCE) {
                 const smallFace = res.box.width < MIN_FACE_PX * 1.7;
                 liveBoxes.push({ box: boxInVideo, label: smallFace ? 'اقترب قليلاً' : 'غير معروف', color: '#fbbf24' });
@@ -335,13 +371,17 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
                 continue;
               }
 
-              // ✅ تأكيد كامل
+              // ✅ تأكيد كامل — البدء بتحسين البصمة
               setMatchedStudent(student);
-              runningRef.current = false;
+              enhancedCountRef.current = 0;
+              savedDescriptorRef.current = student.faceDescriptor;
+              enhancingRef.current = true;
+              enhanceStartRef.current = performance.now();
+              setEnhanceCountdown(10);
+              setPhase('enhancing');
               trackerRef.current.removeTrack(trackId);
               liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
               drawBoxes(liveBoxes);
-              setTimeout(() => { if (mountedRef.current) setPhase('success'); }, 400);
               return;
             }
 
@@ -371,11 +411,15 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
 
               if (confirmCount >= CONFIRM_FRAMES) {
                 setMatchedStudent(student);
-                runningRef.current = false;
+                enhancedCountRef.current = 0;
+                savedDescriptorRef.current = student.faceDescriptor;
+                enhancingRef.current = true;
+                enhanceStartRef.current = performance.now();
+                setEnhanceCountdown(10);
+                setPhase('enhancing');
                 trackerRef.current.removeTrack(t.trackId);
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
                 drawBoxes(liveBoxes);
-                setTimeout(() => { if (mountedRef.current) setPhase('success'); }, 400);
                 return;
               } else {
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
@@ -407,7 +451,58 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
     };
   }, [phase, engineReady, cameraReady, facing, retry, stopScan]);
 
+  // ── عداد تحسين البصمة (10 ثواني) ──
+  useEffect(() => {
+    if (phase !== 'enhancing') return;
+    const start = performance.now();
+    let raf: number;
+    const tick = () => {
+      const elapsed = performance.now() - start;
+      const left = Math.max(0, Math.ceil((ENHANCE_DURATION_MS - elapsed) / 1000));
+      setEnhanceCountdown(left);
+      if (left > 0 && mountedRef.current) {
+        raf = requestAnimationFrame(tick);
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [phase]);
+
+  // ── إنهاء التحسين وحفظ البصمة ──
+  useEffect(() => {
+    if (phase !== 'enhancing') return;
+    const timer = window.setTimeout(async () => {
+      enhancingRef.current = false;
+      runningRef.current = false;
+      if (loopTimerRef.current) { clearTimeout(loopTimerRef.current); loopTimerRef.current = 0; }
+      if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
+
+      // حفظ البصمة المحسّنة
+      if (matchedStudent && savedDescriptorRef.current && linkDataRef.current && enhancedCountRef.current > 0) {
+        try {
+          const students = studentsRef.current;
+          const idx = students.findIndex(s => s.id === matchedStudent.id);
+          if (idx >= 0) {
+            students[idx] = { ...students[idx], faceDescriptor: savedDescriptorRef.current };
+            studentsRef.current = students;
+            galleryRef.current = buildGallery(students.filter(s => hasValidDescriptor(s.faceDescriptor)));
+            await saveStudents(linkDataRef.current.adminUid, linkDataRef.current.stageId, students);
+            console.log(`[face-test] حُفظت ${enhancedCountRef.current} عناقيد جديدة للبصمة`);
+          }
+        } catch (e) {
+          console.warn('[face-test] فشل حفظ البصمة المحسّنة:', e);
+        }
+      }
+
+      if (mountedRef.current) setPhase('success');
+    }, ENHANCE_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [phase, matchedStudent]);
+
   const statusPill = (() => {
+    if (phase === 'enhancing') {
+      return { icon: '🔄', text: `تحسين البصمة... ${enhanceCountdown}s`, cls: 'bg-emerald-500/90 text-white' };
+    }
     if (!engineReady || !cameraReady) return { icon: '⏳', text: 'جاري التحضير...', cls: 'bg-white/10 text-slate-300' };
     return { icon: '✨', text: 'أبقِ وجهك داخل الإطار', cls: 'bg-indigo-500/90 text-white' };
   })();
@@ -491,12 +586,20 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
         </div>
         <h2 className="text-xl font-extrabold text-emerald-300 mb-2">البصمة تعمل!</h2>
         <p className="text-sm text-slate-300 mb-1">تم التعرف على وجهك بنجاح</p>
-        <p className="text-base font-bold text-white mb-5">{matchedStudent.name}</p>
+        <p className="text-base font-bold text-white mb-2">{matchedStudent.name}</p>
+        {enhancedCountRef.current > 0 && (
+          <p className="text-xs text-emerald-400/80 mb-4">
+            تم إضافة {enhancedCountRef.current} عناقيد جديدة لتحسين بصمتك
+          </p>
+        )}
+        {enhancedCountRef.current === 0 && <div className="mb-4" />}
         <div className="flex flex-col gap-2">
           <button
             onClick={() => {
               setMatchedStudent(null);
               setNoMatchOverlay(false);
+              enhancedCountRef.current = 0;
+              savedDescriptorRef.current = null;
               faceSeenRef.current = 0;
               setPhase('ready');
               trackerRef.current.reset();
@@ -515,7 +618,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
       {preScanUI}
       {successOverlay}
 
-      {phase === 'scanning' && (
+      {(phase === 'scanning' || phase === 'enhancing') && (
         <div
           dir="rtl"
           className="fixed inset-0 z-[9999] flex flex-col bg-slate-950/95 backdrop-blur-sm"
