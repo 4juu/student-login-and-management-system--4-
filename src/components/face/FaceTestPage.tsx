@@ -18,7 +18,7 @@ import {
   CONFIRM_FRAMES,
 } from '../../services/faceAI/descriptors';
 import { buildGallery, findBestMatchIndexed } from '../../services/faceAI/gallery';
-import { getTestLink, validateTestLink } from '../../services/tokenService';
+import { getTestLink, validateTestLink, formatRemainingMs, getServerNow } from '../../services/tokenService';
 import { loadStageStudentsCached } from '../SelfRegister/SelfEnrollPage';
 import { getActiveAcademicYear } from '../../firebase/dataService';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
@@ -57,6 +57,8 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
   const [phase, setPhase] = useState<TestPhase>('loading');
   const [matchedStudent, setMatchedStudent] = useState<Student | null>(null);
   const [noMatchOverlay, setNoMatchOverlay] = useState(false);
+  const [expiresAt, setExpiresAt] = useState<number>(0);
+  const [remainingMs, setRemainingMs] = useState<number>(0);
 
   useBodyScrollLock(phase === 'scanning');
 
@@ -76,6 +78,8 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
           setPhase('invalid');
           return;
         }
+        setExpiresAt(link.expiresAt);
+        setRemainingMs(link.expiresAt - getServerNow());
         const year = await getActiveAcademicYear();
         const s = await loadStageStudentsCached(link.adminUid, year, link.stageId);
         if (cancelled) return;
@@ -89,6 +93,24 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
     })();
     return () => { cancelled = true; };
   }, [testToken]);
+
+  // ── إنفاذ انتهاء صلاحية الرابط فعلياً (فحص دوري) ──
+  useEffect(() => {
+    if (!expiresAt) return;
+    const tick = () => {
+      const left = expiresAt - getServerNow();
+      if (left <= 0) {
+        runningRef.current = false;
+        setRemainingMs(0);
+        setPhase('invalid');
+        return;
+      }
+      setRemainingMs(left);
+    };
+    tick();
+    const id = window.setInterval(tick, 20000);
+    return () => window.clearInterval(id);
+  }, [expiresAt]);
 
   // ── فتح/إغلاق الكاميرا ──
   useEffect(() => {
@@ -433,6 +455,12 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
             </div>
             <h2 className="text-lg font-bold text-white mb-2">اختبار بصمة الوجه</h2>
             <p className="text-sm text-slate-400 mb-1">هذه صفحة لاختبار بصمة وجهك</p>
+            {remainingMs > 0 && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[11px] text-slate-300 mb-3">
+                <svg className="h-3.5 w-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                صلاحية الرابط متبقية: {formatRemainingMs(remainingMs)}
+              </div>
+            )}
             <div className="bg-white/5 border border-white/10 rounded-lg p-3 mb-5">
               <p className="text-xs text-slate-300 leading-6">
                 <svg className="inline h-3.5 w-3.5 ml-1 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
@@ -456,7 +484,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
 
   // ── شاشة النجاح ──
   const successOverlay = phase === 'success' && matchedStudent ? (
-    <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto">
       <div className="text-center px-6 max-w-sm">
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/15">
           <svg className="h-8 w-8 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>

@@ -13,6 +13,23 @@ const LINKS_PATH = 'registrationSystem/links';
 const DEFAULT_EXPIRY_DAYS = 30;
 
 /**
+ * ⏱️ مزامنة فرق الوقت مع سيرفر Firebase — حتى تكون الصلاحية حقيقية
+ * ولا يمكن التحايل عليها بتغيير ساعة الجهاز.
+ */
+let serverTimeOffset = 0;
+
+export const syncServerTimeOffset = async (): Promise<void> => {
+  try {
+    const snap = await get(ref(database, '.info/serverTimeOffset'));
+    const val = snap.val();
+    if (typeof val === 'number') serverTimeOffset = val;
+  } catch { /* تجاهل — نرجع لوقت الجهاز كحل احتياطي */ }
+};
+
+/** الوقت الحالي حسب سيرفر Firebase */
+export const getServerNow = (): number => Date.now() + serverTimeOffset;
+
+/**
  * 🧹 تنظيف الكائن من أي حقل قيمته undefined — Firebase RTDB يرفض undefined ويرمي خطأ فوري
  */
 const stripUndefined = <T extends object>(obj: T): T => {
@@ -283,14 +300,34 @@ export interface TestLinkData {
   expiresAt: number;
 }
 
+export const DEFAULT_TEST_LINK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** تنسيق المدة المتبقية بشكل مقروء */
+export const formatRemainingMs = (ms: number): string => {
+  if (!Number.isFinite(ms) || ms <= 0) return 'منتهي';
+  const totalMin = Math.floor(ms / 60000);
+  if (totalMin < 60) return `${Math.max(1, totalMin)} دقيقة`;
+  const hours = Math.floor(totalMin / 60);
+  if (hours < 24) {
+    const min = totalMin % 60;
+    return min > 0 ? `${hours} ساعة و${min} دقيقة` : `${hours} ساعة`;
+  }
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  return remHours > 0 ? `${days} يوم و${remHours} ساعة` : `${days} يوم`;
+};
+
 /** إنشاء رابط اختبار بصمة لمرحلة واحدة — يُخزّن كـ RegistrationLink بtype: 'test' */
 export const createTestLink = async (
   adminUid: string,
   stageId: string,
-  expiryDays: number = 7,
-): Promise<{ token: string; url: string }> => {
+  expiryMs: number = DEFAULT_TEST_LINK_MS,
+): Promise<{ token: string; url: string; expiresAt: number }> => {
   const token = nanoid(20);
-  const now = Date.now();
+  await syncServerTimeOffset();
+  const now = getServerNow();
+  const safeExpiry = Number.isFinite(expiryMs) && expiryMs > 0 ? expiryMs : DEFAULT_TEST_LINK_MS;
+  const expiresAt = now + safeExpiry;
   let academicYear = '';
   try { academicYear = await getActiveAcademicYear(); } catch {}
 
@@ -301,18 +338,19 @@ export const createTestLink = async (
     type: 'test',
     createdBy: adminUid,
     createdAt: new Date().toISOString(),
-    expiresAt: now + expiryDays * 24 * 60 * 60 * 1000,
+    expiresAt,
     used: false,
     academicYear: academicYear || undefined,
   };
   await set(ref(database, `${LINKS_PATH}/${token}`), stripUndefined(linkData));
   const url = `${window.location.origin}${window.location.pathname}?test=${token}`;
-  return { token, url };
+  return { token, url, expiresAt };
 };
 
 /** قراءة بيانات رابط الاختبار */
 export const getTestLink = async (token: string): Promise<TestLinkData | null> => {
   try {
+    await syncServerTimeOffset();
     const snap = await get(ref(database, `${LINKS_PATH}/${token}`));
     if (!snap.exists()) return null;
     const data = snap.val() as RegistrationLink;
@@ -323,9 +361,10 @@ export const getTestLink = async (token: string): Promise<TestLinkData | null> =
   }
 };
 
-/** التحقق من صلاحية رابط الاختبار */
+/** التحقق من صلاحية رابط الاختبار — حسب وقت سيرفر Firebase لا وقت الجهاز */
 export const validateTestLink = (link: TestLinkData | null): { valid: boolean; reason?: string } => {
   if (!link) return { valid: false, reason: 'الرابط غير موجود' };
-  if (link.expiresAt < Date.now()) return { valid: false, reason: 'انتهت صلاحية الرابط' };
+  if (!Number.isFinite(link.expiresAt)) return { valid: false, reason: 'الرابط غير صالح' };
+  if (link.expiresAt <= getServerNow()) return { valid: false, reason: 'انتهت صلاحية الرابط' };
   return { valid: true };
 };

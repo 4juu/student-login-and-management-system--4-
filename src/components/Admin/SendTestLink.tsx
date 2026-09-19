@@ -2,8 +2,8 @@ import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalBehavior } from '../../hooks/useModalBehavior';
 import { College, Stage } from '../../types/student';
-import { createTestLink } from '../../services/tokenService';
-import { Copy, ScanFace, Check, Landmark, Library } from 'lucide-react';
+import { createTestLink, formatRemainingMs, getServerNow } from '../../services/tokenService';
+import { Copy, ScanFace, Check, Landmark, Library, Clock } from 'lucide-react';
 
 interface SendTestLinkProps {
   adminUid: string;
@@ -12,10 +12,25 @@ interface SendTestLinkProps {
   onClose: () => void;
 }
 
+const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
+
+const EXPIRY_OPTIONS = [
+  { label: 'ساعة واحدة', ms: 1 * HOUR },
+  { label: 'ساعتان', ms: 2 * HOUR },
+  { label: '6 ساعات', ms: 6 * HOUR },
+  { label: 'يوم واحد', ms: 1 * DAY },
+  { label: '3 أيام', ms: 3 * DAY },
+  { label: 'أسبوع', ms: 7 * DAY },
+  { label: '30 يوماً', ms: 30 * DAY },
+];
+
 export function SendTestLink({ adminUid, colleges, stages, onClose }: SendTestLinkProps) {
   const [selectedCollegeId, setSelectedCollegeId] = useState('');
   const [selectedStageId, setSelectedStageId] = useState('');
+  const [expiryMs, setExpiryMs] = useState<number>(1 * DAY);
   const [generatedUrl, setGeneratedUrl] = useState('');
+  const [generatedExpiry, setGeneratedExpiry] = useState<number>(0);
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
 
@@ -30,8 +45,9 @@ export function SendTestLink({ adminUid, colleges, stages, onClose }: SendTestLi
     if (!selectedStageId) return;
     setGenerating(true);
     try {
-      const { url } = await createTestLink(adminUid, selectedStageId);
+      const { url, expiresAt } = await createTestLink(adminUid, selectedStageId, expiryMs);
       setGeneratedUrl(url);
+      setGeneratedExpiry(expiresAt);
     } catch {
       alert('فشل إنشاء الرابط');
     } finally {
@@ -99,6 +115,26 @@ export function SendTestLink({ adminUid, colleges, stages, onClose }: SendTestLi
                 </div>
               </div>
 
+              {/* مدة الصلاحية */}
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">مدة صلاحية الرابط</label>
+                <div className="relative">
+                  <select
+                    value={expiryMs}
+                    onChange={e => setExpiryMs(Number(e.target.value))}
+                    className="w-full appearance-none bg-[#0F1B36] border border-[#22334F] rounded-lg px-3 py-2.5 text-sm text-white pr-10 focus:border-blue-500 focus:outline-none"
+                  >
+                    {EXPIRY_OPTIONS.map(o => (
+                      <option key={o.ms} value={o.ms}>{o.label}</option>
+                    ))}
+                  </select>
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
+                </div>
+                <p className="text-[11px] text-gray-500 mt-1.5">
+                  ينتهي الرابط تلقائياً بعد: {EXPIRY_OPTIONS.find(o => o.ms === expiryMs)?.label}. بعده يتوقف عن العمل.
+                </p>
+              </div>
+
               {/* ملاحظة */}
               <div className="bg-blue-500/5 border border-blue-500/10 rounded-lg p-3">
                 <p className="text-xs text-blue-300/70 leading-5">
@@ -131,8 +167,14 @@ export function SendTestLink({ adminUid, colleges, stages, onClose }: SendTestLi
                   {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4 text-gray-400" />}
                 </button>
               </div>
+              {generatedExpiry > 0 && (
+                <div className="flex items-center justify-center gap-1.5 text-xs text-amber-300/80 mt-2">
+                  <Clock className="h-3.5 w-3.5" />
+                  <span>صالح لمدة {formatRemainingMs(generatedExpiry - getServerNow())} — ينتهي {new Date(generatedExpiry).toLocaleString('ar-IQ', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                </div>
+              )}
               <p className="text-xs text-gray-500 text-center mt-1">شارك هذا الرابط مع الطلاب لاختبار بصماتهم</p>
-              <button onClick={() => { setGeneratedUrl(''); }} className="w-full py-2 rounded-lg border border-[#22334F] text-gray-300 text-sm hover:bg-white/5 transition">
+              <button onClick={() => { setGeneratedUrl(''); setGeneratedExpiry(0); }} className="w-full py-2 rounded-lg border border-[#22334F] text-gray-300 text-sm hover:bg-white/5 transition">
                 إنشاء رابط آخر
               </button>
             </>
