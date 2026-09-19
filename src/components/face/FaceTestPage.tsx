@@ -1,38 +1,71 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import type { Student } from '../../types/student';
 import { useFaceAI } from '../../hooks/useFaceAI';
 import { EngineOverlay } from './EngineOverlay';
+import {
+  faceDetectorService,
+  grabVideoFrame,
+  type DetectedFace,
+} from '../../services/faceAI/detector';
+import { openCameraStream, waitVideoDimensionsStable } from '../../services/faceAI/camera';
+import { faceEmbedder, type Box } from '../../services/faceAI/embedder';
+import { FaceTracker, type TrackBox } from '../../services/faceAI/tracker';
+import {
+  hasValidDescriptor,
+  MATCH_LOOSE,
+  MIN_RECOG_CONFIDENCE,
+  CONFIRM_FRAMES,
+} from '../../services/faceAI/descriptors';
+import { buildGallery, findBestMatchIndexed } from '../../services/faceAI/gallery';
 import { getTestLink, validateTestLink, type TestLinkData } from '../../services/tokenService';
 import { loadStageStudentsCached } from '../SelfRegister/SelfEnrollPage';
-import { hasValidDescriptor, MATCH_LOOSE, MIN_RECOG_CONFIDENCE } from '../../services/faceAI/descriptors';
-import { findBestMatchIndexed, buildGallery } from '../../services/faceAI/gallery';
-import { faceDetectorService, grabVideoFrame } from '../../services/faceAI/detector';
-import { faceEmbedder } from '../../services/faceAI/embedder';
-import { openCameraStream } from '../../services/faceAI/camera';
-import type { Student } from '../../types/student';
-import { ScanFace, CheckCircle, XCircle, AlertTriangle, RefreshCw, Camera } from 'lucide-react';
-import '../SelfRegister/selfRegister.css';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface FaceTestPageProps {
   testToken: string;
   onExit: () => void;
-  onReEnroll: (stageId: string, adminUid: string) => void;
+  onReEnroll?: (stageId: string, adminUid: string) => void;
 }
 
-type TestStatus = 'loading' | 'invalid' | 'no-face' | 'pending' | 'ready' | 'scanning' | 'success' | 'failed';
+type TestPhase = 'loading' | 'invalid' | 'no-face' | 'ready' | 'scanning' | 'success';
 
-export function FaceTestPage({ testToken, onExit, onReEnroll }: FaceTestPageProps) {
+const MIN_FACE_PX = 22;
+const MAX_FACES_PER_FRAME = 10;
+const REEMBED_MIN_INTERVAL = 150;
+const REEMBED_MOVE_THRESHOLD = 0.08;
+
+export const FaceTestPage: React.FC<FaceTestPageProps> = ({
+  testToken,
+  onExit,
+  onReEnroll,
+}) => {
   const { ready: engineReady, progress, error: engineError, retry } = useFaceAI();
-  const [status, setStatus] = useState<TestStatus>('loading');
-  const [linkData, setLinkData] = useState<TestLinkData | null>(null);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [matchedName, setMatchedName] = useState('');
-  const [feedback, setFeedback] = useState('');
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const runningRef = useRef(false);
-  const loopTimerRef = useRef<number | null>(null);
 
-  // تحميل بيانات الرابط وطلاب المرحلة
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const loopTimerRef = useRef<number>(0);
+  const rafRef = useRef<number>(0);
+  const busyRef = useRef(false);
+  const runningRef = useRef(false);
+  const mountedRef = useRef(true);
+  const lastTickRef = useRef(0);
+  const lastSeenRef = useRef(0);
+
+  const [cameraReady, setCameraReady] = useState(false);
+  const [facing, setFacing] = useState<'user' | 'environment'>('user');
+  const [phase, setPhase] = useState<TestPhase>('loading');
+  const [linkData, setLinkData] = useState<TestLinkData | null>(null);
+  const [matchedStudent, setMatchedStudent] = useState<Student | null>(null);
+
+  useBodyScrollLock(phase === 'scanning');
+
+  const studentsRef = useRef<Student[]>([]);
+  const galleryRef = useRef<ReturnType<typeof buildGallery>>([]);
+  const trackerRef = useRef(new FaceTracker());
+
+  // ── تحميل بيانات الرابط وطلاب المرحلة ──
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -40,247 +73,518 @@ export function FaceTestPage({ testToken, onExit, onReEnroll }: FaceTestPageProp
         const link = await getTestLink(testToken);
         if (cancelled) return;
         if (!link || !validateTestLink(link).valid) {
-          setStatus('invalid');
+          setPhase('invalid');
           return;
         }
         setLinkData(link);
-        // تحميل الطلاب — نستخدم adminUid من الرابط
         const s = await loadStageStudentsCached(link.adminUid, new Date().getFullYear().toString(), link.stageId);
         if (cancelled) return;
-        setStudents(s);
-        setStatus('ready');
+        studentsRef.current = s;
+        const approved = s.filter(st => hasValidDescriptor(st.faceDescriptor) && st.selfRegistrationApproved === true);
+        if (approved.length === 0) {
+          setPhase('no-face');
+          return;
+        }
+        galleryRef.current = buildGallery(approved);
+        setPhase('ready');
       } catch {
-        if (!cancelled) setStatus('invalid');
+        if (!cancelled) setPhase('invalid');
       }
     })();
     return () => { cancelled = true; };
   }, [testToken]);
 
-  // فتح الكاميرا والبدء بالمسح
-  const startScan = useCallback(async () => {
-    if (runningRef.current) return;
-    runningRef.current = true;
-    setStatus('scanning');
-    setFeedback('جاري فتح الكاميرا...');
-
-    try {
-      const stream = await openCameraStream('user');
-      streamRef.current = stream;
-      if (!videoRef.current) {
-        const v = document.createElement('video');
-        v.srcObject = stream;
-        v.autoplay = true;
-        v.playsInline = true;
-        v.muted = true;
-        videoRef.current = v;
-        await v.play();
-      } else {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+  // ── فتح/إغلاق الكاميرا ──
+  useEffect(() => {
+    if (phase !== 'scanning' || !engineReady) return;
+    let localStream: MediaStream | null = null;
+    let cancelled = false;
+    (async () => {
+      try {
+        localStream = await openCameraStream(facing);
+        if (cancelled) { localStream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = localStream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = localStream;
+          await videoRef.current.play().catch(() => {});
+          await waitVideoDimensionsStable(videoRef.current);
+        }
+        if (cancelled) return;
+        setCameraReady(true);
+      } catch (e) {
+        console.error('[face-test] فشل فتح الكاميرا:', e);
       }
-      setFeedback('وجّه وجهك للكاميرا...');
-      runLoop();
-    } catch {
-      setFeedback('فشل فتح الكاميرا — تحقق من الصلاحيات');
-      setStatus('failed');
+    })();
+    return () => {
+      cancelled = true;
+      localStream?.getTracks().forEach(t => t.stop());
+      if (streamRef.current === localStream) streamRef.current = null;
+      setCameraReady(false);
+    };
+  }, [phase, engineReady, facing]);
+
+  // ── تنظيف عند الخروج ──
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
       runningRef.current = false;
-    }
+      if (loopTimerRef.current) clearTimeout(loopTimerRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      trackerRef.current.reset();
+    };
   }, []);
 
-  const runLoop = useCallback(() => {
-    const tick = async () => {
-      if (!runningRef.current || !engineReady || !videoRef.current) {
-        if (runningRef.current) loopTimerRef.current = window.setTimeout(tick, 100);
-        return;
-      }
-      const video = videoRef.current;
-      if (video.readyState < 2 || !video.videoWidth) {
-        loopTimerRef.current = window.setTimeout(tick, 100);
-        return;
-      }
-      try {
-        const detections = faceDetectorService.detect(video, performance.now());
-        if (detections.length === 0) {
-          loopTimerRef.current = window.setTimeout(tick, 16);
-          return;
-        }
-        // نأخذ أكبر وجه
-        const face = detections[0];
-        const bmp = await grabVideoFrame(video, faceEmbedder.recommendedMaxWidth);
-        if (!bmp) { loopTimerRef.current = window.setTimeout(tick, 16); return; }
-        const scale = bmp.width / video.videoWidth;
-        const results = await faceEmbedder.embedBatch(bmp, [{
-          x: face.box.x * scale, y: face.box.y * scale,
-          width: face.box.width * scale, height: face.box.height * scale,
-        }]);
-        bmp.close();
-        if (!results || results.length === 0) { loopTimerRef.current = window.setTimeout(tick, 16); return; }
-        const res = results[0];
-        const embedding = new Float32Array(res.descriptor);
-
-        // مقارنة مع جميع الطلاب الذين لديهم بصمة موافق عليها
-        const approvedStudents = students.filter(s =>
-          hasValidDescriptor(s.faceDescriptor) && s.selfRegistrationApproved === true
-        );
-        if (approvedStudents.length === 0) {
-          setStatus('no-face');
-          setFeedback('لا يوجد طلاب بصماتهم موافق عليها بالمرحلة');
-          stopScan();
-          return;
-        }
-        const gallery = buildGallery(approvedStudents);
-        const match = findBestMatchIndexed(embedding, gallery, MATCH_LOOSE, res.quality.composite);
-        if (match && match.confidence >= MIN_RECOG_CONFIDENCE) {
-          setMatchedName(match.item.id);
-          setStatus('success');
-          setFeedback('تم التعرف بنجاح — بصمتك تعمل!');
-          stopScan();
-          return;
-        }
-        // ما يتعرف — نستمر
-        setFeedback('لم يتم التعرف — جرّب إضاءة أفضل أو اقترب قليلاً...');
-      } catch { /* تجاهل */ }
-      loopTimerRef.current = window.setTimeout(tick, 16);
-    };
-    tick();
-  }, [engineReady, students]);
-
+  // ── إيقاف المسح ──
   const stopScan = useCallback(() => {
     runningRef.current = false;
-    if (loopTimerRef.current) { clearTimeout(loopTimerRef.current); loopTimerRef.current = null; }
+    if (loopTimerRef.current) { clearTimeout(loopTimerRef.current); loopTimerRef.current = 0; }
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraReady(false);
   }, []);
 
-  useEffect(() => () => stopScan(), [stopScan]);
+  // ── بدء المسح ──
+  const startScan = useCallback(() => {
+    if (runningRef.current) return;
+    runningRef.current = true;
+    trackerRef.current.reset();
+    setPhase('scanning');
+  }, []);
 
-  const studentName = matchedName ? students.find(s => s.id === matchedName)?.name ?? '' : '';
+  // ── حلقة المسح ──
+  useEffect(() => {
+    if (phase !== 'scanning' || !engineReady || !cameraReady) return;
+    runningRef.current = true;
 
-  return (
-    <div dir="rtl" className="sel-bg min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* حالة التحميل */}
-        {status === 'loading' && (
+    const drawBoxes = (
+      faces: Array<{ box: Box; label?: string; color: string; sub?: string }>,
+    ) => {
+      const video = videoRef.current, canvas = canvasRef.current;
+      if (!video || !canvas || !video.videoWidth) return;
+      const cw = video.clientWidth, ch = video.clientHeight;
+      if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+      const g = canvas.getContext('2d');
+      if (!g) return;
+      g.clearRect(0, 0, cw, ch);
+      const vw = video.videoWidth, vh = video.videoHeight;
+      const sxScale = cw / vw, syScale = ch / vh;
+      const mirrored = facing === 'user';
+
+      for (const f of faces) {
+        const bx = mirrored ? (vw - f.box.x - f.box.width) * sxScale : f.box.x * sxScale;
+        const by = f.box.y * syScale;
+        const bw = f.box.width * sxScale;
+        const bh = f.box.height * sxScale;
+        const pad = Math.round(bw * 0.06);
+
+        g.save();
+        g.strokeStyle = f.color;
+        g.lineWidth = 3.5;
+        g.lineCap = 'round';
+        const c = Math.min(bw, bh) * 0.22;
+        const x1 = bx - pad, y1 = by - pad, x2 = bx + bw + pad, y2 = by + bh + pad;
+        g.beginPath();
+        g.moveTo(x1, y1 + c); g.quadraticCurveTo(x1, y1, x1 + c, y1);
+        g.moveTo(x2 - c, y1); g.quadraticCurveTo(x2, y1, x2, y1 + c);
+        g.moveTo(x2, y2 - c); g.quadraticCurveTo(x2, y2, x2 - c, y2);
+        g.moveTo(x1 + c, y2); g.quadraticCurveTo(x1, y2, x1, y2 - c);
+        g.stroke();
+        g.globalAlpha = 0.25;
+        g.lineWidth = 9;
+        g.stroke();
+        g.restore();
+
+        if (f.label) {
+          const text = f.sub ? `${f.label} · ${f.sub}` : f.label;
+          g.font = 'bold 13px system-ui, sans-serif';
+          const tw = g.measureText(text).width + 18;
+          const ly = Math.max(4, y1 - 26);
+          g.fillStyle = f.color;
+          g.beginPath();
+          g.roundRect(x1 + (bw + pad * 2 - tw) / 2, ly, tw, 21, 10);
+          g.fill();
+          g.fillStyle = '#fff';
+          g.textAlign = 'center';
+          g.fillText(text, x1 + (bw + pad * 2) / 2, ly + 14.5);
+        }
+      }
+    };
+
+    const tick = async () => {
+      if (!runningRef.current || !mountedRef.current) return;
+      const video = videoRef.current;
+      if (!video || video.readyState < 2 || busyRef.current) {
+        rafRef.current = requestAnimationFrame(() => { loopTimerRef.current = window.setTimeout(tick, 50); });
+        return;
+      }
+
+      const interval = performance.now() - lastSeenRef.current < 1500 ? 50 : 200;
+      const nowTs = performance.now();
+      if (nowTs - lastTickRef.current < interval) {
+        rafRef.current = requestAnimationFrame(() => { loopTimerRef.current = window.setTimeout(tick, 10); });
+        return;
+      }
+      lastTickRef.current = nowTs;
+      busyRef.current = true;
+
+      let liveBoxes: Array<{ box: Box; label?: string; color: string; sub?: string }> = [];
+
+      try {
+        const detections: DetectedFace[] = faceDetectorService.detect(video, nowTs);
+
+        if (!faceDetectorService.ready) {
+          retry();
+          if (runningRef.current && mountedRef.current) {
+            loopTimerRef.current = window.setTimeout(tick, 200);
+          }
+          return;
+        }
+
+        if (detections.length > 0) lastSeenRef.current = nowTs;
+
+        const bigEnough = detections
+          .filter(d => d.box.width >= MIN_FACE_PX && d.box.height >= MIN_FACE_PX)
+          .slice(0, MAX_FACES_PER_FRAME);
+
+        if (bigEnough.length === 0) {
+          trackerRef.current.update([]);
+          drawBoxes(liveBoxes);
+        } else {
+          const boxes: TrackBox[] = bigEnough.map(d => ({ ...d.box, keypoints: d.keypoints }));
+          const tracked = trackerRef.current.update(boxes);
+
+          const needEmbed = tracked.filter(t =>
+            trackerRef.current.shouldReembed(t.trackId, nowTs, REEMBED_MIN_INTERVAL, REEMBED_MOVE_THRESHOLD)
+          );
+
+          if (needEmbed.length > 0) {
+            const currentMaxWidth = faceEmbedder.recommendedMaxWidth;
+            const bmp = await grabVideoFrame(video, currentMaxWidth);
+            if (!bmp) { drawBoxes(liveBoxes); return; }
+            const scale = bmp.width / video.videoWidth;
+            const results = await faceEmbedder.embedBatch(
+              bmp,
+              needEmbed.map(t => ({
+                x: t.box.x * scale,
+                y: t.box.y * scale,
+                width: t.box.width * scale,
+                height: t.box.height * scale,
+                keypoints: t.box.keypoints?.map(kp => ({ x: kp.x * scale, y: kp.y * scale })),
+              })),
+            );
+            bmp.close();
+            if (!runningRef.current || !mountedRef.current) return;
+
+            for (let i = 0; i < results.length; i++) {
+              const res = results[i];
+              const trackId = needEmbed[i].trackId;
+              const raw = new Float32Array(res.descriptor);
+              const smoothed = trackerRef.current.addEmbedding(trackId, raw, nowTs);
+
+              const match = findBestMatchIndexed(smoothed, galleryRef.current, MATCH_LOOSE, res.quality.composite);
+              trackerRef.current.setCache(trackId, match?.item.id ?? null, match?.confidence ?? 0);
+
+              const vbw = res.box.width / scale, vbh = res.box.height / scale;
+              const vbx = res.box.x / scale, vby = res.box.y / scale;
+              const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
+
+              if (!match || match.confidence < MIN_RECOG_CONFIDENCE) {
+                const smallFace = res.box.width < MIN_FACE_PX * 1.7;
+                liveBoxes.push({ box: boxInVideo, label: smallFace ? 'اقترب قليلاً' : 'غير معروف', color: '#fbbf24' });
+                continue;
+              }
+
+              const student = studentsRef.current.find(s => s.id === match.item.id);
+              if (!student) continue;
+
+              const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id);
+
+              if (confirmCount < CONFIRM_FRAMES) {
+                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
+                continue;
+              }
+
+              // ✅ تأكيد كامل
+              setMatchedStudent(student);
+              runningRef.current = false;
+              trackerRef.current.removeTrack(trackId);
+              liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
+              drawBoxes(liveBoxes);
+              stopScan();
+              setTimeout(() => { if (mountedRef.current) setPhase('success'); }, 600);
+              return;
+            }
+          }
+
+          // الوجوه من الكاش
+          for (const t of tracked) {
+            if (needEmbed.some(n => n.trackId === t.trackId)) continue;
+            if (!trackerRef.current.hasTrack(t.trackId)) continue;
+            const cache = trackerRef.current.getCache(t.trackId);
+            if (!cache || !cache.cachedMatchId) {
+              liveBoxes.push({ box: t.box, color: 'rgba(255,255,255,0.3)' });
+              continue;
+            }
+
+            const boxInVideo: Box = { x: t.box.x, y: t.box.y, width: t.box.width, height: t.box.height };
+            const student = studentsRef.current.find(s => s.id === cache.cachedMatchId);
+
+            if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE) {
+              const confirmCount = trackerRef.current.bumpConfirm(t.trackId, student.id);
+
+              if (confirmCount >= CONFIRM_FRAMES) {
+                setMatchedStudent(student);
+                runningRef.current = false;
+                trackerRef.current.removeTrack(t.trackId);
+                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
+                drawBoxes(liveBoxes);
+                stopScan();
+                setTimeout(() => { if (mountedRef.current) setPhase('success'); }, 600);
+                return;
+              } else {
+                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
+              }
+            } else {
+              liveBoxes.push({ box: boxInVideo, label: 'غير معروف', color: '#fbbf24' });
+            }
+          }
+
+          drawBoxes(liveBoxes);
+        }
+      } catch (e) {
+        console.warn('[face-test] خطأ في دورة المسح:', e);
+      } finally {
+        busyRef.current = false;
+        if (runningRef.current && mountedRef.current) {
+          rafRef.current = requestAnimationFrame(() => {
+            loopTimerRef.current = window.setTimeout(tick, 16);
+          });
+        }
+      }
+    };
+
+    tick();
+    return () => {
+      runningRef.current = false;
+      if (loopTimerRef.current) clearTimeout(loopTimerRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [phase, engineReady, cameraReady, facing, retry, stopScan]);
+
+  const statusPill = (() => {
+    if (!engineReady || !cameraReady) return { icon: '⏳', text: 'جاري التحضير...', cls: 'bg-white/10 text-slate-300' };
+    return { icon: '✨', text: 'أبقِ وجهك داخل الإطار', cls: 'bg-indigo-500/90 text-white' };
+  })();
+
+  // ── شاشات ما قبل المسح (loading / invalid / no-face / ready) ──
+  const preScanUI = (() => {
+    if (phase === 'loading') {
+      return (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm" dir="rtl">
           <div className="text-center">
-            <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-[3px] border-blue-500 border-t-transparent" />
-            <p className="text-[var(--sel-muted)]">جاري التحقق من الرابط...</p>
+            <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-[3px] border-indigo-500 border-t-transparent" />
+            <p className="text-slate-300 text-sm font-bold">جاري التحقق من الرابط...</p>
           </div>
-        )}
+        </div>
+      );
+    }
 
-        {/* رابط غير صالح */}
-        {status === 'invalid' && (
-          <div className="text-center">
+    if (phase === 'invalid') {
+      return (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm" dir="rtl">
+          <div className="text-center px-6">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10">
-              <XCircle className="h-8 w-8 text-red-400" />
+              <svg className="h-8 w-8 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg>
             </div>
-            <h2 className="text-lg font-bold text-[var(--sel-text)] mb-2">الرابط غير صالح</h2>
-            <p className="text-sm text-[var(--sel-muted)] mb-4">الرابط منتهي أو غير موجود. احصل على رابط جديد من الإدارة.</p>
-            <button onClick={onExit} className="px-4 py-2 rounded-lg bg-[var(--sel-accent)] text-white font-medium text-sm">العودة</button>
+            <h2 className="text-lg font-bold text-white mb-2">الرابط غير صالح</h2>
+            <p className="text-sm text-slate-400 mb-4">الرابط منتهي أو غير موجود. احصل على رابط جديد من الإدارة.</p>
+            <button onClick={onExit} className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition active:scale-95">
+              العودة
+            </button>
           </div>
-        )}
+        </div>
+      );
+    }
 
-        {/* جاهز للاختبار */}
-        {(status === 'ready' || status === 'failed') && (
-          <div className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#1458E2] to-[#2B7BFF] shadow-[0_8px_20px_rgba(20,88,226,0.3)]">
-              <ScanFace className="h-8 w-8 text-white" />
+    if (phase === 'no-face') {
+      return (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm" dir="rtl">
+          <div className="text-center px-6">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10">
+              <svg className="h-8 w-8 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
             </div>
-            <h2 className="text-lg font-bold text-[var(--sel-text)] mb-2">اختبار بصمة الوجه</h2>
-            <p className="text-sm text-[var(--sel-muted)] mb-1">هذه صفحة لاختبار بصمة وجهك</p>
-            <div className="bg-[var(--sel-bg-note)] border border-[var(--sel-line-note)] rounded-lg p-3 mb-4">
-              <p className="text-xs text-[var(--sel-note-text)] leading-6">
-                <AlertTriangle className="inline h-3.5 w-3.5 ml-1 text-amber-400" />
+            <h2 className="text-lg font-bold text-amber-300 mb-2">بصمتك غير محفوظة</h2>
+            <p className="text-sm text-slate-400 mb-4">لم يتم العثور على بصمة وجه موافق عليها في هذه المرحلة.</p>
+            {linkData && onReEnroll && (
+              <button
+                onClick={() => onReEnroll(linkData.stageId, linkData.adminUid)}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#1458E2] to-[#2B7BFF] text-white font-bold text-sm shadow-lg active:scale-95 transition"
+              >
+                سجّل بصمتك الآن
+              </button>
+            )}
+            <button onClick={onExit} className="mt-3 block mx-auto text-sm text-slate-400 hover:text-white transition">
+              العودة
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (phase === 'ready') {
+      return (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm" dir="rtl">
+          <div className="text-center px-6">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-[0_8px_20px_rgba(99,102,241,0.3)]">
+              <svg className="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2" />
+                <circle cx="12" cy="10" r="3" />
+                <path d="M12 13c-2.67 0-8 1.34-8 4v1h16v-1c0-2.66-5.33-4-8-4z" />
+              </svg>
+            </div>
+            <h2 className="text-lg font-bold text-white mb-2">اختبار بصمة الوجه</h2>
+            <p className="text-sm text-slate-400 mb-1">هذه صفحة لاختبار بصمة وجهك</p>
+            <div className="bg-white/5 border border-white/10 rounded-lg p-3 mb-5">
+              <p className="text-xs text-slate-300 leading-6">
+                <svg className="inline h-3.5 w-3.5 ml-1 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
                 لكي يعمل الاختبار، يجب أن تكون بصمتك <strong className="text-amber-300">محفوظة في النظام وموافق عليها</strong> من قبل الإدارة.
                 إذا لم تسجل بصمتك بعد، استخدم رابط التسجيل أولاً.
               </p>
             </div>
-            {feedback && status === 'failed' && (
-              <p className="text-sm text-red-400 mb-3">{feedback}</p>
-            )}
             <button
               onClick={startScan}
               disabled={!engineReady}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#1458E2] to-[#2B7BFF] text-white font-bold text-sm shadow-lg hover:shadow-xl transition disabled:opacity-50"
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-sm shadow-lg hover:shadow-xl transition active:scale-95 disabled:opacity-50"
             >
-              <Camera className="inline h-4 w-4 ml-2" />
-              فتح الكاميرا واختبار البصمة
+              ابدأ الاختبار
             </button>
-            <button onClick={onExit} className="mt-3 text-sm text-[var(--sel-muted)] hover:text-[var(--sel-text)] transition">العودة</button>
-          </div>
-        )}
-
-        {/* جاري المسح */}
-        {status === 'scanning' && (
-          <div className="text-center">
-            <div className="relative mx-auto mb-4 w-48 h-48 rounded-2xl overflow-hidden border-2 border-blue-500/50">
-              <video ref={el => {
-                if (el && !videoRef.current) {
-                  videoRef.current = el;
-                  if (streamRef.current) { el.srcObject = streamRef.current; el.play(); }
-                }
-              }} autoPlay playsInline muted className="w-full h-full object-cover" />
-              <div className="absolute inset-0 border-2 border-blue-400/30 rounded-2xl animate-pulse" />
-            </div>
-            <p className="text-sm text-[var(--sel-muted)] mb-3">{feedback}</p>
-            <button onClick={() => { stopScan(); setStatus('ready'); }} className="text-sm text-[var(--sel-muted)] hover:text-red-400 transition">إلغاء</button>
-          </div>
-        )}
-
-        {/* نجاح */}
-        {status === 'success' && (
-          <div className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-green-500/10">
-              <CheckCircle className="h-8 w-8 text-green-400" />
-            </div>
-            <h2 className="text-lg font-bold text-green-300 mb-2">البصمة تعمل!</h2>
-            <p className="text-sm text-[var(--sel-muted)] mb-1">تم التعرف على وجهك بنجاح</p>
-            {studentName && <p className="text-sm text-[var(--sel-accent-soft)] mb-4">مرحباً {studentName}</p>}
-            <button onClick={() => { setStatus('ready'); setFeedback(''); setMatchedName(''); }} className="px-4 py-2 rounded-lg bg-[var(--sel-accent)] text-white font-medium text-sm">اختبار مرة ثانية</button>
-            <button onClick={onExit} className="mt-2 block mx-auto text-sm text-[var(--sel-muted)] hover:text-[var(--sel-text)] transition">العودة</button>
-          </div>
-        )}
-
-        {/* لا توجد بصمة */}
-        {status === 'no-face' && (
-          <div className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10">
-              <AlertTriangle className="h-8 w-8 text-amber-400" />
-            </div>
-            <h2 className="text-lg font-bold text-amber-300 mb-2">بصمتك غير محفوظة</h2>
-            <p className="text-sm text-[var(--sel-muted)] mb-4">لم يتم العثور على بصمة وجه موافق عليها في هذه المرحلة.</p>
-            {linkData && (
-              <button
-                onClick={() => onReEnroll(linkData.stageId, linkData.adminUid)}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#1458E2] to-[#2B7BFF] text-white font-bold text-sm shadow-lg"
-              >
-                <ScanFace className="inline h-4 w-4 ml-2" />
-                سجّل بصمتك الآن
-              </button>
-            )}
-            <button onClick={onExit} className="mt-3 text-sm text-[var(--sel-muted)] hover:text-[var(--sel-text)] transition">العودة</button>
-          </div>
-        )}
-
-        {engineError && (
-          <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-center">
-            <p className="text-xs text-red-400">{engineError}</p>
-            <button onClick={retry} className="mt-2 text-xs text-red-300 hover:text-red-200">
-              <RefreshCw className="inline h-3 w-3 ml-1" /> إعادة المحاولة
+            <button onClick={onExit} className="mt-3 block mx-auto text-sm text-slate-400 hover:text-white transition">
+              العودة
             </button>
           </div>
-        )}
+        </div>
+      );
+    }
 
-        {!engineReady && status !== 'loading' && status !== 'invalid' && (
-          <div className="mt-4">
-            <EngineOverlay progress={progress} error={engineError} onRetry={retry} onCancel={onExit} />
-          </div>
-        )}
+    return null;
+  })();
+
+  // ── شاشة النجاح ──
+  const successOverlay = phase === 'success' && matchedStudent ? (
+    <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto">
+      <div className="text-center px-6 max-w-sm">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/15">
+          <svg className="h-8 w-8 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <h2 className="text-xl font-extrabold text-emerald-300 mb-2">البصمة تعمل!</h2>
+        <p className="text-sm text-slate-300 mb-1">تم التعرف على وجهك بنجاح</p>
+        <p className="text-base font-bold text-white mb-5">{matchedStudent.name}</p>
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={() => {
+              setMatchedStudent(null);
+              setPhase('ready');
+              trackerRef.current.reset();
+            }}
+            className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-sm shadow-lg active:scale-95 transition"
+          >
+            اختبار مرة ثانية
+          </button>
+          <button onClick={onExit} className="text-sm text-slate-400 hover:text-white transition">
+            العودة
+          </button>
+        </div>
       </div>
     </div>
+  ) : null;
+
+  return createPortal(
+    <>
+      {preScanUI}
+
+      {phase === 'scanning' && (
+        <div
+          dir="rtl"
+          className="fixed inset-0 z-[9999] flex flex-col bg-slate-950/95 backdrop-blur-sm"
+          onTouchMove={(e) => { e.preventDefault(); }}
+          style={{ touchAction: 'none' }}
+        >
+          {!engineReady && <EngineOverlay progress={progress} error={engineError} onRetry={retry} onCancel={() => { stopScan(); onExit(); }} />}
+
+          {/* أزرار عائمة */}
+          {engineReady && (
+            <div className="absolute left-3 z-30 flex items-center gap-2 pointer-events-none" style={{ top: 'calc(env(safe-area-inset-top, 12px) + 12px)' }}>
+              <button
+                onClick={() => { stopScan(); setPhase('ready'); }}
+                aria-label="إغلاق"
+                className="pointer-events-auto w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-white flex items-center justify-center transition active:scale-90 shadow-lg"
+              >
+                ✕
+              </button>
+              <button
+                onClick={() => setFacing(f => (f === 'user' ? 'environment' : 'user'))}
+                aria-label="تبديل الكاميرا"
+                className="pointer-events-auto w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-white flex items-center justify-center transition active:scale-90 shadow-lg"
+              >
+                🔄
+              </button>
+            </div>
+          )}
+
+          {/* منطقة الكاميرا */}
+          <div className="relative flex-1 min-h-0 overflow-hidden">
+            <video
+              ref={videoRef}
+              playsInline
+              muted
+              autoPlay
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${cameraReady ? 'opacity-100' : 'opacity-0'}`}
+              style={{ transform: facing === 'user' ? 'scaleX(-1)' : undefined }}
+            />
+            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+
+            {/* دليل الإطار */}
+            {engineReady && cameraReady && (
+              <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                <div
+                  className="rounded-[38%] border-2 border-dashed border-white/25 animate-pulse-slow transition-all duration-500"
+                  style={{ width: 'min(58%, 340px)', height: 'min(62%, 420px)' }}
+                />
+              </div>
+            )}
+
+            {!cameraReady && engineReady && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black">
+                <div className="text-center">
+                  <div className="inline-block w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3" />
+                  <p className="text-slate-300 text-sm font-bold">جاري فتح الكاميرا...</p>
+                </div>
+              </div>
+            )}
+
+            {/* شريط الحالة */}
+            <div className="absolute inset-x-0 flex justify-center pointer-events-none px-4" style={{ bottom: 'calc(env(safe-area-inset-bottom, 16px) + 16px)' }}>
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-extrabold backdrop-blur-md transition-all duration-300 ${statusPill.cls}`}>
+                <span>{statusPill.icon}</span>
+                <span>{statusPill.text}</span>
+              </div>
+            </div>
+
+            {successOverlay}
+          </div>
+
+          <style>{`
+            @keyframes pulseSlow { 0%,100% { opacity:.35 } 50% { opacity:.75 } }
+            .animate-pulse-slow { animation: pulseSlow 2.4s ease-in-out infinite; }
+          `}</style>
+        </div>
+      )}
+    </>,
+    document.body
   );
-}
+};
