@@ -22,8 +22,8 @@ import {
 import { buildGallery, findBestMatchIndexed } from '../../services/faceAI/gallery';
 import { estimatePose, poseToBin } from '../../services/faceAI/pose';
 import { getTestLink, validateTestLink, formatRemainingMs, getServerNow } from '../../services/tokenService';
-import { loadStageStudentsCached } from '../SelfRegister/SelfEnrollPage';
-import { getActiveAcademicYear, saveStudents } from '../../firebase/dataService';
+import { loadStageStudentsWithOverrides } from '../SelfRegister/SelfEnrollPage';
+import { updateStudentDescriptorOverride } from '../../firebase/dataService';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface FaceTestPageProps {
@@ -94,8 +94,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
         setExpiresAt(link.expiresAt);
         setRemainingMs(link.expiresAt - getServerNow());
         linkDataRef.current = { adminUid: link.adminUid, stageId: link.stageId };
-        const year = await getActiveAcademicYear();
-        const s = await loadStageStudentsCached(link.adminUid, year, link.stageId);
+        const s = await loadStageStudentsWithOverrides(link.adminUid, link.stageId);
         if (cancelled) return;
         studentsRef.current = s;
         const approved = s.filter(st => hasValidDescriptor(st.faceDescriptor));
@@ -479,18 +478,25 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
       if (loopTimerRef.current) { clearTimeout(loopTimerRef.current); loopTimerRef.current = 0; }
       if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
 
-      // حفظ البصمة المحسّنة
+      // حفظ البصمة المحسّنة في descriptorOverrides
       if (matchedStudent && savedDescriptorRef.current && linkDataRef.current && enhancedCountRef.current > 0) {
         try {
+          // تحديث الكاش المحلي
           const students = studentsRef.current;
           const idx = students.findIndex(s => s.id === matchedStudent.id);
           if (idx >= 0) {
             students[idx] = { ...students[idx], faceDescriptor: savedDescriptorRef.current };
             studentsRef.current = students;
             galleryRef.current = buildGallery(students.filter(s => hasValidDescriptor(s.faceDescriptor)));
-            await saveStudents(linkDataRef.current.adminUid, linkDataRef.current.stageId, students);
-            console.log(`[face-test] حُفظت ${enhancedCountRef.current} عناقيد جديدة للبصمة`);
           }
+          // حفظ في Firebase عبر descriptorOverrides (لا يتطلب تسجيل دخول)
+          await updateStudentDescriptorOverride(
+            linkDataRef.current.adminUid,
+            linkDataRef.current.stageId,
+            matchedStudent.id,
+            savedDescriptorRef.current,
+          );
+          console.log(`[face-test] حُفظت ${enhancedCountRef.current} عناقيد جديدة للبصمة`);
         } catch (e) {
           console.warn('[face-test] فشل حفظ البصمة المحسّنة:', e);
         }

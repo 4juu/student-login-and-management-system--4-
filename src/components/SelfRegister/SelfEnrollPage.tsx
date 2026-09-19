@@ -70,6 +70,37 @@ export const loadStageStudentsPublic = async (
   return arr.filter(s => s && s.id && s.name) as Student[];
 };
 
+// ── تحميل الطلاب مع دمج التحسينات المحفوظة (descriptorOverrides) ──
+export const loadStageStudentsWithOverrides = async (
+  adminUid: string,
+  stageId: string,
+): Promise<Student[]> => {
+  const year = await getActiveAcademicYear();
+  const students = await loadStageStudentsCached(adminUid, year, stageId);
+  if (students.length === 0) return students;
+
+  try {
+    const overridesPath = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}/descriptorOverrides`;
+    const overridesData = await dbFetch<Record<string, { faceDescriptor: any; updatedAt: number }>>(overridesPath);
+    if (!overridesData) return students;
+
+    let merged = 0;
+    const result = students.map(s => {
+      const ov = overridesData[s.id];
+      if (ov?.faceDescriptor && ov.updatedAt > 0) {
+        merged++;
+        return { ...s, faceDescriptor: ov.faceDescriptor };
+      }
+      return s;
+    });
+
+    if (merged > 0) console.log(`[selfEnroll] دُمج ${merged} تحسين بصمة من descriptorOverrides`);
+    return result;
+  } catch {
+    return students;
+  }
+};
+
 const STAGE_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 ساعات
 
 const stageCacheKey = (adminUid: string, year: string, stageId: string) =>

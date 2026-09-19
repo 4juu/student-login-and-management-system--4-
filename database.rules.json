@@ -130,6 +130,15 @@
                   }
                 },
 
+                // ✅ تحسينات البصمة — أي شخص يكتب ويقرأ (الطلاب بلا تسجيل دخولduring face test)
+                "descriptorOverrides": {
+                  ".read": true,
+                  ".write": true,
+                  "$studentId": {
+                    ".validate": "newData.hasChildren(['faceDescriptor', 'updatedAt'])"
+                  }
+                },
+
                 "teacherRecords": {
                   "$teacherId": {
                     ".read": true,

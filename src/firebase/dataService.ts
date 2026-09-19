@@ -392,6 +392,70 @@ export const loadStudents = async (adminUid: string, stageId: string): Promise<S
 };
 
 // ============================================================
+// 🔄 تحسينات البصمة — descriptorOverrides
+// يسمح للطلاب (بدون تسجيل دخول) بتحسين بصمتهم عبر رابط الاختبار
+// ============================================================
+
+/**
+ * حفظ تحسين بصمة لطالب معين (يكتب للمسار الفرعي descriptorOverrides)
+ * هذه الدالة لا تتطلب تسجيل دخول — القاعدة تسمح لـ `.write: true`
+ */
+export const updateStudentDescriptorOverride = async (
+  adminUid: string,
+  stageId: string,
+  studentId: string,
+  faceDescriptor: any,
+): Promise<void> => {
+  try {
+    const year = await getActiveAcademicYear();
+    const path = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}/descriptorOverrides/${studentId}`;
+    await set(ref(database, path), {
+      faceDescriptor,
+      updatedAt: Date.now(),
+    });
+    console.log(`[dataService] حُفظ تحسين بصمة الطالب: ${studentId}`);
+  } catch (e) {
+    console.warn('[dataService] فشل حفظ تحسين البصمة:', e);
+  }
+};
+
+/**
+ * جلب التحسينات المحفوظة لمرحلة معينة
+ */
+export const loadDescriptorOverrides = async (
+  adminUid: string,
+  stageId: string,
+): Promise<Record<string, any>> => {
+  try {
+    const year = await getActiveAcademicYear();
+    const path = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}/descriptorOverrides`;
+    const snap = await get(ref(database, path));
+    if (!snap.exists()) return {};
+    return snap.val() as Record<string, any>;
+  } catch {
+    return {};
+  }
+};
+
+/**
+ * حذف التحسينات بعد دمجها في القائمة الرئيسية
+ */
+export const clearDescriptorOverrides = async (
+  adminUid: string,
+  stageId: string,
+  studentIds: string[],
+): Promise<void> => {
+  try {
+    const year = await getActiveAcademicYear();
+    const updates: Record<string, null> = {};
+    for (const id of studentIds) {
+      updates[`academicYears/${year}/userData/${adminUid}/stageData/${stageId}/descriptorOverrides/${id}`] = null;
+    }
+    await update(ref(database), updates);
+  } catch { /* تجاهل */ }
+};
+
+// ============================================================
 // 📝 ATTENDANCE RECORDS (مع الضغط الذكي التلقائي)
 // ============================================================
 
