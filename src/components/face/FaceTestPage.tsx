@@ -140,6 +140,8 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
           videoRef.current.srcObject = localStream;
           await videoRef.current.play().catch(() => {});
           await waitVideoDimensionsStable(videoRef.current);
+          // انتظار إضافي لاستقرار الكاميرا полностью (منع الزوم القفز)
+          await new Promise(r => setTimeout(r, 400));
         }
         if (cancelled) return;
         setCameraReady(true);
@@ -501,7 +503,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
 
   const statusPill = (() => {
     if (phase === 'enhancing') {
-      return { icon: '🔄', text: `تحسين البصمة... ${enhanceCountdown}s`, cls: 'bg-emerald-500/90 text-white' };
+      return { icon: '⏳', text: 'يرجى الانتظار', cls: 'bg-emerald-500/90 text-white' };
     }
     if (!engineReady || !cameraReady) return { icon: '⏳', text: 'جاري التحضير...', cls: 'bg-white/10 text-slate-300' };
     return { icon: '✨', text: 'أبقِ وجهك داخل الإطار', cls: 'bg-indigo-500/90 text-white' };
@@ -711,6 +713,31 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
                     >
                       موافق
                     </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* overlay: التعرف ناجح — يرجى الانتظار */}
+            {phase === 'enhancing' && matchedStudent && (
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-auto" dir="rtl">
+                <div className="absolute inset-0 bg-black/50 backdrop-blur-md" />
+                <div className="relative text-center px-8 max-w-md">
+                  <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500/20 border-2 border-emerald-400/30 animate-pulse">
+                    <svg className="h-10 w-10 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  </div>
+                  <h2 className="text-2xl font-extrabold text-white mb-1">أهلاً {matchedStudent.name.split(' ')[0]}</h2>
+                  <p className="text-lg font-bold text-emerald-300 mb-4">تم التعرف على بصمتك</p>
+                  <div className="flex items-center justify-center gap-2 mb-3">
+                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <p className="text-sm text-slate-300 font-medium">يرجى الانتظار {enhanceCountdown} ثوانٍ...</p>
+                  </div>
+                  {/* حلقة تقدم دائرية */}
+                  <div className="mx-auto w-48 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-1000 ease-linear"
+                      style={{ width: `${((10 - enhanceCountdown) / 10) * 100}%` }}
+                    />
                   </div>
                 </div>
               </div>

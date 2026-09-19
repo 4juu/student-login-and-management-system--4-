@@ -33,7 +33,7 @@ export async function waitVideoDimensionsStable(
     const h = video.videoHeight;
     if (w > 0 && h > 0 && w === lastW && h === lastH) {
       stableCount++;
-      if (stableCount >= 2) return;
+      if (stableCount >= 4) return;
     } else {
       stableCount = 0;
     }
