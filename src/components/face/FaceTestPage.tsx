@@ -28,7 +28,7 @@ interface FaceTestPageProps {
   onReEnroll?: (stageId: string, adminUid: string) => void;
 }
 
-type TestPhase = 'loading' | 'invalid' | 'no-face' | 'ready' | 'scanning' | 'success';
+type TestPhase = 'loading' | 'invalid' | 'ready' | 'scanning' | 'success';
 
 const MIN_FACE_PX = 22;
 const MAX_FACES_PER_FRAME = 10;
@@ -58,12 +58,14 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
   const [phase, setPhase] = useState<TestPhase>('loading');
   const [linkData, setLinkData] = useState<TestLinkData | null>(null);
   const [matchedStudent, setMatchedStudent] = useState<Student | null>(null);
+  const [noMatchOverlay, setNoMatchOverlay] = useState(false);
 
   useBodyScrollLock(phase === 'scanning');
 
   const studentsRef = useRef<Student[]>([]);
   const galleryRef = useRef<ReturnType<typeof buildGallery>>([]);
   const trackerRef = useRef(new FaceTracker());
+  const faceSeenRef = useRef(0);
 
   // ── تحميل بيانات الرابط وطلاب المرحلة ──
   useEffect(() => {
@@ -81,10 +83,6 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
         if (cancelled) return;
         studentsRef.current = s;
         const approved = s.filter(st => hasValidDescriptor(st.faceDescriptor) && st.selfRegistrationApproved === true);
-        if (approved.length === 0) {
-          setPhase('no-face');
-          return;
-        }
         galleryRef.current = buildGallery(approved);
         setPhase('ready');
       } catch {
@@ -153,6 +151,8 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
     if (runningRef.current) return;
     runningRef.current = true;
     trackerRef.current.reset();
+    faceSeenRef.current = 0;
+    setNoMatchOverlay(false);
     setPhase('scanning');
   }, []);
 
@@ -253,6 +253,8 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
 
         if (bigEnough.length === 0) {
           trackerRef.current.update([]);
+          faceSeenRef.current = 0;
+          setNoMatchOverlay(false);
           drawBoxes(liveBoxes);
         } else {
           const boxes: TrackBox[] = bigEnough.map(d => ({ ...d.box, keypoints: d.keypoints }));
@@ -280,6 +282,8 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
             bmp.close();
             if (!runningRef.current || !mountedRef.current) return;
 
+            let anyMatched = false;
+
             for (let i = 0; i < results.length; i++) {
               const res = results[i];
               const trackId = needEmbed[i].trackId;
@@ -302,6 +306,8 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               const student = studentsRef.current.find(s => s.id === match.item.id);
               if (!student) continue;
 
+              anyMatched = true;
+
               const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id);
 
               if (confirmCount < CONFIRM_FRAMES) {
@@ -318,6 +324,13 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               stopScan();
               setTimeout(() => { if (mountedRef.current) setPhase('success'); }, 600);
               return;
+            }
+
+            if (!anyMatched && bigEnough.length > 0) {
+              faceSeenRef.current += 1;
+              if (faceSeenRef.current >= 8) {
+                setNoMatchOverlay(true);
+              }
             }
           }
 
@@ -411,31 +424,6 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
       );
     }
 
-    if (phase === 'no-face') {
-      return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm" dir="rtl">
-          <div className="text-center px-6">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10">
-              <svg className="h-8 w-8 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
-            </div>
-            <h2 className="text-lg font-bold text-amber-300 mb-2">بصمتك غير محفوظة</h2>
-            <p className="text-sm text-slate-400 mb-4">لم يتم العثور على بصمة وجه موافق عليها في هذه المرحلة.</p>
-            {linkData && onReEnroll && (
-              <button
-                onClick={() => onReEnroll(linkData.stageId, linkData.adminUid)}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#1458E2] to-[#2B7BFF] text-white font-bold text-sm shadow-lg active:scale-95 transition"
-              >
-                سجّل بصمتك الآن
-              </button>
-            )}
-            <button onClick={onExit} className="mt-3 block mx-auto text-sm text-slate-400 hover:text-white transition">
-              العودة
-            </button>
-          </div>
-        </div>
-      );
-    }
-
     if (phase === 'ready') {
       return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm" dir="rtl">
@@ -488,6 +476,8 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
           <button
             onClick={() => {
               setMatchedStudent(null);
+              setNoMatchOverlay(false);
+              faceSeenRef.current = 0;
               setPhase('ready');
               trackerRef.current.reset();
             }}
@@ -576,6 +566,35 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
             </div>
 
             {successOverlay}
+
+            {/* overlay: لا توجد بصمة */}
+            {noMatchOverlay && !matchedStudent && (
+              <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto">
+                <div className="text-center px-6 max-w-sm">
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/15">
+                    <svg className="h-8 w-8 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                  </div>
+                  <h2 className="text-lg font-bold text-amber-300 mb-2">بصمتك غير محفوظة</h2>
+                  <p className="text-sm text-slate-400 mb-4">لم يتم التعرف على بصمة وجهك. يرجى تسجيل بصمتك عبر رابط التسجيل.</p>
+                  <div className="flex flex-col gap-2">
+                    {linkData && onReEnroll && (
+                      <button
+                        onClick={() => { stopScan(); onReEnroll(linkData.stageId, linkData.adminUid); }}
+                        className="w-full py-3 rounded-xl bg-gradient-to-r from-[#1458E2] to-[#2B7BFF] text-white font-bold text-sm shadow-lg active:scale-95 transition"
+                      >
+                        سجّل بصمتك الآن
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { setNoMatchOverlay(false); faceSeenRef.current = 0; }}
+                      className="text-sm text-slate-400 hover:text-white transition"
+                    >
+                      حاول مرة ثانية
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <style>{`
