@@ -20,6 +20,7 @@ import {
 import { buildGallery, findBestMatchIndexed } from '../../services/faceAI/gallery';
 import { getTestLink, validateTestLink, type TestLinkData } from '../../services/tokenService';
 import { loadStageStudentsCached } from '../SelfRegister/SelfEnrollPage';
+import { getActiveAcademicYear } from '../../firebase/dataService';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface FaceTestPageProps {
@@ -79,7 +80,8 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
           return;
         }
         setLinkData(link);
-        const s = await loadStageStudentsCached(link.adminUid, new Date().getFullYear().toString(), link.stageId);
+        const year = await getActiveAcademicYear();
+        const s = await loadStageStudentsCached(link.adminUid, year, link.stageId);
         if (cancelled) return;
         studentsRef.current = s;
         const approved = s.filter(st => hasValidDescriptor(st.faceDescriptor) && st.selfRegistrationApproved === true);
