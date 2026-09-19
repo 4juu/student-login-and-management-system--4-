@@ -323,8 +323,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               trackerRef.current.removeTrack(trackId);
               liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
               drawBoxes(liveBoxes);
-              stopScan();
-              setTimeout(() => { if (mountedRef.current) setPhase('success'); }, 600);
+              setTimeout(() => { if (mountedRef.current) setPhase('success'); }, 400);
               return;
             }
 
@@ -358,8 +357,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
                 trackerRef.current.removeTrack(t.trackId);
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
                 drawBoxes(liveBoxes);
-                stopScan();
-                setTimeout(() => { if (mountedRef.current) setPhase('success'); }, 600);
+                setTimeout(() => { if (mountedRef.current) setPhase('success'); }, 400);
                 return;
               } else {
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
@@ -497,6 +495,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
   return createPortal(
     <>
       {preScanUI}
+      {successOverlay}
 
       {phase === 'scanning' && (
         <div
@@ -566,11 +565,9 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               </div>
             </div>
 
-            {successOverlay}
-
             {/* overlay: لا توجد بصمة */}
             {noMatchOverlay && !matchedStudent && (
-              <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto">
+<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto">
                 <div className="text-center px-6 max-w-sm">
                   <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/15">
                     <svg className="h-8 w-8 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
