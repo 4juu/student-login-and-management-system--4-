@@ -1,3 +1,6 @@
+/attendance.html  /attendance.html  200
+/register.html    /register.html    200
+/face-test.html   /face-test.html   200
 /assets/*  /assets/:splat  200
 /ort/*     /ort/:splat     200
 /models/*  /models/:splat  200

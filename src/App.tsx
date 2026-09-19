@@ -128,6 +128,7 @@ function App() {
   // 🆕 كشف توكن التسجيل الذاتي من URL - بطرق متعددة لدعم كل المتصفحات
   const [registerToken, setRegisterToken] = useState<string | null>(null);
   const [testToken, setTestToken] = useState<string | null>(null);
+  const [attToken, setAttToken] = useState<string | null>(null);
   const [tokenChecked, setTokenChecked] = useState(false);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -271,6 +272,19 @@ function App() {
           if (match2?.[1]) testTkn = decodeURIComponent(match2[1]);
         }
         if (testTkn) setTestToken(testTkn);
+
+        // كشف توكن الحضور
+        let attTkn: string | null = null;
+        attTkn = params.get('att');
+        if (!attTkn && window.location.hash) {
+          const hashStr3 = window.location.hash.replace(/^#\/?/, '');
+          attTkn = new URLSearchParams(hashStr3).get('att');
+        }
+        if (!attTkn) {
+          const match3 = window.location.href.match(/[?&#]att=([^&#]+)/);
+          if (match3?.[1]) attTkn = decodeURIComponent(match3[1]);
+        }
+        if (attTkn) setAttToken(attTkn);
 
         setTokenChecked(true);
       } catch (e) {
@@ -1003,6 +1017,18 @@ function App() {
         </div>
       }>
         <SelfEnrollPage token={registerToken} onExit={handleExitSelfRegister} />
+      </Suspense>
+    );
+  }
+
+  if (attToken) {
+    return (
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center bg-[#0B1220]">
+          <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }>
+        <SelfEnrollPage token={attToken} onExit={() => { setAttToken(null); window.history.replaceState({}, '', window.location.pathname); }} />
       </Suspense>
     );
   }

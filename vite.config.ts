@@ -16,11 +16,42 @@ const SITE_URL = (
   ''
 ).replace(/\/+$/, '');
 
+// 🎨 عناصر OG المخصصة لكل صفحة
+const OG_CONFIG: Record<string, { title: string; desc: string; url: string }> = {
+  'attendance.html': {
+    title: 'تقرير الحضور والغياب',
+    desc: 'سجّل حضورك وتابع غيابك في محاضراتك — نظام الحضور الذكي.',
+    url: '/attendance.html',
+  },
+  'register.html': {
+    title: 'سجّل بصمتك الآن',
+    desc: 'سجّل بصمة وجهك في نظام الحضور الذكي — الخطوة الأولى لتسجيل حضورك.',
+    url: '/register.html',
+  },
+  'face-test.html': {
+    title: 'اختبر بصمة وجهك',
+    desc: 'اختبر إذا بصمتك تعمل في نظام الحضور — افتح الرابط واختبر عبر الكاميرا.',
+    url: '/face-test.html',
+  },
+};
+
 function injectSiteUrl() {
   return {
     name: 'inject-site-url',
-    transformIndexHtml(html: string) {
-      return html.replace(/%SITE_URL%/g, SITE_URL);
+    transformIndexHtml(html: string, ctx: { filename: string }) {
+      let result = html.replace(/%SITE_URL%/g, SITE_URL);
+      // حقن عناصر OG الخاصة لكل ملف HTML
+      const fileName = ctx.filename.split(/[/\\]/).pop() || '';
+      const og = OG_CONFIG[fileName];
+      if (og) {
+        result = result.replace(/%OG_TITLE%/g, og.title);
+        result = result.replace(/%OG_DESC%/g, og.desc);
+      } else {
+        // index.html — إزالة أي placeholders متبقية
+        result = result.replace(/%OG_TITLE%/g, 'نظام الحضور الذكي');
+        result = result.replace(/%OG_DESC%/g, 'نظام إدارة الحضور والغياب بالتعرف على الوجه.');
+      }
+      return result;
     },
   };
 }
@@ -58,6 +89,12 @@ export default defineConfig({
   build: {
     target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
     rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        attendance: path.resolve(__dirname, 'attendance.html'),
+        register: path.resolve(__dirname, 'register.html'),
+        'face-test': path.resolve(__dirname, 'face-test.html'),
+      },
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom'],

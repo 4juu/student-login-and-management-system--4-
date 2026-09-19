@@ -9,38 +9,43 @@ const FaceTestPage = lazy(() =>
 );
 
 /** صرف مدخل خفيف لصفحة الطالب — دون تحميل لوحة التحكم كاملة */
-function detectToken(): { reg: string | null; test: string | null } {
+function detectToken(): { reg: string | null; test: string | null; att: string | null } {
   try {
     let reg: string | null = null;
     let test: string | null = null;
+    let att: string | null = null;
     const params = new URLSearchParams(window.location.search);
     reg = params.get('reg');
     test = params.get('test');
+    att = params.get('att');
 
-    if (!reg && !test && window.location.hash) {
+    if (!reg && !test && !att && window.location.hash) {
       const hashStr = window.location.hash.replace(/^#\/?/, '');
       const hp = new URLSearchParams(hashStr);
       reg = hp.get('reg');
       test = hp.get('test');
+      att = hp.get('att');
     }
 
-    if (!reg && !test) {
+    if (!reg && !test && !att) {
       const m1 = window.location.href.match(/[?&#]reg=([^&#]+)/);
       if (m1?.[1]) reg = decodeURIComponent(m1[1]);
       const m2 = window.location.href.match(/[?&#]test=([^&#]+)/);
       if (m2?.[1]) test = decodeURIComponent(m2[1]);
+      const m3 = window.location.href.match(/[?&#]att=([^&#]+)/);
+      if (m3?.[1]) att = decodeURIComponent(m3[1]);
     }
 
     if (!reg) reg = sessionStorage.getItem('pendingRegToken');
     if (reg) sessionStorage.setItem('pendingRegToken', reg);
-    return { reg, test };
+    return { reg, test, att };
   } catch {
-    return { reg: sessionStorage.getItem('pendingRegToken'), test: null };
+    return { reg: sessionStorage.getItem('pendingRegToken'), test: null, att: null };
   }
 }
 
 export default function StudentEntry() {
-  const [tokens, setTokens] = useState<{ reg: string | null; test: string | null }>({ reg: null, test: null });
+  const [tokens, setTokens] = useState<{ reg: string | null; test: string | null; att: string | null }>({ reg: null, test: null, att: null });
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
@@ -54,6 +59,7 @@ export default function StudentEntry() {
       const url = new URL(window.location.href);
       url.searchParams.delete('reg');
       url.searchParams.delete('test');
+      url.searchParams.delete('att');
       window.history.replaceState({}, '', `${url.pathname}`);
     } catch {}
   };
@@ -63,7 +69,7 @@ export default function StudentEntry() {
   }
 
   // لا يوجد أي توكن
-  if (!tokens.reg && !tokens.test) {
+  if (!tokens.reg && !tokens.test && !tokens.att) {
     return (
       <div dir="rtl" className="sel-bg flex items-center justify-center p-6">
         <div className="w-full max-w-sm text-center">
@@ -96,14 +102,14 @@ export default function StudentEntry() {
     );
   }
 
-  // صفحة التسجيل الذاتي
+  // صفحة تسجيل البصمة (حضور أو تسجيل ذاتي)
   return (
     <Suspense fallback={
       <div className="flex min-h-screen items-center justify-center" style={{ background: '#0A1224' }}>
         <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-blue-500 border-t-transparent" />
       </div>
     }>
-      <SelfEnrollPage token={tokens.reg!} onExit={handleExit} />
+      <SelfEnrollPage token={tokens.att || tokens.reg!} onExit={handleExit} />
     </Suspense>
   );
 }

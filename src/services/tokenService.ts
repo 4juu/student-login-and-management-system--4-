@@ -69,7 +69,7 @@ export const createSingleRegistrationLink = async (
   
   await set(ref(database, `${LINKS_PATH}/${token}`), stripUndefined(linkData));
   
-  const url = `${window.location.origin}${window.location.pathname}?reg=${token}`;
+  const url = `${window.location.origin}/register.html?reg=${token}`;
   return { token, url };
 };
 
@@ -114,7 +114,7 @@ export const createBulkRegistrationLinks = async (
     results.push({
       studentId: st.id,
       token,
-      url: `${window.location.origin}${window.location.pathname}?reg=${token}`,
+      url: `${window.location.origin}/register.html?reg=${token}`,
     });
   }
 
@@ -156,13 +156,9 @@ export const createAttendanceLink = async (
   
   await set(ref(database, `${LINKS_PATH}/${token}`), stripUndefined(linkData));
   
-  const url = `${window.location.origin}${window.location.pathname}?reg=${token}`;
+  const url = `${window.location.origin}/attendance.html?att=${token}`;
   return { token, url };
 };
-
-/**
- * 🔍 جلب بيانات الرابط بواسطة التوكن
- */
 export const getRegistrationLink = async (token: string): Promise<RegistrationLink | null> => {
   try {
     const snap = await get(ref(database, `${LINKS_PATH}/${token}`));
@@ -343,7 +339,7 @@ export const createTestLink = async (
     academicYear: academicYear || undefined,
   };
   await set(ref(database, `${LINKS_PATH}/${token}`), stripUndefined(linkData));
-  const url = `${window.location.origin}${window.location.pathname}?test=${token}`;
+  const url = `${window.location.origin}/face-test.html?test=${token}`;
   return { token, url, expiresAt };
 };
 
