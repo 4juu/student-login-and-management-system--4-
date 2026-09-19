@@ -18,7 +18,7 @@ import {
   CONFIRM_FRAMES,
 } from '../../services/faceAI/descriptors';
 import { buildGallery, findBestMatchIndexed } from '../../services/faceAI/gallery';
-import { getTestLink, validateTestLink, type TestLinkData } from '../../services/tokenService';
+import { getTestLink, validateTestLink } from '../../services/tokenService';
 import { loadStageStudentsCached } from '../SelfRegister/SelfEnrollPage';
 import { getActiveAcademicYear } from '../../firebase/dataService';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
@@ -26,7 +26,6 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 interface FaceTestPageProps {
   testToken: string;
   onExit: () => void;
-  onReEnroll?: (stageId: string, adminUid: string) => void;
 }
 
 type TestPhase = 'loading' | 'invalid' | 'ready' | 'scanning' | 'success';
@@ -39,7 +38,6 @@ const REEMBED_MOVE_THRESHOLD = 0.08;
 export const FaceTestPage: React.FC<FaceTestPageProps> = ({
   testToken,
   onExit,
-  onReEnroll,
 }) => {
   const { ready: engineReady, progress, error: engineError, retry } = useFaceAI();
 
@@ -57,7 +55,6 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
   const [cameraReady, setCameraReady] = useState(false);
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
   const [phase, setPhase] = useState<TestPhase>('loading');
-  const [linkData, setLinkData] = useState<TestLinkData | null>(null);
   const [matchedStudent, setMatchedStudent] = useState<Student | null>(null);
   const [noMatchOverlay, setNoMatchOverlay] = useState(false);
 
@@ -79,7 +76,6 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
           setPhase('invalid');
           return;
         }
-        setLinkData(link);
         const year = await getActiveAcademicYear();
         const s = await loadStageStudentsCached(link.adminUid, year, link.stageId);
         if (cancelled) return;
@@ -572,22 +568,23 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
                   <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/15">
                     <svg className="h-8 w-8 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
                   </div>
-                  <h2 className="text-lg font-bold text-amber-300 mb-2">بصمتك غير محفوظة</h2>
-                  <p className="text-sm text-slate-400 mb-4">لم يتم التعرف على بصمة وجهك. يرجى تسجيل بصمتك عبر رابط التسجيل.</p>
+                  <h2 className="text-lg font-bold text-amber-300 mb-2">لم يتم التعرف على بصمتك</h2>
+                  <p className="text-sm text-slate-400 mb-4">
+                    يرجى تسجيل البصمة من خلال رابط تسجيل بصمة الوجه المرسل من قبل الإدارة.
+                  </p>
                   <div className="flex flex-col gap-2">
-                    {linkData && onReEnroll && (
-                      <button
-                        onClick={() => { stopScan(); onReEnroll(linkData.stageId, linkData.adminUid); }}
-                        className="w-full py-3 rounded-xl bg-gradient-to-r from-[#1458E2] to-[#2B7BFF] text-white font-bold text-sm shadow-lg active:scale-95 transition"
-                      >
-                        سجّل بصمتك الآن
-                      </button>
-                    )}
                     <button
-                      onClick={() => { setNoMatchOverlay(false); faceSeenRef.current = 0; }}
-                      className="text-sm text-slate-400 hover:text-white transition"
+                      onClick={() => {
+                        stopScan();
+                        setNoMatchOverlay(false);
+                        setMatchedStudent(null);
+                        faceSeenRef.current = 0;
+                        trackerRef.current.reset();
+                        setPhase('ready');
+                      }}
+                      className="w-full py-3 rounded-xl bg-gradient-to-r from-[#1458E2] to-[#2B7BFF] text-white font-bold text-sm shadow-lg active:scale-95 transition"
                     >
-                      حاول مرة ثانية
+                      موافق
                     </button>
                   </div>
                 </div>

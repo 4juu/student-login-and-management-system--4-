@@ -1017,15 +1017,6 @@ function App() {
         <FaceTestPage
           testToken={testToken}
           onExit={() => { setTestToken(null); window.history.replaceState({}, '', window.location.pathname); }}
-          onReEnroll={(stageId, adminUid) => {
-            setTestToken(null);
-            // نسوي رابط تسجيل جديد لهذه المرحلة
-            import('./services/tokenService').then(({ createSingleRegistrationLink }) => {
-              createSingleRegistrationLink(adminUid, stageId, '', 7).then(({ url }) => {
-                window.location.href = url;
-              });
-            });
-          }}
         />
       </Suspense>
     );

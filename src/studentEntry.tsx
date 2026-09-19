@@ -91,7 +91,7 @@ export default function StudentEntry() {
           <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-blue-500 border-t-transparent" />
         </div>
       }>
-        <FaceTestPage testToken={tokens.test} onExit={handleExit} onReEnroll={() => handleExit()} />
+        <FaceTestPage testToken={tokens.test} onExit={handleExit} />
       </Suspense>
     );
   }
