@@ -84,7 +84,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
         const s = await loadStageStudentsCached(link.adminUid, year, link.stageId);
         if (cancelled) return;
         studentsRef.current = s;
-        const approved = s.filter(st => hasValidDescriptor(st.faceDescriptor) && st.selfRegistrationApproved === true);
+        const approved = s.filter(st => hasValidDescriptor(st.faceDescriptor));
         galleryRef.current = buildGallery(approved);
         setPhase('ready');
       } catch {
