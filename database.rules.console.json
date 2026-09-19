@@ -1,0 +1,120 @@
+{
+  "rules": {
+    "users": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin' || (root.child('users').child(auth.uid).child('role').val() == 'college_admin' && root.child('users').child($uid).child('role').val() == 'teacher'))"
+      }
+    },
+    "collegeAdmins": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'",
+      "$uid": {
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'"
+      }
+    },
+    "teacherAccounts": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')",
+        ".write": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')"
+      }
+    },
+    "system": {
+      ".read": true,
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'"
+    },
+    "deletedAccounts": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'"
+    },
+    "registrationSystem": {
+      "links": {
+        ".read": true,
+        "$token": {
+          ".read": true,
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin' || (root.child('users').child(auth.uid).child('role').val() == 'teacher' && newData.child('type').val() == 'attendance'))",
+          "used": {
+            ".write": "newData.val() === true || auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')"
+          }
+        }
+      },
+      "pending": {
+        "$adminUid": {
+          ".read": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin')",
+          "$requestId": {
+            ".write": "(!data.exists() && newData.exists()) || auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin'"
+          }
+        }
+      }
+    },
+    "colleges": {
+      ".read": true,
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')"
+    },
+    "stages": {
+      ".read": true,
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')"
+    },
+    "academicYears": {
+      "$year": {
+        "userData": {
+          "$adminUid": {
+            ".read": true,
+            ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
+            "colleges": {
+              ".read": true,
+              ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin')"
+            },
+            "stages": {
+              ".read": true,
+              ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin')"
+            },
+            "stageData": {
+              "$stageId": {
+                "students": {
+                  ".read": true,
+                  ".write": "(auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin'))",
+                  "$index": {
+                    ".validate": "newData.hasChild('code')",
+                    "qrCodeId": {
+                      ".write": "(auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')) || (!data.exists() && newData.isString() && newData.val().length > 0)"
+                    }
+                  }
+                },
+                "descriptorOverrides": {
+                  ".read": true,
+                  ".write": true,
+                  "$studentId": {
+                    ".validate": "newData.hasChildren(['faceDescriptor', 'updatedAt'])"
+                  }
+                },
+                "teacherRecords": {
+                  "$teacherId": {
+                    ".read": true,
+                    ".write": "auth != null && (auth.uid == $teacherId || auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "notifications": {
+      "messages": {
+        ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'teacher' || root.child('users').child(auth.uid).child('role').val() == 'admin')",
+        "$id": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'",
+          "readBy": {
+            "$uid": {
+              ".write": "auth != null && $uid == auth.uid && newData.isNumber()"
+            }
+          }
+        }
+      }
+    },
+    "$other": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}

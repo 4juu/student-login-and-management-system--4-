@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useModalBehavior } from '../../hooks/useModalBehavior';
 import { Student, AttendanceRecord, AttendanceSession } from '../../types/student';
 import { BookOpen, Check, ClipboardList, Copy, Ticket } from 'lucide-react';
+import { hasValidDescriptor, getCoveragePercent, normalizeClusters } from '../../services/faceAI/descriptors';
 
 interface StudentProfileModalProps {
   student: Student;
@@ -305,6 +306,65 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* ── تحسين بصمة الوجه ── */}
+          {hasValidDescriptor(student.faceDescriptor) && (() => {
+            const coverage = getCoveragePercent(student.faceDescriptor);
+            const clusters = normalizeClusters((student.faceDescriptor as any)?.clusters);
+            const enrollmentCount = Array.isArray((student.faceDescriptor as any)?.enrollment)
+              ? (student.faceDescriptor as any).enrollment.length : 0;
+            const totalSamples = enrollmentCount + clusters.reduce((sum: number, c: any) => sum + (c.count || 0), 0);
+            const stage = coverage >= 80 ? { label: 'متطورة', dot: 'bg-emerald-500', barBg: 'bg-emerald-100', bar: 'bg-emerald-500', box: 'bg-emerald-50 text-emerald-700 border-emerald-100' }
+              : coverage >= 50 ? { label: 'متوسطة', dot: 'bg-amber-500', barBg: 'bg-amber-100', bar: 'bg-amber-400', box: 'bg-amber-50 text-amber-700 border-amber-100' }
+              : { label: 'مبتدئة', dot: 'bg-slate-400', barBg: 'bg-slate-100', bar: 'bg-slate-300', box: 'bg-slate-50 text-slate-700 border-slate-200' };
+
+            return (
+              <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
+                <p className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${stage.dot}`} />
+                  تحسين بصمة الوجه
+                </p>
+
+                {/* شريط التغطية */}
+                <div className="mb-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-gray-500">التغطية</span>
+                    <span className="text-xs font-bold text-gray-800">{coverage}%</span>
+                  </div>
+                  <div className={`w-full h-2 ${stage.barBg} rounded-full overflow-hidden`}>
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${stage.bar}`}
+                      style={{ width: `${coverage}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* الإحصائيات */}
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="p-2 rounded-lg bg-slate-50">
+                    <p className="text-lg font-bold text-gray-800">{clusters.length}<span className="text-xs text-gray-400 mr-0.5">/18</span></p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">عنقيد</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-50">
+                    <p className="text-lg font-bold text-gray-800">{enrollmentCount}</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">عينة تسجيل</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-50">
+                    <p className="text-lg font-bold text-gray-800">{totalSamples}</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">إجمالي العينات</p>
+                  </div>
+                </div>
+
+                {/* المرحلة */}
+                <div className={`mt-3 px-3 py-1.5 rounded-lg ${stage.box} text-xs font-medium text-center border`}>
+                  البصمة {stage.label}
+                  {coverage >= 80 && ' — جاهزة للحضور بالبصمة'}
+                  {coverage >= 50 && coverage < 80 && ' — يُنصح بإجراء اختبار بصمة'}
+                  {coverage < 50 && ' — يحتاج اختبار بصمة لتحسين التعرف'}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* الخط الزمني */}
           {timeline.length > 0 && (
