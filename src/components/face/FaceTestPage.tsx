@@ -448,10 +448,9 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
             </div>
             <button
               onClick={startScan}
-              disabled={!engineReady}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-sm shadow-lg hover:shadow-xl transition active:scale-95 disabled:opacity-50"
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-sm shadow-lg hover:shadow-xl transition active:scale-95"
             >
-              ابدأ الاختبار
+              {engineReady ? 'ابدأ الاختبار' : 'جاري تحميل المحرك...'}
             </button>
             <button onClick={onExit} className="mt-3 block mx-auto text-sm text-slate-400 hover:text-white transition">
               العودة

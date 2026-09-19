@@ -98,7 +98,10 @@
 
         "userData": {
           "$adminUid": {
-            ".read": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
+            // ✅ القراءة مفتوحة للجميع — الأبناء كلهم (.read: true) أصلاً
+            //    (students، colleges، stages، teacherRecords — كلها مفتوحة للقراءة)
+            //    هذا يسمح لصفحات الاختبار والتسجيل الذاتي بقراءة بيانات الطلاب بدون تسجيل دخول
+            ".read": true,
             ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
 
             "colleges": {
