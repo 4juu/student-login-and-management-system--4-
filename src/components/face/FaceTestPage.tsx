@@ -346,7 +346,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
                   if (pose && savedDescriptorRef.current && isGalleryDescriptor(savedDescriptorRef.current)) {
                     const bin = poseToBin(pose);
                     const before = normalizeClusters(savedDescriptorRef.current.clusters).length;
-                    const result = updateGallery(savedDescriptorRef.current, smoothed, res.quality.composite, bin);
+                    const result = updateGallery(savedDescriptorRef.current, smoothed, res.quality.composite, bin, true);
                     const after = normalizeClusters(result.gallery.clusters).length;
                     console.log(`[face-test] updateGallery: bin=${bin}, action=${result.action}, clusters=${before}→${after}`);
                     if (result.action === 'merged' || result.action === 'created') {

@@ -336,6 +336,7 @@ export function updateGallery(
   newSample: Float32Array,
   quality: number,
   bin: string,
+  allowMatureMerge = false,
 ): ClusterUpdateResult {
   if (quality < MIN_CLUSTER_QUALITY) {
     return { gallery: current, action: 'rejected' };
@@ -358,12 +359,15 @@ export function updateGallery(
   if (sameBinIdx >= 0) {
     const cluster = clusters[sameBinIdx];
     const existingVec = parseOneSample(cluster.vector);
-    if (existingVec && cluster.mergeCount < MAX_MERGES_PER_CLUSTER) {
+    if (existingVec) {
+      if (cluster.mergeCount >= MAX_MERGES_PER_CLUSTER && !allowMatureMerge) {
+        return { gallery: current, action: 'skipped_mature', bin };
+      }
       const dist = descriptorDistance(newSample, existingVec);
       if (dist > MAX_CLUSTER_MERGE_DISTANCE) {
         return { gallery: current, action: 'rejected' };
       }
-      const k = cluster.mergeCount;
+      const k = Math.min(cluster.mergeCount, MAX_MERGES_PER_CLUSTER - 1);
       const dim = existingVec.length;
       const merged = new Float32Array(dim);
       for (let i = 0; i < dim; i++) merged[i] = (existingVec[i] * k + newSample[i]) / (k + 1);
@@ -374,7 +378,7 @@ export function updateGallery(
       clusters[sameBinIdx] = {
         ...cluster,
         vector: Array.from(merged).map(v => Math.round(v * 1e5) / 1e5),
-        mergeCount: k + 1,
+        mergeCount: Math.min(k + 1, MAX_MERGES_PER_CLUSTER),
         quality: Math.max(cluster.quality, quality),
         updatedAt: Date.now(),
       };
