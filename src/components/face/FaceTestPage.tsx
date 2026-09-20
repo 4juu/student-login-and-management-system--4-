@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Student } from '../../types/student';
 import { useFaceAI } from '../../hooks/useFaceAI';
@@ -65,8 +65,22 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
   const [expiresAt, setExpiresAt] = useState<number>(0);
   const [remainingMs, setRemainingMs] = useState<number>(0);
   const [enhanceCountdown, setEnhanceCountdown] = useState<number>(10);
-  // ── حالة الحفظ المرئية — تظهر على الشاشة مباشرة (مهمة لأنه لا يمكن فتح Console على الموبايل) ──
+  // ── دولة الحفظ البصرية ──
   const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  // refs لالتقاط لحظات التحقق الحقيقية (تغذي لوحة debug بدون Console)
+  const matchConfidenceRef = useRef<number | null>(null);
+  const embeddingsBeforeRef = useRef<number>(0);
+  // ── لوحة debug — تظهر على الشاشة مباشرة ──
+  const [debugData, setDebugData] = useState<{
+    faceDetected: boolean;
+    confidence: number | null;
+    embeddingsBefore: number;
+    embeddingsAfterMemory: number | null;
+    saveResult: 'pending' | 'ok' | 'fail' | null;
+    storedAfterReRead: number | null;
+    lastUpdate: string;
+  } | null>(null);
+  // ── حالة الحفظ المرئية — تظهر على الشاشة مباشرة (مهمة لأنه لا يمكن فتح Console على الموبايل) ──
   useBodyScrollLock(phase === 'scanning' || phase === 'enhancing');
 
   const studentsRef = useRef<Student[]>([]);
@@ -375,12 +389,25 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
 
               // ✅ تأكيد كامل — البدء بتحسين البصمة
               setMatchedStudent(student);
+              matchConfidenceRef.current = match.confidence;
+              embeddingsBeforeRef.current = studentsRef.current.filter(s => hasValidDescriptor(s.faceDescriptor)).length;
               enhancedCountRef.current = 0;
               savedDescriptorRef.current = student.faceDescriptor;
               enhancingRef.current = true;
               enhanceStartRef.current = performance.now();
               setEnhanceCountdown(10);
               setPhase('enhancing');
+              if (mountedRef.current) {
+                setDebugData({
+                  faceDetected: true,
+                  confidence: match.confidence,
+                  embeddingsBefore: embeddingsBeforeRef.current,
+                  embeddingsAfterMemory: null,
+                  saveResult: 'pending',
+                  storedAfterReRead: null,
+                  lastUpdate: new Date().toLocaleString('ar-IQ', { hour12: false }),
+                });
+              }
               trackerRef.current.removeTrack(trackId);
               liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
               drawBoxes(liveBoxes);
@@ -760,6 +787,23 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
                   {saveStatus && (
                     <div className={`mx-3 mt-2 rounded-lg px-3 py-1.5 text-center text-xs font-bold ${saveStatus.ok ? 'bg-white text-emerald-700' : 'bg-red-500 text-white'}`}>
                       {saveStatus.ok ? '✓ ' : '✗ '}{saveStatus.msg}
+                    </div>
+                  )}
+                  {debugData && (
+                    <div className="mx-3 mt-2 rounded-xl border border-cyan-400/30 bg-slate-950/80 p-3 text-[11px] leading-5 text-left" dir="ltr">
+                      <div className="mb-1 flex items-center gap-1.5 font-bold text-cyan-300 text-xs">
+                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="8 21 12 17 8 13"/><path d="M20 21v-8a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8"/><path d="M1 7A5 5 0 0 1 13 8v5H1z" transform="translate(0 0)"/></svg>
+                        خطأ الإصدار
+                      </div>
+                      <div className="space-y-0.5">
+                        <div>Face: {debugData.faceDetected ? '✅ Detected' : '—'}</div>
+                        <div>Confidence: {debugData.confidence != null ? `${(debugData.confidence * 100).toFixed(0)}%` : '—'}</div>
+                        <div>Embeddings Before: {debugData.embeddingsBefore ?? '—'}</div>
+                        <div>Embeddings After (memory): {debugData.embeddingsAfterMemory ?? '—'}</div>
+                        <div>Database Save: {debugData.saveResult === 'ok' ? '✅ Success' : debugData.saveResult === 'fail' ? '❌ Failed' : '…'}</div>
+                        <div>Stored (Re-read): {debugData.storedAfterReRead ?? '—'}</div>
+                        <div className="mt-1 border-t border-white/10 pt-1 text-cyan-200/70">Last update: {debugData.lastUpdate ?? '—'}</div>
+                      </div>
                     </div>
                   )}
                 </div>
