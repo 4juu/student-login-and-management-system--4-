@@ -667,15 +667,19 @@ export const loadStageData = async (
   ]);
   try {
     const overrides = await loadDescriptorOverrides(adminUid, stageId);
+    const overrideKeys = overrides ? Object.keys(overrides) : [];
+    let mergedCount = 0;
     if (overrides) {
       for (let i = 0; i < students.length; i++) {
         const ov = overrides[students[i].id];
         if (ov?.faceDescriptor && ov.updatedAt > 0) {
           students[i] = { ...students[i], faceDescriptor: ov.faceDescriptor };
+          mergedCount++;
         }
       }
     }
-  } catch { /* تجاهل أخطاء الدمج */ }
+    console.log(`[loadStageData] overrides=${overrideKeys.length}, merged=${mergedCount}/${students.length}, stageId=${stageId}`);
+  } catch (e) { console.warn('[loadStageData] فشل دمج descriptorOverrides:', e); }
   return { students, records, sessions, activeSessionId };
 };
 
