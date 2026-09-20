@@ -409,13 +409,15 @@ export const updateStudentDescriptorOverride = async (
   try {
     const year = await getActiveAcademicYear();
     const path = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}/descriptorOverrides/${studentId}`;
-    await set(ref(database, path), {
-      faceDescriptor,
+    const payload = {
+      faceDescriptor: JSON.parse(JSON.stringify(faceDescriptor)),
       updatedAt: Date.now(),
-    });
-    console.log(`[dataService] حُفظ تحسين بصمة الطالب: ${studentId}`);
+    };
+    console.log(`[dataService] جاري حفظ البصمة للمسار: ${path}`);
+    await set(ref(database, path), payload);
+    console.log(`[dataService] ✅ حُفظت بصمة الطالب بنجاح: ${studentId}`);
   } catch (e) {
-    console.warn('[dataService] فشل حفظ تحسين البصمة:', e);
+    console.error(`[dataService] ❌ فشل حفظ بصمة الطالب ${studentId}:`, e);
   }
 };
 

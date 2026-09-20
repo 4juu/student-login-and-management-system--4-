@@ -478,7 +478,8 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
       if (loopTimerRef.current) { clearTimeout(loopTimerRef.current); loopTimerRef.current = 0; }
       if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
 
-      // حفظ البصمة المحسّنة في descriptorOverrides — يُحفظ دائماً عند وجود طالب
+      // حفظ البصمة في descriptorOverrides — يُحفظ دائماً عند وجود طالب مطابق
+      console.log(`[face-test] محاولة الحفظ — matchedStudent=${!!matchedStudent}, descriptor=${!!savedDescriptorRef.current}, linkData=${!!linkDataRef.current}`);
       if (matchedStudent && savedDescriptorRef.current && linkDataRef.current) {
         try {
           // تحديث الكاش المحلي
@@ -490,16 +491,18 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
             galleryRef.current = buildGallery(students.filter(s => hasValidDescriptor(s.faceDescriptor)));
           }
           // حفظ في Firebase عبر descriptorOverrides (لا يتطلب تسجيل دخول)
+          console.log(`[face-test] حفظ بصمة الطالب: ${matchedStudent.id} — ${matchedStudent.name}`);
           await updateStudentDescriptorOverride(
             linkDataRef.current.adminUid,
             linkDataRef.current.stageId,
             matchedStudent.id,
             savedDescriptorRef.current,
           );
-          console.log(`[face-test] حُفظت ${enhancedCountRef.current} عناقيد جديدة للبصمة`);
         } catch (e) {
-          console.warn('[face-test] فشل حفظ البصمة المحسّنة:', e);
+          console.error('[face-test] ❌ فشل حفظ البصمة:', e);
         }
+      } else {
+        console.warn('[face-test] تم تخطي الحفظ — 조건不符:', { matchedStudent: !!matchedStudent, descriptor: !!savedDescriptorRef.current, linkData: !!linkDataRef.current });
       }
 
       if (mountedRef.current) setPhase('success');
@@ -594,13 +597,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
         </div>
         <h2 className="text-xl font-extrabold text-emerald-300 mb-2">البصمة تعمل!</h2>
         <p className="text-sm text-slate-300 mb-1">تم التعرف على وجهك بنجاح</p>
-        <p className="text-base font-bold text-white mb-2">{matchedStudent.name}</p>
-        {enhancedCountRef.current > 0 && (
-          <p className="text-xs text-emerald-400/80 mb-4">
-            تم إضافة {enhancedCountRef.current} عناقيد جديدة لتحسين بصمتك
-          </p>
-        )}
-        {enhancedCountRef.current === 0 && <div className="mb-4" />}
+        <p className="text-base font-bold text-white mb-4">{matchedStudent.name}</p>
         <div className="flex flex-col gap-2">
           <button
             onClick={() => {
