@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useLayoutEffect, lazy,
 import { Student, AttendanceRecord, AttendanceSession } from '../types/student';
 import { User } from '../types/user';
 import { QRAttendance } from './QRAttendance';
-import { Camera, Info, TriangleAlert, User as UserIcon, Zap } from 'lucide-react';
+import { Camera, Info, TriangleAlert, User as UserIcon } from 'lucide-react';
 
 // 🚀 ماسح الحضور بالوجه يُحمَّل عند فتحه فقط (محرك الوجه ثقيل)
 const LazyFaceScanner = lazy(() =>
@@ -193,9 +193,6 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
               <div className="text-base sm:text-lg">تسجيل الحضور ببصمة الوجه</div>
               <div className="text-[10px] sm:text-xs opacity-90 font-normal">تعرف تلقائي على الوجه وسجل الحضور</div>
             </div>
-            <span className="absolute top-1 left-2 bg-yellow-400 text-yellow-900 text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow inline-flex items-center gap-0.5">
-              جديد <Zap className="w-2.5 h-2.5" />
-            </span>
           </button>
 
           <button
@@ -208,9 +205,6 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
               <div className="text-base sm:text-lg">تسجيل حضور عن طريق هوية الطالب QR Code</div>
               <div className="text-[10px] sm:text-xs opacity-90 font-normal">افتح الكاميرا وامسح رمز QR</div>
             </div>
-            <span className="absolute top-1 left-2 bg-yellow-400 text-yellow-900 text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow inline-flex items-center gap-0.5">
-              جديد <Zap className="w-2.5 h-2.5" />
-            </span>
           </button>
 
           {students.length > 0 && studentsWithUniId === 0 && (

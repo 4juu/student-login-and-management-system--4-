@@ -55,17 +55,20 @@ try {
   /* تجاهل — بيئة بدون localStorage */
 }
 
-// 📱 صفحة الطالب (رابط تسجيل ذاتي) تُفتح بمدخل خفيف دون تحميل لوحة التحكم كاملة
-function hasRegToken(): boolean {
+// 📱 صفحة الطالب (رابط تسجيل/اختبار/حضور) تُفتح بمدخل خفيف دون تحميل لوحة التحكم كاملة
+function hasStudentToken(): boolean {
   try {
-    if (new URLSearchParams(window.location.search).get('reg')) return true;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('reg') || params.get('test') || params.get('att')) return true;
     if (
       window.location.hash &&
-      new URLSearchParams(window.location.hash.replace(/^#\/?/, '')).get('reg')
+      new URLSearchParams(window.location.hash.replace(/^#\/?/, '')).get('reg') ||
+      new URLSearchParams(window.location.hash.replace(/^#\/?/, '')).get('test') ||
+      new URLSearchParams(window.location.hash.replace(/^#\/?/, '')).get('att')
     ) {
       return true;
     }
-    if (/[?&#]reg=([^&#]+)/.test(window.location.href)) return true;
+    if (/[?&#](reg|test|att)=([^&#]+)/.test(window.location.href)) return true;
     if (sessionStorage.getItem('pendingRegToken')) return true;
   } catch {
     /* تجاهل */
@@ -73,7 +76,7 @@ function hasRegToken(): boolean {
   return false;
 }
 
-const isStudentPath = hasRegToken();
+const isStudentPath = hasStudentToken();
 
 const Entry = isStudentPath ? StudentEntry : App;
 

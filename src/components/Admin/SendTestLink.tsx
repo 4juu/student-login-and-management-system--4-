@@ -139,7 +139,6 @@ export function SendTestLink({ adminUid, colleges, stages, onClose }: SendTestLi
               <div className="bg-blue-500/5 border border-blue-500/10 rounded-lg p-3">
                 <p className="text-xs text-blue-300/70 leading-5">
                   هذا الرابط يفتح صفحة اختبار بسيطة — الطالب يفتح الكاميرا ويختبر إذا بصمته تعمل.
-                  لا يُحفظ أي سجل حضور أو تعديلات.
                 </p>
               </div>
 

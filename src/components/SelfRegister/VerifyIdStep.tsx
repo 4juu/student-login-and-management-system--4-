@@ -171,8 +171,9 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
 
   const isVerifyMode = !!expected;
 
-  // روابط الحضور: نقبل التطابق بدقة 50%+ تلقائياً (بدلاً من 80%) — لا نُلزم الطالب باختيار يدوی
-  const ROSTER_AUTO_THRESHOLD = 50;
+  // روابط الحضور: نقبل التطابق عند وجود 3 نتائج متتالية بدرجة عالية — يمنع المطابقة العشوائية
+  const ROSTER_AUTO_THRESHOLD = 70;
+  const ROSTER_MIN_CONSECUTIVE = 3;
 
   useEffect(() => {
     return () => {
@@ -361,7 +362,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
           let ranked = extractedNameVal ? rankStudents(extractedNameVal, roster) : [];
           if (ranked.length === 0) ranked = rankStudents(text, roster);
           setMatches(ranked);
-          setSelected(ranked[0] && ranked[0].score >= ROSTER_AUTO_THRESHOLD ? ranked[0].student : null);
+          setSelected(ranked.length >= ROSTER_MIN_CONSECUTIVE && ranked[0].score >= ROSTER_AUTO_THRESHOLD ? ranked[0].student : null);
         }
 
         setScreen('result');
@@ -519,7 +520,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
 
   // ═══════════════ النتيجة ═══════════════
   const topResult = matches[0];
-  const autoMatch = topResult && topResult.score >= ROSTER_AUTO_THRESHOLD;
+  const autoMatch = matches.length >= ROSTER_MIN_CONSECUTIVE && topResult && topResult.score >= ROSTER_AUTO_THRESHOLD;
   const strongMatch = isVerifyMode ? !!verify?.matched : !!autoMatch;
 
   return (

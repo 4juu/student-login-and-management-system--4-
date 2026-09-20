@@ -547,7 +547,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
       }>
         <LazySelfCapture
           student={expected}
-          allStudents={[]}
+          allStudents={stageStudents}
           onCaptured={handleFaceCaptured}
           onCancel={() => goTo('confirm')}
         />
@@ -657,7 +657,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
                 </p>
                 <ul className="space-y-2 text-sm text-[#B7C6E2]">
                   <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-[#34D399]" /> وجّه وجهك داخل الدائرة</li>
-                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-[#34D399]" /> أدر رأسك للجهات الخمس المطلوبة</li>
+                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-[#34D399]" /> التقط صورتك من 10 زوايا مختلفة</li>
                   <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-[#34D399]" /> سيُحفظ الطلب ويُعرض على الأدمن للموافقة</li>
                 </ul>
               </div>
