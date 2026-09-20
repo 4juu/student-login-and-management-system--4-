@@ -665,6 +665,17 @@ export const loadStageData = async (
     loadSessions(adminUid, stageId, teacherId),
     loadActiveSession(adminUid, stageId, teacherId),
   ]);
+  try {
+    const overrides = await loadDescriptorOverrides(adminUid, stageId);
+    if (overrides) {
+      for (let i = 0; i < students.length; i++) {
+        const ov = overrides[students[i].id];
+        if (ov?.faceDescriptor && ov.updatedAt > 0) {
+          students[i] = { ...students[i], faceDescriptor: ov.faceDescriptor };
+        }
+      }
+    }
+  } catch { /* تجاهل أخطاء الدمج */ }
   return { students, records, sessions, activeSessionId };
 };
 
