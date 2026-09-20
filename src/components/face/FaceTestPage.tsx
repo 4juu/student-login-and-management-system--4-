@@ -14,6 +14,7 @@ import { FaceTracker, type TrackBox } from '../../services/faceAI/tracker';
 import {
   hasValidDescriptor,
   isGalleryDescriptor,
+  normalizeClusters,
   updateGallery,
   MATCH_LOOSE,
   MIN_RECOG_CONFIDENCE,
@@ -344,7 +345,10 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
                   const pose = estimatePose(origDet?.keypoints);
                   if (pose && savedDescriptorRef.current && isGalleryDescriptor(savedDescriptorRef.current)) {
                     const bin = poseToBin(pose);
+                    const before = normalizeClusters(savedDescriptorRef.current.clusters).length;
                     const result = updateGallery(savedDescriptorRef.current, smoothed, res.quality.composite, bin);
+                    const after = normalizeClusters(result.gallery.clusters).length;
+                    console.log(`[face-test] updateGallery: bin=${bin}, action=${result.action}, clusters=${before}→${after}`);
                     if (result.action === 'merged' || result.action === 'created') {
                       savedDescriptorRef.current = result.gallery;
                       enhancedCountRef.current += 1;
@@ -493,7 +497,7 @@ setEnhanceCountdown(10);
             galleryRef.current = buildGallery(students.filter(s => hasValidDescriptor(s.faceDescriptor)));
           }
           // حفظ في Firebase عبر descriptorOverrides (لا يتطلب تسجيل دخول)
-          console.log(`[face-test] حفظ بصمة الطالب: ${matchedStudent.id} — ${matchedStudent.name}`);
+          console.log(`[face-test] حفظ بصمة الطالب: ${matchedStudent.id} — ${matchedStudent.name}, clusters: ${isGalleryDescriptor(savedDescriptorRef.current) ? normalizeClusters(savedDescriptorRef.current.clusters).length : '?'}, enhanced: ${enhancedCountRef.current}`);
           await updateStudentDescriptorOverride(
             linkDataRef.current.adminUid,
             linkDataRef.current.stageId,
