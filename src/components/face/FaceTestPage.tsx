@@ -39,7 +39,7 @@ const MAX_FACES_PER_FRAME = 10;
 const REEMBED_MIN_INTERVAL = 150;
 const REEMBED_MOVE_THRESHOLD = 0.08;
 
-const ENHANCE_DURATION_MS = 10_000;
+const ENHANCE_DURATION_MS = 20_000;
 
 export const FaceTestPage: React.FC<FaceTestPageProps> = ({
   testToken,
@@ -65,11 +65,20 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
   const [noMatchOverlay, setNoMatchOverlay] = useState(false);
   const [expiresAt, setExpiresAt] = useState<number>(0);
   const [remainingMs, setRemainingMs] = useState<number>(0);
-  const [enhanceCountdown, setEnhanceCountdown] = useState<number>(10);
+  const [enhanceCountdown, setEnhanceCountdown] = useState<number>(20);
   // ── دولة الحفظ البصرية ──
 const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   // ── حالة الحفظ المرئية — تظهر على الشاشة مباشرة (مهمة لأنه لا يمكن فتح Console على الموبايل) ──
   useBodyScrollLock(phase === 'scanning' || phase === 'enhancing');
+
+  // ── إرشاد الحركة الدوار أثناء التحسين ──
+  const POSE_HINTS = [
+    { icon: '↔', text: 'حرّك رأسك يميناً' },
+    { icon: '↔', text: 'حرّك رأسك يساراً' },
+    { icon: '↕', text: 'اقترب قليلاً من الكاميرا' },
+    { icon: '↕', text: 'ابتعد قليلاً من الكاميرا' },
+  ];
+  const [poseHintIdx, setPoseHintIdx] = useState(0);
 
   const studentsRef = useRef<Student[]>([]);
   const galleryRef = useRef<ReturnType<typeof buildGallery>>([]);
@@ -129,8 +138,9 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
   }, [expiresAt]);
 
   // ── فتح/إغلاق الكاميرا ──
+  const needsCamera = (phase === 'scanning' || phase === 'enhancing') && engineReady;
   useEffect(() => {
-    if ((phase !== 'scanning' && phase !== 'enhancing') || !engineReady) return;
+    if (!needsCamera) return;
     let localStream: MediaStream | null = null;
     let cancelled = false;
     (async () => {
@@ -157,7 +167,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
       if (streamRef.current === localStream) streamRef.current = null;
       setCameraReady(false);
     };
-  }, [phase, engineReady, facing]);
+  }, [needsCamera, facing]);
 
   // ── تنظيف عند الخروج ──
   useEffect(() => {
@@ -384,7 +394,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
               savedDescriptorRef.current = student.faceDescriptor;
               enhancingRef.current = true;
               enhanceStartRef.current = performance.now();
-setEnhanceCountdown(10);
+setEnhanceCountdown(20);
                 setPhase('enhancing');
                 trackerRef.current.removeTrack(trackId);
               liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
@@ -422,7 +432,7 @@ setEnhanceCountdown(10);
                 savedDescriptorRef.current = student.faceDescriptor;
                 enhancingRef.current = true;
                 enhanceStartRef.current = performance.now();
-                setEnhanceCountdown(10);
+                setEnhanceCountdown(20);
                 setPhase('enhancing');
                 trackerRef.current.removeTrack(t.trackId);
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
@@ -458,7 +468,7 @@ setEnhanceCountdown(10);
     };
   }, [phase, engineReady, cameraReady, facing, retry, stopScan]);
 
-  // ── عداد تحسين البصمة (10 ثواني) ──
+  // ── عداد تحسين البصمة (20 ثانية) ──
   useEffect(() => {
     if (phase !== 'enhancing') return;
     const start = performance.now();
@@ -473,6 +483,14 @@ setEnhanceCountdown(10);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
+  }, [phase]);
+
+  // ── إرشاد الحركة الدوار (كل 4 ثوانٍ) ──
+  useEffect(() => {
+    if (phase !== 'enhancing') return;
+    setPoseHintIdx(0);
+    const iv = setInterval(() => setPoseHintIdx(i => (i + 1) % POSE_HINTS.length), 4000);
+    return () => clearInterval(iv);
   }, [phase]);
 
   // ── إنهاء التحسين وحفظ البصمة ──
@@ -741,7 +759,7 @@ setEnhanceCountdown(10);
                     {enhanceCountdown > 0 ? (
                       <div className="min-w-0 flex-1">
                         <h2 className="text-sm font-extrabold text-white leading-tight">أهلاً {matchedStudent.name.split(' ')[0]}</h2>
-                        <p className="mt-0.5 text-xs font-medium text-emerald-50/90">تم التعرف على بصمتك — جارٍ تحسينها... {enhanceCountdown} ثوانٍ</p>
+                        <p className="mt-0.5 text-xs font-medium text-emerald-50/90">تم التعرف — جارٍ تحسين البصمة</p>
                       </div>
                     ) : (
                       <div className="min-w-0 flex-1">
@@ -751,15 +769,23 @@ setEnhanceCountdown(10);
                           </span>
                           تم التعرف
                         </h2>
-                        <p className="mt-0.5 text-xs font-medium text-emerald-50/90">تم التعرف على بصمتك وشكراً لك ✓</p>
+                        <p className="mt-0.5 text-xs font-medium text-emerald-50/90">تم تحسين بصمتك بنجاح ✓</p>
                       </div>
                     )}
                     <div className="shrink-0 text-2xl font-extrabold text-white tabular-nums leading-none">{enhanceCountdown}</div>
                   </div>
+                  {enhanceCountdown > 0 && (
+                    <div className="px-4 pb-2 pt-0.5 text-center">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-bold text-white transition-all duration-500">
+                        <span className="text-base">{POSE_HINTS[poseHintIdx].icon}</span>
+                        {POSE_HINTS[poseHintIdx].text}
+                      </span>
+                    </div>
+                  )}
                   <div className="h-1.5 w-full bg-black/20">
                     <div
                       className="h-full bg-white/90 transition-all duration-1000 ease-linear"
-                      style={{ width: `${((10 - enhanceCountdown) / 10) * 100}%` }}
+                      style={{ width: `${((20 - enhanceCountdown) / 20) * 100}%` }}
                     />
                   </div>
                   {saveStatus && (
