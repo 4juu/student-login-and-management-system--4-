@@ -180,6 +180,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
       stopStream();
       ocrLogger = null;
       if (capturedUrl) URL.revokeObjectURL(capturedUrl);
+      if (ocrWorker) { ocrWorker.terminate().catch(() => {}); ocrWorker = null; }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

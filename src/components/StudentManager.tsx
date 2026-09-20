@@ -129,7 +129,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
     }
 
     const newStudent: Student = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       name: name.trim(),
       code,
       createdAt: new Date().toISOString(),

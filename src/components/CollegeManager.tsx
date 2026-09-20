@@ -69,7 +69,7 @@ export const CollegeManager: React.FC<CollegeManagerProps> = React.memo(({
     }
 
     const newCollege: College = {
-      id: `college_${Date.now()}`,
+      id: `college_${crypto.randomUUID().slice(0, 8)}`,
       name: collegeName.trim(),
       icon: collegeIcon,
       color: collegeColor,
@@ -92,7 +92,7 @@ export const CollegeManager: React.FC<CollegeManagerProps> = React.memo(({
 
     const collegeStages = stages.filter(s => s.collegeId === collegeId);
     const newStage: Stage = {
-      id: `stage_${Date.now()}`,
+      id: `stage_${crypto.randomUUID().slice(0, 8)}`,
       name: stageName.trim(),
       collegeId,
       createdAt: new Date().toISOString(),
@@ -114,7 +114,7 @@ export const CollegeManager: React.FC<CollegeManagerProps> = React.memo(({
         const collegeStages = stages.filter(s => s.collegeId === collegeId);
         stageNames.forEach((name, idx) => {
           const newStage: Stage = {
-            id: `stage_${Date.now()}_${idx}`,
+            id: `stage_${crypto.randomUUID().slice(0, 8)}`,
             name,
             collegeId,
             createdAt: new Date().toISOString(),

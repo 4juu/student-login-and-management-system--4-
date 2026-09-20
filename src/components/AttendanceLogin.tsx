@@ -171,15 +171,15 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
 
   return (
     <>
-      <div ref={containerRef} className="bg-white rounded-2xl shadow-xl p-6 md:p-8 select-none">
+      <div ref={containerRef} className="bg-slate-900 rounded-2xl shadow-xl p-6 md:p-8 select-none border border-white/10">
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-3 shadow-lg">
             <svg className="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
             </svg>
           </div>
-          <h2 className="text-3xl font-bold text-gray-800">تسجيل الحضور</h2>
-          <p className="text-sm text-gray-500 mt-1">أدخل رمزك المكون من 4 أرقام أو استخدم QR</p>
+          <h2 className="text-3xl font-bold text-white">تسجيل الحضور</h2>
+          <p className="text-sm text-slate-400 mt-1">أدخل رمزك المكون من 4 أرقام أو استخدم QR</p>
         </div>
 
         <div className="mb-6">
@@ -208,12 +208,12 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
           </button>
 
           {students.length > 0 && studentsWithUniId === 0 && (
-            <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800 text-center flex items-center justify-center gap-1">
+            <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-xs text-yellow-300 text-center flex items-center justify-center gap-1">
               <TriangleAlert className="w-4 h-4" /> لم يتم إضافة أرقام جامعية بعد
             </div>
           )}
           {students.length > 0 && studentsWithUniId > 0 && studentsWithUniId < students.length && (
-            <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 text-center flex items-center justify-center gap-1">
+            <div className="mt-2 p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg text-xs text-blue-300 text-center flex items-center justify-center gap-1">
               <Info className="w-4 h-4" /> {studentsWithUniId} من {students.length} طالب لديهم رقم جامعي للـ QR
             </div>
           )}
@@ -221,15 +221,15 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
 
         <div className="relative mb-6">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-200"></div>
+            <div className="w-full border-t border-white/10"></div>
           </div>
           <div className="relative flex justify-center text-xs">
-            <span className="px-3 bg-white text-gray-500 font-medium">أو أدخل الرمز يدوياً</span>
+            <span className="px-3 bg-slate-900 text-slate-400 font-medium">أو أدخل الرمز يدوياً</span>
           </div>
         </div>
 
         <div className="mb-6">
-          <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-6 border-2 border-gray-200 shadow-inner" dir="ltr">
+          <div className="bg-gradient-to-br from-slate-800 to-slate-700 rounded-2xl p-6 border-2 border-slate-600 shadow-inner" dir="ltr">
             <div className="flex items-center justify-center gap-3 md:gap-4" dir="ltr">
               {codeDigits.map((digit, index) => (
                 <div
@@ -237,7 +237,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
                   className={`w-14 h-16 sm:w-16 sm:h-20 md:w-20 md:h-24 flex items-center justify-center rounded-xl border-2 transition-all duration-200 ${
                     digit
                       ? 'bg-gradient-to-br from-blue-500 to-blue-600 border-blue-700 text-white shadow-lg scale-105'
-                      : 'bg-white border-gray-300 text-gray-300'
+                      : 'bg-slate-800 border-slate-600 text-slate-600'
                   }`}
                   style={{ fontFamily: 'Arial, sans-serif' }}
                 >
@@ -248,9 +248,9 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
               ))}
             </div>
             <div className="text-center mt-4">
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white rounded-full shadow-sm border border-gray-200">
-                <span className="text-xs text-gray-500">الأرقام المدخلة:</span>
-                <span className={`font-bold ${code.length === 4 ? 'text-green-600' : 'text-blue-600'}`}>
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-slate-800 rounded-full shadow-sm border border-white/10">
+                <span className="text-xs text-slate-400">الأرقام المدخلة:</span>
+                <span className={`font-bold ${code.length === 4 ? 'text-emerald-400' : 'text-blue-400'}`}>
                   {code.length}/4
                 </span>
               </div>
@@ -261,8 +261,8 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
             <div
               className={`mt-4 p-4 rounded-xl text-center font-medium whitespace-pre-line border-2 shadow-md animate-fadeIn ${
                 message.type === 'success'
-                  ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-800 border-green-300'
-                  : 'bg-gradient-to-r from-red-50 to-rose-50 text-red-800 border-red-300'
+                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                  : 'bg-red-500/10 text-red-300 border-red-500/30'
               }`}
               dir="rtl"
             >

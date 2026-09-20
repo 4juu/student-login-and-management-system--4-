@@ -55,6 +55,15 @@ try {
   /* تجاهل — بيئة بدون localStorage */
 }
 
+// 🤫 كتم Console في الإنتاج — يمنع كشف البيانات الداخلية من المستخدمين
+if (import.meta.env.PROD) {
+  const noop = () => {};
+  console.log = noop;
+  console.debug = noop;
+  console.info = noop;
+  console.warn = noop;
+}
+
 // 📱 صفحة الطالب (رابط تسجيل/اختبار/حضور) تُفتح بمدخل خفيف دون تحميل لوحة التحكم كاملة
 function hasStudentToken(): boolean {
   try {

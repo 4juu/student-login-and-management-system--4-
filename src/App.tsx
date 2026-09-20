@@ -21,7 +21,7 @@ import { Masthead } from './components/Masthead';
 import { MorphingSquare } from './components/MorphingSquare';
 import { TextScramble } from './components/TextScramble';
 import { SendProgressModal } from './components/SendProgressModal';
-import { Crown, Landmark, LogOut, Home, ChevronLeft, GraduationCap } from 'lucide-react';
+import { Crown, Landmark, LogOut, Home, ChevronLeft, GraduationCap, ClipboardList, PenLine, Users, BarChart3, CalendarDays } from 'lucide-react';
 import { Notifications } from './components/Notifications';
 import { ConfirmDialog } from './components/ConfirmDialog';
 
@@ -516,6 +516,8 @@ function App() {
 
   const handleBackToStages = () => {
     flushAllPendingSaves();
+    processedAttendanceRef.current.clear();
+    markAbsentInFlightRef.current.clear();
     setSelectedCollegeId(null);
     setSelectedStageId(null);
     setProfileStudent(null);
@@ -1216,7 +1218,7 @@ function App() {
                     {pendingCount > 0 && (
                       <span
                         className="absolute bg-red-500 text-white text-xs font-bold rounded-full min-w-[22px] h-[22px] px-1.5 flex items-center justify-center shadow-lg"
-                        style={{ top: '-8px', left: '-8px', zIndex: 9999, animation: 'pulse-badge 1.5s ease-in-out infinite' }}
+                        style={{ top: '-8px', right: '-8px', zIndex: 9999, animation: 'pulse-badge 1.5s ease-in-out infinite' }}
                       >
                         {pendingCount > 99 ? '99+' : pendingCount}
                       </span>
@@ -1312,25 +1314,25 @@ function App() {
                 onClick={() => setActiveTab('sessions')}
                 className={`tab-btn shrink-0 ${activeTab === 'sessions' ? 'active' : ''}`}
               >
-                📋 السجلات ({sessions.length})
+                <ClipboardList className="w-4 h-4 inline-block align-middle ml-1" /> السجلات ({sessions.length})
               </button>
               <button
                 onClick={() => setActiveTab('login')}
                 className={`tab-btn shrink-0 ${activeTab === 'login' ? 'active' : ''}`}
               >
-                📝 تسجيل الحضور
+                <PenLine className="w-4 h-4 inline-block align-middle ml-1" /> تسجيل الحضور
               </button>
               <button
                 onClick={() => setActiveTab('manage')}
                 className={`tab-btn shrink-0 ${activeTab === 'manage' ? 'active' : ''}`}
               >
-                👥 {canEditStudents ? `إدارة الطلاب (${students.length})` : `الطلاب (${students.length})`}
+                <Users className="w-4 h-4 inline-block align-middle ml-1" /> {canEditStudents ? `إدارة الطلاب (${students.length})` : `الطلاب (${students.length})`}
               </button>
               <button
                 onClick={() => setActiveTab('records')}
                 className={`tab-btn shrink-0 ${activeTab === 'records' ? 'active' : ''}`}
               >
-                📊 سجل الحضور ({attendanceRecords.length})
+                <BarChart3 className="w-4 h-4 inline-block align-middle ml-1" /> سجل الحضور ({attendanceRecords.length})
               </button>
               {canSendAttendanceLink && (
                 <button
@@ -1338,7 +1340,7 @@ function App() {
                   className="btn-base btn-primary shrink-0 text-xs py-1.5 px-2"
                   title="إنشاء رابط تقرير الحضور والغياب للطلاب"
                 >
-                  📅 رابط الحضور والغياب
+                  <CalendarDays className="w-4 h-4 inline-block align-middle ml-1" /> رابط الحضور والغياب
                 </button>
               )}
             </div>
