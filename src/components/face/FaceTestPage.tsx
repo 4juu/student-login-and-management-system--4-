@@ -600,6 +600,10 @@ setEnhanceCountdown(20);
                 لكي يعمل الاختبار، يجب أن تكون بصمتك <strong className="text-amber-300">محفوظة في النظام وموافق عليها</strong> من قبل الإدارة.
                 إذا لم تسجل بصمتك بعد، استخدم رابط التسجيل أولاً.
               </p>
+              <p className="text-[11px] text-slate-400 leading-5 mt-2 pt-2 border-t border-white/5">
+                <svg className="inline h-3 w-3 ml-1 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                ملاحظة: يُرجى من أصحاب النظارات الطبية إبقاء النظارات مرتدينها أثناء إجراء اختبار البصمة، في حال تم تسجيل البصمة مسبقًا أثناء ارتداء النظارات.
+              </p>
             </div>
             <button
               onClick={startScan}
@@ -748,52 +752,43 @@ setEnhanceCountdown(20);
               </div>
             )}
 
-            {/* شريط علوي رفيع: التعرف ناجح — جاري تحسين البصمة (الكاميرا تبقى مرئية وشغالة طوال الوقت) */}
+            {/* نص على الكاميرا مباشرة: تحسين البصمة — بدون خلفية */}
             {phase === 'enhancing' && matchedStudent && (
-              <div className="absolute top-0 right-0 left-0 z-[9999] pointer-events-none" dir="rtl">
-                <div className="mx-3 mt-3 overflow-hidden rounded-2xl bg-gradient-to-l from-emerald-600 to-emerald-500 shadow-xl shadow-emerald-900/30 ring-1 ring-white/20">
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-white/30 bg-white/20">
-                      <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <div className="absolute inset-x-0 top-0 z-[9999] pointer-events-none flex flex-col items-center pt-8" dir="rtl">
+                {enhanceCountdown > 0 ? (
+                  <>
+                    <div className="px-5 py-3 rounded-2xl bg-black/50 backdrop-blur-sm">
+                      <p className="text-xl sm:text-2xl font-extrabold text-white text-center leading-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
+                        أهلاً {matchedStudent.name.split(' ')[0]}
+                      </p>
+                      <p className="mt-2 text-lg sm:text-xl font-bold text-emerald-300 text-center drop-shadow-[0_2px_6px_rgba(0,0,0,0.7)] transition-all duration-500">
+                        {POSE_HINTS[poseHintIdx].icon} {POSE_HINTS[poseHintIdx].text}
+                      </p>
                     </div>
-                    {enhanceCountdown > 0 ? (
-                      <div className="min-w-0 flex-1">
-                        <h2 className="text-sm font-extrabold text-white leading-tight">أهلاً {matchedStudent.name.split(' ')[0]}</h2>
-                        <p className="mt-0.5 text-xs font-medium text-emerald-50/90">تم التعرف — جارٍ تحسين البصمة</p>
+                    <div className="mt-3 flex flex-col items-center">
+                      <div className="text-5xl sm:text-6xl font-black text-white tabular-nums drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]">
+                        {enhanceCountdown}
                       </div>
-                    ) : (
-                      <div className="min-w-0 flex-1">
-                        <h2 className="flex items-center gap-1.5 text-sm font-extrabold text-white leading-tight">
-                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-emerald-600">
-                            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
-                          </span>
-                          تم التعرف
-                        </h2>
-                        <p className="mt-0.5 text-xs font-medium text-emerald-50/90">تم تحسين بصمتك بنجاح ✓</p>
+                      <div className="mt-2 w-48 h-1.5 rounded-full bg-white/20 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-white/80 transition-all duration-1000 ease-linear"
+                          style={{ width: `${((20 - enhanceCountdown) / 20) * 100}%` }}
+                        />
                       </div>
-                    )}
-                    <div className="shrink-0 text-2xl font-extrabold text-white tabular-nums leading-none">{enhanceCountdown}</div>
-                  </div>
-                  {enhanceCountdown > 0 && (
-                    <div className="px-4 pb-2 pt-0.5 text-center">
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-bold text-white transition-all duration-500">
-                        <span className="text-base">{POSE_HINTS[poseHintIdx].icon}</span>
-                        {POSE_HINTS[poseHintIdx].text}
-                      </span>
                     </div>
-                  )}
-                  <div className="h-1.5 w-full bg-black/20">
-                    <div
-                      className="h-full bg-white/90 transition-all duration-1000 ease-linear"
-                      style={{ width: `${((20 - enhanceCountdown) / 20) * 100}%` }}
-                    />
+                  </>
+                ) : (
+                  <div className="px-5 py-3 rounded-2xl bg-black/50 backdrop-blur-sm">
+                    <p className="text-xl sm:text-2xl font-extrabold text-white text-center drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
+                      ✓ تم تحسين بصمتك بنجاح
+                    </p>
                   </div>
-                  {saveStatus && (
-                    <div className={`mx-3 mt-2 rounded-lg px-3 py-1.5 text-center text-xs font-bold ${saveStatus.ok ? 'bg-white text-emerald-700' : 'bg-red-500 text-white'}`}>
-                      {saveStatus.ok ? '✓ ' : '✗ '}{saveStatus.msg}
-                    </div>
-                  )}
-                </div>
+                )}
+                {saveStatus && (
+                  <div className={`mt-3 px-4 py-2 rounded-xl text-sm font-bold drop-shadow-lg ${saveStatus.ok ? 'bg-emerald-500/90 text-white' : 'bg-red-500/90 text-white'}`}>
+                    {saveStatus.msg}
+                  </div>
+                )}
               </div>
             )}
           </div>
