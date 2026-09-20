@@ -83,6 +83,7 @@ import {
   cancelAllPendingSaves,
   getCurrentAcademicYear,
   loadSystemTitle,
+  loadDescriptorOverrides,
 } from './firebase/dataService';
 import { getCachedStageData, setCachedStageData } from './lib/stageCache';
 
@@ -494,6 +495,21 @@ function App() {
       const data = await loadStageData(adminUid, stageId, teacherId);
 
       if (!userModifiedStudentsRef.current) setStudents(data.students);
+      // 🔧 دمج التحسينات المحفوظة (descriptorOverrides) في العرض — تظهر النسبة المحسّنة فورًا
+      if (!userModifiedStudentsRef.current) {
+        try {
+          const overridesData = await loadDescriptorOverrides(adminUid, stageId);
+          if (overridesData) {
+            setStudents(prev => prev.map(s => {
+              const ov = overridesData[s.id];
+              if (ov?.faceDescriptor && ov.updatedAt > 0) {
+                return { ...s, faceDescriptor: ov.faceDescriptor };
+              }
+              return s;
+            }));
+          }
+        } catch { /* تجاهُل أخطاء الدمج */ }
+      }
       setAttendanceRecords(data.records);
       setSessions(data.sessions);
       setActiveSessionId(data.activeSessionId);
