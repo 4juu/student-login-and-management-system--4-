@@ -65,7 +65,8 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
   const [expiresAt, setExpiresAt] = useState<number>(0);
   const [remainingMs, setRemainingMs] = useState<number>(0);
   const [enhanceCountdown, setEnhanceCountdown] = useState<number>(10);
-
+  // ── حالة الحفظ المرئية — تظهر على الشاشة مباشرة (مهمة لأنه لا يمكن فتح Console على الموبايل) ──
+  const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   useBodyScrollLock(phase === 'scanning' || phase === 'enhancing');
 
   const studentsRef = useRef<Student[]>([]);
@@ -498,11 +499,14 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
             matchedStudent.id,
             savedDescriptorRef.current,
           );
+          if (mountedRef.current) setSaveStatus({ ok: true, msg: 'تم حفظ البصمة المحسّنة في النظام ✓' });
         } catch (e) {
           console.error('[face-test] ❌ فشل حفظ البصمة:', e);
+          if (mountedRef.current) setSaveStatus({ ok: false, msg: `فشل الحفظ: ${e instanceof Error ? e.message : String(e)}` });
         }
       } else {
-        console.warn('[face-test] تم تخطي الحفظ — 조건不符:', { matchedStudent: !!matchedStudent, descriptor: !!savedDescriptorRef.current, linkData: !!linkDataRef.current });
+        console.warn('[face-test] تم تخطي الحفظ — عنقود غير مكتمل:', { matchedStudent: !!matchedStudent, descriptor: !!savedDescriptorRef.current, linkData: !!linkDataRef.current });
+        if (mountedRef.current) setSaveStatus({ ok: false, msg: 'لم يُحفظ — البيانات غير مكتملة' });
       }
 
       if (mountedRef.current) setPhase('success');
@@ -753,6 +757,11 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
                       style={{ width: `${((10 - enhanceCountdown) / 10) * 100}%` }}
                     />
                   </div>
+                  {saveStatus && (
+                    <div className={`mx-3 mt-2 rounded-lg px-3 py-1.5 text-center text-xs font-bold ${saveStatus.ok ? 'bg-white text-emerald-700' : 'bg-red-500 text-white'}`}>
+                      {saveStatus.ok ? '✓ ' : '✗ '}{saveStatus.msg}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
