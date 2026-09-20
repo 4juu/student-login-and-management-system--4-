@@ -478,8 +478,8 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
       if (loopTimerRef.current) { clearTimeout(loopTimerRef.current); loopTimerRef.current = 0; }
       if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
 
-      // حفظ البصمة المحسّنة في descriptorOverrides
-      if (matchedStudent && savedDescriptorRef.current && linkDataRef.current && enhancedCountRef.current > 0) {
+      // حفظ البصمة المحسّنة في descriptorOverrides — يُحفظ دائماً عند وجود طالب
+      if (matchedStudent && savedDescriptorRef.current && linkDataRef.current) {
         try {
           // تحديث الكاش المحلي
           const students = studentsRef.current;
@@ -724,24 +724,35 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               </div>
             )}
 
-            {/* overlay: التعرف ناجح — يرجى الانتظار */}
+            {/* شريط علوي رفيع: التعرف ناجح — جاري تحسين البصمة (الكاميرا تبقى مرئية وشغالة طوال الوقت) */}
             {phase === 'enhancing' && matchedStudent && (
-              <div className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-auto" dir="rtl">
-                <div className="absolute inset-0 bg-black/50 backdrop-blur-md" />
-                <div className="relative text-center px-8 max-w-md">
-                  <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500/20 border-2 border-emerald-400/30 animate-pulse">
-                    <svg className="h-10 w-10 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <div className="absolute top-0 right-0 left-0 z-[9999] pointer-events-none" dir="rtl">
+                <div className="mx-3 mt-3 overflow-hidden rounded-2xl bg-gradient-to-l from-emerald-600 to-emerald-500 shadow-xl shadow-emerald-900/30 ring-1 ring-white/20">
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-white/30 bg-white/20">
+                      <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    </div>
+                    {enhanceCountdown > 0 ? (
+                      <div className="min-w-0 flex-1">
+                        <h2 className="text-sm font-extrabold text-white leading-tight">أهلاً {matchedStudent.name.split(' ')[0]}</h2>
+                        <p className="mt-0.5 text-xs font-medium text-emerald-50/90">تم التعرف على بصمتك — جارٍ تحسينها... {enhanceCountdown} ثوانٍ</p>
+                      </div>
+                    ) : (
+                      <div className="min-w-0 flex-1">
+                        <h2 className="flex items-center gap-1.5 text-sm font-extrabold text-white leading-tight">
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-emerald-600">
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                          </span>
+                          تم التعرف
+                        </h2>
+                        <p className="mt-0.5 text-xs font-medium text-emerald-50/90">تم التعرف على بصمتك وشكراً لك ✓</p>
+                      </div>
+                    )}
+                    <div className="shrink-0 text-2xl font-extrabold text-white tabular-nums leading-none">{enhanceCountdown}</div>
                   </div>
-                  <h2 className="text-2xl font-extrabold text-white mb-1">أهلاً {matchedStudent.name.split(' ')[0]}</h2>
-                  <p className="text-lg font-bold text-emerald-300 mb-4">تم التعرف على بصمتك</p>
-                  <div className="flex items-center justify-center gap-2 mb-3">
-                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <p className="text-sm text-slate-300 font-medium">يرجى الانتظار {enhanceCountdown} ثوانٍ...</p>
-                  </div>
-                  {/* حلقة تقدم دائرية */}
-                  <div className="mx-auto w-48 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div className="h-1.5 w-full bg-black/20">
                     <div
-                      className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-1000 ease-linear"
+                      className="h-full bg-white/90 transition-all duration-1000 ease-linear"
                       style={{ width: `${((10 - enhanceCountdown) / 10) * 100}%` }}
                     />
                   </div>
