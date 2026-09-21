@@ -522,7 +522,9 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
   // ═══════════════ النتيجة ═══════════════
   const topResult = matches[0];
   const autoMatch = matches.length >= ROSTER_MIN_CONSECUTIVE && topResult && topResult.score >= ROSTER_AUTO_THRESHOLD;
-  const strongMatch = isVerifyMode ? !!verify?.matched : !!autoMatch;
+  // روابط الحضور: نقبل أي نتيجة واحدة حتى لو تحت العتبة — الطالب يبي يشوف تقريره
+  const hasAnyMatch = !isVerifyMode && matches.length > 0 && topResult && topResult.score >= 30;
+  const strongMatch = isVerifyMode ? !!verify?.matched : (!!autoMatch || hasAnyMatch);
 
   return (
     <div className="sel-fade">

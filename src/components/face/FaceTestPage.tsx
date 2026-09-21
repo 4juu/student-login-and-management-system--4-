@@ -32,7 +32,7 @@ interface FaceTestPageProps {
   onExit: () => void;
 }
 
-type TestPhase = 'loading' | 'invalid' | 'ready' | 'scanning' | 'enhancing' | 'success';
+type TestPhase = 'loading' | 'invalid' | 'loadError' | 'ready' | 'scanning' | 'enhancing' | 'success';
 
 const MIN_FACE_PX = 22;
 const MAX_FACES_PER_FRAME = 10;
@@ -106,7 +106,13 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
         setExpiresAt(link.expiresAt);
         setRemainingMs(link.expiresAt - getServerNow());
         linkDataRef.current = { adminUid: link.adminUid, stageId: link.stageId };
-        const s = await loadStageStudentsWithOverrides(link.adminUid, link.stageId);
+        let s: Student[] = [];
+        try {
+          s = await loadStageStudentsWithOverrides(link.adminUid, link.stageId);
+        } catch {
+          if (!cancelled) setPhase('loadError');
+          return;
+        }
         if (cancelled) return;
         studentsRef.current = s;
         const approved = s.filter(st => hasValidDescriptor(st.faceDescriptor));
@@ -570,6 +576,28 @@ setEnhanceCountdown(20);
             <button onClick={onExit} className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition active:scale-95">
               العودة
             </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (phase === 'loadError') {
+      return (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm" dir="rtl">
+          <div className="text-center px-6">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10">
+              <svg className="h-8 w-8 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+            </div>
+            <h2 className="text-lg font-bold text-white mb-2">تعذر تحميل بيانات الطلاب</h2>
+            <p className="text-sm text-slate-400 mb-4">الرابط صالح لكن تعذر الاتصال بقاعدة البيانات. تأكد من اتصالك بالإنترنت وأعد المحاولة.</p>
+            <div className="flex gap-2 justify-center">
+              <button onClick={onExit} className="px-6 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm transition active:scale-95">
+                العودة
+              </button>
+              <button onClick={() => window.location.reload()} className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition active:scale-95">
+                إعادة المحاولة
+              </button>
+            </div>
           </div>
         </div>
       );
