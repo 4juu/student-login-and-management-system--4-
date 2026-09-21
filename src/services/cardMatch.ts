@@ -7,6 +7,7 @@ import type { Student } from '../types/student';
 import {
   extractNameFromOCR,
   findNameInOCRText,
+  levenshteinSimilarity,
   normalizeArabic,
   splitMergedName,
 } from './nameMatching';
@@ -163,6 +164,49 @@ export function rankStudents(ocrText: string, roster: Student[]): StudentMatch[]
     .filter((m): m is StudentMatch => m !== null)
     .sort((a, b) => b.score - a.score)
     .slice(0, 6);
+}
+
+// ─────────────────────────────────────────────────────────────
+// مطابقة الأسماء الثلاثة: الطالب + الأب + الجد
+// البطاقة العراقية تحمل الاسم الرباعي: اسم الطالب، اسم الأب، اسم الجد،有时 الجد الرابع
+// نقسم اسم الطالب في القائمة ونص OCR، ونطابق كل جزء لحاله
+// القاعدة: إذا طابق جزئان من ثلاثة على الأقل ← تطابق قوي
+// ─────────────────────────────────────────────────────────────
+export function tripleNameMatch(
+  ocrText: string,
+  roster: Student[],
+  minPartsMatch: number = 2,
+): Array<{ student: Student; score: number; matchedParts: number; totalParts: number }> {
+  if (!ocrText || !roster.length) return [];
+
+  const normText = normalizeArabic(ocrText);
+  const textTokens = normText.split(' ').filter(w => w.length >= 2);
+  if (!textTokens.length) return [];
+
+  const results: Array<{ student: Student; score: number; matchedParts: number; totalParts: number }> = [];
+
+  for (const student of roster) {
+    const nameParts = normalizeArabic(student.name).split(' ').filter(w => w.length >= 2);
+    if (nameParts.length < 2) continue;
+
+    let matchedParts = 0;
+    for (const part of nameParts) {
+      if (textTokens.some(t => t === part || levenshteinSimilarity(t, part) >= 0.75)) {
+        matchedParts++;
+      }
+    }
+
+    if (matchedParts >= minPartsMatch) {
+      results.push({
+        student,
+        score: Math.round((matchedParts / nameParts.length) * 100),
+        matchedParts,
+        totalParts: nameParts.length,
+      });
+    }
+  }
+
+  return results.sort((a, b) => b.score - a.score || b.matchedParts - a.matchedParts);
 }
 
 /** ترتيب الطلاب حسب اسم مكتوب يدوياً (إعادة حساب أثناء الكتابة) */

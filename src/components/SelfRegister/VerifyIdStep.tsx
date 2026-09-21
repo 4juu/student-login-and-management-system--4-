@@ -17,6 +17,7 @@ import { findNameInOCRText } from '../../services/nameMatching';
 import {
   extractStudentName,
   rankStudents,
+  tripleNameMatch,
   type StudentMatch,
 } from '../../services/cardMatch';
 import './selfRegister.css';
@@ -358,12 +359,24 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
           const r = findNameInOCRText(expected.name, text);
           setVerify({ matched: r.matched, confidence: Math.round(r.confidence * 100) });
         } else if (roster.length) {
-          // المطابقة بالأساس من الاسم المستخرج النظيف (الاسم الفعلي للبطاقة)،
-          // وإن لم يُستخرج نعتمد النص الخام — يسمح بتطابق الأسماء ذات الكلمات الزائدة
-          let ranked = extractedNameVal ? rankStudents(extractedNameVal, roster) : [];
-          if (ranked.length === 0) ranked = rankStudents(text, roster);
-          setMatches(ranked);
-          setSelected(ranked.length >= ROSTER_MIN_CONSECUTIVE && ranked[0].score >= ROSTER_AUTO_THRESHOLD ? ranked[0].student : null);
+          // روابط الحضور: مطابقة الأسماء الثلاثة (الطالب + الأب + الجد)
+          const ocrName = extractedNameVal || text;
+          const triple = tripleNameMatch(ocrName, roster, 2);
+          if (triple.length > 0) {
+            const top = triple[0];
+            const matched: StudentMatch[] = triple.map(t => ({
+              student: t.student,
+              score: t.score,
+            }));
+            setMatches(matched);
+            setSelected(top.student);
+          } else {
+            // احتياطي: المطابقة التقليدية
+            let ranked = extractedNameVal ? rankStudents(extractedNameVal, roster) : [];
+            if (ranked.length === 0) ranked = rankStudents(text, roster);
+            setMatches(ranked);
+            setSelected(null);
+          }
         }
 
         setScreen('result');
@@ -522,8 +535,8 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
   // ═══════════════ النتيجة ═══════════════
   const topResult = matches[0];
   const autoMatch = matches.length >= ROSTER_MIN_CONSECUTIVE && topResult && topResult.score >= ROSTER_AUTO_THRESHOLD;
-  // روابط الحضور: نقبل أي نتيجة واحدة حتى لو تحت العتبة — الطالب يبي يشوف تقريره
-  const hasAnyMatch = !isVerifyMode && matches.length > 0 && topResult && topResult.score >= 30;
+  // روابط الحضور: مطابقة الأسماء الثلاثة كافية (selected بالفعل من tripleNameMatch)
+  const hasAnyMatch = !isVerifyMode && !!selected;
   const strongMatch = isVerifyMode ? !!verify?.matched : (!!autoMatch || hasAnyMatch);
 
   return (

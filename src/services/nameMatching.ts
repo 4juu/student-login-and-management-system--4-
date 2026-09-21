@@ -17,7 +17,7 @@ export function normalizeArabic(text: string): string {
 // ─────────────────────────────────────────────────────────────
 // Levenshtein similarity (0-1)
 // ─────────────────────────────────────────────────────────────
-function levenshteinSimilarity(a: string, b: string): number {
+export function levenshteinSimilarity(a: string, b: string): number {
   if (a === b) return 1;
   if (!a.length || !b.length) return 0;
   const m = a.length, n = b.length;
