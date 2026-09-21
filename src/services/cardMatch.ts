@@ -179,19 +179,21 @@ export function tripleNameMatch(
 ): Array<{ student: Student; score: number; matchedParts: number; totalParts: number }> {
   if (!ocrText || !roster.length) return [];
 
-  const normText = normalizeArabic(ocrText);
-  const textTokens = normText.split(' ').filter(w => w.length >= 2);
+  // نقسم أولاً ثم نطبعق كل كلمة على حدة (لأن normalizeArabic يزيل المسافات)
+  const textTokens = ocrText.split(/\s+/).filter(w => w.length >= 2);
   if (!textTokens.length) return [];
+  const textTokensNorm = textTokens.map(normalizeArabic);
 
   const results: Array<{ student: Student; score: number; matchedParts: number; totalParts: number }> = [];
 
   for (const student of roster) {
-    const nameParts = normalizeArabic(student.name).split(' ').filter(w => w.length >= 2);
-    if (nameParts.length < 2) continue;
+    const namePartsRaw = student.name.split(/\s+/).filter(w => w.length >= 2);
+    if (namePartsRaw.length < 2) continue;
+    const nameParts = namePartsRaw.map(normalizeArabic);
 
     let matchedParts = 0;
     for (const part of nameParts) {
-      if (textTokens.some(t => t === part || levenshteinSimilarity(t, part) >= 0.75)) {
+      if (textTokensNorm.some(t => t === part || levenshteinSimilarity(t, part) >= 0.75)) {
         matchedParts++;
       }
     }
