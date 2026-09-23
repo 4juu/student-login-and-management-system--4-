@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
+import { useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { Student, AttendanceRecord, AttendanceSession, College, Stage } from './types/student';
 import { User } from './types/user';
 
@@ -6,15 +6,14 @@ import './design-system.css';
 
 import { OfflineModal } from './components/OfflineModal';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
+import { usePeriodicSync } from './hooks/usePeriodicSync';
 import { Login } from './components/Login';
 import { StageSelector } from './components/StageSelector';
 import { MorphingSquare } from './components/MorphingSquare';
 import { TextScramble } from './components/TextScramble';
 import { SendProgressModal } from './components/SendProgressModal';
-import { AppHeader } from './components/AppHeader';
 import { StageBreadcrumb } from './components/StageBreadcrumb';
 import { AdminTabBar } from './components/AdminTabBar';
-import { StageTabBar } from './components/StageTabBar';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { useConfirm } from './hooks/useConfirm';
 import useRegistrationToken from './hooks/useRegistrationToken';
@@ -24,23 +23,15 @@ import { useAuth } from './hooks/useAuth';
 import useInitialData from './hooks/useInitialData';
 import { useAutoSaves } from './hooks/useAutoSaves';
 import { useAbsenceSender } from './hooks/useAbsenceSender';
+import { useUIStore } from './store/useUIStore';
+import { useStageStore } from './store/useStageStore';
+import { AppHeader } from './layouts/AppHeader';
+import { StageContent } from './layouts/StageContent';
+import { TabFallback, ModalFallback } from './layouts/Fallbacks';
+import { TableSkeleton } from './components/loading/TableSkeleton';
+import { StageSkeleton } from './components/loading/StageSkeleton';
 
 // 🚀 تحميل متأخر للمكونات الثقيلة (تُحمَّل عند الحاجة فقط — خفض حجم الحزمة الأولية)
-const StudentManager = lazy(() =>
-  import('./components/StudentManager').then(m => ({ default: m.StudentManager }))
-);
-const StudentsViewer = lazy(() =>
-  import('./components/StudentsViewer').then(m => ({ default: m.StudentsViewer }))
-);
-const AttendanceLogin = lazy(() =>
-  import('./components/AttendanceLogin').then(m => ({ default: m.AttendanceLogin }))
-);
-const AttendanceRecords = lazy(() =>
-  import('./components/AttendanceRecords').then(m => ({ default: m.AttendanceRecords }))
-);
-const SessionManager = lazy(() =>
-  import('./components/SessionManager').then(m => ({ default: m.SessionManager }))
-);
 const SmartChatBot = lazy(() =>
   import('./components/SmartChatBot').then(m => ({ default: m.SmartChatBot }))
 );
@@ -78,74 +69,46 @@ const StudentProfileModal = lazy(() =>
   import('./components/StudentProfile/StudentProfileModal').then(m => ({ default: m.StudentProfileModal }))
 );
 
-import { loadStageData, loadStudents as loadStudentsForStage, deleteStageData, flushAllPendingSaves, cancelAllPendingSaves } from './firebase/dataService';
+import { loadStageData, loadStudents as loadStudentsForStage, deleteStageData, flushAllPendingSaves, cancelAllPendingSaves, applyOutbox } from './firebase/dataService';
 import { getCachedStageData, setCachedStageData } from './lib/stageCache';
 import { TelegramConfig } from './types/telegram';
-
-const TabFallback = () => (
-  <div className="space-y-4 animate-fadeIn" role="status" aria-label="جاري التحميل">
-    <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="h-9 w-24 shrink-0 rounded-full skeleton-block" />
-      ))}
-    </div>
-    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3 overflow-hidden">
-          <div className="h-4 w-2/3 rounded-md skeleton-block" />
-          <div className="h-3 w-full rounded skeleton-block" />
-          <div className="h-3 w-4/5 rounded skeleton-block" />
-          <div className="h-8 w-24 rounded-lg skeleton-block" />
-        </div>
-      ))}
-    </div>
-  </div>
-);
-
-const ModalFallback = () => (
-  <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" role="status" aria-label="جاري التحميل">
-    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-    <div className="relative flex flex-col items-center gap-3 bg-slate-900 border border-white/10 rounded-2xl px-8 py-6 shadow-2xl">
-      <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-      <p className="text-sm text-slate-300 font-medium">جاري التحميل…</p>
-    </div>
-  </div>
-);
-
-const StageLoading = () => (
-  <div className="max-w-6xl mx-auto py-8" role="status" aria-label="جاري تحميل بيانات المرحلة">
-    <div className="space-y-4">
-      <div className="h-10 w-64 rounded-full skeleton-block" />
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
-            <div className="h-4 w-2/3 rounded-md skeleton-block" />
-            <div className="h-3 w-full rounded skeleton-block" />
-            <div className="h-3 w-4/5 rounded skeleton-block" />
-          </div>
-        ))}
-      </div>
-      <p className="text-center text-sm text-slate-400 pt-2">جاري تحميل بيانات المرحلة…</p>
-    </div>
-  </div>
-);
 
 function App() {
   const { registerToken, testToken, attToken, tokenChecked, handleExitSelfRegister, handleExitTest, handleExitAtt } = useRegistrationToken();
   const { systemTitle, setSystemTitle, currentAcademicYear } = useSystemConfig();
 
-  const [dataLoaded, setDataLoaded] = useState(false);
-  const [selectedCollegeId, setSelectedCollegeId] = useState<string | null>(null);
-  const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
-  const [sessions, setSessions] = useState<AttendanceSession[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [profileStudent, setProfileStudent] = useState<Student | null>(null);
-  const [stageSyncing, setStageSyncing] = useState(false);
+  const {
+    dataLoaded, setDataLoaded,
+    stageSyncing, setStageSyncing,
+    profileStudent, setProfileStudent,
+    offlineModalDismissed, setOfflineModalDismissed,
+  } = useUIStore();
+
+  const {
+    colleges, stages, setColleges, setStages,
+    selectedCollegeId, setSelectedCollegeId,
+    selectedStageId, setSelectedStageId,
+    students, setStudents,
+    records: attendanceRecords, setRecords: setAttendanceRecords,
+    sessions, setSessions,
+    activeSessionId, setActiveSessionId,
+  } = useStageStore();
 
   const { isOffline, syncDone } = useOnlineStatus();
-  const [offlineModalDismissed, setOfflineModalDismissed] = useState(false);
+
+  // ⏱️ مزامنة دورية كل ساعة: تصفيية صندوق الأوفلاين والكتابات المعلقة
+  usePeriodicSync(async () => {
+    try {
+      await applyOutbox();
+    } catch {
+      /* تجاهل — ستُعاد المحاولة في الدورة التالية */
+    }
+    try {
+      await flushAllPendingSaves();
+    } catch {
+      /* تجاهل */
+    }
+  });
 
   useEffect(() => {
     if (isOffline) setOfflineModalDismissed(false);
@@ -173,15 +136,15 @@ function App() {
   const {
     currentUser, loading, logoutConfirmOpen, loggingOut,
     handleLogin, handleLogout, confirmLogout, cancelLogout, handleUpdateProfile,
-    isAdmin, isMainAdmin, isCollegeAdmin, canEditStudents, canSendAttendanceLink,
+    isAdmin, isMainAdmin, isCollegeAdmin,
     getAdminUid, getTeacherId,
   } = auth;
 
   const {
     allTeachers, allStagesData, universityDataLoading, universityDataLoaded,
-    telegramConfig, colleges, stages,
+    telegramConfig,
     loadInitialData: loadInitialDataBase, loadAllAdminData,
-    setColleges, setStages, setTelegramConfig, setAllStagesData,
+    setTelegramConfig, setAllStagesData,
   } = useInitialData({ currentUser });
 
   const nav = useNavigation(currentUser);
@@ -496,8 +459,8 @@ function App() {
   if (registerToken) {
     return (
       <Suspense fallback={
-        <div className="min-h-screen flex items-center justify-center bg-[#0B1220]">
-          <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <div className="min-h-screen bg-[#0B1220] p-4 md:p-8" dir="rtl">
+          <StageSkeleton />
         </div>
       }>
         <SelfEnrollPage token={registerToken} onExit={handleExitSelfRegister} />
@@ -508,8 +471,8 @@ function App() {
   if (attToken) {
     return (
       <Suspense fallback={
-        <div className="min-h-screen flex items-center justify-center bg-[#0B1220]">
-          <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <div className="min-h-screen bg-[#0B1220] p-4 md:p-8" dir="rtl">
+          <StageSkeleton />
         </div>
       }>
         <SelfEnrollPage token={attToken} onExit={handleExitAtt} />
@@ -520,8 +483,8 @@ function App() {
   if (testToken) {
     return (
       <Suspense fallback={
-        <div className="min-h-screen flex items-center justify-center bg-[#0B1220]">
-          <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <div className="min-h-screen bg-[#0B1220] p-4 md:p-8" dir="rtl">
+          <StageSkeleton />
         </div>
       }>
         <FaceTestPage testToken={testToken} onExit={handleExitTest} />
@@ -558,14 +521,10 @@ function App() {
       </a>
       <div className="container mx-auto px-3 md:px-4 py-3 md:py-6">
         <AppHeader
-          currentUser={currentUser}
           systemTitle={systemTitle}
           currentAcademicYear={currentAcademicYear}
-          isMainAdmin={isMainAdmin}
-          isCollegeAdmin={isCollegeAdmin}
           isOffline={isOffline}
           syncDone={syncDone}
-          onProfile={() => setActiveTab('profile')}
           onLogout={handleLogout}
         />
 
@@ -638,7 +597,7 @@ function App() {
                 </Suspense>
               )}
               {activeTab === 'teachers' && (isMainAdmin || isCollegeAdmin) && (
-                <Suspense fallback={<TabFallback />}>
+                <Suspense fallback={<TableSkeleton />}>
                   <TeacherManagement
                     currentUser={currentUser}
                     colleges={isCollegeAdmin ? colleges.filter(c => c.id === currentUser.collegeId) : colleges}
@@ -666,92 +625,31 @@ function App() {
         )}
 
         {selectedStageId && (
-          <div className="max-w-6xl mx-auto">
-            <StageTabBar
-              activeTab={activeTab}
-              sessionsCount={sessions.length}
-              studentsCount={students.length}
-              recordsCount={attendanceRecords.length}
-              canEditStudents={canEditStudents}
-              canSendAttendanceLink={canSendAttendanceLink}
-              onTabChange={setActiveTab}
-              onOpenAttendanceLink={() => setShowAttendanceLink(true)}
-            />
-
-            {!dataLoaded ? (
-              <StageLoading />
-            ) : (
-            <div key={`stage-tab-${activeTab}`} className="animate-pageEnter">
-              {activeTab === 'sessions' && (
-                <Suspense fallback={<TabFallback />}>
-                  <SessionManager
-                    sessions={sessions} activeSessionId={activeSessionId}
-                    onCreateSession={handleCreateSession} onSelectSession={handleSelectSession}
-                    onDeleteSession={handleDeleteSession} onRenameSession={handleRenameSession}
-                    students={students} records={attendanceRecords} onMarkAbsent={handleMarkAbsent}
-                    absenceSendLogs={absenceSendLogs}
-                    isSending={isSending}
-                    currentSendingSessionId={currentSendingSessionId}
-                    sendGroups={sendGroups}
-                    sendDoneCount={sendDoneCount}
-                    sendTotalGroups={sendTotalGroups}
-                    completedGroupData={completedGroupData}
-                  />
-                </Suspense>
-              )}
-              {activeTab === 'login' && (
-                <div className="max-w-lg mx-auto">
-                  {!activeSessionId ? (
-                    <div className="glass-card-sm p-6 text-center">
-                      <p className="text-amber-300 font-medium mb-4">لا يوجد سجل نشط!</p>
-                      <button onClick={() => setActiveTab('sessions')} className="btn-base btn-primary px-6 py-2">
-                        انتقل لإدارة السجلات
-                      </button>
-                    </div>
-                  ) : students.length === 0 ? (
-                    <div className="glass-card-sm p-6 text-center">
-                      <p className="text-amber-300 font-medium">لا يوجد طلاب في هذه المرحلة</p>
-                    </div>
-                  ) : (
-                    <Suspense fallback={<TabFallback />}>
-                      <AttendanceLogin
-                        students={students} activeSessionId={activeSessionId}
-                        activeSession={sessions.find(s => s.id === activeSessionId) || null}
-                        records={attendanceRecords} onAttendanceRecord={handleAttendanceRecord}
-                        onUpdateStudent={handleUpdateStudent} currentUser={currentUser}
-                      />
-                    </Suspense>
-                  )}
-                </div>
-              )}
-              {activeTab === 'manage' && (
-                <Suspense fallback={<TabFallback />}>
-                  {canEditStudents ? (
-                    <StudentManager
-                      students={students} onAddStudent={handleAddStudent}
-                      onAddMultipleStudents={handleAddMultipleStudents} onUpdateStudent={handleUpdateStudent}
-                      onDeleteStudent={handleDeleteStudent} onDeleteSelectedStudents={handleDeleteSelectedStudents}
-                      onSortByName={handleSortByName} onSortByGroup={handleSortByGroup}
-                      onOpenProfile={setProfileStudent}
-                    />
-                  ) : (
-                    <StudentsViewer students={students} onOpenProfile={setProfileStudent} />
-                  )}
-                </Suspense>
-              )}
-              {activeTab === 'records' && (
-                <Suspense fallback={<TabFallback />}>
-                  <AttendanceRecords
-                    records={attendanceRecords} sessions={sessions} students={students}
-                    activeSessionId={activeSessionId} onClearRecords={handleClearRecords}
-                    onUpdateRecord={handleUpdateRecord} onDeleteRecord={handleDeleteRecord}
-                    teacherBio={currentUser?.bio || currentUser?.displayName || ''}
-                  />
-                </Suspense>
-              )}
-            </div>
-            )}
-          </div>
+          <StageContent
+            onCreateSession={handleCreateSession}
+            onSelectSession={handleSelectSession}
+            onDeleteSession={handleDeleteSession}
+            onRenameSession={handleRenameSession}
+            onMarkAbsent={handleMarkAbsent}
+            onAttendanceRecord={handleAttendanceRecord}
+            onUpdateStudent={handleUpdateStudent}
+            onAddStudent={handleAddStudent}
+            onAddMultipleStudents={handleAddMultipleStudents}
+            onDeleteStudent={handleDeleteStudent}
+            onDeleteSelectedStudents={handleDeleteSelectedStudents}
+            onSortByName={handleSortByName}
+            onSortByGroup={handleSortByGroup}
+            onClearRecords={handleClearRecords}
+            onUpdateRecord={handleUpdateRecord}
+            onDeleteRecord={handleDeleteRecord}
+            absenceSendLogs={absenceSendLogs}
+            isSending={isSending}
+            currentSendingSessionId={currentSendingSessionId}
+            sendGroups={sendGroups}
+            sendDoneCount={sendDoneCount}
+            sendTotalGroups={sendTotalGroups}
+            completedGroupData={completedGroupData}
+          />
         )}
 
         </main>

@@ -1,9 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { User } from '../types/user';
 import { auth, database } from '../firebase/config';
 import { signIn, signOut } from '../firebase/authService';
 import { saveUserData, flushAllPendingSaves } from '../firebase/dataService';
+import {
+  useAuthStore,
+  selectIsAdmin,
+  selectIsCollegeAdmin,
+  selectCanEditStudents,
+  selectCanSendAttendanceLink,
+} from '../store/useAuthStore';
 
 interface UseAuthParams {
   resetData: () => void;
@@ -34,10 +41,14 @@ interface UseAuthReturn {
 }
 
 export function useAuth({ resetData, loadInitialData, registerToken = null }: UseAuthParams): UseAuthReturn {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const setCurrentUser = useAuthStore((s) => s.setCurrentUser);
+  const loading = useAuthStore((s) => s.loading);
+  const setLoading = useAuthStore((s) => s.setLoading);
+  const logoutConfirmOpen = useAuthStore((s) => s.logoutConfirmOpen);
+  const setLogoutConfirmOpen = useAuthStore((s) => s.setLogoutConfirmOpen);
+  const loggingOut = useAuthStore((s) => s.loggingOut);
+  const setLoggingOut = useAuthStore((s) => s.setLoggingOut);
 
   useEffect(() => {
     if (registerToken) {
@@ -108,11 +119,11 @@ export function useAuth({ resetData, loadInitialData, registerToken = null }: Us
 
   const handleUpdateProfile = useCallback((updatedUser: User) => setCurrentUser(updatedUser), []);
 
-  const isAdmin = currentUser?.role === 'admin';
-  const isCollegeAdmin = currentUser?.role === 'college_admin';
-  const canEditStudents = isAdmin || isCollegeAdmin;
+  const isAdmin = useAuthStore(selectIsAdmin);
+  const isCollegeAdmin = useAuthStore(selectIsCollegeAdmin);
+  const canEditStudents = useAuthStore(selectCanEditStudents);
   const isMainAdmin = isAdmin;
-  const canSendAttendanceLink = isAdmin || isCollegeAdmin || currentUser?.role === 'teacher';
+  const canSendAttendanceLink = useAuthStore(selectCanSendAttendanceLink);
 
   const getAdminUid = (): string => {
     if (!currentUser) return '';

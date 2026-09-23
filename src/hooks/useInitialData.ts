@@ -10,6 +10,7 @@ import {
 import { Student, AttendanceRecord, AttendanceSession, College, Stage } from '../types/student';
 import { User } from '../types/user';
 import { TelegramConfig } from '../types/telegram';
+import { useStageStore } from '../store/useStageStore';
 
 interface AllStagesData {
   [stageId: string]: {
@@ -47,8 +48,10 @@ export default function useInitialData({ currentUser }: UseInitialDataParams): U
   const [universityDataLoading, setUniversityDataLoading] = useState(false);
   const [universityDataLoaded, setUniversityDataLoaded] = useState(false);
 
-  const [colleges, setColleges] = useState<College[]>([]);
-  const [stages, setStages] = useState<Stage[]>([]);
+  const colleges = useStageStore((s) => s.colleges);
+  const stages = useStageStore((s) => s.stages);
+  const setColleges = useStageStore((s) => s.setColleges);
+  const setStages = useStageStore((s) => s.setStages);
   const [telegramConfig, setTelegramConfig] = useState<TelegramConfig | null>(null);
 
   const loadInitialData = useCallback(async (user: User) => {
