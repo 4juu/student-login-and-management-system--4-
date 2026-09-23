@@ -15,7 +15,7 @@ import { Camera, Check, CircleCheck, CircleX, ClipboardList, LoaderCircle, Mail,
 
 interface PendingRegistrationsProps {
   adminUid: string;
-  dataAdminUid?: string;
+  dataAdminUid?: string | undefined;
   onClose: () => void;
 }
 

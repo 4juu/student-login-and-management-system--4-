@@ -2,18 +2,18 @@ export interface Student {
   id: string;
   name: string;
   code: string;
-  group?: string;
-  universityId?: string;
-  qrCodeId?: string;
+  group?: string | undefined;
+  universityId?: string | undefined;
+  qrCodeId?: string | undefined;
   faceDescriptor?: number[] | object | any; // بصمة v5 (Pose Grid): FaceGalleryDescriptor
-  faceRegisteredAt?: string;
-  faceCompressed?: boolean;
+  faceRegisteredAt?: string | undefined;
+  faceCompressed?: boolean | undefined;
   createdAt: string;
-  academicYear?: string;
-  
+  academicYear?: string | undefined;
+
   // 🆕 معلومات التسجيل الذاتي
-  selfRegisteredAt?: string;
-  selfRegistrationApproved?: boolean;
+  selfRegisteredAt?: string | undefined;
+  selfRegistrationApproved?: boolean | undefined;
 }
 
 export interface AttendanceRecord {
@@ -21,17 +21,17 @@ export interface AttendanceRecord {
   studentId: string;
   studentName: string;
   studentCode: string;
-  studentGroup?: string;
+  studentGroup?: string | undefined;
   timestamp: string;
   date: string;
   time: string;
   sessionId: string;
-  status?: 'present' | 'absent';
-  method?: 'manual' | 'qr' | 'face';
-  academicYear?: string;
-  teacherName?: string;
-  subjectName?: string;
-  absenceCount?: number;
+  status?: 'present' | 'absent' | undefined;
+  method?: 'manual' | 'qr' | 'face' | undefined;
+  academicYear?: string | undefined;
+  teacherName?: string | undefined;
+  subjectName?: string | undefined;
+  absenceCount?: number | undefined;
 }
 
 export interface AttendanceSession {
@@ -40,7 +40,7 @@ export interface AttendanceSession {
   date: string;
   createdAt: string;
   isActive: boolean;
-  academicYear?: string;
+  academicYear?: string | undefined;
 }
 
 export interface Stage {
@@ -48,15 +48,15 @@ export interface Stage {
   name: string;
   collegeId: string;
   createdAt: string;
-  order?: number;
+  order?: number | undefined;
 }
 
 export interface College {
   id: string;
   name: string;
-  description?: string;
-  icon?: string;
-  color?: string;
+  description?: string | undefined;
+  icon?: string | undefined;
+  color?: string | undefined;
   createdAt: string;
   createdBy: string;
 }

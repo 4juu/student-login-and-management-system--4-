@@ -9,12 +9,12 @@ import { useConfirm } from '../hooks/useConfirm';
 interface AttendanceRecordsProps {
   records: AttendanceRecord[];
   sessions: AttendanceSession[];
-  students?: Student[];
+  students?: Student[] | undefined;
   activeSessionId: string | null;
   onClearRecords: () => void;
-  onUpdateRecord?: (recordId: string, updates: Partial<AttendanceRecord>) => void;
-  onDeleteRecord?: (recordId: string) => void;
-  teacherBio?: string;
+  onUpdateRecord?: ((recordId: string, updates: Partial<AttendanceRecord>) => void) | undefined;
+  onDeleteRecord?: ((recordId: string) => void) | undefined;
+  teacherBio?: string | undefined;
 }
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
@@ -39,29 +39,33 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
     if (!dateStr) return '';
     const arabicNumbers = '٠١٢٣٤٥٦٧٨٩';
     const englishNumbers = '0123456789';
-    let normalized = dateStr.replace(/[٠-٩]/g, (d) => englishNumbers[arabicNumbers.indexOf(d)]);
+    let normalized = dateStr.replace(/[٠-٩]/g, (d) => englishNumbers[arabicNumbers.indexOf(d)] ?? d);
     normalized = normalized.replace(/[‏‎\u200E\u200F]/g, '').trim();
 
     if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
 
     const slashMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     if (slashMatch) {
-      const [, day, month, year] = slashMatch;
+      const day = slashMatch[1] ?? '';
+      const month = slashMatch[2] ?? '';
+      const year = slashMatch[3] ?? '';
       return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
     }
 
     return normalized;
   }, []);
 
-  const sortedSessions = useMemo(() => 
+  const sortedSessions = useMemo(() =>
     [...sessions].sort((a, b) =>
       normalizeAnyDate(a.date).localeCompare(normalizeAnyDate(b.date))
     ), [sessions, normalizeAnyDate]);
 
   const { firstDate, lastDate } = useMemo(() => {
-    const t = new Date().toISOString().split('T')[0];
-    const f = sortedSessions.length > 0 ? normalizeAnyDate(sortedSessions[0].date) : t;
-    const l = sortedSessions.length > 0 ? normalizeAnyDate(sortedSessions[sortedSessions.length - 1].date) : t;
+    const t = new Date().toISOString().split('T')[0] ?? '';
+    const firstSession = sortedSessions[0];
+    const lastSession = sortedSessions[sortedSessions.length - 1];
+    const f = firstSession ? normalizeAnyDate(firstSession.date) : t;
+    const l = lastSession ? normalizeAnyDate(lastSession.date) : t;
     return { today: t, firstDate: f, lastDate: l };
   }, [sortedSessions, normalizeAnyDate]);
 
@@ -284,20 +288,24 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
       if (!dateStr) return '';
       const arabicNumbers = '٠١٢٣٤٥٦٧٨٩';
       const englishNumbers = '0123456789';
-      let normalized = dateStr.replace(/[٠-٩]/g, (d) => englishNumbers[arabicNumbers.indexOf(d)]);
+      let normalized = dateStr.replace(/[٠-٩]/g, (d) => englishNumbers[arabicNumbers.indexOf(d)] ?? d);
       normalized = normalized.replace(/[‏‎\u200E\u200F]/g, '').trim();
 
       if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
 
       const slashMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
       if (slashMatch) {
-        const [, day, month, year] = slashMatch;
+        const day = slashMatch[1] ?? '';
+        const month = slashMatch[2] ?? '';
+        const year = slashMatch[3] ?? '';
         return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
       }
 
       const slashMatchYMD = normalized.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
       if (slashMatchYMD) {
-        const [, year, month, day] = slashMatchYMD;
+        const year = slashMatchYMD[1] ?? '';
+        const month = slashMatchYMD[2] ?? '';
+        const day = slashMatchYMD[3] ?? '';
         return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
       }
 
@@ -332,20 +340,24 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
       if (!dateStr) return '';
       const arabicNumbers = '٠١٢٣٤٥٦٧٨٩';
       const englishNumbers = '0123456789';
-      let normalized = dateStr.replace(/[٠-٩]/g, (d) => englishNumbers[arabicNumbers.indexOf(d)]);
+      let normalized = dateStr.replace(/[٠-٩]/g, (d) => englishNumbers[arabicNumbers.indexOf(d)] ?? d);
       normalized = normalized.replace(/[‏‎\u200E\u200F]/g, '').trim();
 
       if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
 
       const slashMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
       if (slashMatch) {
-        const [, day, month, year] = slashMatch;
+        const day = slashMatch[1] ?? '';
+        const month = slashMatch[2] ?? '';
+        const year = slashMatch[3] ?? '';
         return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
       }
 
       const slashMatchYMD = normalized.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
       if (slashMatchYMD) {
-        const [, year, month, day] = slashMatchYMD;
+        const year = slashMatchYMD[1] ?? '';
+        const month = slashMatchYMD[2] ?? '';
+        const day = slashMatchYMD[3] ?? '';
         return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
       }
 
@@ -514,10 +526,11 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
 
     let datePart = '';
     if (distinctDates.length === 1) {
-      datePart = formatDatePart(distinctDates[0], true);
+      const onlyDate = distinctDates[0] ?? '';
+      datePart = formatDatePart(onlyDate, true);
     } else if (distinctDates.length > 1) {
-      const first = distinctDates[0];
-      const last = distinctDates[distinctDates.length - 1];
+      const first = distinctDates[0] ?? '';
+      const last = distinctDates[distinctDates.length - 1] ?? '';
       const sameYear = first.slice(0, 4) === last.slice(0, 4);
       datePart = `من ${formatDatePart(first, !sameYear)} إلى ${formatDatePart(last, !sameYear)}`;
     }

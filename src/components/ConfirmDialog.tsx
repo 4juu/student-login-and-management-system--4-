@@ -7,11 +7,11 @@ import { Button } from './ui/button';
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
-  message?: string;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  confirmClassName?: string;
-  icon?: ReactNode;
+  message?: string | undefined;
+  confirmLabel?: string | undefined;
+  cancelLabel?: string | undefined;
+  confirmClassName?: string | undefined;
+  icon?: ReactNode | undefined;
   onConfirm: () => void;
   onCancel: () => void;
 }

@@ -82,7 +82,7 @@ describe('SessionManager', () => {
   it('opens delete confirm and deletes session', async () => {
     const { onDeleteSession } = setup();
     const deleteButtons = screen.getAllByRole('button', { name: 'حذف' });
-    await userEvent.click(deleteButtons[0]);
+    await userEvent.click(deleteButtons[0]!);
     const alert = await screen.findByRole('alertdialog');
     const confirm = within(alert).getByRole('button', { name: 'موافق' });
     await userEvent.click(confirm);

@@ -169,7 +169,14 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
       const data = await file.arrayBuffer();
       const XLSX = await import('xlsx');
       const workbook = XLSX.read(data);
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const sheetName = workbook.SheetNames[0];
+      const sheet = sheetName !== undefined ? workbook.Sheets[sheetName] : undefined;
+      if (!sheet) {
+        setError('الملف لا يحتوي على أي ورقة عمل.');
+        setImportLoading(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
       const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
       const parsed: {

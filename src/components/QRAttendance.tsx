@@ -10,7 +10,7 @@ interface QRAttendanceProps {
   students: Student[];
   activeSession: AttendanceSession | null;
   onMarkAttendance: (student: Student) => Promise<void> | void;
-  onUpdateStudent?: (id: string, updates: Partial<Student>) => void;
+  onUpdateStudent?: ((id: string, updates: Partial<Student>) => void) | undefined;
   alreadyPresentIds: Set<string>;
   onClose: () => void;
 }
@@ -389,13 +389,17 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     let startY = 0;
     let startScroll = 0;
     const onTouchStart = (e: TouchEvent) => {
-      startY = e.touches[0].clientY;
+      const touch = e.touches[0];
+      if (!touch) return;
+      startY = touch.clientY;
       startScroll = el.scrollTop;
     };
     const onTouchMove = (e: TouchEvent) => {
       const t = e.target as Element;
       if (t.closest('button, a, input, select, textarea')) return;
-      const dy = startY - e.touches[0].clientY;
+      const touch = e.touches[0];
+      if (!touch) return;
+      const dy = startY - touch.clientY;
       const maxScroll = el.scrollHeight - el.clientHeight;
       if ((startScroll <= 0 && dy < 0) || (startScroll >= maxScroll && dy > 0)) {
         e.preventDefault();

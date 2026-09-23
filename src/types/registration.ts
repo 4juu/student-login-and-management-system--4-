@@ -4,21 +4,21 @@ export interface RegistrationLink {
   token: string;
   adminUid: string;
   stageId: string;
-  studentId?: string | null;
+  studentId?: string | null | undefined;
   type: RegistrationLinkType;
   createdBy: string;
   createdAt: string;
   expiresAt: number;
   used: boolean;
-  usedAt?: string;
-  usedByStudentId?: string;
-  academicYear?: string;
-  subjectName?: string;
-  teacherId?: string;
+  usedAt?: string | undefined;
+  usedByStudentId?: string | undefined;
+  academicYear?: string | undefined;
+  subjectName?: string | undefined;
+  teacherId?: string | undefined;
 
-  studentName?: string;
-  studentCode?: string;
-  qrCodeId?: string;
+  studentName?: string | undefined;
+  studentCode?: string | undefined;
+  qrCodeId?: string | undefined;
 }
 
 export interface PendingRegistration {
@@ -29,39 +29,39 @@ export interface PendingRegistration {
   studentCode: string;
   nameInSystem: string;
 
-  nameFromCard?: string;
+  nameFromCard?: string | undefined;
   /** 🆕 الاسم المستخرج فعلياً من البطاقة */
-  extractedName?: string;
-  nationalId?: string;
-  qrCodeUrl?: string;
-  qrCodeId?: string;
+  extractedName?: string | undefined;
+  nationalId?: string | undefined;
+  qrCodeUrl?: string | undefined;
+  qrCodeId?: string | undefined;
   qrVerified: boolean;
   nameMatched: boolean;
 
   faceDescriptor: any;
 
-  linkToken?: string;
-  linkType?: RegistrationLinkType;
+  linkToken?: string | undefined;
+  linkType?: RegistrationLinkType | undefined;
 
   status: 'pending' | 'approved' | 'rejected';
-  rejectionReason?: string;
+  rejectionReason?: string | undefined;
 
   createdAt: string;
-  reviewedAt?: string;
-  reviewedBy?: string;
+  reviewedAt?: string | undefined;
+  reviewedBy?: string | undefined;
 
-  hasExistingQr?: boolean;
-  hasExistingFace?: boolean;
+  hasExistingQr?: boolean | undefined;
+  hasExistingFace?: boolean | undefined;
 }
 
 export interface IDExtractionResult {
   success: boolean;
-  qrUrl?: string;
-  qrId?: string;
-  nationalId?: string;
-  ocrText?: string;
-  nameFromCard?: string;
+  qrUrl?: string | undefined;
+  qrId?: string | undefined;
+  nationalId?: string | undefined;
+  ocrText?: string | undefined;
+  nameFromCard?: string | undefined;
   /** الاسم المستخرج من حقل "الأسم/الاسم" في نص OCR الخام — null إذا لم يُعثر عليه */
-  extractedName?: string | null;
-  error?: string;
+  extractedName?: string | null | undefined;
+  error?: string | undefined;
 }

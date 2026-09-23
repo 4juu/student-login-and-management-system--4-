@@ -112,7 +112,7 @@ export const signIn = async (email: string, password: string): Promise<User> => 
       user = {
         uid: firebaseUser.uid,
         email: firebaseUser.email || email,
-        displayName: firebaseUser.displayName || email.split('@')[0],
+        displayName: firebaseUser.displayName || email.split('@')[0] || '',
         role,
         active: true,
         createdAt: new Date().toISOString(),
@@ -169,7 +169,7 @@ export const createTeacherAccount = async (
       displayName,
       role: 'teacher',
       adminId: adminUid,
-      collegeId,
+      ...(collegeId !== undefined ? { collegeId } : {}),
       active: true,
       lastActivatedAt: new Date().toISOString(),
       permissions: {

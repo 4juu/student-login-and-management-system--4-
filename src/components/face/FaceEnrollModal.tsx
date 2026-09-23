@@ -14,7 +14,7 @@ const LazySelfCapture = lazy(() =>
 interface FaceEnrollModalProps {
   students: Student[];
   onUpdateStudent: (id: string, updates: Partial<Student>) => void;
-  initialSelectedIds?: string[];
+  initialSelectedIds?: string[] | undefined;
   onClose: () => void;
 }
 
@@ -22,7 +22,7 @@ interface Result {
   studentId: string;
   name: string;
   ok: boolean;
-  reason?: string;
+  reason?: string | undefined;
 }
 
 export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({

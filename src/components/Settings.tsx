@@ -209,12 +209,17 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
   const handleChannelToggle = useCallback((stageId: string, field: keyof typeof channelDefaults, value: boolean) => {
     setTelegramConfig(prev => {
       const config = prev || getTelegramConfig();
+      const existing = config.channels[stageId] ?? {
+        chatId: '',
+        stageName: stageId,
+        ...channelDefaults,
+      };
       return {
         ...config,
         channels: {
           ...config.channels,
           [stageId]: {
-            ...config.channels[stageId],
+            ...existing,
             [field]: value,
           },
         },

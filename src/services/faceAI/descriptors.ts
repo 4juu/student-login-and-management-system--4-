@@ -77,8 +77,8 @@ export interface FaceGalleryDescriptor {
   version: typeof DESC_VERSION_GALLERY;
   enrollment: number[][];
   clusters: PoseCluster[];
-  samples?: number;
-  quality?: number;
+  samples?: number | undefined;
+  quality?: number | undefined;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -90,14 +90,15 @@ export function parseOneSample(arr: unknown): Float32Array | null {
   const f = new Float32Array(DESC_DIM);
   let norm = 0;
   for (let i = 0; i < DESC_DIM; i++) {
-    const v = typeof arr[i] === 'number' && Number.isFinite(arr[i]) ? arr[i] : 0;
+    const raw = arr[i];
+    const v = typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
     f[i] = v;
     norm += v * v;
   }
   norm = Math.sqrt(norm);
   if (norm <= 0) return null;
   if (Math.abs(norm - 1) > 0.05) {
-    for (let i = 0; i < DESC_DIM; i++) f[i] /= norm;
+    for (let i = 0; i < DESC_DIM; i++) f[i] = (f[i] ?? 0) / norm;
   }
   return f;
 }
@@ -197,16 +198,16 @@ export function parseGallerySamples(fd: unknown): Float32Array[] {
 
 export function l2Normalize(d: Float32Array): Float32Array {
   let n = 0;
-  for (let i = 0; i < d.length; i++) n += d[i] * d[i];
+  for (let i = 0; i < d.length; i++) n += (d[i] ?? 0) * (d[i] ?? 0);
   n = Math.sqrt(n) || 1;
   const out = new Float32Array(d.length);
-  for (let i = 0; i < d.length; i++) out[i] = d[i] / n;
+  for (let i = 0; i < d.length; i++) out[i] = (d[i] ?? 0) / n;
   return out;
 }
 
 export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   let dot = 0;
-  for (let i = 0; i < a.length; i++) dot += a[i] * b[i];
+  for (let i = 0; i < a.length; i++) dot += (a[i] ?? 0) * (b[i] ?? 0);
   return dot;
 }
 
@@ -269,6 +270,7 @@ export function findBestMatch<T extends MatchCandidate & { faceDescriptor?: unkn
   perItem.sort((a, b) => a.distance - b.distance);
   const first = perItem[0];
   const second = perItem[1];
+  if (!first) return null;
   const margin = second ? second.distance - first.distance : 1;
 
   if (first.distance > first.threshold) return null;
@@ -305,16 +307,20 @@ export function findSuspiciousPairs<T extends MatchCandidate & { name: string; f
   const withFace = students.filter(s => parseAllSamples(s.faceDescriptor).length > 0);
   const suspicious: Array<{ a: string; b: string; distance: number }> = [];
   for (let i = 0; i < withFace.length; i++) {
-    const samplesA = parseAllSamples(withFace[i].faceDescriptor);
+    const studentA = withFace[i];
+    if (!studentA) continue;
+    const samplesA = parseAllSamples(studentA.faceDescriptor);
     for (let j = i + 1; j < withFace.length; j++) {
-      const samplesB = parseAllSamples(withFace[j].faceDescriptor);
+      const studentB = withFace[j];
+      if (!studentB) continue;
+      const samplesB = parseAllSamples(studentB.faceDescriptor);
       let minDist = Infinity;
       for (const a of samplesA) for (const b of samplesB) {
         const d = descriptorDistance(a, b);
         if (d < minDist) minDist = d;
       }
       if (minDist < TAMPER_THRESHOLD) {
-        suspicious.push({ a: withFace[i].name, b: withFace[j].name, distance: Math.round(minDist * 100) / 100 });
+        suspicious.push({ a: studentA.name, b: studentB.name, distance: Math.round(minDist * 100) / 100 });
       }
     }
   }
@@ -358,6 +364,7 @@ export function updateGallery(
 
   if (sameBinIdx >= 0) {
     const cluster = clusters[sameBinIdx];
+    if (!cluster) return { gallery: current, action: 'skipped_mature', bin };
     const existingVec = parseOneSample(cluster.vector);
     if (existingVec) {
       if (cluster.mergeCount >= MAX_MERGES_PER_CLUSTER && !allowMatureMerge) {
@@ -370,10 +377,10 @@ export function updateGallery(
       const k = Math.min(cluster.mergeCount, MAX_MERGES_PER_CLUSTER - 1);
       const dim = existingVec.length;
       const merged = new Float32Array(dim);
-      for (let i = 0; i < dim; i++) merged[i] = (existingVec[i] * k + newSample[i]) / (k + 1);
-      let norm = 0; for (let i = 0; i < dim; i++) norm += merged[i] * merged[i];
+      for (let i = 0; i < dim; i++) merged[i] = ((existingVec[i] ?? 0) * k + (newSample[i] ?? 0)) / (k + 1);
+      let norm = 0; for (let i = 0; i < dim; i++) norm += (merged[i] ?? 0) * (merged[i] ?? 0);
       norm = Math.sqrt(norm) || 1;
-      for (let i = 0; i < dim; i++) merged[i] /= norm;
+      for (let i = 0; i < dim; i++) merged[i] = (merged[i] ?? 0) / norm;
 
       clusters[sameBinIdx] = {
         ...cluster,
@@ -400,12 +407,16 @@ export function updateGallery(
   } else {
     let weakestIdx = 0;
     for (let i = 1; i < clusters.length; i++) {
-      if (clusters[i].mergeCount < clusters[weakestIdx].mergeCount ||
-          (clusters[i].mergeCount === clusters[weakestIdx].mergeCount && clusters[i].updatedAt < clusters[weakestIdx].updatedAt)) {
+      const c = clusters[i];
+      const w = clusters[weakestIdx];
+      if (!c || !w) continue;
+      if (c.mergeCount < w.mergeCount ||
+          (c.mergeCount === w.mergeCount && c.updatedAt < w.updatedAt)) {
         weakestIdx = i;
       }
     }
-    if (clusters[weakestIdx].mergeCount <= 2) {
+    const weakest = clusters[weakestIdx];
+    if (weakest && weakest.mergeCount <= 2) {
       clusters[weakestIdx] = newCluster;
     } else {
       return { gallery: current, action: 'rejected' };
@@ -442,20 +453,25 @@ export function bootstrapClusters(
     let bestIdx = -1;
     let bestDist = Infinity;
     for (let i = 0; i < temps.length; i++) {
+      const temp = temps[i];
+      if (!temp) continue;
       const avg = new Float32Array(sample.length);
-      for (let j = 0; j < sample.length; j++) avg[j] = temps[i].sum[j] / temps[i].count;
+      for (let j = 0; j < sample.length; j++) avg[j] = (temp.sum[j] ?? 0) / temp.count;
       const d = descriptorDistance(sample, avg);
       if (d < bestDist) { bestDist = d; bestIdx = i; }
     }
 
     if (bestIdx >= 0 && bestDist < BOOTSTRAP_MERGE_DISTANCE && temps.length <= BOOTSTRAP_MAX_CLUSTERS) {
       // دمج — أضف للعنقيد الموجود
-      for (let j = 0; j < sample.length; j++) temps[bestIdx].sum[j] += sample[j];
-      temps[bestIdx].count++;
+      const target = temps[bestIdx];
+      if (target) {
+        for (let j = 0; j < sample.length; j++) target.sum[j] = (target.sum[j] ?? 0) + (sample[j] ?? 0);
+        target.count++;
+      }
     } else if (temps.length < BOOTSTRAP_MAX_CLUSTERS) {
       // عنقيد جديد
       const sum = new Float32Array(sample.length);
-      for (let j = 0; j < sample.length; j++) sum[j] = sample[j];
+      for (let j = 0; j < sample.length; j++) sum[j] = sample[j] ?? 0;
       temps.push({ vec: sample, count: 1, sum });
     }
   }
@@ -463,11 +479,11 @@ export function bootstrapClusters(
   // حوّل إلى PoseCluster[] مع bin افتراضي
   return temps.map((t, i) => {
     const avg = new Float32Array(t.vec.length);
-    for (let j = 0; j < t.vec.length; j++) avg[j] = t.sum[j] / t.count;
+    for (let j = 0; j < t.vec.length; j++) avg[j] = (t.sum[j] ?? 0) / t.count;
     let norm = 0;
-    for (let j = 0; j < avg.length; j++) norm += avg[j] * avg[j];
+    for (let j = 0; j < avg.length; j++) norm += (avg[j] ?? 0) * (avg[j] ?? 0);
     norm = Math.sqrt(norm) || 1;
-    for (let j = 0; j < avg.length; j++) avg[j] /= norm;
+    for (let j = 0; j < avg.length; j++) avg[j] = (avg[j] ?? 0) / norm;
     return {
       bin: `e${i}`,
       vector: Array.from(avg).map(v => Math.round(v * 1e5) / 1e5),

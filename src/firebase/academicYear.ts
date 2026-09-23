@@ -67,7 +67,9 @@ export const saveSystemTitle = async (title: string): Promise<void> => {
  * مثال: "2024_2025" → "2025_2026"
  */
 export const getNextAcademicYear = (currentYear: string): string => {
-  const [start, end] = currentYear.split('_').map(Number);
+  const parts = currentYear.split('_');
+  const start = Number(parts[0] ?? 0);
+  const end = Number(parts[1] ?? 0);
   return `${start + 1}_${end + 1}`;
 };
 

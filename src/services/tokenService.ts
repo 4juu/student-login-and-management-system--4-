@@ -79,7 +79,7 @@ export const createSingleRegistrationLink = async (
 export const createBulkRegistrationLinks = async (
   adminUid: string,
   stageId: string,
-  students: Array<{ id: string; name?: string; code?: string; qrCodeId?: string }>,
+  students: Array<{ id: string; name?: string | undefined; code?: string | undefined; qrCodeId?: string | undefined }>,
   expiryDays: number = DEFAULT_EXPIRY_DAYS
 ): Promise<Array<{ studentId: string; token: string; url: string }>> => {
   const results: Array<{ studentId: string; token: string; url: string }> = [];

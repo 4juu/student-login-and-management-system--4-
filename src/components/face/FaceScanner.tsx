@@ -38,8 +38,8 @@ interface LogEntry {
   key: string;
   id: string;
   name: string;
-  code?: string;
-  group?: string;
+  code?: string | undefined;
+  group?: string | undefined;
   status: 'marked' | 'already' | 'unknown' | 'failed';
   confidence: number;
   time: string;
@@ -301,7 +301,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     runningRef.current = true;
 
     const drawBoxes = (
-      faces: Array<{ box: Box; label?: string; color: string; sub?: string }>,
+      faces: Array<{ box: Box; label?: string | undefined; color: string; sub?: string | undefined }>,
     ) => {
       const video = videoRef.current, canvas = canvasRef.current;
       if (!video || !canvas || !video.videoWidth) return;
@@ -385,7 +385,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     // تنظيف مناطق الكبت المنتهية في كل دورة
     pruneSuppressZones();
 
-      let liveBoxes: Array<{ box: Box; label?: string; color: string; sub?: string }> = [];
+      let liveBoxes: Array<{ box: Box; label?: string | undefined; color: string; sub?: string | undefined }> = [];
 
       try {
         // ١) كشف سريع عبر MediaPipe (موديل جوجل)
@@ -449,7 +449,9 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
 
             for (let i = 0; i < results.length; i++) {
               const res = results[i];
-              const trackId = needEmbed[i].trackId;
+              const embTrack = needEmbed[i];
+              if (!res || !embTrack) continue;
+              const trackId = embTrack.trackId;
               const raw = new Float32Array(res.descriptor);
               const smoothed = trackerRef.current.addEmbedding(trackId, raw, nowTs);
 
@@ -491,8 +493,8 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               // ✅ Pose Grid: تحسين البصمة تدريجياً عبر شبكة الزوايا (فقط عند التضمين الجديد)
               try {
                 const origDet = bigEnough.find(d =>
-                  Math.abs(d.box.x - needEmbed[i].box.x) < 1 &&
-                  Math.abs(d.box.y - needEmbed[i].box.y) < 1
+                  Math.abs(d.box.x - embTrack.box.x) < 1 &&
+                  Math.abs(d.box.y - embTrack.box.y) < 1
                 );
                 const pose = estimatePose(origDet?.keypoints);
 

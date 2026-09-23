@@ -52,7 +52,7 @@ interface SelfEnrollPageProps {
 
 const dbFetch = async <T,>(path: string, signal?: AbortSignal): Promise<T | null> => {
   const url = `${dbURL}/${path}.json`;
-  const res = await fetch(url, { signal });
+  const res = await fetch(url, signal ? { signal } : {});
   if (!res.ok) return null;
   return res.json() as Promise<T | null>;
 };
@@ -158,10 +158,15 @@ const normalizeDate = (dateStr: string): string => {
   if (!dateStr) return '';
   const arabicNums = '٠١٢٣٤٥٦٧٨٩';
   const engNums = '0123456789';
-  let n = dateStr.replace(/[٠-٩]/g, d => engNums[arabicNums.indexOf(d)]).replace(/[\u200E\u200F]/g, '').trim();
+  let n = dateStr.replace(/[٠-٩]/g, d => engNums[arabicNums.indexOf(d)] ?? '').replace(/[\u200E\u200F]/g, '').trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(n)) return n;
   const m = n.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  if (m) {
+    const day = m[1] ?? '';
+    const month = m[2] ?? '';
+    const year = m[3] ?? '';
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
   return n;
 };
 

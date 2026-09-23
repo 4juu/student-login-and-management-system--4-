@@ -6,7 +6,7 @@
 
 export interface TrackBox {
   x: number; y: number; width: number; height: number;
-  keypoints?: { x: number; y: number }[];
+  keypoints?: { x: number; y: number }[] | undefined;
 }
 
 interface Track {
@@ -85,20 +85,22 @@ export class FaceTracker {
     for (const track of this.tracks) {
       let bestIdx = -1, bestScore = this.IOU_THRESHOLD;
       for (let i = 0; i < detections.length; i++) {
-        if (matched.has(i)) continue;
-        const score = iou(track.box, detections[i]);
+        const det = detections[i];
+        if (!det || matched.has(i)) continue;
+        const score = iou(track.box, det);
         if (score > bestScore) { bestScore = score; bestIdx = i; }
       }
       if (bestIdx >= 0) {
+        const bestDet = detections[bestIdx]!;
         matched.add(bestIdx);
         // ── #6: Update velocity ──
         const dt = track.lastBoxTime > 0 ? Math.max(0.016, (now - track.lastBoxTime) / 1000) : 0.05;
-        const dx = detections[bestIdx].x - track.box.x;
-        const dy = detections[bestIdx].y - track.box.y;
+        const dx = bestDet.x - track.box.x;
+        const dy = bestDet.y - track.box.y;
         track.velocityX = dx / dt * 0.3 + track.velocityX * 0.7; // exponential smoothing
         track.velocityY = dy / dt * 0.3 + track.velocityY * 0.7;
 
-        track.box = detections[bestIdx];
+        track.box = bestDet;
         track.missedFrames = 0;
         track.lastBoxTime = now;
         // #1.4: سجل الموضع في السجل (آخر 8 فريمات)
@@ -115,10 +117,11 @@ export class FaceTracker {
     this.tracks = this.tracks.filter(t => t.missedFrames <= this.MAX_MISSED);
 
     for (let i = 0; i < detections.length; i++) {
-      if (matched.has(i)) continue;
+      const det = detections[i];
+      if (!det || matched.has(i)) continue;
       const track: Track = {
         id: this.nextId++,
-        box: detections[i],
+        box: det,
         missedFrames: 0,
         embeddingBuffer: [],
         smoothedEmbedding: null,
@@ -160,11 +163,11 @@ export class FaceTracker {
 
     const dim = embedding.length;
     const avg = new Float32Array(dim);
-    for (const e of t.embeddingBuffer) for (let i = 0; i < dim; i++) avg[i] += e[i];
-    for (let i = 0; i < dim; i++) avg[i] /= t.embeddingBuffer.length;
-    let norm = 0; for (let i = 0; i < dim; i++) norm += avg[i] * avg[i];
+    for (const e of t.embeddingBuffer) for (let i = 0; i < dim; i++) avg[i] = avg[i]! + e[i]!;
+    for (let i = 0; i < dim; i++) avg[i] = avg[i]! / t.embeddingBuffer.length;
+    let norm = 0; for (let i = 0; i < dim; i++) norm += avg[i]! * avg[i]!;
     norm = Math.sqrt(norm) || 1;
-    for (let i = 0; i < dim; i++) avg[i] /= norm;
+    for (let i = 0; i < dim; i++) avg[i] = avg[i]! / norm;
 
     t.smoothedEmbedding = avg;
     return avg;

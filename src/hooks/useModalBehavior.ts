@@ -36,7 +36,8 @@ export function useModalBehavior({ open, onClose }: ModalBehaviorOptions) {
       const focusables = Array.from(
         panel.querySelectorAll<HTMLElement>(FOCUSABLE)
       ).filter(el => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true');
-      if (focusables.length > 0) focusables[0].focus();
+      const firstEl = focusables[0];
+      if (firstEl) firstEl.focus();
       else panel.focus();
     }, 0);
     return () => window.clearTimeout(id);
@@ -59,6 +60,7 @@ export function useModalBehavior({ open, onClose }: ModalBehaviorOptions) {
       if (focusables.length === 0) return;
       const first = focusables[0];
       const last = focusables[focusables.length - 1];
+      if (!first || !last) return;
       if (e.shiftKey && document.activeElement === first) {
         e.preventDefault();
         last.focus();

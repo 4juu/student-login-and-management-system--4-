@@ -9,7 +9,7 @@ interface StudentProfileModalProps {
   student: Student;
   records: AttendanceRecord[];
   sessions: AttendanceSession[];
-  stageName?: string;
+  stageName?: string | undefined;
   onClose: () => void;
 }
 
@@ -20,6 +20,8 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   absent: { label: 'غائب', cls: 'bg-red-50 text-red-700 border-red-200' },
   none: { label: 'لم يُسجَّل', cls: 'bg-gray-50 text-gray-500 border-gray-200' },
 };
+
+const STATUS_META_FALLBACK = { label: '—', cls: 'bg-gray-50 text-gray-500 border-gray-200' };
 
 const METHOD_LABEL: Record<string, string> = {
   manual: 'يدوي',
@@ -266,7 +268,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                 {sortedByDate.map(s => {
                   const rec = studentRecords.find(r => r.sessionId === s.id);
                   const status = rec ? (rec.status || 'present') : 'none';
-                  const meta = STATUS_META[status] || STATUS_META.none;
+                  const meta = STATUS_META[status] ?? STATUS_META.none ?? STATUS_META_FALLBACK;
                   return (
                     <div key={s.id} className={`px-2.5 py-2 rounded-lg border text-center ${meta.cls}`}>
                       <p className="text-xs font-semibold truncate" title={s.name}>{s.name}</p>
@@ -376,7 +378,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
               <p className="text-sm font-bold text-gray-800 mb-3">سجل الحضور ({timeline.length})</p>
               <div className="space-y-2 max-h-72 overflow-y-auto pl-1">
                 {visibleRecords.map(r => {
-                  const meta = STATUS_META[r.status || 'present'] || STATUS_META.present;
+                  const meta = STATUS_META[r.status || 'present'] ?? STATUS_META.present ?? STATUS_META_FALLBACK;
                   const method = r.method || 'manual';
                   const session = sessions.find(s => s.id === r.sessionId);
                   return (

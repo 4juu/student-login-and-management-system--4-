@@ -75,7 +75,7 @@ describe('AttendanceLogin', () => {
     const { onAttendanceRecord } = renderLogin();
     await enterCode('1234');
     expect(onAttendanceRecord).toHaveBeenCalledTimes(1);
-    const record: AttendanceRecord = onAttendanceRecord.mock.calls[0][0];
+    const record: AttendanceRecord = onAttendanceRecord.mock.calls[0]![0];
     expect(record.studentId).toBe('st1');
     expect(record.studentCode).toBe('1234');
     expect(record.status).toBe('present');

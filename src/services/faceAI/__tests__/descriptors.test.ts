@@ -32,22 +32,23 @@ function makeVec(seed: number, dim = DESC_DIM): Float32Array {
   const f = new Float32Array(dim);
   let norm = 0;
   for (let i = 0; i < dim; i++) {
-    f[i] = Math.sin(seed * 1000 + i) + 0.1;
-    norm += f[i] * f[i];
+    const val = Math.sin(seed * 1000 + i) + 0.1;
+    f[i] = val;
+    norm += val * val;
   }
   norm = Math.sqrt(norm) || 1;
-  for (let i = 0; i < dim; i++) f[i] /= norm;
+  for (let i = 0; i < dim; i++) f[i] = f[i]! / norm;
   return f;
 }
 
 /** same base vector with a tiny perturbation → distance well under MAX_NEW_CLUSTER_DISTANCE */
 function perturb(v: Float32Array, amount = 0.02): Float32Array {
   const out = new Float32Array(v);
-  out[0] += amount;
+  out[0] = out[0]! + amount;
   let norm = 0;
-  for (let i = 0; i < out.length; i++) norm += out[i] * out[i];
+  for (let i = 0; i < out.length; i++) norm += out[i]! * out[i]!;
   norm = Math.sqrt(norm) || 1;
-  for (let i = 0; i < out.length; i++) out[i] /= norm;
+  for (let i = 0; i < out.length; i++) out[i] = out[i]! / norm;
   return out;
 }
 
@@ -203,7 +204,7 @@ describe('parseAllSamples / parseStoredDescriptor / parseGallerySamples', () => 
 describe('l2Normalize / cosineSimilarity / descriptorDistance', () => {
   it('l2Normalize produces unit vector', () => {
     const v = l2Normalize(new Float32Array([3, 4]));
-    expect(Math.hypot(v[0], v[1])).toBeCloseTo(1, 5);
+    expect(Math.hypot(v[0]!, v[1]!)).toBeCloseTo(1, 5);
   });
 
   it('identical vectors have cosine 1 and distance 0', () => {
@@ -255,11 +256,11 @@ describe('findBestMatch', () => {
   it('returns null when margin between top-2 is too small (ambiguous)', () => {
     const a = makeVec(4);
     const b = makeVec(4);
-    b[0] += 0.001; // nearly identical
+    b[0] = b[0]! + 0.001; // nearly identical
     let norm = 0;
-    for (let i = 0; i < DESC_DIM; i++) norm += b[i] * b[i];
+    for (let i = 0; i < DESC_DIM; i++) norm += b[i]! * b[i]!;
     norm = Math.sqrt(norm);
-    for (let i = 0; i < DESC_DIM; i++) b[i] /= norm;
+    for (let i = 0; i < DESC_DIM; i++) b[i] = b[i]! / norm;
 
     const items: Cand[] = [
       { id: 'a', faceDescriptor: { version: 5, enrollment: [vecToArr(a)], clusters: [] } },
@@ -271,11 +272,11 @@ describe('findBestMatch', () => {
   it('picks the closer of two distinct candidates', () => {
     const query = makeVec(10);
     const close = makeVec(10);
-    close[0] += 0.01;
+    close[0] = close[0]! + 0.01;
     let n = 0;
-    for (let i = 0; i < DESC_DIM; i++) n += close[i] * close[i];
+    for (let i = 0; i < DESC_DIM; i++) n += close[i]! * close[i]!;
     n = Math.sqrt(n);
-    for (let i = 0; i < DESC_DIM; i++) close[i] /= n;
+    for (let i = 0; i < DESC_DIM; i++) close[i] = close[i]! / n;
 
     const items: Cand[] = [
       { id: 'far', faceDescriptor: { version: 5, enrollment: [vecToArr(makeVec(200))], clusters: [] } },
@@ -334,7 +335,7 @@ describe('updateGallery', () => {
     expect(first.action).toBe('created');
     const second = updateGallery(first.gallery, perturb(makeVec(1), 0.03), 0.9, '0_0');
     expect(second.action).toBe('merged');
-    expect(second.gallery.clusters[0].mergeCount).toBe(2);
+    expect(second.gallery.clusters[0]!.mergeCount).toBe(2);
   });
 
   it('rejects sample too far from existing gallery (MAX_NEW_CLUSTER_DISTANCE)', () => {
@@ -351,7 +352,7 @@ describe('updateGallery', () => {
       if (r.action === 'rejected' || r.action === 'skipped_mature') break;
       g = r.gallery;
     }
-    expect(g.clusters[0].mergeCount).toBeGreaterThanOrEqual(MAX_MERGES_PER_CLUSTER);
+    expect(g.clusters[0]!.mergeCount).toBeGreaterThanOrEqual(MAX_MERGES_PER_CLUSTER);
     const r = updateGallery(g, perturb(makeVec(1), 0.05), 0.9, '0_0', false);
     expect(r.action).toBe('skipped_mature');
   });
@@ -363,10 +364,10 @@ describe('updateGallery', () => {
       if (r.action === 'rejected' || r.action === 'skipped_mature') break;
       g = r.gallery;
     }
-    expect(g.clusters[0].mergeCount).toBeGreaterThanOrEqual(MAX_MERGES_PER_CLUSTER);
+    expect(g.clusters[0]!.mergeCount).toBeGreaterThanOrEqual(MAX_MERGES_PER_CLUSTER);
     const r = updateGallery(g, perturb(makeVec(1), 0.05), 0.9, '0_0', true);
     expect(r.action).toBe('merged');
-    expect(r.gallery.clusters[0].mergeCount).toBeLessThanOrEqual(MAX_MERGES_PER_CLUSTER);
+    expect(r.gallery.clusters[0]!.mergeCount).toBeLessThanOrEqual(MAX_MERGES_PER_CLUSTER);
   });
 });
 

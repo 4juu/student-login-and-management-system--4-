@@ -261,8 +261,8 @@ export const getCompressionStats = async (
     estimatedOriginalSizeKB: Math.round(originalSize / 1024 * 10) / 10,
     savedKB: Math.round((originalSize - compressedSize) / 1024 * 10) / 10,
     savedPercent: Math.round((1 - compressedSize / originalSize) * 100),
-    oldestRecordDate: oldestDate.toISOString().split('T')[0],
-    newestRecordDate: newestDate.toISOString().split('T')[0],
+    oldestRecordDate: oldestDate.toISOString().split('T')[0] ?? '',
+    newestRecordDate: newestDate.toISOString().split('T')[0] ?? '',
     monthsOfData: monthsDiff,
   };
 };

@@ -90,12 +90,12 @@ function levenshteinRatio(a: string, b: string): number {
   for (let i = 1; i <= m; i++) {
     const curr: number[] = [i];
     for (let j = 1; j <= n; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+      const cost = (a[i - 1] ?? '') === (b[j - 1] ?? '') ? 0 : 1;
+      curr[j] = Math.min((prev[j] ?? 0) + 1, (curr[j - 1] ?? 0) + 1, (prev[j - 1] ?? 0) + cost);
     }
     prev = curr;
   }
-  return 1 - prev[n] / maxLen;
+  return 1 - (prev[n] ?? 0) / maxLen;
 }
 
 function tokenCoverage(wordsA: string[], wordsB: string[]): number {

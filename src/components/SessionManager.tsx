@@ -211,7 +211,7 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
   const renderSendLogModal = () => {
     const isThisSending = isSending && currentSendingSessionId === sendLogSessionId;
     const log = absenceSendLogs.find(l => l.sessionId === sendLogSessionId);
-    const groupData = isThisSending ? sendGroups : (log ? completedGroupData[sendLogSessionId!] : []);
+    const groupData = isThisSending ? sendGroups : (log ? completedGroupData[sendLogSessionId!] ?? [] : []);
     const hasData = isThisSending || (log && groupData.length > 0);
 
     return createPortal(

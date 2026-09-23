@@ -237,15 +237,15 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
       const nextPhase = CAPTURE_PHASES[sampleCount]?.key;
       if (nextPhase) {
         setCapturePhase(nextPhase);
-        setFeedback(`تم — الآن: ${CAPTURE_PHASES[sampleCount].instruction}`);
+        setFeedback(`تم — الآن: ${CAPTURE_PHASES[sampleCount]!.instruction}`);
       }
 
       if (sampleCount >= SAMPLES_NEEDED) {
         // دمج العينات ثم تطبيع L2
-        const dim = samplesDataRef.current[0].length;
+        const dim = samplesDataRef.current[0]!.length;
         const avg = new Float32Array(dim);
-        for (const s of samplesDataRef.current) for (let i = 0; i < dim; i++) avg[i] += s[i];
-        for (let i = 0; i < dim; i++) avg[i] /= samplesDataRef.current.length;
+        for (const s of samplesDataRef.current) for (let i = 0; i < dim; i++) avg[i] = avg[i]! + s[i]!;
+        for (let i = 0; i < dim; i++) avg[i] = avg[i]! / samplesDataRef.current.length;
         const finalDesc = l2Normalize(avg);
 
         // فحص الاحتيال
@@ -418,7 +418,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
                   : 'bg-white/10 text-slate-300 hover:bg-white/15 cursor-pointer border border-white/10'
               }`}
             >
-              التقاط — {CAPTURE_PHASES[samples].instruction} ({samples + 1}/{SAMPLES_NEEDED})
+              التقاط — {CAPTURE_PHASES[samples]?.instruction} ({samples + 1}/{SAMPLES_NEEDED})
             </button>
           )}
 

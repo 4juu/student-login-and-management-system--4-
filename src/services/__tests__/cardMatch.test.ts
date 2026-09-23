@@ -103,7 +103,7 @@ describe('rankStudents', () => {
   it('ranks matching student first', () => {
     const results = rankStudents('الاسم: نور الهدى مؤيد سالم', roster);
     expect(results.length).toBeGreaterThan(0);
-    expect(results[0].student.name).toBe('نور الهدى مؤيد سالم');
+    expect(results[0]!.student.name).toBe('نور الهدى مؤيد سالم');
   });
 
   it('filters out students with no token in text', () => {
@@ -122,7 +122,7 @@ describe('rankStudents', () => {
   it('sorts by descending score', () => {
     const results = rankStudents('مجتبى هيثم محمد محسن', roster);
     for (let i = 1; i < results.length; i++) {
-      expect(results[i - 1].score).toBeGreaterThanOrEqual(results[i].score);
+      expect(results[i - 1]!.score).toBeGreaterThanOrEqual(results[i]!.score);
     }
   });
 });
@@ -145,8 +145,8 @@ describe('rankByNameInput', () => {
 
   it('finds exact match when typing full name', () => {
     const results = rankByNameInput('أحمد علي حسن', roster);
-    expect(results[0].student.name).toBe('أحمد علي حسن');
-    expect(results[0].score).toBe(100);
+    expect(results[0]!.student.name).toBe('أحمد علي حسن');
+    expect(results[0]!.score).toBe(100);
   });
 });
 
@@ -171,7 +171,7 @@ describe('tripleNameMatch — regression: split BEFORE normalizeArabic', () => {
     const ocr = 'نور الهدى مؤيد سالم جاسم';
     const results = tripleNameMatch(ocr, roster);
     expect(results.length).toBeGreaterThan(0);
-    const top = results[0];
+    const top = results[0]!;
     expect(top.student.name).toBe('نور الهدى مؤيد سالم جاسم');
     expect(top.matchedParts).toBeGreaterThanOrEqual(2);
     expect(top.totalParts).toBe(5);
@@ -205,14 +205,14 @@ describe('tripleNameMatch — regression: split BEFORE normalizeArabic', () => {
     const ocr = 'نور الهدى مؤيد سالم جاسم مجتبى';
     const results = tripleNameMatch(ocr, roster);
     for (let i = 1; i < results.length; i++) {
-      expect(results[i - 1].score).toBeGreaterThanOrEqual(results[i].score);
+      expect(results[i - 1]!.score).toBeGreaterThanOrEqual(results[i]!.score);
     }
   });
 
   it('handles OCR text with extra noise words', () => {
     const ocr = 'الاسم: نور الهدى مؤيد سالم جاسم رقم 123';
     const results = tripleNameMatch(ocr, roster);
-    expect(results[0].student.name).toBe('نور الهدى مؤيد سالم جاسم');
-    expect(results[0].matchedParts).toBe(5);
+    expect(results[0]!.student.name).toBe('نور الهدى مؤيد سالم جاسم');
+    expect(results[0]!.matchedParts).toBe(5);
   });
 });

@@ -206,9 +206,11 @@ export const loadStageData = async (
     const overrides = await loadDescriptorOverrides(adminUid, stageId);
     if (overrides) {
       for (let i = 0; i < students.length; i++) {
-        const ov = overrides[students[i].id];
+        const student = students[i];
+        if (!student) continue;
+        const ov = overrides[student.id];
         if (ov?.faceDescriptor && ov.updatedAt > 0) {
-          students[i] = { ...students[i], faceDescriptor: ov.faceDescriptor };
+          students[i] = { ...student, faceDescriptor: ov.faceDescriptor };
         }
       }
     }

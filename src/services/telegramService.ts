@@ -16,7 +16,7 @@ export function sleep(ms: number): Promise<void> {
 export function getArabicDayName(dateStr: string): string {
   const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
   const date = new Date(dateStr + (dateStr.includes('T') ? '' : 'T00:00:00'));
-  return days[date.getDay()];
+  return days[date.getDay()] ?? '';
 }
 
 export function formatDisplayDate(dateStr: string): string {
@@ -381,12 +381,14 @@ export async function sendQueuedMessages(
   for (let i = 0; i < items.length; i++) {
     if (signal?.aborted) break;
 
-    items[i].status = 'sending';
+    const item = items[i];
+    if (!item) continue;
+    item.status = 'sending';
     onProgress([...items]);
 
-    const ok = await sendTelegramMessage(botToken, items[i].chatId, items[i].message);
+    const ok = await sendTelegramMessage(botToken, item.chatId, item.message);
 
-    items[i].status = ok ? 'sent' : 'failed';
+    item.status = ok ? 'sent' : 'failed';
     onProgress([...items]);
 
     if (i < items.length - 1 && !signal?.aborted) {

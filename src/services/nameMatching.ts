@@ -22,17 +22,22 @@ export function levenshteinSimilarity(a: string, b: string): number {
   if (!a.length || !b.length) return 0;
   const m = a.length, n = b.length;
   if (m > 300 || n > 300) return a.includes(b) || b.includes(a) ? 0.8 : 0;
-  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-  for (let i = 0; i <= m; i++) dp[i][0] = i;
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0) as number[]);
+  for (let i = 0; i <= m; i++) (dp[i] as number[])[0] = i;
+  for (let j = 0; j <= n; j++) (dp[0] as number[])[j] = j;
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
-      dp[i][j] = a[i - 1] === b[j - 1]
-        ? dp[i - 1][j - 1]
-        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      const ai = a[i - 1] ?? '';
+      const bj = b[j - 1] ?? '';
+      const diag = (dp[i - 1] as number[])[j - 1] ?? 0;
+      const up = (dp[i - 1] as number[])[j] ?? 0;
+      const left = (dp[i] as number[])[j - 1] ?? 0;
+      (dp[i] as number[])[j] = ai === bj
+        ? diag
+        : 1 + Math.min(up, left, diag);
     }
   }
-  return 1 - dp[m][n] / Math.max(m, n);
+  return 1 - ((dp[m] as number[])[n] ?? 0) / Math.max(m, n);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -193,8 +198,8 @@ export function extractNameFromOCR(ocrText: string): string | null {
   const match = ocrText.match(NAME_LABEL_REGEX);
   if (!match || match.index === undefined) return null;
 
-  const afterMatch = ocrText.slice(match.index + match[0].length);
-  const sameLine = afterMatch.split('\n')[0];
+  const afterMatch = ocrText.slice(match.index + (match[0]?.length ?? 0));
+  const sameLine = afterMatch.split('\n')[0] ?? '';
 
   let cut = sameLine;
   for (const kw of STOP_KEYWORDS) {

@@ -12,11 +12,11 @@ const LazyFaceScanner = lazy(() =>
 interface AttendanceLoginProps {
   students: Student[];
   activeSessionId: string | null;
-  activeSession?: AttendanceSession | null;
-  records?: AttendanceRecord[];
+  activeSession?: AttendanceSession | null | undefined;
+  records?: AttendanceRecord[] | undefined;
   onAttendanceRecord: (record: AttendanceRecord) => void;
-  onUpdateStudent?: (id: string, updates: Partial<Student>) => void;
-  currentUser?: User | null;
+  onUpdateStudent?: ((id: string, updates: Partial<Student>) => void) | undefined;
+  currentUser?: User | null | undefined;
 }
 export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
   students,
@@ -45,6 +45,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
       const timer = setTimeout(() => setMessage(null), 3000);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [message]);
 
   const checkAndSubmitRef = useRef<(code: string) => void>(null as any);

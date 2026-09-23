@@ -27,14 +27,14 @@ export interface QrScanResult {
   qrCodeId: string;
   verified: boolean;
   /** هل الرمز المقروء يطابق رمزاً محفوظاً بمستند الطالب؟ (قد يكون غير محفوظ أصلاً) */
-  matchedWithRecord?: boolean;
+  matchedWithRecord?: boolean | undefined;
 }
 
 interface VerifyIdStepProps {
   roster: Student[];
-  expected?: Student | null;
-  linkType?: string;
-  onVerified: (student: Student, qr?: QrScanResult | null) => void;
+  expected?: Student | null | undefined;
+  linkType?: string | undefined;
+  onVerified: (student: Student, qr?: QrScanResult | null | undefined) => void;
   onCancel: () => void;
 }
 
@@ -199,6 +199,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
       if (!focusables.length) return;
       const first = focusables[0];
       const last = focusables[focusables.length - 1];
+      if (!first || !last) return;
       if (e.shiftKey) {
         if (document.activeElement === first) {
           e.preventDefault();
@@ -362,8 +363,8 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
           // روابط الحضور: مطابقة الأسماء الثلاثة (الطالب + الأب + الجد)
           const ocrName = extractedNameVal || text;
           const triple = tripleNameMatch(ocrName, roster, 2);
-          if (triple.length > 0) {
-            const top = triple[0];
+          const top = triple[0];
+          if (top) {
             const matched: StudentMatch[] = triple.map(t => ({
               student: t.student,
               score: t.score,

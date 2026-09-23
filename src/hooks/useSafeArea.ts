@@ -33,6 +33,7 @@ export const useSafeArea = () => {
         vv.removeEventListener('scroll', update);
       };
     }
+    return undefined;
   }, []);
 
   return { topSafe: Math.max(topSafe, vvTop), bottomSafe };

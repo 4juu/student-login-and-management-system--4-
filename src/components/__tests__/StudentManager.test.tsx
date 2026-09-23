@@ -50,12 +50,12 @@ describe('StudentManager', () => {
     const nameInput = textboxes.find(t =>
       (t.getAttribute('placeholder') || '').includes('اسم') ||
       (t.id && t.id.toLowerCase().includes('name')),
-    ) || textboxes[0];
+    ) || textboxes[0]!;
     const codeInput = textboxes.find(t =>
       (t.getAttribute('placeholder') || '').includes('رمز') ||
       (t.id && t.id.toLowerCase().includes('code')) ||
       (t.getAttribute('inputmode') === 'numeric'),
-    ) || textboxes[1];
+    ) || textboxes[1]!;
 
     await userEvent.clear(nameInput);
     await userEvent.type(nameInput, 'اختبار');
@@ -73,8 +73,8 @@ describe('StudentManager', () => {
   it('rejects code below 1000', async () => {
     const { onAddStudent } = setup();
     const textboxes = screen.getAllByRole('textbox');
-    const nameInput = textboxes[0];
-    const codeInput = textboxes[1];
+    const nameInput = textboxes[0]!;
+    const codeInput = textboxes[1]!;
 
     await userEvent.clear(nameInput);
     await userEvent.type(nameInput, 'اختبار');
@@ -90,7 +90,7 @@ describe('StudentManager', () => {
   it('does not call onAddStudent when name is empty', async () => {
     const { onAddStudent } = setup();
     const textboxes = screen.getAllByRole('textbox');
-    const codeInput = textboxes[1];
+    const codeInput = textboxes[1]!;
     await userEvent.clear(codeInput);
     await userEvent.type(codeInput, '2000');
 
@@ -118,7 +118,7 @@ describe('StudentManager', () => {
       .getAllByRole('button')
       .filter(b => b.textContent?.trim() === 'حذف');
     expect(deleteButtons.length).toBeGreaterThanOrEqual(2);
-    await userEvent.click(deleteButtons[0]);
+    await userEvent.click(deleteButtons[0]!);
 
     expect(onDeleteStudent).toHaveBeenCalledWith('s1');
   });
@@ -127,7 +127,7 @@ describe('StudentManager', () => {
     const { onDeleteSelectedStudents } = setup();
 
     const checkboxes = screen.getAllByRole('checkbox');
-    await userEvent.click(checkboxes[0]);
+    await userEvent.click(checkboxes[0]!);
 
     const bulkDeleteBtn = screen.getByRole('button', { name: /حذف المحدد/ });
     await userEvent.click(bulkDeleteBtn);

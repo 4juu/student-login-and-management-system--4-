@@ -10,7 +10,11 @@ export function estimatePose(
 ): PoseEstimate | null {
   if (!keypoints || keypoints.length < 4) return null;
 
-  const [rightEye, leftEye, nose, mouth] = keypoints;
+  const rightEye = keypoints[0];
+  const leftEye = keypoints[1];
+  const nose = keypoints[2];
+  const mouth = keypoints[3];
+  if (!rightEye || !leftEye || !nose || !mouth) return null;
 
   // ── Yaw: موضع الأنف أفقياً بالنسبة لمنتصف العينين ──
   const eyeMidX = (rightEye.x + leftEye.x) / 2;

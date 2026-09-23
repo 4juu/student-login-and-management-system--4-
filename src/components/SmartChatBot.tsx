@@ -28,24 +28,24 @@ interface SmartChatBotProps {
   user: User;
   colleges: College[];
   stages: Stage[];
-  currentCollegeId?: string | null;
-  currentStageId?: string | null;
+  currentCollegeId?: string | null | undefined;
+  currentStageId?: string | null | undefined;
   students: Student[];
   records: AttendanceRecord[];
   sessions: AttendanceSession[];
-  activeSessionId?: string | null;
-  allTeachers?: User[];
+  activeSessionId?: string | null | undefined;
+  allTeachers?: User[] | undefined;
   allStagesData?: {
     [stageId: string]: {
       students: Student[];
       records: AttendanceRecord[];
       sessions: AttendanceSession[];
     };
-  };
+  } | undefined;
   // 🆕 3 Props جديدة فقط
-  onRequestUniversityData?: () => Promise<void>;
-  universityDataLoaded?: boolean;
-  universityDataLoading?: boolean;
+  onRequestUniversityData?: (() => Promise<void>) | undefined;
+  universityDataLoaded?: boolean | undefined;
+  universityDataLoading?: boolean | undefined;
 }
 
 // ✅ API Keys
@@ -111,11 +111,11 @@ const normalizeDateKey = (value?: string | Date | null): string => {
     text = text.replace(/[/\\.]/g, '-');
     const ymdMatch = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
     if (ymdMatch) {
-      return `${ymdMatch[1]}-${pad2(parseInt(ymdMatch[2]))}-${pad2(parseInt(ymdMatch[3]))}`;
+      return `${ymdMatch[1] ?? ''}-${pad2(parseInt(ymdMatch[2] ?? '1'))}-${pad2(parseInt(ymdMatch[3] ?? '1'))}`;
     }
     const dmyMatch = text.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
-    if (dmyMatch && dmyMatch[3].length === 4) {
-      return `${dmyMatch[3]}-${pad2(parseInt(dmyMatch[2]))}-${pad2(parseInt(dmyMatch[1]))}`;
+    if (dmyMatch && (dmyMatch[3] ?? '').length === 4) {
+      return `${dmyMatch[3] ?? ''}-${pad2(parseInt(dmyMatch[2] ?? '1'))}-${pad2(parseInt(dmyMatch[1] ?? '1'))}`;
     }
     const dateObj = new Date(text);
     if (!isNaN(dateObj.getTime())) {
@@ -134,7 +134,7 @@ const formatDateWithDay = (value?: string | Date | null): string => {
   const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
   const d = new Date(`${key}T12:00:00`);
   if (isNaN(d.getTime())) return key;
-  return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  return `${days[d.getDay()] ?? ''} ${d.getDate()} ${months[d.getMonth()] ?? ''} ${d.getFullYear()}`;
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -171,7 +171,7 @@ const pickBestStudentMatch = (q: string, students: Student[]): Student | null =>
     const nameL = (s.name || '').toLowerCase();
     const nameN = normalizeArabic(nameL);
     const codeL = (s.code || '').toLowerCase();
-    const firstName = normalizeArabic(nameL.split(' ')[0]);
+    const firstName = normalizeArabic(nameL.split(' ')[0] ?? '');
     const basicMatch =
       (nameN && qN.includes(nameN)) ||
       (firstName.length > 2 && qN.includes(firstName)) ||
@@ -424,7 +424,10 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
     }
 
     const allowedStagesMap = user.permissions?.allowedStages ?? {};
-    const accessibleColleges = colleges.filter(c => !!allowedStagesMap[c.id] && allowedStagesMap[c.id].length > 0);
+    const accessibleColleges = colleges.filter(c => {
+      const stagesForCollege = allowedStagesMap[c.id];
+      return !!stagesForCollege && stagesForCollege.length > 0;
+    });
     const accessibleStageIds = Object.values(allowedStagesMap).flat();
     const accessibleStages = stages.filter(s => accessibleStageIds.includes(s.id));
 
@@ -470,13 +473,13 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
     if (!numbers || numbers.length < 3) return cleaned;
     let yearIdx = -1;
     for (let i = 0; i < numbers.length; i++) {
-      if (numbers[i].length === 4) { yearIdx = i; break; }
+      if ((numbers[i] ?? '').length === 4) { yearIdx = i; break; }
     }
     let year = '', month = '', day = '';
-    if (yearIdx === 0) { year = numbers[0]; month = numbers[1]; day = numbers[2]; }
-    else if (yearIdx === 2) { day = numbers[0]; month = numbers[1]; year = numbers[2]; }
-    else if (yearIdx === 1) { month = numbers[0]; year = numbers[1]; day = numbers[2]; }
-    else { year = numbers[0]; month = numbers[1]; day = numbers[2]; }
+    if (yearIdx === 0) { year = numbers[0] ?? ''; month = numbers[1] ?? ''; day = numbers[2] ?? ''; }
+    else if (yearIdx === 2) { day = numbers[0] ?? ''; month = numbers[1] ?? ''; year = numbers[2] ?? ''; }
+    else if (yearIdx === 1) { month = numbers[0] ?? ''; year = numbers[1] ?? ''; day = numbers[2] ?? ''; }
+    else { year = numbers[0] ?? ''; month = numbers[1] ?? ''; day = numbers[2] ?? ''; }
     if (!year || !month || !day) return cleaned;
     return `${year}-${String(parseInt(month)).padStart(2, '0')}-${String(parseInt(day)).padStart(2, '0')}`;
   }, []);
@@ -604,10 +607,9 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
   }, [isOpen, messages.length, user.displayName, isAdmin, currentStageId]);
 
   useEffect(() => {
-    if (isOpen) {
-      const timer = setTimeout(() => inputRef.current?.focus(), 50);
-      return () => clearTimeout(timer);
-    }
+    if (!isOpen) return;
+    const timer = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(timer);
   }, [isOpen]);
 
   const buildDataContext = useCallback((): string => {
@@ -1031,6 +1033,7 @@ ${dataContext}`;
 
       for (let i = currentModelIndex; i < AI_MODELS.length; i++) {
         const aiModel = AI_MODELS[i];
+        if (!aiModel) continue;
         if (failedModels.has(aiModel.id)) continue;
         if (aiModel.provider === 'gemini' && !GEMINI_API_KEY) continue;
         if (aiModel.provider === 'openrouter' && !OPENROUTER_API_KEY) continue;

@@ -215,7 +215,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
     runningRef.current = true;
 
     const drawBoxes = (
-      faces: Array<{ box: Box; label?: string; color: string; sub?: string }>,
+      faces: Array<{ box: Box; label?: string | undefined; color: string; sub?: string | undefined }>,
     ) => {
       const video = videoRef.current, canvas = canvasRef.current;
       if (!video || !canvas || !video.videoWidth) return;
@@ -285,7 +285,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
       lastTickRef.current = nowTs;
       busyRef.current = true;
 
-      let liveBoxes: Array<{ box: Box; label?: string; color: string; sub?: string }> = [];
+      let liveBoxes: Array<{ box: Box; label?: string | undefined; color: string; sub?: string | undefined }> = [];
 
       try {
         const detections: DetectedFace[] = faceDetectorService.detect(video, nowTs);
@@ -339,7 +339,9 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
 
             for (let i = 0; i < results.length; i++) {
               const res = results[i];
-              const trackId = needEmbed[i].trackId;
+              const embTrack = needEmbed[i];
+              if (!res || !embTrack) continue;
+              const trackId = embTrack.trackId;
               const raw = new Float32Array(res.descriptor);
               const smoothed = trackerRef.current.addEmbedding(trackId, raw, nowTs);
 
@@ -354,8 +356,8 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
               if (enhancingRef.current && matchedStudent && match && match.item.id === matchedStudent.id) {
                 try {
                   const origDet = detections.find(d =>
-                    Math.abs(d.box.x - needEmbed[i].box.x) < 1 &&
-                    Math.abs(d.box.y - needEmbed[i].box.y) < 1
+                    Math.abs(d.box.x - embTrack.box.x) < 1 &&
+                    Math.abs(d.box.y - embTrack.box.y) < 1
                   );
                   const pose = estimatePose(origDet?.keypoints);
                   if (pose && savedDescriptorRef.current && isGalleryDescriptor(savedDescriptorRef.current)) {
@@ -511,7 +513,7 @@ setEnhanceCountdown(20);
           const students = studentsRef.current;
           const idx = students.findIndex(s => s.id === matchedStudent.id);
           if (idx >= 0) {
-            students[idx] = { ...students[idx], faceDescriptor: savedDescriptorRef.current };
+            students[idx] = { ...students[idx]!, faceDescriptor: savedDescriptorRef.current };
             studentsRef.current = students;
             galleryRef.current = buildGallery(students.filter(s => hasValidDescriptor(s.faceDescriptor)));
           }
@@ -787,7 +789,7 @@ setEnhanceCountdown(20);
                         أهلاً {matchedStudent.name.split(' ')[0]}
                       </p>
                       <p className="mt-2 text-lg sm:text-xl font-bold text-emerald-300 text-center drop-shadow-[0_2px_6px_rgba(0,0,0,0.7)] transition-all duration-500">
-                        {POSE_HINTS[poseHintIdx].icon} {POSE_HINTS[poseHintIdx].text}
+                        {POSE_HINTS[poseHintIdx]?.icon} {POSE_HINTS[poseHintIdx]?.text}
                       </p>
                     </div>
                     <div className="mt-3 flex flex-col items-center">

@@ -25,7 +25,7 @@ type Msg =
 
 export interface Box {
   x: number; y: number; width: number; height: number;
-  keypoints?: { x: number; y: number }[];
+  keypoints?: { x: number; y: number }[] | undefined;
 }
 
 interface EmbedBatchResult {
@@ -75,9 +75,9 @@ function alignFace(g: OffscreenCanvasRenderingContext2D, bmp: ImageBitmap, box: 
 /** حوّل بكسلات RGBA إلى Float32 RGB مسطّح — يستخدم البخزن المعاد استخدامه (#5) */
 function rgbaToFloat32(data: Uint8ClampedArray, out: Float32Array): void {
   for (let i = 0, j = 0; i < out.length; i += 3, j += 4) {
-    out[i]     = data[j]     / 255;
-    out[i + 1] = data[j + 1] / 255;
-    out[i + 2] = data[j + 2] / 255;
+    out[i]     = (data[j] ?? 0) / 255;
+    out[i + 1] = (data[j + 1] ?? 0) / 255;
+    out[i + 2] = (data[j + 2] ?? 0) / 255;
   }
 }
 
@@ -89,7 +89,7 @@ function computeQuality(
   // brightness + texture variance في نفس المرور
   let sum = 0, sumSq = 0, n = 0;
   for (let j = 0; j < data.length; j += 64) {
-    const gray = 0.299 * data[j] + 0.587 * data[j + 1] + 0.114 * data[j + 2];
+    const gray = 0.299 * (data[j] ?? 0) + 0.587 * (data[j + 1] ?? 0) + 0.114 * (data[j + 2] ?? 0);
     sum += gray;
     sumSq += gray * gray;
     n++;
@@ -131,13 +131,13 @@ async function embedOne(bmp: ImageBitmap, box: Box): Promise<EmbedBatchResult> {
 
   const inputTensor = new ort.Tensor('float32', new Float32Array(reusablePx), [1, EMB_INPUT, EMB_INPUT, 3]);
   const out = await session.run({ [inputName]: inputTensor });
-  const emb = out[outputName].data as Float32Array;
+  const emb = out[outputName]!.data as Float32Array;
 
   let norm = 0;
-  for (let i = 0; i < emb.length; i++) norm += emb[i] * emb[i];
+  for (let i = 0; i < emb.length; i++) norm += (emb[i] ?? 0) * (emb[i] ?? 0);
   norm = Math.sqrt(norm) || 1;
   const desc = new Array<number>(EMB_DIM);
-  for (let i = 0; i < EMB_DIM && i < emb.length; i++) desc[i] = emb[i] / norm;
+  for (let i = 0; i < EMB_DIM && i < emb.length; i++) desc[i] = (emb[i] ?? 0) / norm;
 
   return { descriptor: desc, quality, box };
 }
@@ -206,8 +206,8 @@ async function init() {
   session = await ort.InferenceSession.create(modelBuffer as ArrayBuffer, {
     executionProviders: ['wasm'],
   });
-  inputName = session.inputNames[0];
-  outputName = session.outputNames[0];
+  inputName = session.inputNames[0]!;
+  outputName = session.outputNames[0]!;
 
   post({ type: 'progress', stage: 'warmup', percent: 70, detail: 'تسخين الموديل...' });
   const dummy = new ort.Tensor('float32', new Float32Array(EMB_INPUT * EMB_INPUT * 3), [1, EMB_INPUT, EMB_INPUT, 3]);

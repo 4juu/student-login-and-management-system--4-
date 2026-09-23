@@ -95,7 +95,7 @@ export const EngineOverlay: React.FC<EngineOverlayProps> = ({ progress, error, o
             <div className="space-y-1.5 text-right">
               {STEPS.map((s, i) => {
                 const done = pct >= s.max;
-                const active = !done && (i === 0 || pct >= STEPS[i - 1].max);
+                const active = !done && (i === 0 || pct >= (STEPS[i - 1]?.max ?? 0));
                 return (
                   <div
                     key={s.label}

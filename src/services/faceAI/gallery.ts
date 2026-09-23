@@ -41,32 +41,36 @@ export function buildGallery<T extends { id: string; faceDescriptor?: unknown }>
     if (allSamples.length === 0) continue;
 
     // Weighted centroid: enrollment = weight 1.0, clusters = weight by quality
-    const dim = allSamples[0].length;
+    const firstSample = allSamples[0];
+    if (!firstSample) continue;
+    const dim = firstSample.length;
     const avg = new Float32Array(dim);
     let totalWeight = 0;
 
     for (const s of enrollmentSamples) {
-      for (let i = 0; i < dim; i++) avg[i] += s[i];
+      for (let i = 0; i < dim; i++) avg[i] = (avg[i] ?? 0) + (s[i] ?? 0);
       totalWeight += 1;
     }
     for (const c of clusterSamples) {
-      for (let i = 0; i < dim; i++) avg[i] += c.vec[i] * c.weight;
+      for (let i = 0; i < dim; i++) avg[i] = (avg[i] ?? 0) + (c.vec[i] ?? 0) * c.weight;
       totalWeight += c.weight;
     }
 
     if (totalWeight > 0) {
-      for (let i = 0; i < dim; i++) avg[i] /= totalWeight;
+      for (let i = 0; i < dim; i++) avg[i] = (avg[i] ?? 0) / totalWeight;
     }
     let norm = 0;
-    for (let i = 0; i < dim; i++) norm += avg[i] * avg[i];
+    for (let i = 0; i < dim; i++) norm += (avg[i] ?? 0) * (avg[i] ?? 0);
     norm = Math.sqrt(norm) || 1;
-    for (let i = 0; i < dim; i++) avg[i] /= norm;
+    for (let i = 0; i < dim; i++) avg[i] = (avg[i] ?? 0) / norm;
 
     // primary: العينة الأقرب للـ centroid (أعلى جودة تمثيلاً)
     let bestDist = Infinity;
     let bestIdx = 0;
     for (let i = 0; i < allSamples.length; i++) {
-      const d = descriptorDistance(avg, allSamples[i]);
+      const sample = allSamples[i];
+      if (!sample) continue;
+      const d = descriptorDistance(avg, sample);
       if (d < bestDist) { bestDist = d; bestIdx = i; }
     }
 
@@ -74,7 +78,7 @@ export function buildGallery<T extends { id: string; faceDescriptor?: unknown }>
       id: item.id,
       allSamples,
       centroid: norm > 0 ? avg : null,
-      primary: allSamples[bestIdx],
+      primary: allSamples[bestIdx] ?? null,
     });
   }
   return gallery;
@@ -124,6 +128,7 @@ export function findBestMatchIndexed(
   perItem.sort((a, b) => a.distance - b.distance);
   const first = perItem[0];
   const second = perItem[1];
+  if (!first) return null;
   const margin = second ? second.distance - first.distance : 1;
 
   if (first.distance > first.threshold) return null;
