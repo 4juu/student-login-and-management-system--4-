@@ -178,79 +178,79 @@
 
 /* === الخلفيات === */
 .dark .bg-white {
-  background-color: rgb(30 41 59) !important;
+  background-color: rgb(30 41 59);
   color: rgb(241 245 249);
 }
 
 .dark .bg-gray-50 {
-  background-color: rgb(15 23 42) !important;
+  background-color: rgb(15 23 42);
 }
 
 .dark .bg-gray-100 {
-  background-color: rgb(51 65 85) !important;
+  background-color: rgb(51 65 85);
 }
 
 .dark .bg-gray-200 {
-  background-color: rgb(51 65 85) !important;
+  background-color: rgb(51 65 85);
 }
 
 /* === النصوص === */
 .dark .text-gray-900 {
-  color: rgb(241 245 249) !important;
+  color: rgb(241 245 249);
 }
 
 .dark .text-gray-800 {
-  color: rgb(241 245 249) !important;
+  color: rgb(241 245 249);
 }
 
 .dark .text-gray-700 {
-  color: rgb(226 232 240) !important;
+  color: rgb(226 232 240);
 }
 
 .dark .text-gray-600 {
-  color: rgb(203 213 225) !important;
+  color: rgb(203 213 225);
 }
 
 .dark .text-gray-500 {
-  color: rgb(148 163 184) !important;
+  color: rgb(148 163 184);
 }
 
 .dark .text-gray-400 {
-  color: rgb(100 116 139) !important;
+  color: rgb(100 116 139);
 }
 
 /* === الحدود === */
 .dark .border-gray-200 {
-  border-color: rgb(51 65 85) !important;
+  border-color: rgb(51 65 85);
 }
 
 .dark .border-gray-300 {
-  border-color: rgb(71 85 105) !important;
+  border-color: rgb(71 85 105);
 }
 
 .dark .border-gray-100 {
-  border-color: rgb(51 65 85) !important;
+  border-color: rgb(51 65 85);
 }
 
 /* === الـ Inputs === */
 .dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 .dark select,
 .dark textarea {
-  background-color: rgb(51 65 85) !important;
-  border-color: rgb(71 85 105) !important;
-  color: rgb(241 245 249) !important;
+  background-color: rgb(51 65 85);
+  border-color: rgb(71 85 105);
+  color: rgb(241 245 249);
 }
 
 .dark input::placeholder,
 .dark textarea::placeholder {
-  color: rgb(148 163 184) !important;
+  color: rgb(148 163 184);
 }
 
 .dark input:disabled,
 .dark select:disabled,
 .dark textarea:disabled {
-  background-color: rgb(30 41 59) !important;
-  color: rgb(100 116 139) !important;
+  background-color: rgb(30 41 59);
+  color: rgb(100 116 139);
 }
 
 /* === الجداول === */
@@ -259,559 +259,559 @@
 }
 
 .dark thead.bg-gray-50 {
-  background-color: rgb(51 65 85) !important;
+  background-color: rgb(51 65 85);
 }
 
 .dark tbody tr {
-  border-color: rgb(51 65 85) !important;
+  border-color: rgb(51 65 85);
 }
 
 .dark tbody tr:hover {
-  background-color: rgb(51 65 85) !important;
+  background-color: rgb(51 65 85);
 }
 
 /* === الأزرق === */
 .dark .bg-blue-50 {
-  background-color: rgb(30 58 138 / 0.3) !important;
+  background-color: rgb(30 58 138 / 0.3);
 }
 
 .dark .bg-blue-100 {
-  background-color: rgb(30 58 138 / 0.5) !important;
+  background-color: rgb(30 58 138 / 0.5);
 }
 
 .dark .text-blue-900 {
-  color: rgb(191 219 254) !important;
+  color: rgb(191 219 254);
 }
 
 .dark .text-blue-800 {
-  color: rgb(147 197 253) !important;
+  color: rgb(147 197 253);
 }
 
 .dark .text-blue-700 {
-  color: rgb(96 165 250) !important;
+  color: rgb(96 165 250);
 }
 
 .dark .text-blue-600 {
-  color: rgb(96 165 250) !important;
+  color: rgb(96 165 250);
 }
 
 .dark .text-blue-500 {
-  color: rgb(96 165 250) !important;
+  color: rgb(96 165 250);
 }
 
 .dark .text-blue-400 {
-  color: rgb(147 197 253) !important;
+  color: rgb(147 197 253);
 }
 
 .dark .text-blue-300 {
-  color: rgb(191 219 254) !important;
+  color: rgb(191 219 254);
 }
 
 .dark .border-blue-200 {
-  border-color: rgb(30 64 175 / 0.5) !important;
+  border-color: rgb(30 64 175 / 0.5);
 }
 
 .dark .border-blue-300 {
-  border-color: rgb(30 64 175 / 0.7) !important;
+  border-color: rgb(30 64 175 / 0.7);
 }
 
 /* === الأخضر === */
 .dark .bg-green-50 {
-  background-color: rgb(20 83 45 / 0.3) !important;
+  background-color: rgb(20 83 45 / 0.3);
 }
 
 .dark .bg-green-100 {
-  background-color: rgb(20 83 45 / 0.5) !important;
+  background-color: rgb(20 83 45 / 0.5);
 }
 
 .dark .text-green-800 {
-  color: rgb(134 239 172) !important;
+  color: rgb(134 239 172);
 }
 
 .dark .text-green-700 {
-  color: rgb(74 222 128) !important;
+  color: rgb(74 222 128);
 }
 
 .dark .text-green-600 {
-  color: rgb(74 222 128) !important;
+  color: rgb(74 222 128);
 }
 
 .dark .text-green-500 {
-  color: rgb(74 222 128) !important;
+  color: rgb(74 222 128);
 }
 
 .dark .text-green-400 {
-  color: rgb(134 239 172) !important;
+  color: rgb(134 239 172);
 }
 
 .dark .text-green-100 {
-  color: rgb(187 247 208) !important;
+  color: rgb(187 247 208);
 }
 
 .dark .border-green-200 {
-  border-color: rgb(21 128 61 / 0.5) !important;
+  border-color: rgb(21 128 61 / 0.5);
 }
 
 .dark .border-green-300 {
-  border-color: rgb(21 128 61 / 0.7) !important;
+  border-color: rgb(21 128 61 / 0.7);
 }
 
 .dark .border-green-400 {
-  border-color: rgb(34 197 94 / 0.7) !important;
+  border-color: rgb(34 197 94 / 0.7);
 }
 
 /* === الأحمر === */
 .dark .bg-red-50 {
-  background-color: rgb(127 29 29 / 0.3) !important;
+  background-color: rgb(127 29 29 / 0.3);
 }
 
 .dark .bg-red-100 {
-  background-color: rgb(127 29 29 / 0.5) !important;
+  background-color: rgb(127 29 29 / 0.5);
 }
 
 .dark .text-red-900 {
-  color: rgb(254 202 202) !important;
+  color: rgb(254 202 202);
 }
 
 .dark .text-red-800 {
-  color: rgb(252 165 165) !important;
+  color: rgb(252 165 165);
 }
 
 .dark .text-red-700 {
-  color: rgb(248 113 113) !important;
+  color: rgb(248 113 113);
 }
 
 .dark .text-red-600 {
-  color: rgb(248 113 113) !important;
+  color: rgb(248 113 113);
 }
 
 .dark .text-red-500 {
-  color: rgb(248 113 113) !important;
+  color: rgb(248 113 113);
 }
 
 .dark .text-red-400 {
-  color: rgb(252 165 165) !important;
+  color: rgb(252 165 165);
 }
 
 .dark .text-red-200 {
-  color: rgb(254 202 202) !important;
+  color: rgb(254 202 202);
 }
 
 .dark .text-red-100 {
-  color: rgb(254 226 226) !important;
+  color: rgb(254 226 226);
 }
 
 .dark .border-red-200 {
-  border-color: rgb(153 27 27 / 0.5) !important;
+  border-color: rgb(153 27 27 / 0.5);
 }
 
 .dark .border-red-300 {
-  border-color: rgb(153 27 27 / 0.7) !important;
+  border-color: rgb(153 27 27 / 0.7);
 }
 
 .dark .border-red-400 {
-  border-color: rgb(220 38 38 / 0.7) !important;
+  border-color: rgb(220 38 38 / 0.7);
 }
 
 /* === الأصفر === */
 .dark .bg-yellow-50 {
-  background-color: rgb(113 63 18 / 0.3) !important;
+  background-color: rgb(113 63 18 / 0.3);
 }
 
 .dark .bg-yellow-100 {
-  background-color: rgb(113 63 18 / 0.5) !important;
+  background-color: rgb(113 63 18 / 0.5);
 }
 
 .dark .text-yellow-800 {
-  color: rgb(253 224 71) !important;
+  color: rgb(253 224 71);
 }
 
 .dark .text-yellow-700 {
-  color: rgb(250 204 21) !important;
+  color: rgb(250 204 21);
 }
 
 .dark .text-yellow-600 {
-  color: rgb(250 204 21) !important;
+  color: rgb(250 204 21);
 }
 
 .dark .border-yellow-200 {
-  border-color: rgb(133 77 14 / 0.5) !important;
+  border-color: rgb(133 77 14 / 0.5);
 }
 
 .dark .border-yellow-300 {
-  border-color: rgb(133 77 14 / 0.7) !important;
+  border-color: rgb(133 77 14 / 0.7);
 }
 
 /* === البنفسجي === */
 .dark .bg-purple-50 {
-  background-color: rgb(88 28 135 / 0.3) !important;
+  background-color: rgb(88 28 135 / 0.3);
 }
 
 .dark .bg-purple-100 {
-  background-color: rgb(88 28 135 / 0.5) !important;
+  background-color: rgb(88 28 135 / 0.5);
 }
 
 .dark .text-purple-900 {
-  color: rgb(233 213 255) !important;
+  color: rgb(233 213 255);
 }
 
 .dark .text-purple-800 {
-  color: rgb(216 180 254) !important;
+  color: rgb(216 180 254);
 }
 
 .dark .text-purple-700 {
-  color: rgb(192 132 252) !important;
+  color: rgb(192 132 252);
 }
 
 .dark .text-purple-600 {
-  color: rgb(192 132 252) !important;
+  color: rgb(192 132 252);
 }
 
 .dark .text-purple-500 {
-  color: rgb(216 180 254) !important;
+  color: rgb(216 180 254);
 }
 
 .dark .text-purple-400 {
-  color: rgb(216 180 254) !important;
+  color: rgb(216 180 254);
 }
 
 .dark .text-purple-200 {
-  color: rgb(233 213 255) !important;
+  color: rgb(233 213 255);
 }
 
 .dark .border-purple-200 {
-  border-color: rgb(107 33 168 / 0.5) !important;
+  border-color: rgb(107 33 168 / 0.5);
 }
 
 .dark .border-purple-300 {
-  border-color: rgb(107 33 168 / 0.7) !important;
+  border-color: rgb(107 33 168 / 0.7);
 }
 
 /* === الوردي === */
 .dark .bg-pink-50 {
-  background-color: rgb(131 24 67 / 0.3) !important;
+  background-color: rgb(131 24 67 / 0.3);
 }
 
 .dark .bg-pink-100 {
-  background-color: rgb(131 24 67 / 0.5) !important;
+  background-color: rgb(131 24 67 / 0.5);
 }
 
 .dark .text-pink-800 {
-  color: rgb(249 168 212) !important;
+  color: rgb(249 168 212);
 }
 
 .dark .text-pink-700 {
-  color: rgb(244 114 182) !important;
+  color: rgb(244 114 182);
 }
 
 .dark .text-pink-600 {
-  color: rgb(244 114 182) !important;
+  color: rgb(244 114 182);
 }
 
 .dark .text-pink-400 {
-  color: rgb(249 168 212) !important;
+  color: rgb(249 168 212);
 }
 
 .dark .border-pink-200 {
-  border-color: rgb(157 23 77 / 0.5) !important;
+  border-color: rgb(157 23 77 / 0.5);
 }
 
 /* === البرتقالي === */
 .dark .bg-orange-50 {
-  background-color: rgb(124 45 18 / 0.3) !important;
+  background-color: rgb(124 45 18 / 0.3);
 }
 
 .dark .bg-orange-100 {
-  background-color: rgb(124 45 18 / 0.5) !important;
+  background-color: rgb(124 45 18 / 0.5);
 }
 
 .dark .text-orange-800 {
-  color: rgb(253 186 116) !important;
+  color: rgb(253 186 116);
 }
 
 .dark .text-orange-700 {
-  color: rgb(251 146 60) !important;
+  color: rgb(251 146 60);
 }
 
 .dark .text-orange-600 {
-  color: rgb(251 146 60) !important;
+  color: rgb(251 146 60);
 }
 
 .dark .text-orange-500 {
-  color: rgb(253 186 116) !important;
+  color: rgb(253 186 116);
 }
 
 .dark .text-orange-200 {
-  color: rgb(254 215 170) !important;
+  color: rgb(254 215 170);
 }
 
 .dark .text-orange-100 {
-  color: rgb(255 237 213) !important;
+  color: rgb(255 237 213);
 }
 
 .dark .border-orange-200 {
-  border-color: rgb(154 52 18 / 0.5) !important;
+  border-color: rgb(154 52 18 / 0.5);
 }
 
 .dark .border-orange-300 {
-  border-color: rgb(154 52 18 / 0.7) !important;
+  border-color: rgb(154 52 18 / 0.7);
 }
 
 /* === الفيروزي (Emerald) === */
 .dark .bg-emerald-50 {
-  background-color: rgb(6 78 59 / 0.3) !important;
+  background-color: rgb(6 78 59 / 0.3);
 }
 
 .dark .bg-emerald-100 {
-  background-color: rgb(6 78 59 / 0.5) !important;
+  background-color: rgb(6 78 59 / 0.5);
 }
 
 .dark .text-emerald-800 {
-  color: rgb(110 231 183) !important;
+  color: rgb(110 231 183);
 }
 
 .dark .text-emerald-700 {
-  color: rgb(52 211 153) !important;
+  color: rgb(52 211 153);
 }
 
 .dark .text-emerald-600 {
-  color: rgb(52 211 153) !important;
+  color: rgb(52 211 153);
 }
 
 .dark .text-emerald-400 {
-  color: rgb(110 231 183) !important;
+  color: rgb(110 231 183);
 }
 
 .dark .text-emerald-300 {
-  color: rgb(167 243 208) !important;
+  color: rgb(167 243 208);
 }
 
 .dark .border-emerald-200 {
-  border-color: rgb(5 105 75 / 0.5) !important;
+  border-color: rgb(5 105 75 / 0.5);
 }
 
 .dark .border-emerald-300 {
-  border-color: rgb(5 105 75 / 0.7) !important;
+  border-color: rgb(5 105 75 / 0.7);
 }
 
 /* === الفيروزي (Teal) === */
 .dark .bg-teal-50 {
-  background-color: rgb(19 78 74 / 0.3) !important;
+  background-color: rgb(19 78 74 / 0.3);
 }
 
 .dark .bg-teal-100 {
-  background-color: rgb(19 78 74 / 0.5) !important;
+  background-color: rgb(19 78 74 / 0.5);
 }
 
 .dark .text-teal-800 {
-  color: rgb(94 234 212) !important;
+  color: rgb(94 234 212);
 }
 
 .dark .text-teal-700 {
-  color: rgb(45 212 191) !important;
+  color: rgb(45 212 191);
 }
 
 .dark .text-teal-600 {
-  color: rgb(45 212 191) !important;
+  color: rgb(45 212 191);
 }
 
 .dark .border-teal-200 {
-  border-color: rgb(15 118 110 / 0.5) !important;
+  border-color: rgb(15 118 110 / 0.5);
 }
 
 /* === النيلي === */
 .dark .bg-indigo-50 {
-  background-color: rgb(49 46 129 / 0.3) !important;
+  background-color: rgb(49 46 129 / 0.3);
 }
 
 .dark .bg-indigo-100 {
-  background-color: rgb(49 46 129 / 0.5) !important;
+  background-color: rgb(49 46 129 / 0.5);
 }
 
 .dark .text-indigo-900 {
-  color: rgb(199 210 254) !important;
+  color: rgb(199 210 254);
 }
 
 .dark .text-indigo-800 {
-  color: rgb(165 180 252) !important;
+  color: rgb(165 180 252);
 }
 
 .dark .text-indigo-700 {
-  color: rgb(129 140 248) !important;
+  color: rgb(129 140 248);
 }
 
 .dark .text-indigo-600 {
-  color: rgb(129 140 248) !important;
+  color: rgb(129 140 248);
 }
 
 .dark .text-indigo-500 {
-  color: rgb(165 180 252) !important;
+  color: rgb(165 180 252);
 }
 
 .dark .border-indigo-200 {
-  border-color: rgb(67 56 202 / 0.5) !important;
+  border-color: rgb(67 56 202 / 0.5);
 }
 
 .dark .border-indigo-300 {
-  border-color: rgb(67 56 202 / 0.7) !important;
+  border-color: rgb(67 56 202 / 0.7);
 }
 
 /* === الـ Cyan === */
 .dark .bg-cyan-50 {
-  background-color: rgb(22 78 99 / 0.3) !important;
+  background-color: rgb(22 78 99 / 0.3);
 }
 
 .dark .text-cyan-800 {
-  color: rgb(103 232 249) !important;
+  color: rgb(103 232 249);
 }
 
 .dark .border-cyan-200 {
-  border-color: rgb(14 116 144 / 0.5) !important;
+  border-color: rgb(14 116 144 / 0.5);
 }
 
 .dark .border-cyan-300 {
-  border-color: rgb(14 116 144 / 0.7) !important;
+  border-color: rgb(14 116 144 / 0.7);
 }
 
 /* === متفرقات ناقصة === */
-.dark .text-yellow-900 { color: rgb(253 224 71) !important; }
-.dark .text-amber-400 { color: rgb(251 191 36) !important; }
-.dark .text-sky-700 { color: rgb(125 211 252) !important; }
-.dark .text-sky-900 { color: rgb(186 230 253) !important; }
-.dark .text-slate-300 { color: rgb(203 213 225) !important; }
+.dark .text-yellow-900 { color: rgb(253 224 71); }
+.dark .text-amber-400 { color: rgb(251 191 36); }
+.dark .text-sky-700 { color: rgb(125 211 252); }
+.dark .text-sky-900 { color: rgb(186 230 253); }
+.dark .text-slate-300 { color: rgb(203 213 225); }
 
 /* === الـ Slate === */
 .dark .bg-slate-50 {
-  background-color: rgb(30 41 59) !important;
+  background-color: rgb(30 41 59);
 }
 
 .dark .bg-slate-100 {
-  background-color: rgb(51 65 85) !important;
+  background-color: rgb(51 65 85);
 }
 
 /* === Gradient Backgrounds === */
 .dark .from-blue-50 {
-  --tw-gradient-from: rgb(30 58 138 / 0.4) !important;
+  --tw-gradient-from: rgb(30 58 138 / 0.4);
 }
 
 .dark .to-indigo-100 {
-  --tw-gradient-to: rgb(49 46 129 / 0.6) !important;
+  --tw-gradient-to: rgb(49 46 129 / 0.6);
 }
 
 .dark .from-green-50 {
-  --tw-gradient-from: rgb(20 83 45 / 0.4) !important;
+  --tw-gradient-from: rgb(20 83 45 / 0.4);
 }
 
 .dark .to-emerald-50 {
-  --tw-gradient-to: rgb(6 78 59 / 0.4) !important;
+  --tw-gradient-to: rgb(6 78 59 / 0.4);
 }
 
 .dark .from-purple-50 {
-  --tw-gradient-from: rgb(88 28 135 / 0.4) !important;
+  --tw-gradient-from: rgb(88 28 135 / 0.4);
 }
 
 .dark .to-pink-50 {
-  --tw-gradient-to: rgb(131 24 67 / 0.4) !important;
+  --tw-gradient-to: rgb(131 24 67 / 0.4);
 }
 
 .dark .from-cyan-50 {
-  --tw-gradient-from: rgb(22 78 99 / 0.4) !important;
+  --tw-gradient-from: rgb(22 78 99 / 0.4);
 }
 
 .dark .to-blue-50 {
-  --tw-gradient-to: rgb(30 58 138 / 0.4) !important;
+  --tw-gradient-to: rgb(30 58 138 / 0.4);
 }
 
 .dark .from-yellow-50 {
-  --tw-gradient-from: rgb(113 63 18 / 0.4) !important;
+  --tw-gradient-from: rgb(113 63 18 / 0.4);
 }
 
 .dark .from-red-50 {
-  --tw-gradient-from: rgb(127 29 29 / 0.4) !important;
+  --tw-gradient-from: rgb(127 29 29 / 0.4);
 }
 
 .dark .to-rose-50 {
-  --tw-gradient-to: rgb(136 19 55 / 0.4) !important;
+  --tw-gradient-to: rgb(136 19 55 / 0.4);
 }
 
 .dark .from-orange-50 {
-  --tw-gradient-from: rgb(124 45 18 / 0.4) !important;
+  --tw-gradient-from: rgb(124 45 18 / 0.4);
 }
 
 /* Additional gradient stops used across components */
 .dark .to-indigo-50 {
-  --tw-gradient-to: rgb(49 46 129 / 0.4) !important;
+  --tw-gradient-to: rgb(49 46 129 / 0.4);
 }
 
 .dark .to-teal-50 {
-  --tw-gradient-to: rgb(19 78 74 / 0.4) !important;
+  --tw-gradient-to: rgb(19 78 74 / 0.4);
 }
 
 .dark .to-cyan-50 {
-  --tw-gradient-to: rgb(22 78 99 / 0.4) !important;
+  --tw-gradient-to: rgb(22 78 99 / 0.4);
 }
 
 .dark .to-orange-50 {
-  --tw-gradient-to: rgb(124 45 18 / 0.4) !important;
+  --tw-gradient-to: rgb(124 45 18 / 0.4);
 }
 
 .dark .from-indigo-50 {
-  --tw-gradient-from: rgb(49 46 129 / 0.4) !important;
+  --tw-gradient-from: rgb(49 46 129 / 0.4);
 }
 
 .dark .from-sky-50 {
-  --tw-gradient-from: rgb(12 74 110 / 0.4) !important;
+  --tw-gradient-from: rgb(12 74 110 / 0.4);
 }
 
 .dark .to-sky-50 {
-  --tw-gradient-to: rgb(12 74 110 / 0.4) !important;
+  --tw-gradient-to: rgb(12 74 110 / 0.4);
 }
 
 /* === الـ Hover States === */
 .dark .hover\:bg-gray-50:hover {
-  background-color: rgb(51 65 85) !important;
+  background-color: rgb(51 65 85);
 }
 
 .dark .hover\:bg-gray-100:hover {
-  background-color: rgb(71 85 105) !important;
+  background-color: rgb(71 85 105);
 }
 
 .dark .hover\:bg-blue-50:hover {
-  background-color: rgb(30 58 138 / 0.4) !important;
+  background-color: rgb(30 58 138 / 0.4);
 }
 
 .dark .hover\:bg-green-50:hover {
-  background-color: rgb(20 83 45 / 0.4) !important;
+  background-color: rgb(20 83 45 / 0.4);
 }
 
 .dark .hover\:bg-red-50:hover {
-  background-color: rgb(127 29 29 / 0.4) !important;
+  background-color: rgb(127 29 29 / 0.4);
 }
 
 /* === الـ Shadows === */
 .dark .shadow-sm {
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.3) !important;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.3);
 }
 
 .dark .shadow {
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4) !important;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4);
 }
 
 .dark .shadow-md {
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4) !important;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
 }
 
 .dark .shadow-lg {
-  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.5) !important;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.5);
 }
 
 .dark .shadow-xl {
-  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.5) !important;
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.5);
 }
 
 /* === الـ Dividers === */
 .dark .divide-gray-200 > * + * {
-  border-color: rgb(51 65 85) !important;
+  border-color: rgb(51 65 85);
 }
 
 /* === Scrollbar === */
@@ -846,113 +846,102 @@
 .dark button.bg-red-600,
 .dark button.bg-purple-600,
 .dark button.bg-emerald-600 {
-  color: white !important;
+  color: white;
 }
 
 /* === الـ Shadows الناقصة === */
 .dark .shadow-2xl {
-  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.6) !important;
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.6);
 }
 
 .dark .shadow-inner {
-  box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.4) !important;
+  box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.4);
 }
 
 /* === Gray Backgrounds 300-900 === */
-.dark .bg-gray-300 { background-color: rgb(51 65 85) !important; }
-.dark .bg-gray-400 { background-color: rgb(71 85 105) !important; }
-.dark .bg-gray-500 { background-color: rgb(100 116 139) !important; }
-.dark .bg-gray-600 { background-color: rgb(71 85 105) !important; }
-.dark .bg-gray-700 { background-color: rgb(51 65 85) !important; }
-.dark .bg-gray-800 { background-color: rgb(30 41 59) !important; }
-.dark .bg-gray-900 { background-color: rgb(15 23 42) !important; }
+.dark .bg-gray-300 { background-color: rgb(51 65 85); }
+.dark .bg-gray-400 { background-color: rgb(71 85 105); }
+.dark .bg-gray-500 { background-color: rgb(100 116 139); }
+.dark .bg-gray-600 { background-color: rgb(71 85 105); }
+.dark .bg-gray-700 { background-color: rgb(51 65 85); }
+.dark .bg-gray-800 { background-color: rgb(30 41 59); }
+.dark .bg-gray-900 { background-color: rgb(15 23 42); }
 
 /* === Text Gray 200, 300 === */
-.dark .text-gray-200 { color: rgb(203 213 225) !important; }
-.dark .text-gray-300 { color: rgb(148 163 184) !important; }
+.dark .text-gray-200 { color: rgb(203 213 225); }
+.dark .text-gray-300 { color: rgb(148 163 184); }
 
 /* === Hover Backgrounds === */
-.dark .hover\:bg-gray-300:hover { background-color: rgb(71 85 105) !important; }
-.dark .hover\:bg-gray-400:hover { background-color: rgb(100 116 139) !important; }
-.dark .hover\:bg-gray-600:hover { background-color: rgb(71 85 105) !important; }
-.dark .hover\:bg-gray-700:hover { background-color: rgb(51 65 85) !important; }
-.dark .hover\:bg-green-200:hover { background-color: rgb(22 101 52) !important; }
-.dark .hover\:bg-purple-200:hover { background-color: rgb(107 33 168) !important; }
-.dark .hover\:bg-blue-200:hover { background-color: rgb(30 64 175) !important; }
-.dark .hover\:bg-red-200:hover { background-color: rgb(153 27 27) !important; }
-.dark .hover\:bg-indigo-100:hover { background-color: rgb(55 48 163) !important; }
-.dark .hover\:border-gray-400:hover { border-color: rgb(100 116 139) !important; }
+.dark .hover\:bg-gray-300:hover { background-color: rgb(71 85 105); }
+.dark .hover\:bg-gray-400:hover { background-color: rgb(100 116 139); }
+.dark .hover\:bg-gray-600:hover { background-color: rgb(71 85 105); }
+.dark .hover\:bg-gray-700:hover { background-color: rgb(51 65 85); }
+.dark .hover\:bg-green-200:hover { background-color: rgb(22 101 52); }
+.dark .hover\:bg-purple-200:hover { background-color: rgb(107 33 168); }
+.dark .hover\:bg-blue-200:hover { background-color: rgb(30 64 175); }
+.dark .hover\:bg-red-200:hover { background-color: rgb(153 27 27); }
+.dark .hover\:bg-indigo-100:hover { background-color: rgb(55 48 163); }
+.dark .hover\:border-gray-400:hover { border-color: rgb(100 116 139); }
 
 /* === Border & Divide Gray 50, 100 === */
-.dark .border-gray-50 { border-color: rgb(51 65 85) !important; }
-.dark .border-gray-100 { border-color: rgb(51 65 85) !important; }
-.dark .divide-gray-50 > * + * { border-color: rgb(51 65 85) !important; }
-.dark .divide-gray-100 > * + * { border-color: rgb(51 65 85) !important; }
+.dark .border-gray-50 { border-color: rgb(51 65 85); }
+.dark .divide-gray-50 > * + * { border-color: rgb(51 65 85); }
+.dark .divide-gray-100 > * + * { border-color: rgb(51 65 85); }
 
 /* === Border Blue 100 === */
-.dark .border-blue-100 { border-color: rgb(30 64 175) !important; }
+.dark .border-blue-100 { border-color: rgb(30 64 175); }
 
 /* === Border Green 500, 600 === */
-.dark .border-green-500 { border-color: rgb(22 163 74) !important; }
-.dark .border-green-600 { border-color: rgb(22 101 52) !important; }
+.dark .border-green-500 { border-color: rgb(22 163 74); }
+.dark .border-green-600 { border-color: rgb(22 101 52); }
 
-/* === Orange Text Variants === */
-.dark .text-orange-200 { color: rgb(251 146 60) !important; }
-.dark .text-orange-500 { color: rgb(234 88 12) !important; }
-.dark .text-orange-600 { color: rgb(194 65 12) !important; }
-.dark .text-orange-700 { color: rgb(154 52 18) !important; }
-.dark .text-orange-800 { color: rgb(124 45 18) !important; }
-
-/* === Border Orange === */
-.dark .border-orange-100 { border-color: rgb(124 45 18) !important; }
-.dark .border-orange-200 { border-color: rgb(154 52 18) !important; }
-.dark .border-orange-300 { border-color: rgb(194 65 12) !important; }
+/* === Border Orange 100 (فقط — الباقي في قسم الألوان أعلاه) === */
+.dark .border-orange-100 { border-color: rgb(124 45 18); }
 
 /* === Amber Family === */
-.dark .bg-amber-50 { background-color: rgb(69 26 3) !important; }
-.dark .bg-amber-100 { background-color: rgb(120 53 15) !important; }
-.dark .bg-amber-200 { background-color: rgb(146 64 14) !important; }
-.dark .bg-amber-500 { background-color: rgb(180 83 9) !important; }
-.dark .text-amber-600 { color: rgb(217 119 6) !important; }
-.dark .text-amber-700 { color: rgb(245 158 11) !important; }
-.dark .text-amber-800 { color: rgb(251 191 36) !important; }
-.dark .border-amber-200 { border-color: rgb(146 64 14) !important; }
-.dark .border-amber-300 { border-color: rgb(180 83 9) !important; }
-.dark .border-amber-400 { border-color: rgb(217 119 6) !important; }
+.dark .bg-amber-50 { background-color: rgb(69 26 3); }
+.dark .bg-amber-100 { background-color: rgb(120 53 15); }
+.dark .bg-amber-200 { background-color: rgb(146 64 14); }
+.dark .bg-amber-500 { background-color: rgb(180 83 9); }
+.dark .text-amber-600 { color: rgb(217 119 6); }
+.dark .text-amber-700 { color: rgb(245 158 11); }
+.dark .text-amber-800 { color: rgb(251 191 36); }
+.dark .border-amber-200 { border-color: rgb(146 64 14); }
+.dark .border-amber-300 { border-color: rgb(180 83 9); }
+.dark .border-amber-400 { border-color: rgb(217 119 6); }
 
 /* === Focus Ring === */
 .dark input:focus,
 .dark select:focus,
 .dark textarea:focus,
 .dark button:focus-visible {
-  outline-color: rgb(96 165 250 / 0.5) !important;
+  outline-color: rgb(96 165 250 / 0.5);
 }
 .dark .focus\:ring-blue-500:focus,
 .dark .focus\:ring-green-500:focus,
 .dark .focus\:ring-emerald-500:focus {
-  --tw-ring-color: rgb(96 165 250 / 0.4) !important;
+  --tw-ring-color: rgb(96 165 250 / 0.4);
 }
 .dark .focus\:border-blue-500:focus,
 .dark .focus\:border-green-500:focus,
 .dark .focus\:border-emerald-500:focus,
 .dark .focus\:border-purple-500:focus {
-  border-color: rgb(96 165 250 / 0.6) !important;
+  border-color: rgb(96 165 250 / 0.6);
 }
 
 /* === Disabled States === */
-.dark .disabled\:bg-gray-300:disabled { background-color: rgb(51 65 85) !important; }
-.dark .disabled\:bg-blue-400:disabled { background-color: rgb(30 64 175) !important; }
-.dark .disabled\:bg-green-400:disabled { background-color: rgb(22 101 52) !important; }
-.dark .disabled\:bg-gray-100:disabled { background-color: rgb(51 65 85) !important; }
+.dark .disabled\:bg-gray-300:disabled { background-color: rgb(51 65 85); }
+.dark .disabled\:bg-blue-400:disabled { background-color: rgb(30 64 175); }
+.dark .disabled\:bg-green-400:disabled { background-color: rgb(22 101 52); }
+.dark .disabled\:bg-gray-100:disabled { background-color: rgb(51 65 85); }
 
 /* === Colored backgrounds on badges === */
-.dark .bg-green-500 { background-color: rgb(22 163 74) !important; }
-.dark .bg-red-500 { background-color: rgb(220 38 38) !important; }
-.dark .bg-blue-500 { background-color: rgb(37 99 235) !important; }
-.dark .bg-purple-500 { background-color: rgb(147 51 234) !important; }
-.dark .bg-amber-500 { background-color: rgb(180 83 9) !important; }
-.dark .bg-orange-500 { background-color: rgb(234 88 12) !important; }
-.dark .bg-pink-500 { background-color: rgb(190 24 93) !important; }
+.dark .bg-green-500 { background-color: rgb(22 163 74); }
+.dark .bg-red-500 { background-color: rgb(220 38 38); }
+.dark .bg-blue-500 { background-color: rgb(37 99 235); }
+.dark .bg-purple-500 { background-color: rgb(147 51 234); }
+.dark .bg-orange-500 { background-color: rgb(234 88 12); }
+.dark .bg-pink-500 { background-color: rgb(190 24 93); }
 
 /* ============================================ */
 /* 🎯 Animations                                  */
