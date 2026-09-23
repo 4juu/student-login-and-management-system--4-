@@ -18,5 +18,27 @@ export default defineConfig({
     css: false,
     // firebase imports need longer timeout on cold start
     testTimeout: 15000,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      include: [
+        'src/components/**/*.{ts,tsx}',
+        'src/services/**/*.{ts,tsx}',
+        'src/hooks/**/*.{ts,tsx}',
+      ],
+      exclude: [
+        'src/components/**/__tests__/**',
+        'src/**/__tests__/**',
+        'src/**/*.test.*',
+        'src/**/*.spec.*',
+        'src/vite-env.d.ts',
+      ],
+      thresholds: {
+        lines: 40,
+        functions: 40,
+        branches: 40,
+        statements: 40,
+      },
+    },
   },
 });
