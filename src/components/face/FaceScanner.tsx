@@ -40,7 +40,7 @@ interface LogEntry {
   name: string;
   code?: string;
   group?: string;
-  status: 'marked' | 'already' | 'unknown';
+  status: 'marked' | 'already' | 'unknown' | 'failed';
   confidence: number;
   time: string;
 }
@@ -288,7 +288,11 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
       pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'marked', confidence: matchConfidence });
     }
 
-    Promise.resolve(markRef.current(student)).catch(e => console.error('[face-scanner] فشل تسجيل الحضور:', e));
+    Promise.resolve(markRef.current(student)).catch(e => {
+      console.error('[face-scanner] فشل تسجيل الحضور:', e);
+      loggedIdsRef.current.delete(student.id);
+      pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'failed', confidence: matchConfidence });
+    });
   }, [suppressZone, pushLog]);
 
   // ── حلقة المسح ──
@@ -781,9 +785,11 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                     <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
                       log.status === 'marked' ? 'bg-emerald-500/15 text-emerald-300'
                         : log.status === 'already' ? 'bg-amber-500/15 text-amber-300'
-                        : 'bg-slate-500/15 text-slate-400'
-                    }`}>
-                      {log.status === 'marked' ? '✔ حاضر' : log.status === 'already' ? '↺ مسبقاً' : '؟'}
+                        : log.status === 'failed' ? 'bg-red-500/15 text-red-300'
+                        : 'bg-white/10 text-slate-400'
+                    }`}
+                  >
+                      {log.status === 'marked' ? '✔ حاضر' : log.status === 'already' ? '↺ مسبقاً' : log.status === 'failed' ? '✖ فشل' : '؟'}
                     </span>
                     <p className="text-[10px] text-slate-500 mt-0.5">{log.time}</p>
                   </div>

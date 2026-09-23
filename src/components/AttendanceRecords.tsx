@@ -960,9 +960,14 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                   disabled={exporting}
                   onClick={async () => {
                     setExporting(true);
-                    const ok = await handleExportOfficialExcel();
-                    setExporting(false);
-                    if (ok) setExportOpen(false);
+                    try {
+                      const ok = await handleExportOfficialExcel();
+                      if (ok) setExportOpen(false);
+                    } catch (e) {
+                      console.error('Export failed:', e);
+                    } finally {
+                      setExporting(false);
+                    }
                   }}
                   className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-700 hover:from-indigo-500 hover:to-violet-600 text-white font-bold text-base flex items-center justify-center gap-2 shadow-lg shadow-indigo-700/30 hover:shadow-indigo-600/40 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 >

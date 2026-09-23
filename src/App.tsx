@@ -92,6 +92,34 @@ const TabFallback = () => (
   </div>
 );
 
+const ModalFallback = () => (
+  <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" role="status" aria-label="جاري التحميل">
+    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+    <div className="relative flex flex-col items-center gap-3 bg-slate-900 border border-white/10 rounded-2xl px-8 py-6 shadow-2xl">
+      <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      <p className="text-sm text-slate-300 font-medium">جاري التحميل…</p>
+    </div>
+  </div>
+);
+
+const StageLoading = () => (
+  <div className="max-w-6xl mx-auto py-8" role="status" aria-label="جاري تحميل بيانات المرحلة">
+    <div className="space-y-4">
+      <div className="h-10 w-64 rounded-full skeleton-block" />
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
+            <div className="h-4 w-2/3 rounded-md skeleton-block" />
+            <div className="h-3 w-full rounded skeleton-block" />
+            <div className="h-3 w-4/5 rounded skeleton-block" />
+          </div>
+        ))}
+      </div>
+      <p className="text-center text-sm text-slate-400 pt-2">جاري تحميل بيانات المرحلة…</p>
+    </div>
+  </div>
+);
+
 function App() {
   const { registerToken, testToken, attToken, tokenChecked, handleExitSelfRegister, handleExitTest, handleExitAtt } = useRegistrationToken();
   const { systemTitle, setSystemTitle, currentAcademicYear } = useSystemConfig();
@@ -515,7 +543,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#0B1220]" dir="rtl">
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[9999] focus:bg-white focus:text-black focus:px-4 focus:py-2 focus:rounded-lg focus:font-bold">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:start-4 focus:z-[9999] focus:bg-white focus:text-black focus:px-4 focus:py-2 focus:rounded-lg focus:font-bold">
         تخطي إلى المحتوى الرئيسي
       </a>
       <div className="container mx-auto px-3 md:px-4 py-3 md:py-6">
@@ -640,6 +668,9 @@ function App() {
               onOpenAttendanceLink={() => setShowAttendanceLink(true)}
             />
 
+            {!dataLoaded ? (
+              <StageLoading />
+            ) : (
             <div key={`stage-tab-${activeTab}`} className="animate-pageEnter">
               {activeTab === 'sessions' && (
                 <SessionManager
@@ -701,6 +732,7 @@ function App() {
                 />
               )}
             </div>
+            )}
           </div>
         )}
 
@@ -733,7 +765,7 @@ function App() {
       )}
 
       {showSendLink && currentUser && isMainAdmin && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalFallback />}>
           <SendEnrollLink
             adminUid={currentUser.uid}
             colleges={colleges}
@@ -745,7 +777,7 @@ function App() {
       )}
 
       {showTestLink && currentUser && isMainAdmin && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalFallback />}>
           <SendTestLink
             adminUid={currentUser.uid}
             colleges={colleges}
@@ -756,7 +788,7 @@ function App() {
       )}
 
       {showAttendanceLink && currentUser && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalFallback />}>
           <SendAttendanceLink
             adminUid={getAdminUid()}
             colleges={attendanceLinkScope.colleges}
@@ -771,7 +803,7 @@ function App() {
       )}
 
       {showPendingRegistrations && currentUser && (isMainAdmin || isCollegeAdmin) && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalFallback />}>
           <LazyPendingRegistrations
             adminUid={currentUser.uid}
             dataAdminUid={isCollegeAdmin ? getAdminUid() : undefined}
@@ -793,7 +825,7 @@ function App() {
 
       {/* 📋 ملف الطالب (يُحمَّل عند الطلب) */}
       {profileStudent && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalFallback />}>
           <StudentProfileModal
             student={profileStudent}
             records={attendanceRecords}

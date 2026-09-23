@@ -53,7 +53,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <div>
               <label htmlFor="login-email" className="block text-sm font-bold text-slate-300 mb-1.5">البريد الإلكتروني</label>
               <div className="relative">
-                <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <Mail className="absolute end-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   id="login-email"
                   type="email"
@@ -61,7 +61,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={isLoading}
-                  className="glass-input pr-10"
+                  className="glass-input pe-10"
                   autoComplete="email"
                 />
               </div>
@@ -70,7 +70,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <div>
               <label htmlFor="login-password" className="block text-sm font-bold text-slate-300 mb-1.5">كلمة المرور</label>
               <div className="relative">
-                <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <Lock className="absolute end-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   id="login-password"
                   type={showPassword ? 'text' : 'password'}
@@ -78,13 +78,13 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isLoading}
-                  className="glass-input pr-10 pl-10"
+                  className="glass-input pe-10 ps-10"
                   autoComplete="current-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                  className="absolute end-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
                   tabIndex={-1}
                   aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
                 >
@@ -112,7 +112,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </form>
         </div>
 
-        <p className="mt-6 text-center text-slate-500 text-sm">
+        <p className="mt-6 text-center text-slate-400 text-sm">
           © {new Date().getFullYear()} {systemTitle}
         </p>
       </div>

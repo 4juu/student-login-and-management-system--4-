@@ -51,7 +51,7 @@ export const StageSelector: React.FC<StageSelectorProps> = ({
             <p>يرجى التواصل مع الأدمن لإعادة تفعيل حسابك وتحديد المراحل المسموح لك بالوصول إليها للسنة الأكاديمية الجديدة.</p>
           </div>
           {user.deactivatedAt && (
-            <p className="text-xs text-white/30">
+            <p className="text-xs text-white/50">
               تاريخ التعطيل: {new Date(user.deactivatedAt).toLocaleDateString('ar')}
             </p>
           )}
@@ -106,7 +106,7 @@ export const StageSelector: React.FC<StageSelectorProps> = ({
 
               <div className="p-6">
                 {allowedStages.length === 0 ? (
-                  <p className="text-white/40 text-center py-4">لا توجد مراحل مضافة بعد</p>
+                  <p className="text-white/60 text-center py-4">لا توجد مراحل مضافة بعد</p>
                 ) : (
                   <div className="grid grid-cols-1 gap-3">
                     {allowedStages.sort((a,b) => (a.order||0) - (b.order||0)).map(stage => (

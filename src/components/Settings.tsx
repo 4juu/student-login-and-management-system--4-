@@ -531,7 +531,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
                       : 'bg-slate-800/30 text-slate-300 border-white/15'
                   }`}
                 >
-                  {year === currentAcademicYear && <CircleCheck className="w-4 h-4 text-green-600 inline-block align-middle ml-1" />}
+                  {year === currentAcademicYear && <CircleCheck className="w-4 h-4 text-green-600 inline-block align-middle ms-1" />}
                   {year.replace('_', ' - ')}
                 </span>
               ))}

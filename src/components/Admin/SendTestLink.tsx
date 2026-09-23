@@ -85,14 +85,14 @@ export function SendTestLink({ adminUid, colleges, stages, onClose }: SendTestLi
                   <select
                     value={selectedCollegeId}
                     onChange={e => { setSelectedCollegeId(e.target.value); setSelectedStageId(''); }}
-                    className="w-full appearance-none bg-[#0F1B36] border border-[#22334F] rounded-lg px-3 py-2.5 text-sm text-white pr-10 focus:border-blue-500 focus:outline-none"
+                    className="w-full appearance-none bg-[#0F1B36] border border-[#22334F] rounded-lg px-3 py-2.5 text-sm text-white pe-10 focus:border-blue-500 focus:outline-none"
                   >
                     <option value="">اختر الكلية</option>
                     {colleges.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
-                  <Landmark className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
+                  <Landmark className="absolute end-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
                 </div>
               </div>
 
@@ -104,14 +104,14 @@ export function SendTestLink({ adminUid, colleges, stages, onClose }: SendTestLi
                     value={selectedStageId}
                     onChange={e => setSelectedStageId(e.target.value)}
                     disabled={!selectedCollegeId}
-                    className="w-full appearance-none bg-[#0F1B36] border border-[#22334F] rounded-lg px-3 py-2.5 text-sm text-white pr-10 focus:border-blue-500 focus:outline-none disabled:opacity-40"
+                    className="w-full appearance-none bg-[#0F1B36] border border-[#22334F] rounded-lg px-3 py-2.5 text-sm text-white pe-10 focus:border-blue-500 focus:outline-none disabled:opacity-40"
                   >
                     <option value="">اختر المرحلة</option>
                     {filteredStages.map(s => (
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
                   </select>
-                  <Library className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
+                  <Library className="absolute end-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
                 </div>
               </div>
 
@@ -122,13 +122,13 @@ export function SendTestLink({ adminUid, colleges, stages, onClose }: SendTestLi
                   <select
                     value={expiryMs}
                     onChange={e => setExpiryMs(Number(e.target.value))}
-                    className="w-full appearance-none bg-[#0F1B36] border border-[#22334F] rounded-lg px-3 py-2.5 text-sm text-white pr-10 focus:border-blue-500 focus:outline-none"
+                    className="w-full appearance-none bg-[#0F1B36] border border-[#22334F] rounded-lg px-3 py-2.5 text-sm text-white pe-10 focus:border-blue-500 focus:outline-none"
                   >
                     {EXPIRY_OPTIONS.map(o => (
                       <option key={o.ms} value={o.ms}>{o.label}</option>
                     ))}
                   </select>
-                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
+                  <Clock className="absolute end-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
                 </div>
                 <p className="text-[11px] text-gray-500 mt-1.5">
                   ينتهي الرابط تلقائياً بعد: {EXPIRY_OPTIONS.find(o => o.ms === expiryMs)?.label}. بعده يتوقف عن العمل.

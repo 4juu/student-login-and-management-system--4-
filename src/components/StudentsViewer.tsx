@@ -89,7 +89,7 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="اكتب اسم الطالب أو الرمز..."
-              className="w-full px-4 py-2 pr-10 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-500 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 pl-10 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-400 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               dir="rtl"
             />
             {searchQuery && (

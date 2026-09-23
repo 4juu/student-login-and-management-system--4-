@@ -328,15 +328,15 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
               <div>
                 {currentUser.role === 'admin' ? (
                   <span className="inline-flex items-center px-4 py-2 bg-purple-100 text-purple-800 text-sm font-medium rounded-full">
-                    <Crown className="w-4 h-4 text-purple-700 ml-1.5" /> أدمن رئيسي
+                    <Crown className="w-4 h-4 text-purple-700 ms-1.5" /> أدمن رئيسي
                   </span>
                 ) : currentUser.role === 'college_admin' ? (
                   <span className="inline-flex items-center px-4 py-2 bg-amber-100 text-amber-800 text-sm font-medium rounded-full">
-                    <Landmark className="w-4 h-4 text-amber-700 ml-1.5" /> أدمن كلية
+                    <Landmark className="w-4 h-4 text-amber-700 ms-1.5" /> أدمن كلية
                   </span>
                 ) : (
                   <span className="inline-flex items-center px-4 py-2 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
-                    <GraduationCap className="w-4 h-4 text-blue-700 ml-1.5" /> تدريسي
+                    <GraduationCap className="w-4 h-4 text-blue-700 ms-1.5" /> تدريسي
                   </span>
                 )}
               </div>

@@ -318,7 +318,7 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
         </div>
       </div>
 
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
         <h2 className="text-2xl font-bold text-white">إدارة السجلات</h2>
         <div className="flex gap-2">
           <button

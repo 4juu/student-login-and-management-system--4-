@@ -18,6 +18,7 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
   const [content, setContent] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [loaded, setLoaded] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const uid = currentUser?.uid || '';
@@ -27,8 +28,8 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
   useEffect(() => {
     if (!uid) return;
     const unsub = subscribeNotifications(
-      (list) => setItems(list),
-      () => setError('فشل تحميل الإشعارات')
+      (list) => { setItems(list); setLoaded(true); },
+      () => { setError('فشل تحميل الإشعارات'); setLoaded(true); }
     );
     return unsub;
   }, [uid]);
@@ -182,7 +183,14 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
 
             {/* List */}
             <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-2.5" style={{ WebkitOverflowScrolling: 'touch' }}>
-              {items.length === 0 && (
+              {!loaded && (
+                <div className="text-center py-12 text-slate-400" role="status" aria-label="جاري التحميل">
+                  <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                  <p className="text-sm font-bold">جاري تحميل الإشعارات…</p>
+                </div>
+              )}
+
+              {loaded && items.length === 0 && (
                 <div className="text-center py-12 text-slate-500">
                   <div className="text-4xl mb-2">🔕</div>
                   <p className="text-sm font-bold">لا توجد إشعارات</p>

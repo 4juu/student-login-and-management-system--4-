@@ -36,6 +36,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
   const [newPassword, setNewPassword] = useState('');
   const [currentTeacherPassword, setCurrentTeacherPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [teachersLoading, setTeachersLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -67,6 +68,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
   }, [selectedCollegeId]);
 
   const loadTeachers = async () => {
+    setTeachersLoading(true);
     try {
       if (isCollegeAdmin && currentUser.collegeId) {
         const list = await getAllTeachersForCollege(currentUser.collegeId);
@@ -111,8 +113,10 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
       }
 
       setTeachers([]);
-    } catch (e) { 
-      console.error('Error loading teachers:', e); 
+    } catch (e) {
+      console.error('Error loading teachers:', e);
+    } finally {
+      setTeachersLoading(false);
     }
   };
 
@@ -868,7 +872,16 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
             </tr>
           </thead>
           <tbody className="bg-white/5 divide-y divide-white/10">
-            {displayTeachers.length === 0 ? (
+            {teachersLoading ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-8 text-center text-slate-400" role="status" aria-label="جاري التحميل">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-7 h-7 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-sm font-bold">جاري تحميل التدريسيين…</span>
+                  </div>
+                </td>
+              </tr>
+            ) : displayTeachers.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-6 py-8 text-center text-slate-400">
                   لا توجد حسابات تدريسيين في هذه الكلية

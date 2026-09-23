@@ -854,7 +854,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="بحث بالاسم أو الكود أو الكروب أو الرقم الجامعي..."
-              className="w-full px-4 py-2 pr-10 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 pl-10 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               dir="rtl"
             />
             {searchQuery && (
