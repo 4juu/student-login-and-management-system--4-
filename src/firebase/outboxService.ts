@@ -4,10 +4,9 @@
 
 import { ref, set } from "firebase/database";
 import { database } from "./config";
-import { AttendanceRecord } from "../types/student";
 import { getOutboxEntries, removeOutboxEntry } from "../lib/offlineOutbox";
 import { getActiveAcademicYear } from "./academicYear";
-import { getStagePath, getTeacherPath, getRecordsPath } from "./paths";
+import { getStagePath, getTeacherDataPath } from "./paths";
 import { stripUndefined } from "./localCache";
 
 // ============================================================
@@ -40,11 +39,9 @@ export const applyOutbox = async (): Promise<void> => {
           const middle = rest.slice(0, rest.lastIndexOf('_'));
           const sid = middle.slice(middle.lastIndexOf('_') + 1);
           const uid = middle.slice(0, middle.lastIndexOf('_'));
-          const { compressRecord } = await import('./dataServiceCompressed');
-          const compressed = (entry.data as AttendanceRecord[]).map(compressRecord);
           await set(
-            ref(database, getRecordsPath(year, uid, sid, tid)),
-            compressed
+            ref(database, getTeacherDataPath(year, uid, sid, tid, 'records')),
+            (entry.data as unknown[]).map(stripUndefined as any)
           );
         } else if (entry.key.startsWith('sessions_')) {
           const rest = entry.key.slice('sessions_'.length);
@@ -52,9 +49,8 @@ export const applyOutbox = async (): Promise<void> => {
           const middle = rest.slice(0, rest.lastIndexOf('_'));
           const sid = middle.slice(middle.lastIndexOf('_') + 1);
           const uid = middle.slice(0, middle.lastIndexOf('_'));
-          const compressed = (entry.data as AttendanceRecord[]).map(compressRecord);
           await set(
-            ref(database, getTeacherPath(year, uid, sid, tid)),
+            ref(database, getTeacherDataPath(year, uid, sid, tid, 'sessions')),
             (entry.data as unknown[]).map(stripUndefined as any)
           );
         }
