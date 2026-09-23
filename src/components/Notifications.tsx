@@ -6,6 +6,8 @@ import {
   subscribeNotifications, sendNotification, markNotificationRead, deleteNotification, deleteAllNotifications,
 } from '../services/notificationService';
 import { User } from '../types/user';
+import { useConfirm } from '../hooks/useConfirm';
+import { TableSkeleton } from './loading/TableSkeleton';
 
 interface NotificationsProps {
   currentUser: User | null;
@@ -13,6 +15,7 @@ interface NotificationsProps {
 
 export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => {
   const [items, setItems] = useState<AdminNotification[]>([]);
+  const { confirm: confirmAction, ConfirmDialog: ConfirmDialogEl } = useConfirm();
   const [open, setOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [content, setContent] = useState('');
@@ -139,7 +142,14 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
                 )}
                 {items.length > 0 && mainAdminCanSend && (
                   <button
-                    onClick={() => { if (confirm('حذف كل الإشعارات؟')) deleteAllNotifications(); }}
+                    onClick={async () => {
+                      const ok = await confirmAction({
+                        title: 'حذف كل الإشعارات؟',
+                        message: 'سيتم حذف جميع الإشعارات نهائياً.',
+                        confirmLabel: 'حذف الكل',
+                      });
+                      if (ok) await deleteAllNotifications();
+                    }}
                     className="bg-white/5 hover:bg-red-500/15 text-slate-300 hover:text-red-300 p-2 rounded-lg transition active:scale-90"
                     title="حذف الكل"
                   >
@@ -184,10 +194,7 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
             {/* List */}
             <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-2.5" style={{ WebkitOverflowScrolling: 'touch' }}>
               {!loaded && (
-                <div className="text-center py-12 text-slate-400" role="status" aria-label="جاري التحميل">
-                  <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                  <p className="text-sm font-bold">جاري تحميل الإشعارات…</p>
-                </div>
+                <TableSkeleton rows={4} cols={1} aria-label="جاري تحميل الإشعارات…" />
               )}
 
               {loaded && items.length === 0 && (
@@ -243,6 +250,7 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
         </div>,
         document.body
       )}
+      {ConfirmDialogEl}
     </>
   );
 };

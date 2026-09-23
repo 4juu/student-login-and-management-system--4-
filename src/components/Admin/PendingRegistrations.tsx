@@ -5,13 +5,14 @@ import { Student } from '../../types/student';
 import { PendingRegistration } from '../../types/registration';
 import { getActiveAcademicYear } from '../../firebase/dataService';
 import { markLinkAsUsed } from '../../services/tokenService';
-import { SkeletonTable } from '../Skeleton';
+import { TableSkeleton } from '../loading/TableSkeleton';
 import {
   parseStoredDescriptor,
   checkForTampering,
   migrateToV5,
 } from '../../services/faceAI/descriptors';
 import { Camera, Check, CircleCheck, CircleX, ClipboardList, LoaderCircle, Mail, QrCode, Save, Smile, Trash2, TriangleAlert } from 'lucide-react';
+import { useConfirm } from '../../hooks/useConfirm';
 
 interface PendingRegistrationsProps {
   adminUid: string;
@@ -34,6 +35,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
   const [rejectReason, setRejectReason] = useState('');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [purging, setPurging] = useState(false);
+  const { confirm: confirmAction, ConfirmDialog: ConfirmDialogEl } = useConfirm();
 
   useEffect(() => {
     const path = `registrationSystem/pending/${adminUid}`;
@@ -212,7 +214,12 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       alert('لا توجد طلبات تالفة — كل البصمات سليمة ✅');
       return;
     }
-    if (!confirm(`سيتم حذف ${corrupt.length} طلباً تالفاً نهائياً. على الطلاب المتأثرين إعادة التسجيل من رابطهم. متابعة؟`)) return;
+    const ok = await confirmAction({
+      title: 'حذف الطلبات التالفة',
+      message: `سيتم حذف ${corrupt.length} طلباً تالفاً نهائياً. على الطلاب المتأثرين إعادة التسجيل من رابطهم. متابعة؟`,
+      confirmLabel: 'حذف',
+    });
+    if (!ok) return;
 
     setPurging(true);
     try {
@@ -239,6 +246,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
+      {ConfirmDialogEl}
       <div className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[95vh] flex flex-col">
 
         <div className="p-5 border-b border-white/10 flex items-center justify-between">
@@ -326,7 +334,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {loading ? (
             <div className="p-4">
-              <SkeletonTable rows={4} cols={4} />
+              <TableSkeleton rows={4} cols={4} />
             </div>
           ) : filteredRequests.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
