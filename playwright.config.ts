@@ -21,13 +21,15 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  // Build + preview for local e2e (set E2E_BASE_URL to skip webServer)
+  // Preview-only server (run `npm run build` first, or use the `e2e:build` script).
+  // Set E2E_BASE_URL to point at an already-running server instead.
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
-        command: 'npm run build && npm run preview -- --port 4173 --strictPort',
+        command: 'npm run preview -- --port 4173 --strictPort',
         url: 'http://localhost:4173',
         reuseExistingServer: !process.env.CI,
-        timeout: 180_000,
+        timeout: 60_000,
+        env: { NODE_OPTIONS: '--max-old-space-size=4096' },
       },
 });
