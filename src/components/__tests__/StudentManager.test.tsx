@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StudentManager } from '../StudentManager';
 import type { Student } from '../../types/student';
@@ -111,7 +111,6 @@ describe('StudentManager', () => {
   });
 
   it('calls onDeleteStudent when delete button clicked', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const { onDeleteStudent } = setup();
 
     // delete row buttons have text "حذف" (may also match other buttons — pick table row ones)
@@ -121,22 +120,23 @@ describe('StudentManager', () => {
     expect(deleteButtons.length).toBeGreaterThanOrEqual(2);
     await userEvent.click(deleteButtons[0]);
 
-    expect(confirmSpy).toHaveBeenCalledWith(
-      expect.stringContaining('هل أنت متأكد من حذف الطالب'),
-    );
     expect(onDeleteStudent).toHaveBeenCalledWith('s1');
   });
 
-  it('does not delete when confirm is cancelled', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
-    const { onDeleteStudent } = setup();
+  it('does not bulk-delete when confirm dialog is cancelled', async () => {
+    const { onDeleteSelectedStudents } = setup();
 
-    const deleteButtons = screen
-      .getAllByRole('button')
-      .filter(b => b.textContent?.trim() === 'حذف');
-    await userEvent.click(deleteButtons[0]);
+    const checkboxes = screen.getAllByRole('checkbox');
+    await userEvent.click(checkboxes[0]);
 
-    expect(onDeleteStudent).not.toHaveBeenCalled();
+    const bulkDeleteBtn = screen.getByRole('button', { name: /حذف المحدد/ });
+    await userEvent.click(bulkDeleteBtn);
+
+    const dialog = await screen.findByRole('alertdialog');
+    const cancelBtn = within(dialog).getByRole('button', { name: 'إلغاء' });
+    await userEvent.click(cancelBtn);
+
+    expect(onDeleteSelectedStudents).not.toHaveBeenCalled();
   });
 
   it('renders empty state when no students', () => {

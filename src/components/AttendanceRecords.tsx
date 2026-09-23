@@ -4,6 +4,7 @@ import { getCurrentAcademicYear } from '../firebase/dataService';
 import { CalendarCheck, CalendarRange, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, CircleX, Download, FileSpreadsheet, GraduationCap, Pencil, QrCode, Trash2, X } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useModalBehavior } from '../hooks/useModalBehavior';
+import { useConfirm } from '../hooks/useConfirm';
 
 interface AttendanceRecordsProps {
   records: AttendanceRecord[];
@@ -31,6 +32,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
 }) => {
   // 🆕 السنة الأكاديمية الحالية (للعرض)
   const currentAcademicYear = useMemo(() => getCurrentAcademicYear(), []);
+  const { confirm: confirmAction, ConfirmDialog: ConfirmDialogEl } = useConfirm();
 
   // 🎯 useCallback للـ helper function
   const normalizeAnyDate = useCallback((dateStr: string): string => {
@@ -152,8 +154,13 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
     setEditingRecord(null);
   };
 
-  const handleDeleteRecord = (rec: AttendanceRecord) => {
-    if (!window.confirm(`هل أنت متأكد من حذف سجل حضور "${rec.studentName}"؟`)) return;
+  const handleDeleteRecord = async (rec: AttendanceRecord) => {
+    const ok = await confirmAction({
+      title: 'حذف سجل',
+      message: `هل أنت متأكد من حذف سجل حضور "${rec.studentName}"؟`,
+      confirmLabel: 'حذف',
+    });
+    if (!ok) return;
     onDeleteRecord?.(rec.id);
   };
 
@@ -522,14 +529,18 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
     return true;
   };
 
-  const handleClearRecords = () => {
-    if (window.confirm('تحذير: هل أنت متأكد من حذف جميع سجلات الحضور لهذه المرحلة؟')) {
-      onClearRecords();
-    }
+  const handleClearRecords = async () => {
+    const ok = await confirmAction({
+      title: 'حذف جميع السجلات',
+      message: 'تحذير: هل أنت متأكد من حذف جميع سجلات الحضور لهذه المرحلة؟',
+      confirmLabel: 'حذف الكل',
+    });
+    if (ok) onClearRecords();
   };
 
   return (
     <div className="glass-card">
+      {ConfirmDialogEl}
       {/* 🆕 شريط السنة الأكاديمية */}
       <div className="flex items-center gap-2 mb-6">
         <span className="glass-badge badge-blue">

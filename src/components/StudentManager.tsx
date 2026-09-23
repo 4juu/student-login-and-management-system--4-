@@ -1,5 +1,6 @@
 import React, { useState, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { Student } from '../types/student';
+import { useConfirm } from '../hooks/useConfirm';
 import {
   hasValidDescriptor,
   getCoveragePercent,
@@ -68,6 +69,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [editingUniIdStudent, setEditingUniIdStudent] = useState<string | null>(null);
+  const { confirm: confirmAction, ConfirmDialog: ConfirmDialogEl } = useConfirm();
   const [editUniversityId, setEditUniversityId] = useState('');
 
   const [editingQrStudent, setEditingQrStudent] = useState<string | null>(null);
@@ -246,9 +248,11 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
       }
 
       if (parsed.length > 50) {
-        const confirmed = window.confirm(
-          `تم العثور على ${parsed.length} طالب في الملف.\n\nهل تريد المتابعة بالاستيراد؟`
-        );
+        const confirmed = await confirmAction({
+          title: 'استيراد دفعة كبيرة',
+          message: `تم العثور على ${parsed.length} طالب في الملف. هل تريد المتابعة بالاستيراد؟`,
+          confirmLabel: 'متابعة',
+        });
         if (!confirmed) {
           setImportLoading(false);
           if (fileInputRef.current) fileInputRef.current.value = '';
@@ -377,15 +381,16 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
     }
   };
 
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected = async () => {
     if (selectedIds.size === 0) return;
 
     const isAll = selectedIds.size === students.length;
     const message = isAll
-      ? `سيتم حذف جميع الطلاب (${students.length})!\nهل أنت متأكد؟`
+      ? `سيتم حذف جميع الطلاب (${students.length})! هل أنت متأكد؟`
       : `هل أنت متأكد من حذف ${selectedIds.size} طالب؟`;
 
-    if (!window.confirm(message)) return;
+    const ok = await confirmAction({ title: 'حذف الطلاب', message, confirmLabel: 'حذف' });
+    if (!ok) return;
 
     onDeleteSelectedStudents(Array.from(selectedIds));
     setSelectedIds(new Set());
@@ -441,15 +446,25 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
     setEditQrCodeId('');
   };
 
-  const removeQrLink = (student: Student) => {
+  const removeQrLink = async (student: Student) => {
     if (!onUpdateStudent) return;
-    if (!window.confirm(`هل تريد فك ربط رمز QR من ${student.name}؟`)) return;
+    const ok = await confirmAction({
+      title: 'فك ربط QR',
+      message: `هل تريد فك ربط رمز QR من ${student.name}؟`,
+      confirmLabel: 'فك الربط',
+    });
+    if (!ok) return;
     onUpdateStudent(student.id, { qrCodeId: undefined });
   };
 
-  const removeFaceData = (student: Student) => {
+  const removeFaceData = async (student: Student) => {
     if (!onUpdateStudent) return;
-    if (!window.confirm(`هل تريد حذف بصمة الوجه من ${student.name}؟`)) return;
+    const ok = await confirmAction({
+      title: 'حذف بصمة الوجه',
+      message: `هل تريد حذف بصمة الوجه من ${student.name}؟`,
+      confirmLabel: 'حذف',
+    });
+    if (!ok) return;
     onUpdateStudent(student.id, { faceDescriptor: undefined, faceRegisteredAt: undefined });
   };
 
@@ -799,10 +814,13 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
           <div className="flex flex-wrap gap-2">
             {onSortByName && (
               <button
-                onClick={() => {
-                  if (window.confirm('هل تريد ترتيب الطلاب أبجدياً حسب الأسماء؟')) {
-                    onSortByName();
-                  }
+                onClick={async () => {
+                  const ok = await confirmAction({
+                    title: 'إعادة ترتيب',
+                    message: 'هل تريد ترتيب الطلاب أبجدياً حسب الأسماء؟',
+                    confirmLabel: 'ترتيب',
+                  });
+                  if (ok) onSortByName();
                 }}
                 className="flex-1 min-w-[140px] sm:min-w-[200px] px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-medium rounded-md transition duration-200 shadow-md flex items-center justify-center gap-2"
               >
@@ -811,10 +829,13 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
             )}
             {onSortByGroup && (
               <button
-                onClick={() => {
-                  if (window.confirm('هل تريد ترتيب الطلاب حسب الكروب ثم الاسم؟')) {
-                    onSortByGroup();
-                  }
+                onClick={async () => {
+                  const ok = await confirmAction({
+                    title: 'إعادة ترتيب',
+                    message: 'هل تريد ترتيب الطلاب حسب الكروب ثم الاسم؟',
+                    confirmLabel: 'ترتيب',
+                  });
+                  if (ok) onSortByGroup();
                 }}
                 className="flex-1 min-w-[140px] sm:min-w-[200px] px-4 py-2 bg-gradient-to-r from-pink-600 to-pink-700 hover:from-pink-700 hover:to-pink-800 text-white font-medium rounded-md transition duration-200 shadow-md flex items-center justify-center gap-2"
               >
@@ -1279,11 +1300,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
                           </button>
                         )}
                         <button
-                          onClick={() => {
-                            if (window.confirm(`هل أنت متأكد من حذف الطالب ${student.name}؟`)) {
-                              onDeleteStudent(student.id);
-                            }
-                          }}
+                          onClick={() => onDeleteStudent(student.id)}
                           className="text-red-400 hover:text-red-300 font-medium"
                         >
                           حذف
@@ -1375,6 +1392,8 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
           />
         </Suspense>
       )}
+
+      {ConfirmDialogEl}
     </div>
   );
 });

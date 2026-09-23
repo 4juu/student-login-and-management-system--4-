@@ -3,6 +3,7 @@ import { ref as dbRef, update } from 'firebase/database';
 import { database } from '../firebase/config';
 import { User } from '../types/user';
 import { Crown, GraduationCap, Landmark, TriangleAlert } from 'lucide-react';
+import { useConfirm } from '../hooks/useConfirm';
 
 interface ProfileSettingsProps {
   currentUser: User;
@@ -21,6 +22,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { confirm: confirmAction, ConfirmDialog: ConfirmDialogEl } = useConfirm();
 
   const convertToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -63,9 +65,14 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
     }
   };
 
-  const handleRemovePhoto = () => {
+  const handleRemovePhoto = async () => {
     if (!photoURL) return;
-    if (window.confirm('هل أنت متأكد من حذف الصورة الشخصية؟')) {
+    const ok = await confirmAction({
+      title: 'حذف الصورة',
+      message: 'هل أنت متأكد من حذف الصورة الشخصية؟',
+      confirmLabel: 'حذف',
+    });
+    if (ok) {
       setPhotoURL('');
       setSuccess('سيتم حذف الصورة عند حفظ التغييرات');
     }
@@ -122,8 +129,13 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
     }
   };
 
-  const handleReset = () => {
-    if (window.confirm('هل أنت متأكد من إلغاء جميع التغييرات؟')) {
+  const handleReset = async () => {
+    const ok = await confirmAction({
+      title: 'إلغاء التغييرات',
+      message: 'هل أنت متأكد من إلغاء جميع التغييرات؟',
+      confirmLabel: 'إلغاء التغييرات',
+    });
+    if (ok) {
       setDisplayName(currentUser.displayName);
       setBio(currentUser.bio || '');
       setPhotoURL(currentUser.photoURL || '');
@@ -134,6 +146,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
+      {ConfirmDialogEl}
       <h2 className="text-2xl font-bold mb-6 text-gray-800">
         إعدادات الملف الشخصي
       </h2>

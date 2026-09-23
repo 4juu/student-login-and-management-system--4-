@@ -13,6 +13,7 @@ import {
 import { User, TeacherPermissions } from '../types/user';
 import { College, Stage } from '../types/student';
 import { ArrowLeft, BookOpen, CircleCheck, Crown, GraduationCap, KeyRound, Landmark, Lightbulb, LoaderCircle, Lock, Plus, RefreshCw, Save, Settings, SquarePen, Trash2, TriangleAlert, Truck, User as UserIcon, UserCheck, Users, Wrench } from 'lucide-react';
+import { useConfirm } from '../hooks/useConfirm';
 
 interface TeacherManagementProps {
   currentUser: User;
@@ -26,6 +27,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
   stages 
 }) => {
   const [teachers, setTeachers] = useState<User[]>([]);
+  const { confirm: confirmAction, ConfirmDialog: ConfirmDialogEl } = useConfirm();
   const [showAddForm, setShowAddForm] = useState(false);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -115,7 +117,12 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
   };
 
   const handleFixOldTeachers = async () => {
-    if (!window.confirm('هذه الأداة ستربط جميع التدريسيين القدامى بحسابك (كأدمن) وتجهزهم لاستقبال الصلاحيات. متابعة؟')) return;
+    const ok = await confirmAction({
+      title: 'إصلاح التدريسيين القدامى',
+      message: 'هذه الأداة ستربط جميع التدريسيين القدامى بحسابك (كأدمن) وتجهزهم لاستقبال الصلاحيات. متابعة؟',
+      confirmLabel: 'متابعة',
+    });
+    if (!ok) return;
     setLoading(true);
     try {
       const { ref: dbRef, update } = await import('firebase/database');
@@ -156,11 +163,12 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
   };
 
   const handleReactivateTeacher = async (teacher: User) => {
-    if (!window.confirm(
-      `إعادة تفعيل ${teacher.displayName}؟\n\n` +
-      `سيتم تفعيل حسابه بدون صلاحيات.\n` +
-      `بعد ذلك يجب تحديد المراحل المسموحة له من زر "الصلاحيات".`
-    )) return;
+    const ok = await confirmAction({
+      title: 'إعادة تفعيل تدريسي',
+      message: `إعادة تفعيل ${teacher.displayName}؟ سيتم تفعيل حسابه بدون صلاحيات. بعد ذلك يجب تحديد المراحل المسموحة له من زر "الصلاحيات".`,
+      confirmLabel: 'إعادة تفعيل',
+    });
+    if (!ok) return;
     setLoading(true);
     try {
       await reactivateTeacher(teacher.uid, {
@@ -330,7 +338,12 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
   };
 
   const handleDeleteTeacher = async (teacher: User) => {
-    if (!window.confirm(`هل أنت متأكد من حذف حساب ${teacher.displayName}؟\n\nسيتم حذف جميع بياناته نهائياً!`)) return;
+    const ok = await confirmAction({
+      title: 'حذف حساب تدريسي',
+      message: `هل أنت متأكد من حذف حساب ${teacher.displayName}؟ سيتم حذف جميع بياناته نهائياً!`,
+      confirmLabel: 'حذف نهائي',
+    });
+    if (!ok) return;
     setLoading(true);
     try {
       await deleteTeacherAccount(teacher.uid);
@@ -576,7 +589,12 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
                       <button
                         key={t.uid}
                         onClick={async () => {
-                          if (!window.confirm(`تعيين ${t.displayName} أدمن لكلية ${assignAdminCollegeName}؟`)) return;
+                          const ok = await confirmAction({
+                            title: 'تعيين أدمن كلية',
+                            message: `تعيين ${t.displayName} أدمن لكلية ${assignAdminCollegeName}؟`,
+                            confirmLabel: 'تعيين',
+                          });
+                          if (!ok) return;
                           setLoading(true);
                           try {
                             await promoteToCollegeAdmin(t.uid, assignAdminCollegeId, assignAdminCollegeName);
@@ -909,14 +927,14 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
                           <button onClick={() => handleOpenPasswordModal(t)} className="bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs inline-flex items-center gap-1"><KeyRound className="w-3 h-3" /> الرمز</button>
                         )}
                           {isMainAdmin && t.role === 'college_admin' && (
-                            <button onClick={async () => { if (window.confirm(`إلغاء أدمن كلية عن ${t.displayName}؟`)) { await demoteFromCollegeAdmin(t.uid); await loadTeachers(); } }} disabled={loading} className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs inline-flex items-center gap-1"><UserIcon className="w-3 h-3" /> إلغاء أدمن</button>
+                            <button onClick={async () => { const ok = await confirmAction({ title: 'إلغاء أدمن', message: `إلغاء أدمن كلية عن ${t.displayName}؟`, confirmLabel: 'إلغاء الأدمن' }); if (ok) { await demoteFromCollegeAdmin(t.uid); await loadTeachers(); } }} disabled={loading} className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs inline-flex items-center gap-1"><UserIcon className="w-3 h-3" /> إلغاء أدمن</button>
                           )}
                           {isMainAdmin && t.role !== 'college_admin' && (() => {
                             const cId = selectedCollegeId === '__all__' ? (t.collegeId || '') : (selectedCollegeId || '');
                             const cName = colleges.find(c => c.id === cId)?.name || '';
                             if (!cId) return null;
                             return (
-                              <button onClick={async () => { if (window.confirm(`تعيين ${t.displayName} أدمن لكلية ${cName}؟`)) { await promoteToCollegeAdmin(t.uid, cId, cName); await loadTeachers(); } }} disabled={loading} className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs inline-flex items-center gap-1"><Landmark className="w-3 h-3" /> تعيين أدمن</button>
+                              <button onClick={async () => { const ok = await confirmAction({ title: 'تعيين أدمن كلية', message: `تعيين ${t.displayName} أدمن لكلية ${cName}؟`, confirmLabel: 'تعيين' }); if (ok) { await promoteToCollegeAdmin(t.uid, cId, cName); await loadTeachers(); } }} disabled={loading} className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 px-2 sm:px-3 py-1 rounded font-medium text-[10px] sm:text-xs inline-flex items-center gap-1"><Landmark className="w-3 h-3" /> تعيين أدمن</button>
                             );
                           })()}
                           {isMainAdmin && (
@@ -1045,6 +1063,8 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
 
         <p className="flex items-start gap-2"><UserCheck className="w-4 h-4 shrink-0 mt-0.5" /> إذا تدريسي ظهر بحالة "معطّل" بعد التصفير السنوي، اضغط <strong>"إعادة تفعيل"</strong> ثم حدد له المراحل الجديدة.</p>
       </div>
+
+      {ConfirmDialogEl}
     </div>
   );
 });
