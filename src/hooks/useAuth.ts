@@ -20,6 +20,7 @@ interface UseAuthReturn {
   handleLogin: (email: string, password: string) => Promise<void>;
   handleLogout: () => void;
   confirmLogout: () => Promise<void>;
+  cancelLogout: () => void;
   handleUpdateProfile: (updatedUser: User) => void;
 
   isAdmin: boolean;
@@ -92,6 +93,7 @@ export function useAuth({ resetData, loadInitialData, registerToken = null }: Us
   };
 
   const handleLogout = () => setLogoutConfirmOpen(true);
+  const cancelLogout = () => setLogoutConfirmOpen(false);
 
   const confirmLogout = async () => {
     if (loggingOut) return;
@@ -131,6 +133,7 @@ export function useAuth({ resetData, loadInitialData, registerToken = null }: Us
     handleLogin,
     handleLogout,
     confirmLogout,
+    cancelLogout,
     handleUpdateProfile,
 
     isAdmin,

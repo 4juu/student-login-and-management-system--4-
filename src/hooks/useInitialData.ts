@@ -28,11 +28,15 @@ interface UseInitialDataReturn {
   allStagesData: AllStagesData;
   universityDataLoading: boolean;
   universityDataLoaded: boolean;
+  telegramConfig: TelegramConfig | null;
+  colleges: College[];
+  stages: Stage[];
   loadInitialData: (user: User) => Promise<void>;
   loadAllAdminData: () => Promise<void>;
   setColleges: React.Dispatch<React.SetStateAction<College[]>>;
   setStages: React.Dispatch<React.SetStateAction<Stage[]>>;
   setTelegramConfig: React.Dispatch<React.SetStateAction<TelegramConfig | null>>;
+  setAllStagesData: React.Dispatch<React.SetStateAction<AllStagesData>>;
 }
 
 const currentAcademicYear = getCurrentAcademicYear();
@@ -43,9 +47,9 @@ export default function useInitialData({ currentUser }: UseInitialDataParams): U
   const [universityDataLoading, setUniversityDataLoading] = useState(false);
   const [universityDataLoaded, setUniversityDataLoaded] = useState(false);
 
-  const [_colleges, setColleges] = useState<College[]>([]);
+  const [colleges, setColleges] = useState<College[]>([]);
   const [stages, setStages] = useState<Stage[]>([]);
-  const [_telegramConfig, setTelegramConfig] = useState<TelegramConfig | null>(null);
+  const [telegramConfig, setTelegramConfig] = useState<TelegramConfig | null>(null);
 
   const loadInitialData = useCallback(async (user: User) => {
     try {
@@ -156,10 +160,14 @@ export default function useInitialData({ currentUser }: UseInitialDataParams): U
     allStagesData,
     universityDataLoading,
     universityDataLoaded,
+    telegramConfig,
+    colleges,
+    stages,
     loadInitialData,
     loadAllAdminData,
     setColleges,
     setStages,
     setTelegramConfig,
+    setAllStagesData,
   };
 }

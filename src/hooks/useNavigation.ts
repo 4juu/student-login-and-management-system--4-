@@ -8,6 +8,7 @@ export type Tab = 'stage-selector' | 'colleges' | 'login' | 'manage' | 'records'
 function useNavigation(currentUser: User | null) {
   const [activeTab, setActiveTab] = useState<Tab>('stage-selector');
   const [showSendLink, setShowSendLink] = useState(false);
+  const [showTestLink, setShowTestLink] = useState(false);
   const [showAttendanceLink, setShowAttendanceLink] = useState(false);
   const [showPendingRegistrations, setShowPendingRegistrations] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -40,6 +41,8 @@ function useNavigation(currentUser: User | null) {
     setActiveTab,
     showSendLink,
     setShowSendLink,
+    showTestLink,
+    setShowTestLink,
     showAttendanceLink,
     setShowAttendanceLink,
     showPendingRegistrations,
