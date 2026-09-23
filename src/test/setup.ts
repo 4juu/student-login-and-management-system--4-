@@ -20,6 +20,12 @@ if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
 
+// jsdom doesn't implement window scrollTo/scroll (students' tab switching calls it)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).scrollTo = (window as any).scrollTo || (() => {});
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).scroll = (window as any).scroll || (() => {});
+
 // jsdom doesn't implement window.scrollTo / scroll (components call it on tab change)
 if (!window.scrollTo) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
