@@ -4,8 +4,10 @@
     // 👥 المستخدمون
     // ══════════════════════════════════════════════════════════
     "users": {
-      ".read": "auth != null",
+      // ✅ سرد كل المستخدمين: أدمن/أدمن كلية فقط — التدريسي يقرأ ملفه عبر $uid
+      ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')",
       "$uid": {
+        ".read": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')",
         ".write": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin' || (root.child('users').child(auth.uid).child('role').val() == 'college_admin' && root.child('users').child($uid).child('role').val() == 'teacher'))"
       }
     },
@@ -51,7 +53,9 @@
     // ══════════════════════════════════════════════════════════
     "registrationSystem": {
       "links": {
-        ".read": true,
+        // ✅ سرد كل الروابط للمستخدمين المسجّلين فقط (يمنع تعداد tokens بلا دخول)
+        //    الطالب بلا تسجيل دخول يقرأ توكنه المحدد فقط عبر $token
+        ".read": "auth != null",
         "$token": {
           ".read": true,
           // ✅ الأدمن/أدمن الكلية ينشئون أي رابط، والتدريسي العادي ينشئ روابط الحضور فقط
@@ -71,7 +75,9 @@
         "$adminUid": {
           ".read": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin')",
           "$requestId": {
-            ".write": "(!data.exists() && newData.exists()) || auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin'"
+            ".write": "(!data.exists() && newData.exists()) || auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')",
+            // ✅ إنشاء الزائر (طالب بلا دخول) يلزم شكل طلب معلّق فقط — يمنع التلوّث العشوائي
+            ".validate": "!newData.exists() || auth != null || (newData.hasChildren(['status', 'createdAt', 'studentId']) && newData.child('status').val() === 'pending')"
           }
         }
       }
@@ -130,12 +136,14 @@
                   }
                 },
 
-                // ✅ تحسينات البصمة — أي شخص يكتب ويقرأ (الطلاب بلا تسجيل دخولduring face test)
+                // ✅ تحسينات البصمة — الكتابة بلا دخول لاختبار الوجه فقط، وبشكل مُتحقَّق منه
+                //    (لا حذف بلا دخول — الحذف للأدمن بعد الدمج فقط)
                 "descriptorOverrides": {
                   ".read": true,
-                  ".write": true,
+                  ".write": "auth != null || newData.exists()",
                   "$studentId": {
-                    ".validate": "newData.hasChildren(['faceDescriptor', 'updatedAt'])"
+                    ".write": "auth != null || (newData.exists() && newData.hasChildren(['faceDescriptor', 'updatedAt']))",
+                    ".validate": "newData.exists() ? (newData.hasChildren(['faceDescriptor', 'updatedAt']) && newData.child('updatedAt').isNumber() && (newData.child('faceDescriptor').isArray() || newData.child('faceDescriptor').isMap() || newData.child('faceDescriptor').isString())) : auth != null"
                   }
                 },
 
