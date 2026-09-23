@@ -4,6 +4,8 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { compression } from "vite-plugin-compression2";
+import { visualizer } from "rollup-plugin-visualizer";
+import type { PluginOption } from "vite";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -79,6 +81,8 @@ export default defineConfig({
     injectSiteUrl(),
     // 🗜️ ضغط مسبق gzip + brotli لجميع الأصول المبنية
     compression({ algorithms: ['gzip', 'brotliCompress'], threshold: 1024 }),
+    // 📊 تحليل حجم الحزمة عند ANALYZE=true (npm run analyze) → stats.html
+    (process.env.ANALYZE ? visualizer({ open: false, filename: 'stats.html' }) : undefined) as PluginOption | undefined,
   ],
   publicDir: 'src/public',
   resolve: {
@@ -102,6 +106,8 @@ export default defineConfig({
           'face-engine': ['onnxruntime-web/webgpu'],
           'xlsx': ['xlsx-js-style'],
           'icons': ['lucide-react'],
+          'tesseract': ['tesseract.js'],
+          'qr-scanner': ['html5-qrcode'],
         },
       },
     },
