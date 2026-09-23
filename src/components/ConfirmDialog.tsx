@@ -39,12 +39,15 @@ export const ConfirmDialog: FC<ConfirmDialogProps> = ({
         dir="rtl"
         role="alertdialog"
         aria-modal="true"
-        className="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-modalUp"
+        aria-labelledby="confirm-dialog-title"
+        aria-describedby={message ? 'confirm-dialog-message' : undefined}
+        tabIndex={-1}
+        className="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-modalUp focus:outline-none"
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div className="flex items-center gap-2">
             <span className="text-xl">{icon || <LogOut className="w-5 h-5 text-red-400" />}</span>
-            <h3 className="font-extrabold text-white">{title}</h3>
+            <h3 id="confirm-dialog-title" className="font-extrabold text-white">{title}</h3>
           </div>
           <button
             onClick={onCancel}
@@ -55,7 +58,7 @@ export const ConfirmDialog: FC<ConfirmDialogProps> = ({
           </button>
         </div>
 
-        {message && <p className="px-5 py-4 text-sm text-slate-300 leading-relaxed">{message}</p>}
+        {message && <p id="confirm-dialog-message" className="px-5 py-4 text-sm text-slate-300 leading-relaxed">{message}</p>}
 
         <div className="flex items-center justify-end gap-2 px-5 pb-5 pt-1">
           <Button

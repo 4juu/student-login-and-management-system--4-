@@ -706,13 +706,17 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
         >
           <div
             ref={modalBehaviorRef}
-            className="modal-panel bg-slate-900 rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="reset-dialog-title"
+            tabIndex={-1}
+            className="modal-panel bg-slate-900 rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center focus:outline-none"
             onClick={e => e.stopPropagation()}
             dir="rtl"
           >
             {resetDialog.type === 'confirm' && (
               <>
-                <h3 className="text-lg font-bold text-white mb-2">تحذير خطير</h3>
+                <h3 id="reset-dialog-title" className="text-lg font-bold text-white mb-2">تحذير خطير</h3>
                 <p className="text-sm text-slate-400 mb-4 whitespace-pre-line text-right">
                   {`السنة الجديدة: ${newYearDraft}\n\n` +
                    `سيتم حذف جميع الطلاب وسجلات الحضور والجلسات\n` +
@@ -751,7 +755,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
 
             {resetDialog.type === 'success' && (
               <>
-                <h3 className="text-lg font-bold text-green-700 mb-2">تم بدء السنة الجديدة بنجاح!</h3>
+                <h3 id="reset-dialog-title" className="text-lg font-bold text-green-700 mb-2">تم بدء السنة الجديدة بنجاح!</h3>
                 <p className="text-sm text-slate-400 mb-6 whitespace-pre-line text-right">
                   {`السنة السابقة: ${resetDialog.oldYear}\n` +
                    `السنة الجديدة: ${resetDialog.newYear}\n\n` +
@@ -769,7 +773,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
 
             {resetDialog.type === 'error' && (
               <>
-                <h3 className="text-lg font-bold text-red-700 mb-2">فشل العملية</h3>
+                <h3 id="reset-dialog-title" className="text-lg font-bold text-red-700 mb-2">فشل العملية</h3>
                 <p className="text-sm text-slate-400 mb-6 whitespace-pre-line">{resetDialog.message}</p>
                 <button
                   onClick={() => setResetDialog(null)}

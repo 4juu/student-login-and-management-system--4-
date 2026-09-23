@@ -215,12 +215,12 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
     const hasData = isThisSending || (log && groupData.length > 0);
 
     return createPortal(
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setSendLogSessionId(null)}>
-        <div ref={modalBehaviorRef} className="modal-height bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden border border-slate-600" dir="rtl" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4" onClick={() => setSendLogSessionId(null)}>
+        <div ref={modalBehaviorRef} role="dialog" aria-modal="true" aria-labelledby="send-log-modal-title" tabIndex={-1} className="modal-height bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden border border-slate-600 focus:outline-none" dir="rtl" onClick={e => e.stopPropagation()}>
           <div className="shrink-0 px-6 pt-6 pb-4 border-b border-slate-700">
             <div className="flex items-center justify-between mb-1">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2"><ClipboardList className="w-5 h-5" /> سجل إرسال الغيابات</h2>
-              <button onClick={() => setSendLogSessionId(null)} className="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+              <h2 id="send-log-modal-title" className="text-lg font-bold text-white flex items-center gap-2"><ClipboardList className="w-5 h-5" /> سجل إرسال الغيابات</h2>
+              <button type="button" aria-label="إغلاق" onClick={() => setSendLogSessionId(null)} className="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
             </div>
             {log && <p className="text-sm text-slate-400 flex items-center gap-1"><Library className="w-4 h-4" /> {log.subjectName} | {log.groups.join('، ')}</p>}
           </div>
@@ -481,11 +481,11 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
       {/* نافذة اختيار الكروبات للغياب */}
       {absentSessionId &&
         createPortal(
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setAbsentSessionId(null)}>
-          <div ref={modalBehaviorRef} className="modal-panel bg-slate-900 border border-white/10 rounded-xl shadow-2xl max-w-lg w-full overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4" onClick={() => setAbsentSessionId(null)}>
+          <div ref={modalBehaviorRef} role="dialog" aria-modal="true" aria-labelledby="absent-modal-title" tabIndex={-1} className="modal-panel bg-slate-900 border border-white/10 rounded-xl shadow-2xl max-w-lg w-full overflow-y-auto p-6 focus:outline-none" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-white flex items-center gap-2"><Circle className="w-3 h-3 fill-red-500 text-red-500" /> تسجيل غياب الكروبات</h3>
-              <button onClick={() => setAbsentSessionId(null)} className="text-slate-400 hover:text-white text-2xl">&times;</button>
+              <h3 id="absent-modal-title" className="text-xl font-bold text-white flex items-center gap-2"><Circle className="w-3 h-3 fill-red-500 text-red-500" /> تسجيل غياب الكروبات</h3>
+              <button type="button" aria-label="إغلاق" onClick={() => setAbsentSessionId(null)} className="text-slate-400 hover:text-white text-2xl">&times;</button>
             </div>
 
             <p className="text-sm text-slate-300 mb-4">
@@ -519,7 +519,7 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
                       className="accent-orange-500 w-5 h-5"
                     />
                     <span className="font-medium text-white">{group}</span>
-                    <span className="text-xs text-slate-400 mr-auto">
+                    <span className="text-xs text-slate-400 ms-auto">
                       {students.filter(s => s.group === group).length} طالب
                     </span>
                   </label>
@@ -534,7 +534,7 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
                 </p>
                 <div className="text-xs text-red-400 max-h-24 overflow-y-auto">
                   {getAbsentCandidates.map(s => (
-                    <span key={s.id} className="inline-block ml-1">{s.name} | </span>
+                    <span key={s.id} className="inline-block ms-1">{s.name} | </span>
                   ))}
                 </div>
               </div>
@@ -564,9 +564,9 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
       {confirmState &&
         createPortal(
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4" onClick={() => setConfirmState(null)}>
-            <div ref={modalBehaviorRef} className="modal-panel bg-slate-900 border border-white/10 rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center" onClick={e => e.stopPropagation()}>
-              <h3 className="text-lg font-bold text-white mb-2">{confirmState.title}</h3>
-              <p className="text-sm text-slate-300 mb-6 whitespace-pre-line">{confirmState.message}</p>
+            <div ref={modalBehaviorRef} role="alertdialog" aria-modal="true" aria-labelledby="session-confirm-title" aria-describedby="session-confirm-message" tabIndex={-1} className="modal-panel bg-slate-900 border border-white/10 rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center focus:outline-none" onClick={e => e.stopPropagation()}>
+              <h3 id="session-confirm-title" className="text-lg font-bold text-white mb-2">{confirmState.title}</h3>
+              <p id="session-confirm-message" className="text-sm text-slate-300 mb-6 whitespace-pre-line">{confirmState.message}</p>
               <div className="flex gap-2">
                 <button
                   onClick={confirmState.onConfirm}

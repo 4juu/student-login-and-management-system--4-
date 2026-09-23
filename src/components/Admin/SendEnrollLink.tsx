@@ -265,11 +265,11 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
   if (resultRows.length > 0) {
     return createPortal(
       <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
-        <div className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden">
+        <div role="dialog" aria-modal="true" aria-labelledby="enroll-links-result-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden focus:outline-none">
           <div className="p-5 border-b border-white/10 bg-gradient-to-l from-violet-500/15 to-purple-500/15">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <h2 id="enroll-links-result-title" className="text-xl font-bold text-white flex items-center gap-2">
                   <UserCheck className="w-5 h-5 text-violet-400" /> تم توليد {resultRows.length} رابط بصمة
                 </h2>
                 <p className="text-sm text-slate-400 mt-1">
@@ -331,11 +331,11 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
-      <div className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden">
+      <div role="dialog" aria-modal="true" aria-labelledby="send-enroll-links-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden focus:outline-none">
         <div className="p-5 border-b border-white/10 bg-gradient-to-l from-purple-500/15 to-violet-500/15">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <h2 id="send-enroll-links-title" className="text-xl font-bold text-white flex items-center gap-2">
                 <ScanFace className="w-5 h-5 text-purple-400" /> إرسال روابط تسجيل بصمة الوجه
               </h2>
               <p className="text-sm text-slate-400 mt-1">اختر الكلية والمرحلة ثم حدد الطلاب لإنشاء رابط خاص لكل طالب</p>
@@ -460,8 +460,8 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
         {confirmState &&
           createPortal(
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] p-4" onClick={() => setConfirmState(null)}>
-              <div ref={modalBehaviorRef} className="bg-slate-900 border border-white/10 text-white rounded-xl shadow-2xl max-w-sm w-full p-6 text-center" onClick={e => e.stopPropagation()}>
-                <h3 className="text-lg font-bold text-white mb-2">{confirmState.title}</h3>
+              <div ref={modalBehaviorRef} role="alertdialog" aria-modal="true" aria-labelledby="send-enroll-confirm-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-xl shadow-2xl max-w-sm w-full p-6 text-center focus:outline-none" onClick={e => e.stopPropagation()}>
+                <h3 id="send-enroll-confirm-title" className="text-lg font-bold text-white mb-2">{confirmState.title}</h3>
                 <p className="text-sm text-slate-400 mb-6 whitespace-pre-line">{confirmState.message}</p>
                 <div className="flex gap-2">
                   <button onClick={confirmState.onConfirm} className="flex-1 bg-violet-600 hover:bg-violet-500 text-white font-bold py-3 px-4 rounded-lg transition">

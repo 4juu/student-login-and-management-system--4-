@@ -438,12 +438,12 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   };
 
   return createPortal(
-    <div ref={panelRef} className="fixed inset-0 z-[9999] bg-black/80 text-white flex flex-col overscroll-none" dir="rtl">
+    <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="qr-scanner-title" tabIndex={-1} className="fixed inset-0 z-[9999] bg-black/80 text-white flex flex-col overscroll-none focus:outline-none" dir="rtl">
       <div className="w-full bg-black flex flex-col flex-1 overflow-hidden">
       <header className="flex items-center justify-between px-3 py-2 bg-gray-900/95 border-b border-white/10"
         style={{ paddingTop: `${topSafe + 8}px` }}>
-        <h2 className="text-sm font-bold flex items-center gap-1.5">🔳 QR</h2>
-        <button onClick={onClose}
+        <h2 id="qr-scanner-title" className="text-sm font-bold flex items-center gap-1.5">🔳 QR</h2>
+        <button type="button" onClick={onClose}
           className="bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded-lg text-sm font-bold transition active:scale-95">
           ✕ إغلاق
         </button>

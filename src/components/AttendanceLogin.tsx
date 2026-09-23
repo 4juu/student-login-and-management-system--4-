@@ -259,6 +259,8 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
 
           {message && (
             <div
+              role="status"
+              aria-live="polite"
               className={`mt-4 p-4 rounded-xl text-center font-medium whitespace-pre-line border-2 shadow-md animate-fadeIn ${
                 message.type === 'success'
                   ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'

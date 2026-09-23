@@ -305,19 +305,19 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
   if (generatedLink) {
     return createPortal(
       <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
-        <div ref={modalBehaviorRefLink} className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+        <div ref={modalBehaviorRefLink} role="dialog" aria-modal="true" aria-labelledby="attendance-link-dialog-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden focus:outline-none">
 
           <div className="p-5 border-b border-white/10 bg-gradient-to-l from-emerald-500/15 to-teal-500/15">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <h2 id="attendance-link-dialog-title" className="text-xl font-bold text-white flex items-center gap-2">
                   <CalendarDays className="w-5 h-5 text-emerald-400" /> رابط تقرير الحضور جاهز
                 </h2>
                 <p className="text-sm text-slate-400 mt-1">
                   <strong className="text-emerald-400">{generatedLink.stageName}</strong> • {generatedLink.collegeName}
                 </p>
               </div>
-              <button onClick={onClose} className="bg-red-500/20 hover:bg-red-500/30 text-red-300 w-10 h-10 rounded-full font-bold text-lg transition-all hover:scale-110">✕</button>
+              <button type="button" aria-label="إغلاق" onClick={onClose} className="bg-red-500/20 hover:bg-red-500/30 text-red-300 w-10 h-10 rounded-full font-bold text-lg transition-all hover:scale-110">✕</button>
             </div>
           </div>
 
@@ -387,17 +387,17 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
-      <div ref={modalBehaviorRefLink} className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden">
+      <div ref={modalBehaviorRefLink} role="dialog" aria-modal="true" aria-labelledby="attendance-link-create-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden focus:outline-none">
 
         <div className="p-5 border-b border-white/10 bg-gradient-to-l from-teal-500/15 to-emerald-500/15">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <h2 id="attendance-link-create-title" className="text-xl font-bold text-white flex items-center gap-2">
                 <CalendarDays className="w-5 h-5 text-teal-400" /> إنشاء رابط تقرير الحضور
               </h2>
               <p className="text-sm text-slate-400 mt-1">رابط واحد للمرحلة - الطلاب يرفعون الهوية ويشوفون تقريرهم</p>
             </div>
-            <button onClick={onClose} className="bg-red-500/20 hover:bg-red-500/30 text-red-300 w-10 h-10 rounded-full font-bold text-lg transition-all hover:scale-110">✕</button>
+            <button type="button" aria-label="إغلاق" onClick={onClose} className="bg-red-500/20 hover:bg-red-500/30 text-red-300 w-10 h-10 rounded-full font-bold text-lg transition-all hover:scale-110">✕</button>
           </div>
         </div>
 
@@ -476,8 +476,8 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
         {confirmState &&
           createPortal(
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] p-4" onClick={() => setConfirmState(null)}>
-              <div ref={modalBehaviorRef} className="bg-slate-900 border border-white/10 text-white rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center" onClick={e => e.stopPropagation()}>
-                <h3 className="text-lg font-bold text-white mb-2">{confirmState.title}</h3>
+              <div ref={modalBehaviorRef} role="alertdialog" aria-modal="true" aria-labelledby="send-attendance-confirm-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center focus:outline-none" onClick={e => e.stopPropagation()}>
+                <h3 id="send-attendance-confirm-title" className="text-lg font-bold text-white mb-2">{confirmState.title}</h3>
                 <p className="text-sm text-slate-400 mb-6 whitespace-pre-line">{confirmState.message}</p>
                 <div className="flex gap-2">
                   <button onClick={confirmState.onConfirm} className="flex-1 bg-teal-600 hover:bg-teal-500 text-white font-bold py-3 px-4 rounded-lg transition">

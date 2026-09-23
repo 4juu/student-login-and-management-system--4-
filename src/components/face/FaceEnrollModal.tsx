@@ -99,11 +99,11 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
 
   return createPortal(
     <div dir="rtl" className="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-sm flex items-center justify-center p-3">
-      <div className="bg-slate-900 border border-white/10 rounded-3xl shadow-2xl w-full max-w-lg max-h-[96vh] overflow-y-auto overscroll-contain">
+      <div role="dialog" aria-modal="true" aria-labelledby="face-enroll-modal-title" tabIndex={-1} className="bg-slate-900 border border-white/10 rounded-3xl shadow-2xl w-full max-w-lg max-h-[96vh] overflow-y-auto overscroll-contain focus:outline-none">
         {/* رأس */}
         <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur px-5 py-4 border-b border-white/8 flex items-center gap-3">
           <div className="flex-1 min-w-0">
-            <h2 className="text-white font-extrabold text-base leading-tight">تسجيل بصمة الوجه</h2>
+            <h2 id="face-enroll-modal-title" className="text-white font-extrabold text-base leading-tight">تسجيل بصمة الوجه</h2>
             <p className="text-[11px] text-slate-400">
               {phase === 'select' && 'اختر طالباً أو أكثر — التقاط يدوي لكل طالب'}
               {phase === 'live' && queue.length > 0 && `الطالب ${qi + 1} من ${queue.length}`}

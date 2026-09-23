@@ -65,14 +65,14 @@ export function SendTestLink({ adminUid, colleges, stages, onClose }: SendTestLi
 
   return createPortal(
     <div ref={modalRef as React.Ref<HTMLDivElement>} className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="w-full max-w-md bg-[#0E1930] border border-[#22334F] rounded-2xl shadow-2xl overflow-hidden" dir="rtl">
+      <div role="dialog" aria-modal="true" aria-labelledby="send-test-link-title" tabIndex={-1} className="w-full max-w-md bg-[#0E1930] border border-[#22334F] rounded-2xl shadow-2xl overflow-hidden focus:outline-none" dir="rtl">
         {/* Header */}
         <div className="p-4 border-b border-[#22334F] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ScanFace className="h-5 w-5 text-blue-400" />
-            <h2 className="text-base font-bold text-white">اختبار بصمة الوجه</h2>
+            <h2 id="send-test-link-title" className="text-base font-bold text-white">اختبار بصمة الوجه</h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+          <button type="button" aria-label="إغلاق" onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
         </div>
 
         <div className="p-5 space-y-4">

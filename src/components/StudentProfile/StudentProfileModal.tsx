@@ -137,13 +137,17 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
     >
       <div
         ref={panelRef}
-        className="modal-height bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden border border-slate-200"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="student-profile-modal-title"
+        tabIndex={-1}
+        className="modal-height bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden border border-slate-200 focus:outline-none"
         onClick={e => e.stopPropagation()}
       >
         {/* ── الهيدر ── */}
         <div className="shrink-0 px-5 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-slate-100">
           <div className="flex items-center justify-between gap-3 mb-3">
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2"><ClipboardList className="w-5 h-5 text-indigo-600" /> ملف الطالب</h2>
+            <h2 id="student-profile-modal-title" className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2"><ClipboardList className="w-5 h-5 text-indigo-600" /> ملف الطالب</h2>
             <button
               onClick={onClose}
               className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 text-xl leading-none transition"

@@ -10,12 +10,36 @@ const FOCUSABLE =
 
 export function useModalBehavior({ open, onClose }: ModalBehaviorOptions) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prevOverflow; };
+  }, [open]);
+
+  // 🎯 نقل التركيز إلى اللوحة عند الفتح + إعادته للمُنشئ عند الإغلاق
+  useEffect(() => {
+    if (!open) {
+      const prev = restoreFocusRef.current;
+      restoreFocusRef.current = null;
+      if (prev && typeof prev.focus === 'function' && document.contains(prev)) {
+        prev.focus();
+      }
+      return;
+    }
+    restoreFocusRef.current = document.activeElement as HTMLElement | null;
+    const id = window.setTimeout(() => {
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusables = Array.from(
+        panel.querySelectorAll<HTMLElement>(FOCUSABLE)
+      ).filter(el => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true');
+      if (focusables.length > 0) focusables[0].focus();
+      else panel.focus();
+    }, 0);
+    return () => window.clearTimeout(id);
   }, [open]);
 
   useEffect(() => {

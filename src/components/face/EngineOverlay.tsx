@@ -19,7 +19,7 @@ export const EngineOverlay: React.FC<EngineOverlayProps> = ({ progress, error, o
   const isDone = pct >= 100;
 
   return createPortal(
-    <div dir="rtl" style={{
+    <div dir="rtl" role="dialog" aria-modal="true" aria-label="تحميل محرك الوجه" style={{
       position: 'fixed',
       inset: 0,
       zIndex: 10000,

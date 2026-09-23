@@ -114,14 +114,18 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { setOpen(false); setComposeOpen(false); }} />
           <div
             ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="notifications-panel-title"
+            tabIndex={-1}
             dir="rtl"
-            className="relative w-full sm:max-w-md max-h-[88dvh] bg-slate-900 border border-white/10 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-modalUp"
+            className="relative w-full sm:max-w-md max-h-[88dvh] bg-slate-900 border border-white/10 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-modalUp focus:outline-none"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
               <div className="flex items-center gap-2">
                 <span className="text-xl">📬</span>
-                <h3 className="font-extrabold text-white">إشعارات الإدارة</h3>
+                <h3 id="notifications-panel-title" className="font-extrabold text-white">إشعارات الإدارة</h3>
                 {unreadCount > 0 && (
                   <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 text-[10px] font-bold">{unreadCount} غير مقروءة</span>
                 )}
@@ -141,7 +145,7 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
                     <Trash2 className="w-4 h-4" />
                   </button>
                 )}
-                <button onClick={() => { setOpen(false); setComposeOpen(false); }} className="bg-white/5 hover:bg-white/15 text-slate-300 p-2 rounded-lg transition active:scale-90">
+                <button type="button" aria-label="إغلاق" onClick={() => { setOpen(false); setComposeOpen(false); }} className="bg-white/5 hover:bg-white/15 text-slate-300 p-2 rounded-lg transition active:scale-90">
                   <X className="w-4 h-4" />
                 </button>
               </div>

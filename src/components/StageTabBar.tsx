@@ -23,38 +23,55 @@ export const StageTabBar: FC<StageTabBarProps> = ({
   onTabChange,
   onOpenAttendanceLink,
 }) => (
-  <div className="flex overflow-x-auto flex-nowrap md:flex-wrap gap-2 md:gap-3 pb-1 md:pb-0 justify-start md:justify-center mb-4 md:mb-6 scrollbar-none">
+  <div
+    role="tablist"
+    aria-label="أقسام المرحلة"
+    className="flex overflow-x-auto flex-nowrap md:flex-wrap gap-2 md:gap-3 pb-1 md:pb-0 justify-start md:justify-center mb-4 md:mb-6 scrollbar-none"
+  >
     <button
+      type="button"
+      role="tab"
+      aria-selected={activeTab === 'sessions'}
       onClick={() => onTabChange('sessions')}
       className={`tab-btn shrink-0 ${activeTab === 'sessions' ? 'active' : ''}`}
     >
-      <ClipboardList className="w-4 h-4 inline-block align-middle ml-1" /> السجلات ({sessionsCount})
+      <ClipboardList className="w-4 h-4 inline-block align-middle ms-1" /> السجلات ({sessionsCount})
     </button>
     <button
+      type="button"
+      role="tab"
+      aria-selected={activeTab === 'login'}
       onClick={() => onTabChange('login')}
       className={`tab-btn shrink-0 ${activeTab === 'login' ? 'active' : ''}`}
     >
-      <PenLine className="w-4 h-4 inline-block align-middle ml-1" /> تسجيل الحضور
+      <PenLine className="w-4 h-4 inline-block align-middle ms-1" /> تسجيل الحضور
     </button>
     <button
+      type="button"
+      role="tab"
+      aria-selected={activeTab === 'manage'}
       onClick={() => onTabChange('manage')}
       className={`tab-btn shrink-0 ${activeTab === 'manage' ? 'active' : ''}`}
     >
-      <Users className="w-4 h-4 inline-block align-middle ml-1" /> {canEditStudents ? `إدارة الطلاب (${studentsCount})` : `الطلاب (${studentsCount})`}
+      <Users className="w-4 h-4 inline-block align-middle ms-1" /> {canEditStudents ? `إدارة الطلاب (${studentsCount})` : `الطلاب (${studentsCount})`}
     </button>
     <button
+      type="button"
+      role="tab"
+      aria-selected={activeTab === 'records'}
       onClick={() => onTabChange('records')}
       className={`tab-btn shrink-0 ${activeTab === 'records' ? 'active' : ''}`}
     >
-      <BarChart3 className="w-4 h-4 inline-block align-middle ml-1" /> سجل الحضور ({recordsCount})
+      <BarChart3 className="w-4 h-4 inline-block align-middle ms-1" /> سجل الحضور ({recordsCount})
     </button>
     {canSendAttendanceLink && (
       <button
+        type="button"
         onClick={onOpenAttendanceLink}
         className="btn-base btn-primary shrink-0 text-xs py-1.5 px-2"
         title="إنشاء رابط تقرير الحضور والغياب للطلاب"
       >
-        <CalendarDays className="w-4 h-4 inline-block align-middle ml-1" /> رابط الحضور والغياب
+        <CalendarDays className="w-4 h-4 inline-block align-middle ms-1" /> رابط الحضور والغياب
       </button>
     )}
   </div>

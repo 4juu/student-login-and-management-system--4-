@@ -33,16 +33,18 @@ export const AppHeader: FC<AppHeaderProps> = ({
   <div className="mb-8">
     <div className="flex items-center justify-between gap-3 mb-6">
       <div className="flex items-center gap-3 min-w-0">
-        <div
-          className="w-11 h-11 shrink-0 bg-blue-600 rounded-full flex items-center justify-center overflow-hidden border-2 border-blue-500/40 cursor-pointer"
+        <button
+          type="button"
           onClick={onProfile}
+          aria-label="فتح الملف الشخصي"
+          className="w-11 h-11 shrink-0 bg-blue-600 rounded-full flex items-center justify-center overflow-hidden border-2 border-blue-500/40 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1220]"
         >
           {currentUser.photoURL ? (
             <img src={currentUser.photoURL} alt="" className="w-full h-full object-cover" />
           ) : (
             <span className="text-white font-bold text-lg">{currentUser.displayName.charAt(0)}</span>
           )}
-        </div>
+        </button>
         <div className="text-right min-w-0">
           <p className="text-xs text-slate-400">مرحباً،</p>
           <p className="font-bold text-slate-100 truncate max-w-[120px] sm:max-w-none">{currentUser.displayName}</p>

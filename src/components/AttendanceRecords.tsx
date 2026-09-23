@@ -857,7 +857,11 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
             />
             <div
               ref={modalBehaviorRef}
-              className="relative w-full max-w-md rounded-2xl overflow-hidden bg-slate-900 border border-slate-700/60 shadow-2xl shadow-slate-950/50 animate-modalUp"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="export-records-title"
+              tabIndex={-1}
+              className="relative w-full max-w-md rounded-2xl overflow-hidden bg-slate-900 border border-slate-700/60 shadow-2xl shadow-slate-950/50 animate-modalUp focus:outline-none"
             >
               <div className="relative px-6 pt-6 pb-5 overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-700 to-slate-900">
                 <div className="absolute -top-16 -left-16 w-48 h-48 rounded-full bg-white/10 blur-2xl" />
@@ -867,7 +871,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                     <FileSpreadsheet className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-white">تصدير سجل الحضور والغياب</h3>
+                    <h3 id="export-records-title" className="text-lg font-bold text-white">تصدير سجل الحضور والغياب</h3>
                     <p className="text-xs text-indigo-100/80 mt-0.5">حدد المدة الزمنية وقم بتحميل ملف Excel</p>
                   </div>
                 </div>
@@ -985,7 +989,11 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
             />
             <div
               ref={modalBehaviorRef}
-              className="relative w-full max-w-sm rounded-2xl overflow-hidden bg-slate-900 border border-slate-700/60 shadow-2xl shadow-slate-950/50 animate-modalUp"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="edit-record-title"
+              tabIndex={-1}
+              className="relative w-full max-w-sm rounded-2xl overflow-hidden bg-slate-900 border border-slate-700/60 shadow-2xl shadow-slate-950/50 animate-modalUp focus:outline-none"
             >
               <div className="relative px-5 pt-5 pb-4 overflow-hidden bg-gradient-to-br from-amber-600 via-orange-700 to-slate-900">
                 <div className="absolute -top-16 -left-16 w-44 h-44 rounded-full bg-white/10 blur-2xl" />
@@ -994,7 +1002,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                     <Pencil className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-white">تعديل سجل الحضور</h3>
+                    <h3 id="edit-record-title" className="text-base font-bold text-white">تعديل سجل الحضور</h3>
                     <p className="text-xs text-amber-100/80 mt-0.5 truncate max-w-[200px]">{editingRecord.studentName}</p>
                   </div>
                 </div>
