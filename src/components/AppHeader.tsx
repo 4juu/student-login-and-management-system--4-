@@ -5,6 +5,7 @@ import { Masthead } from './Masthead';
 import { PwaInstallButton } from './PwaInstallButton';
 import { OfflineWarningIcon } from './OfflineWarningIcon';
 import { Notifications } from './Notifications';
+import { Button } from './ui/button';
 
 interface AppHeaderProps {
   currentUser: User;
@@ -71,13 +72,16 @@ export const AppHeader: FC<AppHeaderProps> = ({
 
       {(currentUser?.role === 'teacher' || currentUser?.role === 'admin') && <Notifications currentUser={currentUser} />}
 
-      <button
+      <Button
+        variant="destructive"
+        size="sm"
         onClick={onLogout}
-        className="shrink-0 bg-red-500/90 hover:bg-red-600 text-white text-sm font-medium py-2 px-3.5 rounded-lg inline-flex items-center gap-2"
+        className="shrink-0 inline-flex items-center gap-2"
+        aria-label="تسجيل الخروج"
       >
         <LogOut className="w-4 h-4" />
         <span className="hidden sm:inline">تسجيل الخروج</span>
-      </button>
+      </Button>
     </div>
 
     <Masthead title={systemTitle} yearLabel={currentAcademicYear.replace('_', ' - ')} />

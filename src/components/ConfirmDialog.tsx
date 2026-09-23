@@ -2,6 +2,7 @@ import { type FC, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { LogOut, X } from 'lucide-react';
 import { useModalBehavior } from '../hooks/useModalBehavior';
+import { Button } from './ui/button';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -57,18 +58,22 @@ export const ConfirmDialog: FC<ConfirmDialogProps> = ({
         {message && <p className="px-5 py-4 text-sm text-slate-300 leading-relaxed">{message}</p>}
 
         <div className="flex items-center justify-end gap-2 px-5 pb-5 pt-1">
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={onCancel}
-            className="text-slate-400 text-sm font-bold px-4 py-2 rounded-lg hover:text-white transition"
+            className="text-slate-400 hover:text-white font-bold"
           >
             {cancelLabel}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
             onClick={onConfirm}
-            className={`text-white text-sm font-bold px-4 py-2 rounded-lg transition active:scale-95 ${confirmClassName}`}
+            className={`font-bold ${confirmClassName}`}
           >
             {confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

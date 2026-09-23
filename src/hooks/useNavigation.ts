@@ -1,17 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { ref as dbRef, onValue, off } from 'firebase/database';
 import { database } from '../firebase/config';
 import { User } from '../types/user';
+import { useNavStore } from '../store/navStore';
 
-export type Tab = 'stage-selector' | 'colleges' | 'login' | 'manage' | 'records' | 'settings' | 'sessions' | 'teachers' | 'profile' | 'system-settings';
+export type { Tab } from '../store/navStore';
 
 function useNavigation(currentUser: User | null) {
-  const [activeTab, setActiveTab] = useState<Tab>('stage-selector');
-  const [showSendLink, setShowSendLink] = useState(false);
-  const [showTestLink, setShowTestLink] = useState(false);
-  const [showAttendanceLink, setShowAttendanceLink] = useState(false);
-  const [showPendingRegistrations, setShowPendingRegistrations] = useState(false);
-  const [pendingCount, setPendingCount] = useState(0);
+  const activeTab = useNavStore((s) => s.activeTab);
+  const setActiveTab = useNavStore((s) => s.setActiveTab);
+  const showSendLink = useNavStore((s) => s.showSendLink);
+  const setShowSendLink = useNavStore((s) => s.setShowSendLink);
+  const showTestLink = useNavStore((s) => s.showTestLink);
+  const setShowTestLink = useNavStore((s) => s.setShowTestLink);
+  const showAttendanceLink = useNavStore((s) => s.showAttendanceLink);
+  const setShowAttendanceLink = useNavStore((s) => s.setShowAttendanceLink);
+  const showPendingRegistrations = useNavStore((s) => s.showPendingRegistrations);
+  const setShowPendingRegistrations = useNavStore((s) => s.setShowPendingRegistrations);
+  const pendingCount = useNavStore((s) => s.pendingCount);
+  const setPendingCount = useNavStore((s) => s.setPendingCount);
 
   useEffect(() => {
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'college_admin')) {
@@ -34,7 +41,7 @@ function useNavigation(currentUser: User | null) {
     });
 
     return () => { off(requestsRef); unsubscribe(); };
-  }, [currentUser]);
+  }, [currentUser, setPendingCount]);
 
   return {
     activeTab,
