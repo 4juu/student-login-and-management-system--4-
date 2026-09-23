@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Student } from '../../types/student';
+import { CardSkeleton } from '../loading/CardSkeleton';
 import {
   hasValidDescriptor,
   type FaceGalleryDescriptor,
@@ -172,12 +173,7 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
 
         {/* خطوة الالتقاط — يستخدم SelfCaptureStep نفسه المستخدم بالرابط */}
         {phase === 'live' && currentStudent && (
-          <Suspense fallback={
-            <div className="p-5 text-center">
-              <div className="inline-block w-9 h-9 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3" />
-              <p className="text-white/50 text-sm">جاري تحميل محرك الالتقاط...</p>
-            </div>
-          }>
+          <Suspense fallback={<CardSkeleton className="m-5" />}>
             <div className="p-2">
               <LazySelfCapture
                 student={currentStudent}

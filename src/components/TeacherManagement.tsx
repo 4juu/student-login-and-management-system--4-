@@ -14,6 +14,7 @@ import { User, TeacherPermissions } from '../types/user';
 import { College, Stage } from '../types/student';
 import { ArrowLeft, BookOpen, CircleCheck, Crown, GraduationCap, KeyRound, Landmark, Lightbulb, LoaderCircle, Lock, Plus, RefreshCw, Save, Settings, SquarePen, Trash2, TriangleAlert, Truck, User as UserIcon, UserCheck, Users, Wrench } from 'lucide-react';
 import { useConfirm } from '../hooks/useConfirm';
+import { TableSkeleton } from './loading/TableSkeleton';
 
 interface TeacherManagementProps {
   currentUser: User;
@@ -874,11 +875,8 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
           <tbody className="bg-white/5 divide-y divide-white/10">
             {teachersLoading ? (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-slate-400" role="status" aria-label="جاري التحميل">
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="w-7 h-7 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                    <span className="text-sm font-bold">جاري تحميل التدريسيين…</span>
-                  </div>
+                <td colSpan={5} className="px-4 py-4">
+                  <TableSkeleton rows={4} cols={5} />
                 </td>
               </tr>
             ) : displayTeachers.length === 0 ? (

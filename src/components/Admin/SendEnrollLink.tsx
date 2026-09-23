@@ -8,6 +8,7 @@ import {
   Check, Clock, Copy, FileSpreadsheet, Landmark, Library, Link2, LoaderCircle,
   Rocket, Smartphone, Users, ScanFace, UserCheck,
 } from 'lucide-react';
+import { TableSkeleton } from '../loading/TableSkeleton';
 
 interface SendEnrollLinkProps {
   adminUid: string;
@@ -406,9 +407,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
               </div>
 
               {loadingStudents ? (
-                <div className="flex items-center justify-center gap-2 py-6 text-slate-400">
-                  <LoaderCircle className="w-5 h-5 animate-spin" /> جاري تحميل الطلاب...
-                </div>
+                <TableSkeleton rows={5} cols={3} className="py-2" />
               ) : (
                 <div className="max-h-64 overflow-y-auto space-y-1.5 border border-white/10 rounded-lg p-2">
                   {filteredStudents.length === 0 && (

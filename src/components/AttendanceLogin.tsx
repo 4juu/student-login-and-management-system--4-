@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useLayoutEffect, lazy,
 import { Student, AttendanceRecord, AttendanceSession } from '../types/student';
 import { User } from '../types/user';
 import { QRAttendance } from './QRAttendance';
+import { CardSkeleton } from './loading/CardSkeleton';
 import { Camera, Info, TriangleAlert, User as UserIcon } from 'lucide-react';
 
 // 🚀 ماسح الحضور بالوجه يُحمَّل عند فتحه فقط (محرك الوجه ثقيل)
@@ -335,12 +336,9 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
       {showFaceAttendance && (
         <Suspense
           fallback={
-            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" role="status" aria-label="جاري تحميل الماسح">
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-              <div className="relative flex flex-col items-center gap-3 bg-slate-900 border border-white/10 rounded-2xl px-8 py-6 shadow-2xl">
-                <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-slate-300 font-medium">جاري تحميل ماسح الوجه…</p>
-              </div>
+              <CardSkeleton className="relative" />
             </div>
           }
         >

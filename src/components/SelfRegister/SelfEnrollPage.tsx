@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import './selfRegister.css';
 import { TextScramble } from '../TextScramble';
+import { StageSkeleton } from '../loading/StageSkeleton';
 
 const LazySelfCapture = lazy(() =>
   import('../face/SelfCaptureStep').then(m => ({ default: m.SelfCaptureStep }))
@@ -544,8 +545,8 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
   if (step === 'capture-face' && expected) {
     return (
       <Suspense fallback={
-        <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
-          <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <div className="min-h-screen bg-[#0B1220] p-4 md:p-8" dir="rtl">
+          <StageSkeleton />
         </div>
       }>
         <LazySelfCapture
