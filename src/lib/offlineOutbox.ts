@@ -24,6 +24,25 @@ const setKeys = (keys: string[]): void => {
   } catch {}
 };
 
+// ============================================================
+// 🔁 Background Sync — تسجيل تصفيية تلقائية عند عودة الاتصال
+// الـ SW يستمع لحدث sync ويببلّغ النوافذ (أو يفتح التطبيق) لتصفيية الصندوق
+// ============================================================
+const OUTBOX_SYNC_TAG = 'flush-outbox';
+
+type SyncManagerLike = { register: (tag: string) => Promise<void> };
+
+export const requestOutboxBackgroundSync = async (): Promise<void> => {
+  try {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    const registration = await navigator.serviceWorker.ready;
+    const sync = (registration as ServiceWorkerRegistration & { sync?: SyncManagerLike }).sync;
+    await sync?.register(OUTBOX_SYNC_TAG);
+  } catch {
+    // المتصفح لا يدعم Background Sync — يبقى الاعتماد على المزامنة عند فتح التطبيق
+  }
+};
+
 export const queueOutbox = async (key: string, data: unknown): Promise<void> => {
   try {
     await dbSet(`outbox:${key}`, data);
@@ -32,6 +51,7 @@ export const queueOutbox = async (key: string, data: unknown): Promise<void> => 
       keys.push(key);
       setKeys(keys);
     }
+    await requestOutboxBackgroundSync();
   } catch {
     // تجاهل - التخزين المحلي العادي (localStorage) يبقى احتياطاً
   }

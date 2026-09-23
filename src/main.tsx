@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ChunkLoadErrorBoundary } from './components/ChunkLoadErrorBoundary';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
+import { StageSkeleton } from './components/loading/StageSkeleton';
 import { initSentry } from './lib/sentry';
 import './index.css';
 
@@ -98,7 +99,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <ThemeProvider>
       <ChunkLoadErrorBoundary>
         <AppErrorBoundary>
-          <Suspense fallback={<div className="min-h-screen bg-[#0B1220]" />}>
+          <Suspense fallback={
+            <div className="min-h-screen bg-[#0B1220] p-4 md:p-8" dir="rtl">
+              <StageSkeleton />
+            </div>
+          }>
             <Entry />
           </Suspense>
         </AppErrorBoundary>
@@ -126,6 +131,17 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
       window.setInterval(checkForUpdate, 60 * 60 * 1000);
     } catch {
       /* بيئة لا تدعم SW — يُهمل */
+    }
+  });
+
+  // 📦 Background Sync: الـ SW يبلّغنا عند عودة الاتصال لتصفيية صندوق الأوفلاين
+  navigator.serviceWorker.addEventListener('message', (event: MessageEvent) => {
+    if ((event.data as { type?: string } | null)?.type === 'FLUSH_OUTBOX') {
+      void import('./firebase/dataService')
+        .then(({ applyOutbox, flushAllPendingSaves }) =>
+          Promise.allSettled([applyOutbox(), flushAllPendingSaves()]),
+        )
+        .catch(() => {});
     }
   });
 

@@ -11,6 +11,15 @@
   "background_color": "#0B1220",
   "theme_color": "#0B1220",
   "categories": ["education"],
+  "shortcuts": [
+    {
+      "name": "حضور سريع",
+      "short_name": "حضور",
+      "url": "/?tab=attendance",
+      "description": "فتح شاشة الحضور مباشرة"
+    }
+  ],
+  "screenshots": [],
   "icons": [
     {
       "src": "/android-chrome-192x192.png",

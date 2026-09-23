@@ -16,6 +16,13 @@ const STEPS = [
   'سيظهر التطبيق على شاشتك ويمكنك فتحه مباشرة',
 ];
 
+const BENEFITS = [
+  'يفتح أسرع ويستهلك مساحة أقل على الشاشة',
+  'يعمل كتطبيق مستقل بدون شريط متصفح',
+  'يظل متاحاً سريعاً حتى مع اتصال ضعيف',
+  'يتحدث تلقائياً مع كل إصدار جديد',
+];
+
 export const PwaInstallButton: React.FC = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(isStandalone);
@@ -55,7 +62,7 @@ export const PwaInstallButton: React.FC = () => {
     <>
       <button
         onClick={handleClick}
-        title="تثبيت التطبيق"
+        title="تثبيت التطبيق — فتح أسرع وتجربة مثل التطبيقات الأصلية"
         aria-label="تثبيت التطبيق"
         className="shrink-0 bg-emerald-500/90 hover:bg-emerald-600 text-white p-2.5 rounded-lg inline-flex items-center justify-center"
       >
@@ -74,6 +81,20 @@ export const PwaInstallButton: React.FC = () => {
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            <div className="mb-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+              <p className="mb-2 text-xs font-bold text-emerald-300">لماذا تثبّت التطبيق؟</p>
+              <ul className="space-y-1.5 text-xs text-slate-200">
+                {BENEFITS.map((benefit) => (
+                  <li key={benefit} className="flex items-start gap-2">
+                    <span aria-hidden="true" className="mt-0.5 shrink-0 text-emerald-400">✓</span>
+                    <span>{benefit}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <p className="mb-2 text-xs font-bold text-slate-300">خطوات التثبيت</p>
             <ol className="space-y-3 text-sm text-slate-200">
               {STEPS.map((step, i) => (
                 <li key={i} className="flex items-start gap-2">

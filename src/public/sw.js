@@ -7,9 +7,38 @@
  * - عند التفعيل: نمسح كل كاشات الإصدارات القديمة (يكسر SW عالق)
  * ============================================================ */
 
-const VERSION = 'v2026.09.15.3';
+const VERSION = 'v2026.09.23.1';
 const SHELL_CACHE = `att-shell-${VERSION}`;
 const ASSET_CACHE = `att-assets-${VERSION}`;
+const OUTBOX_SYNC_TAG = 'flush-outbox';
+
+/* ============================================================
+ * Background Sync — تصفيية صندوق الأوفلاين عند عودة الاتصال
+ * البيانات المعلقة تُخزَّن في localStorage (المفاتيح) + IndexedDB
+ * والتصفيية نفسها تحتاج Firebase SDK في نافذة التطبيق،
+ * لذا يبلّغ الـ SW النوافذ المفتوحة، أو يفتح التطبيق إن لم تكن هناك نافذة.
+ * ============================================================ */
+self.addEventListener('sync', (event) => {
+  if (event.tag === OUTBOX_SYNC_TAG) {
+    event.waitUntil(notifyClientsToFlushOutbox());
+  }
+});
+
+async function notifyClientsToFlushOutbox() {
+  try {
+    const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    if (clientList.length === 0) {
+      // لا توجد نافذة مفتوحة — افتح التطبيق ليستكمل التصفيية عند الإقلاع
+      await self.clients.openWindow('/').catch(() => {});
+      return;
+    }
+    for (const client of clientList) {
+      client.postMessage({ type: 'FLUSH_OUTBOX' });
+    }
+  } catch (err) {
+    console.warn('[sw] فشل إبلاغ النوافذ بتصفيية الأوفلاين:', err);
+  }
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
