@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { ref as dbRef, onValue, goOnline } from 'firebase/database';
 import { database } from '../firebase/config';
-import { applyOutbox, flushAllPendingSaves, hasPendingWrites } from '../firebase/dataService';
+import { applyOutbox, flushAllPendingSaves, hasPendingWrites, retryFailedSaves } from '../firebase/dataService';
 
 // مدة سماح: لا نعتبر الاتصال بالسيرفر مقطوعاً إلا بعد بقاء
 // .info/connected = false لمدة كافية (يمنع التذبذب عند إعادة الاتصال)
@@ -70,11 +70,19 @@ export function useOnlineStatus(): { isOffline: boolean; syncDone: boolean } {
     try {
       goOnline(database);
     } catch {}
+    // 1) أعد المحاولات الفاشلة (مثبّتة سابقاً وسقطت بعد 3 محاولات)
+    try {
+      await retryFailedSaves();
+    } catch (e) {
+      console.error('❌ فشل إعادة محاولات الحفظ:', e);
+    }
+    // 2) ارفع صندوق الأوفلاين
     try {
       await applyOutbox();
     } catch (e) {
       console.error('❌ فشل تطبيق صندوق الأوفلاين:', e);
     }
+    // 3) صفّي أي كتابات معلّقة متبقية
     try {
       await flushAllPendingSaves();
     } catch (e) {

@@ -285,7 +285,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
       lastTickRef.current = nowTs;
       busyRef.current = true;
 
-      let liveBoxes: Array<{ box: Box; label?: string | undefined; color: string; sub?: string | undefined }> = [];
+      const liveBoxes: Array<{ box: Box; label?: string | undefined; color: string; sub?: string | undefined }> = [];
 
       try {
         const detections: DetectedFace[] = faceDetectorService.detect(video, nowTs);

@@ -9,6 +9,15 @@ interface RegistrationSuccessProps {
   onExit: () => void;
 }
 
+const CONFETTI_COLORS = ['#1458E2', '#10B981', '#6D28D9', '#F59E0B', '#3B82F6'];
+
+const confetti = [...Array(36)].map(() => ({
+  left: `${Math.random() * 100}%`,
+  backgroundColor: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+  animationDelay: `${Math.random() * 2}s`,
+  animationDuration: `${2 + Math.random() * 2}s`,
+}));
+
 export const RegistrationSuccess: React.FC<RegistrationSuccessProps> = ({
   student,
   qrVerified,
@@ -26,17 +35,11 @@ export const RegistrationSuccess: React.FC<RegistrationSuccessProps> = ({
       {/* Confetti خفيف في أول 3.5 ثوانٍ */}
       {showConfetti && (
         <div className="absolute inset-0 pointer-events-none z-0" aria-hidden>
-          {[...Array(36)].map((_, i) => (
+          {confetti.map((style, i) => (
             <div
               key={i}
               className="absolute w-2 h-2 rounded-full animate-[sel-confetti_linear_forwards]"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: '-10px',
-                backgroundColor: ['#1458E2', '#10B981', '#6D28D9', '#F59E0B', '#3B82F6'][Math.floor(Math.random() * 5)],
-                animationDelay: `${Math.random() * 2}s`,
-                animationDuration: `${2 + Math.random() * 2}s`,
-              }}
+              style={{ ...style, top: '-10px' }}
             />
           ))}
         </div>

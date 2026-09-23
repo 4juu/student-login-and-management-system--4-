@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Lock, Eye, EyeOff, GraduationCap, LogIn } from 'lucide-react';
 import { loadSystemTitle } from '../firebase/dataService';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Button } from './ui/button';
 
 interface LoginProps {
   onLogin: (email: string, password: string) => Promise<void>;
@@ -51,10 +54,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
           <form onSubmit={handleSubmit} className="space-y-4 text-right">
             <div>
-              <label htmlFor="login-email" className="block text-sm font-bold text-slate-300 mb-1.5">البريد الإلكتروني</label>
+              <Label htmlFor="login-email" className="block text-sm font-bold text-slate-300 mb-1.5">البريد الإلكتروني</Label>
               <div className="relative">
                 <Mail className="absolute end-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
+                <Input
                   id="login-email"
                   type="email"
                   placeholder="example@university.edu"
@@ -68,10 +71,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </div>
 
             <div>
-              <label htmlFor="login-password" className="block text-sm font-bold text-slate-300 mb-1.5">كلمة المرور</label>
+              <Label htmlFor="login-password" className="block text-sm font-bold text-slate-300 mb-1.5">كلمة المرور</Label>
               <div className="relative">
                 <Lock className="absolute end-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
+                <Input
                   id="login-password"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
@@ -99,7 +102,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
               </div>
             )}
 
-            <button type="submit" disabled={isLoading} className="btn-base btn-primary w-full py-2.5">
+            <Button type="submit" disabled={isLoading} className="btn-base btn-primary w-full py-2.5">
               {isLoading ? (
                 <span className="w-4 h-4 border-2 border-white/60 border-t-white rounded-full animate-spin" />
               ) : (
@@ -108,7 +111,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   تسجيل الدخول
                 </>
               )}
-            </button>
+            </Button>
           </form>
         </div>
 

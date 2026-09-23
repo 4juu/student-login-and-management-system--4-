@@ -16,6 +16,21 @@ try {
   window.scrollTo(0, 0);
 } catch { /* بيئة بدون window */ }
 
+// 🌐 مزامنة عالمية عند رجوع الإنترنت — تعمل على كل الصفحات (لوحة + روابط طالب)
+// تتصفي outbox + المحاولات الفاشلة فور رجوع الاتصال بغض النظر عن حالة React
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    // ننتظر قليلاً حتى يستقر اتصال Firebase ثم نصفي كل شيء
+    window.setTimeout(() => {
+      void import('./firebase/dataService')
+        .then(({ applyOutbox, flushAllPendingSaves, retryFailedSaves }) =>
+          Promise.allSettled([retryFailedSaves(), applyOutbox(), flushAllPendingSaves()]),
+        )
+        .catch(() => {});
+    }, 400);
+  });
+}
+
 const App = lazy(() => import('./App'));
 const StudentEntry = lazy(() => import('./studentEntry'));
 

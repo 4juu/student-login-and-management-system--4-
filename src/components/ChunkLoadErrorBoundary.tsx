@@ -27,7 +27,7 @@ export class ChunkLoadErrorBoundary extends Component<
   componentDidCatch(error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
     const isChunkError =
-      /dynamically (imported|fetched)|Loading chunk|import\(\"\.\//i.test(msg) ||
+      /dynamically (imported|fetched)|Loading chunk|import\("\.\//i.test(msg) ||
       /Failed to fetch/i.test(msg) ||
       error instanceof TypeError;
 

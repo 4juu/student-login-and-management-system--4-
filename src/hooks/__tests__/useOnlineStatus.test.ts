@@ -19,11 +19,12 @@ vi.mock('../../firebase/dataService', () => ({
   applyOutbox: vi.fn(async () => undefined),
   flushAllPendingSaves: vi.fn(async () => undefined),
   hasPendingWrites: vi.fn(async () => false),
+  retryFailedSaves: vi.fn(async () => undefined),
 }));
 
 import { useOnlineStatus } from '../useOnlineStatus';
 import { onValue, goOnline } from 'firebase/database';
-import { applyOutbox, flushAllPendingSaves, hasPendingWrites } from '../../firebase/dataService';
+import { applyOutbox, flushAllPendingSaves, hasPendingWrites, retryFailedSaves } from '../../firebase/dataService';
 
 describe('useOnlineStatus', () => {
   beforeEach(() => {
@@ -81,6 +82,7 @@ describe('useOnlineStatus', () => {
 
     expect(result.current.isOffline).toBe(false);
     expect(goOnline).toHaveBeenCalled();
+    expect(retryFailedSaves).toHaveBeenCalled();
     expect(applyOutbox).toHaveBeenCalled();
     expect(flushAllPendingSaves).toHaveBeenCalled();
   });

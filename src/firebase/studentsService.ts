@@ -6,7 +6,7 @@ import { Student } from "../types/student";
 import { getActiveAcademicYear } from "./academicYear";
 import { getStagePath } from "./paths";
 import { LS, saveLocal, loadLocal, isDangerousEmpty, stripUndefined } from "./localCache";
-import { debouncedSave } from "./saveQueue";
+import { debouncedSave, registerOutboxFallback } from "./saveQueue";
 import { queueOutbox } from "../lib/offlineOutbox";
 
 export const saveStudents = async (
@@ -24,12 +24,14 @@ export const saveStudents = async (
 
   saveLocal(LS.students(adminUid, stageId), students);
 
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    void queueOutbox(`students_${adminUid}_${stageId}`, students);
-  }
-
   const year = await getActiveAcademicYear();
   const saveKey = `students_${adminUid}_${stageId}`;
+  // نسخة احتياطية تُرفع تلقائياً إذا فشل الحفظ (قطع نت متقطع / Firebase مقطوع)
+  registerOutboxFallback(saveKey, saveKey, students);
+
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    void queueOutbox(saveKey, students);
+  }
 
   debouncedSave(saveKey, async () => {
     await set(ref(database, getStagePath(year, adminUid, stageId, 'students')), students.map(s => stripUndefined(s as any)));

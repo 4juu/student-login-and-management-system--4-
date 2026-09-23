@@ -41,4 +41,68 @@ test.describe('Attendance flow', () => {
     expect(text.length).toBeGreaterThan(0);
     expect(text).not.toContain('Minified React error');
   });
+
+  test('face-test.html with token shows face test UI or Arabic error (not blank)', async ({ page }) => {
+    await page.goto('/face-test.html?test=demo-token-123');
+    await page.waitForLoadState('networkidle').catch(() => undefined);
+    const text = (await page.locator('body').innerText()).trim();
+    expect(text.length).toBeGreaterThan(0);
+    expect(text).not.toContain('Minified React error');
+    expect(text).not.toContain('Unhandled Runtime Error');
+    // Arabic content present (UI or error message)
+    expect(text).toMatch(/[؀-ۿ]/);
+  });
+
+  test('register.html with token shows Arabic UI (not blank)', async ({ page }) => {
+    await page.goto('/register.html?reg=demo-token-123');
+    await page.waitForLoadState('networkidle').catch(() => undefined);
+    const text = (await page.locator('body').innerText()).trim();
+    expect(text.length).toBeGreaterThan(0);
+    expect(text).not.toContain('Minified React error');
+    expect(text).toMatch(/[؀-ۿ]/);
+  });
+
+  test('student entry pages share RTL Arabic shell', async ({ page }) => {
+    for (const url of [
+      '/register.html?reg=x',
+      '/face-test.html?test=x',
+      '/attendance.html?att=x',
+    ]) {
+      await page.goto(url);
+      await page.waitForLoadState('domcontentloaded');
+      const dir = await page.locator('html').getAttribute('dir');
+      expect(dir).toBe('rtl');
+      const lang = await page.locator('html').getAttribute('lang');
+      expect(lang).toBe('ar');
+    }
+  });
+});
+
+  test('face-test.html with token shows Arabic test UI or incomplete-link message', async ({ page }) => {
+    await page.goto('/face-test.html?test=demo-token-123');
+    await page.waitForLoadState('networkidle').catch(() => undefined);
+    const text = (await page.locator('body').innerText()).trim();
+    expect(text.length).toBeGreaterThan(0);
+    expect(text).not.toContain('Minified React error');
+    // either the face-test UI, loading skeleton, or Arabic incomplete/invalid message
+    expect(text).toMatch(/[؀-ۿ]/);
+  });
+
+  test('register.html with token shows Arabic registration UI or incomplete-link message', async ({ page }) => {
+    await page.goto('/register.html?reg=demo-token-123');
+    await page.waitForLoadState('networkidle').catch(() => undefined);
+    const text = (await page.locator('body').innerText()).trim();
+    expect(text.length).toBeGreaterThan(0);
+    expect(text).not.toContain('Minified React error');
+    expect(text).toMatch(/[؀-ۿ]/);
+  });
+
+  test('attendance.html with att token stays Arabic and non-empty', async ({ page }) => {
+    await page.goto('/attendance.html?att=demo-token-123');
+    await page.waitForLoadState('networkidle').catch(() => undefined);
+    const text = (await page.locator('body').innerText()).trim();
+    expect(text.length).toBeGreaterThan(0);
+    expect(text).not.toContain('Unhandled Runtime Error');
+    expect(text).toMatch(/[؀-ۿ]/);
+  });
 });

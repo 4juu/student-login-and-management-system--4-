@@ -122,7 +122,7 @@ const normalizeDateKey = (value?: string | Date | null): string => {
       return `${dateObj.getFullYear()}-${pad2(dateObj.getMonth() + 1)}-${pad2(dateObj.getDate())}`;
     }
     return '';
-  } catch (e) {
+  } catch {
     return '';
   }
 };

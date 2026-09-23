@@ -280,7 +280,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       }
 
       if (mountedRef.current) { setCameraReady(true); setCameraStatus('ready'); }
-    } catch (err: any) {
+    } catch {
       if (!mountedRef.current) return;
       setCameraStatus('error');
       setTimeout(() => { if (mountedRef.current) startCamera(cf); }, 4000);

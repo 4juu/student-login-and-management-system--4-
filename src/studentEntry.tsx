@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { StageSkeleton } from './components/loading/StageSkeleton';
 import './components/SelfRegister/selfRegister.css';
 
@@ -46,13 +46,8 @@ function detectToken(): { reg: string | null; test: string | null; att: string |
 }
 
 export default function StudentEntry() {
-  const [tokens, setTokens] = useState<{ reg: string | null; test: string | null; att: string | null }>({ reg: null, test: null, att: null });
-  const [checked, setChecked] = useState(false);
-
-  useEffect(() => {
-    setTokens(detectToken());
-    setChecked(true);
-  }, []);
+  const [tokens] = useState<{ reg: string | null; test: string | null; att: string | null }>(() => detectToken());
+  const [checked] = useState(true);
 
   const handleExit = () => {
     try { sessionStorage.removeItem('pendingRegToken'); } catch {}

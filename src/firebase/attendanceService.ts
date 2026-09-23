@@ -6,7 +6,7 @@ import { AttendanceRecord, AttendanceSession } from "../types/student";
 import { getActiveAcademicYear } from "./academicYear";
 import { getYearBasePath, getTeacherDataPath } from "./paths";
 import { LS, saveLocal, loadLocal, isDangerousEmpty, stripUndefined } from "./localCache";
-import { debouncedSave, cancelPendingSavesWhere } from "./saveQueue";
+import { debouncedSave, cancelPendingSavesWhere, registerOutboxFallback } from "./saveQueue";
 import { queueOutbox } from "../lib/offlineOutbox";
 import { loadStudents, loadDescriptorOverrides } from "./studentsService";
 
@@ -26,12 +26,13 @@ export const saveAttendanceRecords = async (
 
   saveLocal(LS.records(adminUid, stageId, teacherId), records);
 
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    void queueOutbox(`records_${adminUid}_${stageId}_${teacherId}`, records);
-  }
-
   const year = await getActiveAcademicYear();
   const saveKey = `records_${adminUid}_${stageId}_${teacherId}`;
+  registerOutboxFallback(saveKey, saveKey, records);
+
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    void queueOutbox(saveKey, records);
+  }
 
   debouncedSave(saveKey, async () => {
     const { compressRecord } = await import('./dataServiceCompressed');
@@ -104,12 +105,13 @@ export const saveSessions = async (
 
   saveLocal(LS.sessions(adminUid, stageId, teacherId), sessions);
 
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    void queueOutbox(`sessions_${adminUid}_${stageId}_${teacherId}`, sessions);
-  }
-
   const year = await getActiveAcademicYear();
   const saveKey = `sessions_${adminUid}_${stageId}_${teacherId}`;
+  registerOutboxFallback(saveKey, saveKey, sessions);
+
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    void queueOutbox(saveKey, sessions);
+  }
 
   debouncedSave(saveKey, async () => {
     await set(

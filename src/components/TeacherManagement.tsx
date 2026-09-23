@@ -215,7 +215,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
       await updateTeacherPermissions(teacher.uid, newPermissions);
       await loadTeachers();
       setSelectedTeacher({ ...teacher, permissions: newPermissions });
-    } catch (e) {
+    } catch {
       alert('فشل تحديث الصلاحيات');
     }
   };
@@ -234,7 +234,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
       await updateTeacherPermissions(teacher.uid, newPermissions);
       await loadTeachers();
       setSelectedTeacher({ ...teacher, permissions: newPermissions });
-    } catch (e) {
+    } catch {
       alert('فشل تحديث الصلاحيات');
     }
   };
@@ -252,7 +252,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
       await updateTeacherPermissions(teacher.uid, newPermissions);
       await loadTeachers();
       setSelectedTeacher({ ...teacher, permissions: newPermissions });
-    } catch (e) {
+    } catch {
       alert('فشل تحديث الصلاحيات');
     }
   };

@@ -1,11 +1,13 @@
 // Debounced save queue with automatic retry (3 attempts, exponential backoff)
 
-import { hasOutboxEntries } from "../lib/offlineOutbox";
+import { hasOutboxEntries, queueOutbox } from "../lib/offlineOutbox";
 
 const MAX_RETRIES = 3;
 const retryQueues = new Map<string, { fn: () => Promise<void>; attempts: number }>();
 const pendingSaves = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingSaveFunctions = new Map<string, () => Promise<void>>();
+/** بيانات أوفلاين لوكيل التخزين الاحتياطي عند فشل كل المحاولات */
+const outboxFallbacks = new Map<string, { key: string; data: unknown }>();
 
 export const cancelAllPendingSaves = (): void => {
   for (const [key, timeout] of pendingSaves) {
@@ -14,12 +16,37 @@ export const cancelAllPendingSaves = (): void => {
     pendingSaveFunctions.delete(key);
   }
   retryQueues.clear();
+  outboxFallbacks.clear();
+};
+
+/**
+ * يسجّل نسخة احتياطية تُرفع لاحقاً إلى outbox إذا فشلت كل محاولات الحفظ.
+ * يمنع ضياع البيانات عند طول الانقطاع أو فشل Firebase رغم وجود النت.
+ */
+export const registerOutboxFallback = (saveKey: string, outboxKey: string, data: unknown): void => {
+  outboxFallbacks.set(saveKey, { key: outboxKey, data });
+};
+
+const persistToOutbox = async (saveKey: string): Promise<void> => {
+  const fb = outboxFallbacks.get(saveKey);
+  if (!fb) return;
+  try {
+    await queueOutbox(fb.key, fb.data);
+  } catch {
+    /* localStorage احتياطي */
+  }
 };
 
 const retryWithBackoff = async (key: string, fn: () => Promise<void>, attempt: number = 1): Promise<void> => {
+  // لا نستهلك المحاولات أثناء انقطاع الإنترنت — ننتظر حدث online
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    retryQueues.set(key, { fn, attempts: 0 });
+    return;
+  }
   try {
     await fn();
     retryQueues.delete(key);
+    outboxFallbacks.delete(key);
   } catch (e) {
     console.warn(`⚠️ [${attempt}/${MAX_RETRIES}] فشلت محاولة الحفظ: ${key}`);
     if (attempt < MAX_RETRIES) {
@@ -27,7 +54,9 @@ const retryWithBackoff = async (key: string, fn: () => Promise<void>, attempt: n
       await new Promise(r => setTimeout(r, delay));
       return retryWithBackoff(key, fn, attempt + 1);
     }
-    console.error(`❌ فشل الحفظ بعد ${MAX_RETRIES} محاولات: ${key}`, e);
+    console.error(`❌ فشل الحفظ بعد ${MAX_RETRIES} محاولات — يُحفظ في outbox: ${key}`, e);
+    // ضمان عدم فقد البيانات: نصفيها تلقائياً عند رجوع النت
+    await persistToOutbox(key);
     retryQueues.delete(key);
   }
 };
@@ -61,6 +90,23 @@ export const debouncedSave = (key: string, saveFn: () => Promise<void>): void =>
   }, SAVE_DELAY);
 
   pendingSaves.set(key, timeout);
+};
+
+/**
+ * يعيد محاولة كل ما فشل سابقاً — يُستدعى عند رجوع الاتصال
+ * لضمان تصفيية outbox + retryQueues المعلقة.
+ */
+export const retryFailedSaves = async (): Promise<void> => {
+  for (const [key, { fn, attempts }] of Array.from(retryQueues.entries())) {
+    await retryWithBackoff(key, fn, attempts);
+  }
+  // أي عنصر سقط من retryQueues وله outbox fallback → يُرفع الآن
+  for (const key of Array.from(outboxFallbacks.keys())) {
+    if (!retryQueues.has(key)) {
+      await persistToOutbox(key);
+      outboxFallbacks.delete(key);
+    }
+  }
 };
 
 /** Schedule a save with a custom delay (used by user profile saves). */
@@ -99,8 +145,8 @@ export const cancelPendingSavesWhere = (match: (key: string) => boolean): void =
 
 export const flushAllPendingSaves = async (): Promise<void> => {
   const keys = Array.from(pendingSaves.keys());
-  if (keys.length === 0 && retryQueues.size === 0) return;
-
+  const hasRetry = retryQueues.size > 0 || outboxFallbacks.size > 0;
+  if (keys.length === 0 && !hasRetry) return;
 
   for (const key of keys) {
     const timeout = pendingSaves.get(key);
@@ -117,8 +163,16 @@ export const flushAllPendingSaves = async (): Promise<void> => {
   }
 
   // Also flush any remaining retry items
-  for (const [key, { fn, attempts }] of retryQueues) {
+  for (const [key, { fn, attempts }] of Array.from(retryQueues.entries())) {
     await retryWithBackoff(key, fn, attempts + 1);
+  }
+
+  // ما تبقى في outbox fallback ولم يُرفع
+  for (const key of Array.from(outboxFallbacks.keys())) {
+    if (!retryQueues.has(key)) {
+      await persistToOutbox(key);
+      outboxFallbacks.delete(key);
+    }
   }
 };
 
@@ -134,5 +188,10 @@ if (typeof window !== 'undefined') {
     });
     pendingSaves.clear();
     pendingSaveFunctions.clear();
+  });
+
+  // عند رجوع الإنترنت: أعد كل المحاولات الفاشلة فوراً
+  window.addEventListener('online', () => {
+    void retryFailedSaves().catch(() => {});
   });
 }

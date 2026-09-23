@@ -85,11 +85,9 @@ export const loadStageStudentsWithOverrides = async (
     const overridesData = await dbFetch<Record<string, { faceDescriptor: any; updatedAt: number }>>(overridesPath);
     if (!overridesData) return students;
 
-    let merged = 0;
     const result = students.map(s => {
       const ov = overridesData[s.id];
       if (ov?.faceDescriptor && ov.updatedAt > 0) {
-        merged++;
         return { ...s, faceDescriptor: ov.faceDescriptor };
       }
       return s;
@@ -159,7 +157,7 @@ const normalizeDate = (dateStr: string): string => {
   if (!dateStr) return '';
   const arabicNums = '٠١٢٣٤٥٦٧٨٩';
   const engNums = '0123456789';
-  let n = dateStr.replace(/[٠-٩]/g, d => engNums[arabicNums.indexOf(d)] ?? '').replace(/[\u200E\u200F]/g, '').trim();
+  const n = dateStr.replace(/[٠-٩]/g, d => engNums[arabicNums.indexOf(d)] ?? '').replace(/[\u200E\u200F]/g, '').trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(n)) return n;
   const m = n.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m) {

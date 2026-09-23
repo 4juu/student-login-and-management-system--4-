@@ -131,7 +131,7 @@ export default function useInitialData({ currentUser }: UseInitialDataParams): U
                     const data = sesSnap.val();
                     allSessions.push(...(Array.isArray(data) ? data : Object.values(data)));
                   }
-                } catch (e) {
+                } catch {
                   console.warn(`فشل جلب بيانات المستخدم ${userId}`);
                 }
               })
@@ -142,7 +142,7 @@ export default function useInitialData({ currentUser }: UseInitialDataParams): U
               records: allRecords,
               sessions: allSessions,
             };
-          } catch (e) {
+          } catch {
             console.warn(`فشل تحميل بيانات المرحلة ${stage.id}`);
           }
         })

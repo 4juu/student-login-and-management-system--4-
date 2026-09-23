@@ -7,6 +7,8 @@ export {
   getDebouncedSavesCount,
   hasPendingWrites,
   flushAllPendingSaves,
+  retryFailedSaves,
+  registerOutboxFallback,
 } from './saveQueue';
 
 export {

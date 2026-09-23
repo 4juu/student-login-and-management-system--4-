@@ -58,8 +58,7 @@ export const applyOutbox = async (): Promise<void> => {
   for (const key of succeededKeys) {
     await removeOutboxEntry(key);
   }
-  if (succeededKeys.length === entries.length) {
-  } else {
+  if (succeededKeys.length !== entries.length) {
     console.warn(`⚠️ بقي ${entries.length - succeededKeys.length} عنصر في صندوق الأوفلاين لمحاولة لاحقة`);
   }
 };

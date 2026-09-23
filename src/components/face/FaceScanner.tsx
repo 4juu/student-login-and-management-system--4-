@@ -385,7 +385,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     // تنظيف مناطق الكبت المنتهية في كل دورة
     pruneSuppressZones();
 
-      let liveBoxes: Array<{ box: Box; label?: string | undefined; color: string; sub?: string | undefined }> = [];
+      const liveBoxes: Array<{ box: Box; label?: string | undefined; color: string; sub?: string | undefined }> = [];
 
       try {
         // ١) كشف سريع عبر MediaPipe (موديل جوجل)
