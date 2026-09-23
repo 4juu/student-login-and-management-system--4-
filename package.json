@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "e2e:build": "npm run build && playwright test"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.0.1",
@@ -33,6 +34,7 @@
     "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "4.1.17",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",

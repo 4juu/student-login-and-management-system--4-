@@ -20,6 +20,16 @@ if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
 
+// jsdom doesn't implement window.scrollTo / scroll (components call it on tab change)
+if (!window.scrollTo) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any).scrollTo = () => {};
+}
+if (!window.scroll) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any).scroll = () => {};
+}
+
 // crypto.randomUUID polyfill for older Node
 if (!globalThis.crypto?.randomUUID) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
