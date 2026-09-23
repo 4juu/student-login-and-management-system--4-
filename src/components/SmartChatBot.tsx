@@ -323,7 +323,7 @@ interface StudentQuickCard {
   absentDays: { date: string; label: string; count: number }[];
 }
 
-export const SmartChatBot: React.FC<SmartChatBotProps> = ({
+export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
   user,
   colleges,
   stages,
@@ -1638,4 +1638,4 @@ ${dataContext}`;
         )}
     </>
   );
-};
+});

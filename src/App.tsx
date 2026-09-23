@@ -1,16 +1,11 @@
 import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { Student, AttendanceRecord, AttendanceSession, College, Stage } from './types/student';
 import { User } from './types/user';
-import { StudentManager } from './components/StudentManager';
 
 import './design-system.css';
 
-import { StudentsViewer } from './components/StudentsViewer';
-import { AttendanceLogin } from './components/AttendanceLogin';
-import { AttendanceRecords } from './components/AttendanceRecords';
 import { OfflineModal } from './components/OfflineModal';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
-import { SessionManager } from './components/SessionManager';
 import { Login } from './components/Login';
 import { StageSelector } from './components/StageSelector';
 import { MorphingSquare } from './components/MorphingSquare';
@@ -31,6 +26,21 @@ import { useAutoSaves } from './hooks/useAutoSaves';
 import { useAbsenceSender } from './hooks/useAbsenceSender';
 
 // 🚀 تحميل متأخر للمكونات الثقيلة (تُحمَّل عند الحاجة فقط — خفض حجم الحزمة الأولية)
+const StudentManager = lazy(() =>
+  import('./components/StudentManager').then(m => ({ default: m.StudentManager }))
+);
+const StudentsViewer = lazy(() =>
+  import('./components/StudentsViewer').then(m => ({ default: m.StudentsViewer }))
+);
+const AttendanceLogin = lazy(() =>
+  import('./components/AttendanceLogin').then(m => ({ default: m.AttendanceLogin }))
+);
+const AttendanceRecords = lazy(() =>
+  import('./components/AttendanceRecords').then(m => ({ default: m.AttendanceRecords }))
+);
+const SessionManager = lazy(() =>
+  import('./components/SessionManager').then(m => ({ default: m.SessionManager }))
+);
 const SmartChatBot = lazy(() =>
   import('./components/SmartChatBot').then(m => ({ default: m.SmartChatBot }))
 );
@@ -673,19 +683,21 @@ function App() {
             ) : (
             <div key={`stage-tab-${activeTab}`} className="animate-pageEnter">
               {activeTab === 'sessions' && (
-                <SessionManager
-                  sessions={sessions} activeSessionId={activeSessionId}
-                  onCreateSession={handleCreateSession} onSelectSession={handleSelectSession}
-                  onDeleteSession={handleDeleteSession} onRenameSession={handleRenameSession}
-                  students={students} records={attendanceRecords} onMarkAbsent={handleMarkAbsent}
-                  absenceSendLogs={absenceSendLogs}
-                  isSending={isSending}
-                  currentSendingSessionId={currentSendingSessionId}
-                  sendGroups={sendGroups}
-                  sendDoneCount={sendDoneCount}
-                  sendTotalGroups={sendTotalGroups}
-                  completedGroupData={completedGroupData}
-                />
+                <Suspense fallback={<TabFallback />}>
+                  <SessionManager
+                    sessions={sessions} activeSessionId={activeSessionId}
+                    onCreateSession={handleCreateSession} onSelectSession={handleSelectSession}
+                    onDeleteSession={handleDeleteSession} onRenameSession={handleRenameSession}
+                    students={students} records={attendanceRecords} onMarkAbsent={handleMarkAbsent}
+                    absenceSendLogs={absenceSendLogs}
+                    isSending={isSending}
+                    currentSendingSessionId={currentSendingSessionId}
+                    sendGroups={sendGroups}
+                    sendDoneCount={sendDoneCount}
+                    sendTotalGroups={sendTotalGroups}
+                    completedGroupData={completedGroupData}
+                  />
+                </Suspense>
               )}
               {activeTab === 'login' && (
                 <div className="max-w-lg mx-auto">
@@ -701,35 +713,41 @@ function App() {
                       <p className="text-amber-300 font-medium">لا يوجد طلاب في هذه المرحلة</p>
                     </div>
                   ) : (
-                    <AttendanceLogin
-                      students={students} activeSessionId={activeSessionId}
-                      activeSession={sessions.find(s => s.id === activeSessionId) || null}
-                      records={attendanceRecords} onAttendanceRecord={handleAttendanceRecord}
-                      onUpdateStudent={handleUpdateStudent} currentUser={currentUser}
-                    />
+                    <Suspense fallback={<TabFallback />}>
+                      <AttendanceLogin
+                        students={students} activeSessionId={activeSessionId}
+                        activeSession={sessions.find(s => s.id === activeSessionId) || null}
+                        records={attendanceRecords} onAttendanceRecord={handleAttendanceRecord}
+                        onUpdateStudent={handleUpdateStudent} currentUser={currentUser}
+                      />
+                    </Suspense>
                   )}
                 </div>
               )}
               {activeTab === 'manage' && (
-                canEditStudents ? (
-                  <StudentManager
-                    students={students} onAddStudent={handleAddStudent}
-                    onAddMultipleStudents={handleAddMultipleStudents} onUpdateStudent={handleUpdateStudent}
-                    onDeleteStudent={handleDeleteStudent} onDeleteSelectedStudents={handleDeleteSelectedStudents}
-                    onSortByName={handleSortByName} onSortByGroup={handleSortByGroup}
-                    onOpenProfile={setProfileStudent}
-                  />
-                ) : (
-                  <StudentsViewer students={students} onOpenProfile={setProfileStudent} />
-                )
+                <Suspense fallback={<TabFallback />}>
+                  {canEditStudents ? (
+                    <StudentManager
+                      students={students} onAddStudent={handleAddStudent}
+                      onAddMultipleStudents={handleAddMultipleStudents} onUpdateStudent={handleUpdateStudent}
+                      onDeleteStudent={handleDeleteStudent} onDeleteSelectedStudents={handleDeleteSelectedStudents}
+                      onSortByName={handleSortByName} onSortByGroup={handleSortByGroup}
+                      onOpenProfile={setProfileStudent}
+                    />
+                  ) : (
+                    <StudentsViewer students={students} onOpenProfile={setProfileStudent} />
+                  )}
+                </Suspense>
               )}
               {activeTab === 'records' && (
-                <AttendanceRecords
-                  records={attendanceRecords} sessions={sessions} students={students}
-                  activeSessionId={activeSessionId} onClearRecords={handleClearRecords}
-                  onUpdateRecord={handleUpdateRecord} onDeleteRecord={handleDeleteRecord}
-                  teacherBio={currentUser?.bio || currentUser?.displayName || ''}
-                />
+                <Suspense fallback={<TabFallback />}>
+                  <AttendanceRecords
+                    records={attendanceRecords} sessions={sessions} students={students}
+                    activeSessionId={activeSessionId} onClearRecords={handleClearRecords}
+                    onUpdateRecord={handleUpdateRecord} onDeleteRecord={handleDeleteRecord}
+                    teacherBio={currentUser?.bio || currentUser?.displayName || ''}
+                  />
+                </Suspense>
               )}
             </div>
             )}
