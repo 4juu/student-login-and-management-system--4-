@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Student } from '../../types/student';
 import { useFaceAI } from '../../hooks/useFaceAI';
@@ -14,7 +14,6 @@ import { FaceTracker, type TrackBox } from '../../services/faceAI/tracker';
 import {
   hasValidDescriptor,
   isGalleryDescriptor,
-  normalizeClusters,
   updateGallery,
   MATCH_LOOSE,
   MIN_RECOG_CONFIDENCE,
@@ -66,17 +65,17 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
   const [expiresAt, setExpiresAt] = useState<number>(0);
   const [remainingMs, setRemainingMs] = useState<number>(0);
   const [enhanceCountdown, setEnhanceCountdown] = useState<number>(20);
-  // ── دولة الحفظ البصرية ──
+  // -- ???? ????? ??????? --
 const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null>(null);
-  // ── حالة الحفظ المرئية — تظهر على الشاشة مباشرة (مهمة لأنه لا يمكن فتح Console على الموبايل) ──
+  // -- ???? ????? ??????? � ???? ??? ?????? ?????? (???? ???? ?? ???? ??? Console ??? ????????) --
   useBodyScrollLock(phase === 'scanning' || phase === 'enhancing');
 
-  // ── إرشاد الحركة الدوار أثناء التحسين ──
+  // -- ????? ?????? ?????? ????? ??????? --
   const POSE_HINTS = [
-    { icon: '↔', text: 'حرّك رأسك يميناً' },
-    { icon: '↔', text: 'حرّك رأسك يساراً' },
-    { icon: '↕', text: 'اقترب قليلاً من الكاميرا' },
-    { icon: '↕', text: 'ابتعد قليلاً من الكاميرا' },
+    { icon: '?', text: '???? ???? ??????' },
+    { icon: '?', text: '???? ???? ??????' },
+    { icon: '?', text: '????? ?????? ?? ????????' },
+    { icon: '?', text: '????? ?????? ?? ????????' },
   ];
   const [poseHintIdx, setPoseHintIdx] = useState(0);
 
@@ -85,14 +84,14 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
   const trackerRef = useRef(new FaceTracker());
   const faceSeenRef = useRef(0);
 
-  // ── refs للتحسين التلقائي ──
+  // -- refs ??????? ???????? --
   const enhancingRef = useRef(false);
   const enhanceStartRef = useRef(0);
   const enhancedCountRef = useRef(0);
   const savedDescriptorRef = useRef<any>(null);
   const linkDataRef = useRef<{ adminUid: string; stageId: string } | null>(null);
 
-  // ── تحميل بيانات الرابط وطلاب المرحلة ──
+  // -- ????? ?????? ?????? ????? ??????? --
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -125,7 +124,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
     return () => { cancelled = true; };
   }, [testToken]);
 
-  // ── إنفاذ انتهاء صلاحية الرابط فعلياً (فحص دوري) ──
+  // -- ????? ?????? ?????? ?????? ?????? (??? ????) --
   useEffect(() => {
     if (!expiresAt) return;
     const tick = () => {
@@ -143,7 +142,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
     return () => window.clearInterval(id);
   }, [expiresAt]);
 
-  // ── فتح/إغلاق الكاميرا ──
+  // -- ???/????? ???????? --
   const needsCamera = (phase === 'scanning' || phase === 'enhancing') && engineReady;
   useEffect(() => {
     if (!needsCamera) return;
@@ -158,13 +157,13 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
           videoRef.current.srcObject = localStream;
           await videoRef.current.play().catch(() => {});
           await waitVideoDimensionsStable(videoRef.current);
-          // انتظار إضافي لاستقرار الكاميرا полностью (منع الزوم القفز)
+          // ?????? ????? ???????? ???????? ????????? (??? ????? ?????)
           await new Promise(r => setTimeout(r, 400));
         }
         if (cancelled) return;
         setCameraReady(true);
       } catch (e) {
-        console.error('[face-test] فشل فتح الكاميرا:', e);
+        console.error('[face-test] ??? ??? ????????:', e);
       }
     })();
     return () => {
@@ -175,7 +174,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
     };
   }, [needsCamera, facing]);
 
-  // ── تنظيف عند الخروج ──
+  // -- ????? ??? ?????? --
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -187,7 +186,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
     };
   }, []);
 
-  // ── إيقاف المسح ──
+  // -- ????? ????? --
   const stopScan = useCallback(() => {
     runningRef.current = false;
     if (loopTimerRef.current) { clearTimeout(loopTimerRef.current); loopTimerRef.current = 0; }
@@ -200,7 +199,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
     setCameraReady(false);
   }, []);
 
-  // ── بدء المسح ──
+  // -- ??? ????? --
   const startScan = useCallback(() => {
     if (runningRef.current) return;
     runningRef.current = true;
@@ -210,7 +209,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
     setPhase('scanning');
   }, []);
 
-  // ── حلقة المسح ──
+  // -- ???? ????? --
   useEffect(() => {
     if ((phase !== 'scanning' && phase !== 'enhancing') || !engineReady || !cameraReady) return;
     runningRef.current = true;
@@ -254,7 +253,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
         g.restore();
 
         if (f.label) {
-          const text = f.sub ? `${f.label} · ${f.sub}` : f.label;
+          const text = f.sub ? `${f.label} � ${f.sub}` : f.label;
           g.font = 'bold 13px system-ui, sans-serif';
           const tw = g.measureText(text).width + 18;
           const ly = Math.max(4, y1 - 26);
@@ -351,7 +350,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
               const vbx = res.box.x / scale, vby = res.box.y / scale;
               const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
 
-              // ── وضع التحسين: حفظ العناقيد للمطابق ──
+              // -- ??? ???????: ??? ???????? ??????? --
               if (enhancingRef.current && matchedStudent && match && match.item.id === matchedStudent.id) {
                 try {
                   const origDet = detections.find(d =>
@@ -361,24 +360,21 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
                   const pose = estimatePose(origDet?.keypoints);
                   if (pose && savedDescriptorRef.current && isGalleryDescriptor(savedDescriptorRef.current)) {
                     const bin = poseToBin(pose);
-                    const before = normalizeClusters(savedDescriptorRef.current.clusters).length;
                     const result = updateGallery(savedDescriptorRef.current, smoothed, res.quality.composite, bin, true);
-                    const after = normalizeClusters(result.gallery.clusters).length;
-                    console.log(`[face-test] updateGallery: bin=${bin}, action=${result.action}, clusters=${before}→${after}`);
                     if (result.action === 'merged' || result.action === 'created') {
                       savedDescriptorRef.current = result.gallery;
                       enhancedCountRef.current += 1;
                     }
                   }
-                } catch { /* تجاهل */ }
+                } catch { /* ????? */ }
 
-                liveBoxes.push({ box: boxInVideo, label: matchedStudent.name.split(' ')[0], sub: 'تحسين البصمة', color: '#34d399' });
+                liveBoxes.push({ box: boxInVideo, label: matchedStudent.name.split(' ')[0], sub: '????? ??????', color: '#34d399' });
                 continue;
               }
 
               if (!match || match.confidence < MIN_RECOG_CONFIDENCE) {
                 const smallFace = res.box.width < MIN_FACE_PX * 1.7;
-                liveBoxes.push({ box: boxInVideo, label: smallFace ? 'اقترب قليلاً' : 'غير معروف', color: '#fbbf24' });
+                liveBoxes.push({ box: boxInVideo, label: smallFace ? '????? ??????' : '??? ?????', color: '#fbbf24' });
                 continue;
               }
 
@@ -390,11 +386,11 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
               const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id);
 
               if (confirmCount < CONFIRM_FRAMES) {
-                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
+                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: '???? ??????...', color: '#818cf8' });
                 continue;
               }
 
-              // ✅ تأكيد كامل — البدء بتحسين البصمة
+              // ? ????? ???? � ????? ?????? ??????
               setMatchedStudent(student);
               enhancedCountRef.current = 0;
               savedDescriptorRef.current = student.faceDescriptor;
@@ -403,7 +399,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
 setEnhanceCountdown(20);
                 setPhase('enhancing');
                 trackerRef.current.removeTrack(trackId);
-              liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
+              liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: '?? ??????', color: '#34d399' });
               drawBoxes(liveBoxes);
               return;
             }
@@ -416,7 +412,7 @@ setEnhanceCountdown(20);
             }
           }
 
-          // الوجوه من الكاش
+          // ?????? ?? ?????
           for (const t of tracked) {
             if (needEmbed.some(n => n.trackId === t.trackId)) continue;
             if (!trackerRef.current.hasTrack(t.trackId)) continue;
@@ -441,21 +437,21 @@ setEnhanceCountdown(20);
                 setEnhanceCountdown(20);
                 setPhase('enhancing');
                 trackerRef.current.removeTrack(t.trackId);
-                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
+                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: '?? ??????', color: '#34d399' });
                 drawBoxes(liveBoxes);
                 return;
               } else {
-                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
+                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: '???? ??????...', color: '#818cf8' });
               }
             } else {
-              liveBoxes.push({ box: boxInVideo, label: 'غير معروف', color: '#fbbf24' });
+              liveBoxes.push({ box: boxInVideo, label: '??? ?????', color: '#fbbf24' });
             }
           }
 
           drawBoxes(liveBoxes);
         }
       } catch (e) {
-        console.warn('[face-test] خطأ في دورة المسح:', e);
+        console.warn('[face-test] ??? ?? ???? ?????:', e);
       } finally {
         busyRef.current = false;
         if (runningRef.current && mountedRef.current) {
@@ -474,7 +470,7 @@ setEnhanceCountdown(20);
     };
   }, [phase, engineReady, cameraReady, facing, retry, stopScan]);
 
-  // ── عداد تحسين البصمة (20 ثانية) ──
+  // -- ???? ????? ?????? (20 ?????) --
   useEffect(() => {
     if (phase !== 'enhancing') return;
     const start = performance.now();
@@ -491,7 +487,7 @@ setEnhanceCountdown(20);
     return () => cancelAnimationFrame(raf);
   }, [phase]);
 
-  // ── إرشاد الحركة الدوار (كل 4 ثوانٍ) ──
+  // -- ????? ?????? ?????? (?? 4 ?????) --
   useEffect(() => {
     if (phase !== 'enhancing') return;
     setPoseHintIdx(0);
@@ -499,7 +495,7 @@ setEnhanceCountdown(20);
     return () => clearInterval(iv);
   }, [phase]);
 
-  // ── إنهاء التحسين وحفظ البصمة ──
+  // -- ????? ??????? ???? ?????? --
   useEffect(() => {
     if (phase !== 'enhancing') return;
     const timer = window.setTimeout(async () => {
@@ -508,11 +504,10 @@ setEnhanceCountdown(20);
       if (loopTimerRef.current) { clearTimeout(loopTimerRef.current); loopTimerRef.current = 0; }
       if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
 
-      // حفظ البصمة في descriptorOverrides — يُحفظ دائماً عند وجود طالب مطابق
-      console.log(`[face-test] محاولة الحفظ — matchedStudent=${!!matchedStudent}, descriptor=${!!savedDescriptorRef.current}, linkData=${!!linkDataRef.current}`);
+      // ??? ?????? ?? descriptorOverrides � ????? ?????? ??? ???? ???? ?????
       if (matchedStudent && savedDescriptorRef.current && linkDataRef.current) {
         try {
-          // تحديث الكاش المحلي
+          // ????? ????? ??????
           const students = studentsRef.current;
           const idx = students.findIndex(s => s.id === matchedStudent.id);
           if (idx >= 0) {
@@ -520,22 +515,21 @@ setEnhanceCountdown(20);
             studentsRef.current = students;
             galleryRef.current = buildGallery(students.filter(s => hasValidDescriptor(s.faceDescriptor)));
           }
-          // حفظ في Firebase عبر descriptorOverrides (لا يتطلب تسجيل دخول)
-          console.log(`[face-test] حفظ بصمة الطالب: ${matchedStudent.id} — ${matchedStudent.name}, clusters: ${isGalleryDescriptor(savedDescriptorRef.current) ? normalizeClusters(savedDescriptorRef.current.clusters).length : '?'}, enhanced: ${enhancedCountRef.current}`);
+          // ??? ?? Firebase ??? descriptorOverrides (?? ????? ????? ????)
           await updateStudentDescriptorOverride(
             linkDataRef.current.adminUid,
             linkDataRef.current.stageId,
             matchedStudent.id,
             savedDescriptorRef.current,
           );
-          if (mountedRef.current) setSaveStatus({ ok: true, msg: 'تم حفظ البصمة المحسّنة في النظام ✓' });
+          if (mountedRef.current) setSaveStatus({ ok: true, msg: '?? ??? ?????? ???????? ?? ?????? ?' });
         } catch (e) {
-          console.error('[face-test] ❌ فشل حفظ البصمة:', e);
-          if (mountedRef.current) setSaveStatus({ ok: false, msg: `فشل الحفظ: ${e instanceof Error ? e.message : String(e)}` });
+          console.error('[face-test] ? ??? ??? ??????:', e);
+          if (mountedRef.current) setSaveStatus({ ok: false, msg: `??? ?????: ${e instanceof Error ? e.message : String(e)}` });
         }
       } else {
-        console.warn('[face-test] تم تخطي الحفظ — عنقود غير مكتمل:', { matchedStudent: !!matchedStudent, descriptor: !!savedDescriptorRef.current, linkData: !!linkDataRef.current });
-        if (mountedRef.current) setSaveStatus({ ok: false, msg: 'لم يُحفظ — البيانات غير مكتملة' });
+        console.warn('[face-test] ?? ???? ????? � ????? ??? ?????:', { matchedStudent: !!matchedStudent, descriptor: !!savedDescriptorRef.current, linkData: !!linkDataRef.current });
+        if (mountedRef.current) setSaveStatus({ ok: false, msg: '?? ????? � ???????? ??? ??????' });
       }
 
       if (mountedRef.current) setPhase('success');
@@ -545,20 +539,20 @@ setEnhanceCountdown(20);
 
   const statusPill = (() => {
     if (phase === 'enhancing') {
-      return { icon: '⏳', text: 'يرجى الانتظار', cls: 'bg-emerald-500/90 text-white' };
+      return { icon: '?', text: '???? ????????', cls: 'bg-emerald-500/90 text-white' };
     }
-    if (!engineReady || !cameraReady) return { icon: '⏳', text: 'جاري التحضير...', cls: 'bg-white/10 text-slate-300' };
-    return { icon: '✨', text: 'أبقِ وجهك داخل الإطار', cls: 'bg-indigo-500/90 text-white' };
+    if (!engineReady || !cameraReady) return { icon: '?', text: '???? ???????...', cls: 'bg-white/10 text-slate-300' };
+    return { icon: '?', text: '???? ???? ???? ??????', cls: 'bg-indigo-500/90 text-white' };
   })();
 
-  // ── شاشات ما قبل المسح (loading / invalid / no-face / ready) ──
+  // -- ????? ?? ??? ????? (loading / invalid / no-face / ready) --
   const preScanUI = (() => {
     if (phase === 'loading') {
       return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm" dir="rtl">
           <div className="text-center">
             <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-[3px] border-indigo-500 border-t-transparent" />
-            <p className="text-slate-300 text-sm font-bold">جاري التحقق من الرابط...</p>
+            <p className="text-slate-300 text-sm font-bold">???? ?????? ?? ??????...</p>
           </div>
         </div>
       );
@@ -571,10 +565,10 @@ setEnhanceCountdown(20);
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10">
               <svg className="h-8 w-8 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg>
             </div>
-            <h2 className="text-lg font-bold text-white mb-2">الرابط غير صالح</h2>
-            <p className="text-sm text-slate-400 mb-4">الرابط منتهي أو غير موجود. احصل على رابط جديد من الإدارة.</p>
+            <h2 className="text-lg font-bold text-white mb-2">?????? ??? ????</h2>
+            <p className="text-sm text-slate-400 mb-4">?????? ????? ?? ??? ?????. ???? ??? ???? ???? ?? ???????.</p>
             <button onClick={onExit} className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition active:scale-95">
-              العودة
+              ??????
             </button>
           </div>
         </div>
@@ -588,14 +582,14 @@ setEnhanceCountdown(20);
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10">
               <svg className="h-8 w-8 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
             </div>
-            <h2 className="text-lg font-bold text-white mb-2">تعذر تحميل بيانات الطلاب</h2>
-            <p className="text-sm text-slate-400 mb-4">الرابط صالح لكن تعذر الاتصال بقاعدة البيانات. تأكد من اتصالك بالإنترنت وأعد المحاولة.</p>
+            <h2 className="text-lg font-bold text-white mb-2">???? ????? ?????? ??????</h2>
+            <p className="text-sm text-slate-400 mb-4">?????? ???? ??? ???? ??????? ?????? ????????. ???? ?? ?????? ????????? ???? ????????.</p>
             <div className="flex gap-2 justify-center">
               <button onClick={onExit} className="px-6 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm transition active:scale-95">
-                العودة
+                ??????
               </button>
               <button onClick={() => window.location.reload()} className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition active:scale-95">
-                إعادة المحاولة
+                ????? ????????
               </button>
             </div>
           </div>
@@ -614,30 +608,30 @@ setEnhanceCountdown(20);
                 <path d="M12 13c-2.67 0-8 1.34-8 4v1h16v-1c0-2.66-5.33-4-8-4z" />
               </svg>
             </div>
-            <h2 className="text-lg font-bold text-white mb-2">اختبار بصمة الوجه</h2>
-            <p className="text-sm text-slate-400 mb-1">هذه صفحة لاختبار بصمة وجهك</p>
+            <h2 className="text-lg font-bold text-white mb-2">?????? ???? ?????</h2>
+            <p className="text-sm text-slate-400 mb-1">??? ???? ??????? ???? ????</p>
             {remainingMs > 0 && (
               <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[11px] text-slate-300 mb-3">
                 <svg className="h-3.5 w-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-                صلاحية الرابط متبقية: {formatRemainingMs(remainingMs)}
+                ?????? ?????? ??????: {formatRemainingMs(remainingMs)}
               </div>
             )}
             <div className="bg-white/5 border border-white/10 rounded-lg p-3 mb-5">
               <p className="text-xs text-slate-300 leading-6">
                 <svg className="inline h-3.5 w-3.5 ml-1 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
-                لكي يعمل الاختبار، يجب أن تكون بصمتك <strong className="text-amber-300">محفوظة في النظام وموافق عليها</strong> من قبل الإدارة.
-                إذا لم تسجل بصمتك بعد، استخدم رابط التسجيل أولاً.
+                ??? ???? ????????? ??? ?? ???? ????? <strong className="text-amber-300">?????? ?? ?????? ?????? ?????</strong> ?? ??? ???????.
+                ??? ?? ???? ????? ???? ?????? ???? ??????? ?????.
               </p>
               <p className="text-[11px] text-slate-400 leading-5 mt-2 pt-2 border-t border-white/5">
                 <svg className="inline h-3 w-3 ml-1 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-                ملاحظة: يُرجى من أصحاب النظارات الطبية إبقاء النظارات مرتدينها أثناء إجراء اختبار البصمة، في حال تم تسجيل البصمة مسبقًا أثناء ارتداء النظارات.
+                ??????: ????? ?? ????? ???????? ?????? ????? ???????? ???????? ????? ????? ?????? ??????? ?? ??? ?? ????? ?????? ?????? ????? ?????? ????????.
               </p>
             </div>
             <button
               onClick={startScan}
               className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-sm shadow-lg hover:shadow-xl transition active:scale-95"
             >
-              {engineReady ? 'ابدأ الاختبار' : 'جاري تحميل المحرك...'}
+              {engineReady ? '???? ????????' : '???? ????? ??????...'}
             </button>
           </div>
         </div>
@@ -647,15 +641,15 @@ setEnhanceCountdown(20);
     return null;
   })();
 
-  // ── شاشة النجاح ──
+  // -- ???? ?????? --
   const successOverlay = phase === 'success' && matchedStudent ? (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto">
       <div className="text-center px-6 max-w-sm">
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/15">
           <svg className="h-8 w-8 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
         </div>
-        <h2 className="text-xl font-extrabold text-emerald-300 mb-2">البصمة تعمل!</h2>
-        <p className="text-sm text-slate-300 mb-1">تم التعرف على وجهك بنجاح</p>
+        <h2 className="text-xl font-extrabold text-emerald-300 mb-2">?????? ????!</h2>
+        <p className="text-sm text-slate-300 mb-1">?? ?????? ??? ???? ?????</p>
         <p className="text-base font-bold text-white mb-4">{matchedStudent.name}</p>
         <div className="flex flex-col gap-2">
           <button
@@ -670,7 +664,7 @@ setEnhanceCountdown(20);
             }}
             className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-sm shadow-lg active:scale-95 transition"
           >
-            اختبار مرة ثانية
+            ?????? ??? ?????
           </button>
         </div>
       </div>
@@ -691,27 +685,27 @@ setEnhanceCountdown(20);
         >
           {!engineReady && <EngineOverlay progress={progress} error={engineError} onRetry={retry} onCancel={() => { stopScan(); onExit(); }} />}
 
-          {/* أزرار عائمة */}
+          {/* ????? ????? */}
           {engineReady && (
             <div className="absolute left-3 z-30 flex items-center gap-2 pointer-events-none" style={{ top: 'calc(env(safe-area-inset-top, 12px) + 12px)' }}>
               <button
                 onClick={() => { stopScan(); setPhase('ready'); }}
-                aria-label="إغلاق"
+                aria-label="?????"
                 className="pointer-events-auto w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-white flex items-center justify-center transition active:scale-90 shadow-lg"
               >
-                ✕
+                ?
               </button>
               <button
                 onClick={() => setFacing(f => (f === 'user' ? 'environment' : 'user'))}
-                aria-label="تبديل الكاميرا"
+                aria-label="????? ????????"
                 className="pointer-events-auto w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-white flex items-center justify-center transition active:scale-90 shadow-lg"
               >
-                🔄
+                ??
               </button>
             </div>
           )}
 
-          {/* منطقة الكاميرا */}
+          {/* ????? ???????? */}
           <div className="relative flex-1 min-h-0 overflow-hidden">
             <video
               ref={videoRef}
@@ -723,7 +717,7 @@ setEnhanceCountdown(20);
             />
             <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
-            {/* دليل الإطار */}
+            {/* ???? ?????? */}
             {engineReady && cameraReady && (
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                 <div
@@ -737,12 +731,12 @@ setEnhanceCountdown(20);
               <div className="absolute inset-0 flex items-center justify-center bg-black">
                 <div className="text-center">
                   <div className="inline-block w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3" />
-                  <p className="text-slate-300 text-sm font-bold">جاري فتح الكاميرا...</p>
+                  <p className="text-slate-300 text-sm font-bold">???? ??? ????????...</p>
                 </div>
               </div>
             )}
 
-            {/* شريط الحالة */}
+            {/* ???? ?????? */}
             <div className="absolute inset-x-0 flex justify-center pointer-events-none px-4" style={{ bottom: 'calc(env(safe-area-inset-bottom, 16px) + 16px)' }}>
               <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-extrabold backdrop-blur-md transition-all duration-300 ${statusPill.cls}`}>
                 <span>{statusPill.icon}</span>
@@ -750,16 +744,16 @@ setEnhanceCountdown(20);
               </div>
             </div>
 
-            {/* overlay: لا توجد بصمة */}
+            {/* overlay: ?? ???? ???? */}
             {noMatchOverlay && !matchedStudent && (
 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto">
                 <div className="text-center px-6 max-w-sm">
                   <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/15">
                     <svg className="h-8 w-8 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
                   </div>
-                  <h2 className="text-lg font-bold text-amber-300 mb-2">لم يتم التعرف على بصمتك</h2>
+                  <h2 className="text-lg font-bold text-amber-300 mb-2">?? ??? ?????? ??? ?????</h2>
                   <p className="text-sm text-slate-400 mb-4">
-                    يرجى تسجيل البصمة من خلال رابط تسجيل بصمة الوجه المرسل من قبل الإدارة.
+                    ???? ????? ?????? ?? ???? ???? ????? ???? ????? ?????? ?? ??? ???????.
                   </p>
                   <div className="flex flex-col gap-2">
                     <button
@@ -773,21 +767,21 @@ setEnhanceCountdown(20);
                       }}
                       className="w-full py-3 rounded-xl bg-gradient-to-r from-[#1458E2] to-[#2B7BFF] text-white font-bold text-sm shadow-lg active:scale-95 transition"
                     >
-                      موافق
+                      ?????
                     </button>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* نص على الكاميرا مباشرة: تحسين البصمة — بدون خلفية */}
+            {/* ?? ??? ???????? ??????: ????? ?????? � ???? ????? */}
             {phase === 'enhancing' && matchedStudent && (
               <div className="absolute inset-x-0 top-0 z-[9999] pointer-events-none flex flex-col items-center pt-8" dir="rtl">
                 {enhanceCountdown > 0 ? (
                   <>
                     <div className="px-5 py-3 rounded-2xl bg-black/50 backdrop-blur-sm">
                       <p className="text-xl sm:text-2xl font-extrabold text-white text-center leading-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
-                        أهلاً {matchedStudent.name.split(' ')[0]}
+                        ????? {matchedStudent.name.split(' ')[0]}
                       </p>
                       <p className="mt-2 text-lg sm:text-xl font-bold text-emerald-300 text-center drop-shadow-[0_2px_6px_rgba(0,0,0,0.7)] transition-all duration-500">
                         {POSE_HINTS[poseHintIdx].icon} {POSE_HINTS[poseHintIdx].text}
@@ -808,7 +802,7 @@ setEnhanceCountdown(20);
                 ) : (
                   <div className="px-5 py-3 rounded-2xl bg-black/50 backdrop-blur-sm">
                     <p className="text-xl sm:text-2xl font-extrabold text-white text-center drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
-                      ✓ تم تحسين بصمتك بنجاح
+                      ? ?? ????? ????? ?????
                     </p>
                   </div>
                 )}

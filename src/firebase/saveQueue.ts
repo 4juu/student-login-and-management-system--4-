@@ -101,7 +101,6 @@ export const flushAllPendingSaves = async (): Promise<void> => {
   const keys = Array.from(pendingSaves.keys());
   if (keys.length === 0 && retryQueues.size === 0) return;
 
-  console.log(`💾 Flushing ${keys.length + retryQueues.size} pending saves...`);
 
   for (const key of keys) {
     const timeout = pendingSaves.get(key);

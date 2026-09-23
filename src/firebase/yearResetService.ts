@@ -25,7 +25,6 @@ export const resetAcademicYear = async (
   options: { newYear?: string } = {}
 ): Promise<{ oldYear: string; newYear: string }> => {
   try {
-    console.log('🔄 بدء سنة أكاديمية جديدة...');
 
     // 1️⃣ احفظ كل التعديلات المعلقة
     await flushAllPendingSaves();
@@ -40,7 +39,6 @@ export const resetAcademicYear = async (
       throw new Error('يجب أن تختلف السنة الجديدة عن السنة الحالية');
     }
 
-    console.log(`🗓️ الانتقال من ${oldYear} إلى ${newYear}`);
 
     // 3️⃣ انقل الكليات والمراحل وإعدادات التلغرام إلى السنة الجديدة
     // (قراءات صغيرة فقط حتى لا يتم تحميل بيانات الطلاب الضخمة وتجميد الواجهة)
@@ -57,12 +55,10 @@ export const resetAcademicYear = async (
 
     if (Object.keys(preserved).length > 0) {
       await update(ref(database, getYearBasePath(newYear, adminUid)), preserved);
-      console.log('✅ تم نقل الكليات والمراحل إلى السنة الجديدة');
     }
 
     // 4️⃣ احذف الطلاب وسجلات الحضور والجلسات فقط من السنة القديمة
     await remove(ref(database, `${getYearBasePath(oldYear, adminUid)}/stageData`));
-    console.log('✅ تم حذف الطلاب وسجلات الحضور');
 
     // 5️⃣ تعطيل صلاحيات كل التدريسيين (الحسابات تبقى)
     await deactivateAllTeachers(adminUid);
@@ -81,7 +77,6 @@ export const resetAcademicYear = async (
       resetBy: adminUid
     });
 
-    console.log('✅ تم بدء السنة الجديدة بنجاح!');
 
     return { oldYear, newYear };
   } catch (e) {
@@ -115,7 +110,6 @@ const deactivateAllTeachers = async (adminUid: string): Promise<void> => {
 
     if (Object.keys(updates).length > 0) {
       await update(ref(database), updates);
-      console.log(`✅ تم تعطيل ${Object.keys(updates).length / 3} تدريسي`);
     }
   } catch (e) {
     console.warn('⚠️ فشل تعطيل التدريسيين:', e);
@@ -140,7 +134,6 @@ const clearAllLocalData = (adminUid: string): void => {
   });
 
   keysToRemove.forEach(k => localStorage.removeItem(k));
-  console.log(`🧹 تم مسح ${keysToRemove.length} عنصر من LocalStorage`);
 };
 
 /** إحصائيات حجم البيانات للفاتورة والمراقبة */

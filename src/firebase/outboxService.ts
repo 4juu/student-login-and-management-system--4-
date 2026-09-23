@@ -12,7 +12,6 @@ export const applyOutbox = async (): Promise<void> => {
   const entries = await getOutboxEntries();
   if (entries.length === 0) return;
 
-  console.log(`📦 تطبيق ${entries.length} عنصر من صندوق الأوفلاين...`);
   const year = await getActiveAcademicYear();
   const succeededKeys: string[] = [];
 
@@ -60,7 +59,6 @@ export const applyOutbox = async (): Promise<void> => {
     await removeOutboxEntry(key);
   }
   if (succeededKeys.length === entries.length) {
-    console.log('✅ تم رفع صندوق الأوفلاين بالكامل');
   } else {
     console.warn(`⚠️ بقي ${entries.length - succeededKeys.length} عنصر في صندوق الأوفلاين لمحاولة لاحقة`);
   }

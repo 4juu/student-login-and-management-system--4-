@@ -60,13 +60,12 @@ try {
   /* تجاهل — بيئة بدون localStorage */
 }
 
-// 🤫 كتم Console في الإنتاج — يمنع كشف البيانات الداخلية من المستخدمين
+// 🤫 كتم Console التفصيلي في الإنتاج — نبقي console.error/warn للتشخيص
 if (import.meta.env.PROD) {
   const noop = () => {};
   console.log = noop;
   console.debug = noop;
   console.info = noop;
-  console.warn = noop;
 }
 
 // 📱 صفحة الطالب (رابط تسجيل/اختبار/حضور) تُفتح بمدخل خفيف دون تحميل لوحة التحكم كاملة

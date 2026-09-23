@@ -93,8 +93,6 @@ export const loadStageStudentsWithOverrides = async (
       }
       return s;
     });
-
-    if (merged > 0) console.log(`[selfEnroll] دُمج ${merged} تحسين بصمة من descriptorOverrides`);
     return result;
   } catch {
     return students;

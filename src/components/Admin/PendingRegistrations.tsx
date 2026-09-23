@@ -167,7 +167,6 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         await markLinkAsUsed(req.linkToken, req.studentId).catch(() => {});
       }
 
-      console.log('✅ تمت الموافقة واستبدال البصمة بنجاح');
     } catch (e: any) {
       console.error('❌ خطأ في الموافقة:', e);
       alert('فشلت العملية: ' + (e.message || 'خطأ غير معروف'));

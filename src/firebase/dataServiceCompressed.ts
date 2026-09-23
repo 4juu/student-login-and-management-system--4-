@@ -95,12 +95,6 @@ export const saveCompressedRecords = async (
     
     const path = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}/teacherRecords/${teacherId}/recordsCompressed`;
     await set(ref(database, path), compressed);
-    
-    const originalSize = JSON.stringify(records).length;
-    const compressedSize = JSON.stringify(compressed).length;
-    const savedPercent = ((1 - compressedSize / originalSize) * 100).toFixed(1);
-    
-    console.log(`✅ تم حفظ ${compressed.length} سجل مضغوط - وفّرنا ${savedPercent}%`);
   } catch (e) {
     console.error('❌ فشل حفظ السجلات المضغوطة:', e);
     throw e;
@@ -128,7 +122,6 @@ export const loadCompressedRecords = async (
     // فك الضغط (آمن - لا يعتمد على وجود الطلاب)
     const decompressed = compressed.map(decompressRecord);
     
-    console.log(`✅ تم تحميل ${decompressed.length} سجل مضغوط`);
     return decompressed;
   } catch (e) {
     console.error('❌ فشل تحميل السجلات المضغوطة:', e);

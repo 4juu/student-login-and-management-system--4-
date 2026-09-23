@@ -18,7 +18,6 @@ const ADMIN_EMAIL = "mujtabahaitham@gmail.com";
 // ============================================================
 export const signIn = async (email: string, password: string): Promise<User> => {
   try {
-    console.log('🔐 محاولة تسجيل الدخول...', email);
     
     // 🆕 سجّل دخول مباشرة أولاً (قبل أي قراءة من DB)
     let userCredential;
@@ -28,10 +27,8 @@ export const signIn = async (email: string, password: string): Promise<User> => 
     
     try {
       userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log('✅ تسجيل دخول مباشر نجح');
     } catch (firstError: any) {
       // إذا فشل، شوف هل الأدمن غيّر كلمة المرور
-      console.log('⚠️ فشل تسجيل دخول مباشر، جاري التحقق من كلمة مرور بديلة...');
       
       try {
         const usersRef = ref(database, 'users');
@@ -55,10 +52,8 @@ export const signIn = async (email: string, password: string): Promise<User> => 
                 actualPassword = teacherData.storedPassword;
                 storedPasswordForUpdate = password;
                 needsPasswordUpdate = true;
-                console.log('🔑 استخدام كلمة المرور القديمة لتحديثها');
                 
                 userCredential = await signInWithEmailAndPassword(auth, email, actualPassword);
-                console.log('✅ تسجيل الدخول نجح بكلمة المرور القديمة');
               } else {
                 throw firstError;
               }
@@ -91,7 +86,6 @@ export const signIn = async (email: string, password: string): Promise<User> => 
           storedPassword: storedPasswordForUpdate,
           passwordLastUpdated: new Date().toISOString()
         });
-        console.log('🔄 تم تحديث كلمة المرور');
       } catch (error) {
         console.error("⚠️ خطأ في تحديث كلمة المرور:", error);
       }
@@ -105,14 +99,12 @@ export const signIn = async (email: string, password: string): Promise<User> => 
     
     if (snapshot.exists()) {
       user = snapshot.val();
-      console.log('✅ تم تحميل بروفايل المستخدم');
       
       if (user.role === 'teacher' && user.active === false) {
         console.warn('⚠️ حساب التدريسي معطّل');
       }
     } else {
       // 🆕 المستخدم موجود بـ Auth بس مو بـ DB → ننشئه
-      console.log('🆕 إنشاء بروفايل جديد للمستخدم');
       
       const role: 'admin' | 'teacher' = 
         email.toLowerCase() === ADMIN_EMAIL.toLowerCase() ? 'admin' : 'teacher';
@@ -127,13 +119,11 @@ export const signIn = async (email: string, password: string): Promise<User> => 
         lastLogin: new Date().toISOString()
       };
       
-      console.log(`✅ إنشاء حساب ${role === 'admin' ? 'أدمن' : 'تدريسي'}`);
     }
     
     user.lastLogin = new Date().toISOString();
     await set(userRef, user);
     
-    console.log('✅ تسجيل الدخول مكتمل!');
     return user;
     
   } catch (error: any) {
@@ -148,7 +138,6 @@ export const signIn = async (email: string, password: string): Promise<User> => 
 export const signOut = async (): Promise<void> => {
   try {
     await firebaseSignOut(auth);
-    console.log('✅ تم تسجيل الخروج');
   } catch (error) {
     console.error("❌ خطأ تسجيل الخروج:", error);
     throw error;
@@ -204,7 +193,6 @@ export const createTeacherAccount = async (
     });
     
     await secondarySignOut(secondaryAuth);
-    console.log('✅ تم إنشاء حساب التدريسي');
     
   } catch (error: any) {
     console.error("❌ خطأ إنشاء التدريسي:", error);
@@ -227,7 +215,6 @@ export const promoteToCollegeAdmin = async (
       collegeName,
       lastUpdated: new Date().toISOString()
     });
-    console.log('✅ تم تعيين التدريسي كأدمن كلية');
   } catch (error: any) {
     console.error("❌ خطأ تعيين أدمن كلية:", error);
     throw new Error('حدث خطأ أثناء تعيين أدمن الكلية');
@@ -246,7 +233,6 @@ export const demoteFromCollegeAdmin = async (
       collegeName: existing.collegeName || null,
       lastUpdated: new Date().toISOString()
     });
-    console.log('✅ تم إلغاء تعيين أدمن الكلية');
   } catch (error: any) {
     console.error("❌ خطأ إلغاء تعيين أدمن كلية:", error);
     throw new Error('حدث خطأ أثناء إلغاء تعيين أدمن الكلية');
@@ -265,7 +251,6 @@ export const updateTeacherPermissions = async (
       permissions,
       lastUpdated: new Date().toISOString()
     });
-    console.log('✅ تم تحديث الصلاحيات');
   } catch (error: any) {
     console.error('❌ خطأ تحديث الصلاحيات:', error);
     throw new Error('فشل تحديث الصلاحيات');
@@ -287,7 +272,6 @@ export const reactivateTeacher = async (
       permissions,
       lastUpdated: new Date().toISOString()
     });
-    console.log('✅ تم إعادة تفعيل التدريسي');
   } catch (error: any) {
     console.error('❌ خطأ إعادة التفعيل:', error);
     throw new Error('فشل إعادة تفعيل التدريسي');
@@ -387,7 +371,6 @@ export const updateTeacherPassword = async (
       passwordLastReset: new Date().toISOString()
     });
 
-    console.log('✅ تم تحديث كلمة المرور في Firebase Auth');
   } catch (error: any) {
     console.error("❌ خطأ تحديث كلمة المرور:", error);
     throw new Error(error?.message || 'حدث خطأ أثناء تحديث كلمة المرور');
@@ -407,7 +390,6 @@ export const deleteTeacherAccount = async (uid: string): Promise<void> => {
       deletedAt: new Date().toISOString()
     });
     
-    console.log('✅ تم حذف الحساب');
   } catch (error: any) {
     console.error("❌ خطأ حذف الحساب:", error);
     throw new Error('حدث خطأ أثناء حذف الحساب');
@@ -426,7 +408,6 @@ export const updateUserProfile = async (
       ...updates,
       lastUpdated: new Date().toISOString()
     });
-    console.log('✅ تم تحديث البروفايل');
   } catch (error: any) {
     console.error("❌ خطأ تحديث البروفايل:", error);
     throw new Error('حدث خطأ أثناء تحديث الملف الشخصي');

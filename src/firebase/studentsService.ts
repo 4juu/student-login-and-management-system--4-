@@ -80,9 +80,7 @@ export const updateStudentDescriptorOverride = async (
       faceDescriptor: JSON.parse(JSON.stringify(faceDescriptor)),
       updatedAt: Date.now(),
     };
-    console.log(`[dataService] جاري حفظ البصمة للمسار: ${path}`);
     await set(ref(database, path), payload);
-    console.log(`[dataService] ✅ حُفظت بصمة الطالب بنجاح: ${studentId}`);
   } catch (e) {
     console.error(`[dataService] ❌ فشل حفظ بصمة الطالب ${studentId}:`, e);
   }
