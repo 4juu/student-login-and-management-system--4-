@@ -10,6 +10,12 @@ import './index.css';
 // 📡 مراقبة الأخطاء في الإنتاج (no-op بدون VITE_SENTRY_DSN أو في التطوير)
 initSentry();
 
+// 🔄 منع استعادة موضع التمرير من المتصفح — كل صفحة/تبويب جديد يبدأ من الأعلى
+try {
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  window.scrollTo(0, 0);
+} catch { /* بيئة بدون window */ }
+
 const App = lazy(() => import('./App'));
 const StudentEntry = lazy(() => import('./studentEntry'));
 

@@ -28,14 +28,21 @@ interface NavState {
   resetNav: () => void;
 }
 
-export const useNavStore = create<NavState>((set) => ({
+export const useNavStore = create<NavState>((set, get) => ({
   activeTab: 'stage-selector',
   showSendLink: false,
   showTestLink: false,
   showAttendanceLink: false,
   showPendingRegistrations: false,
   pendingCount: 0,
-  setActiveTab: (activeTab) => set({ activeTab }),
+  setActiveTab: (tab) => {
+    const prev = get().activeTab;
+    set({ activeTab: tab });
+    // كل تبويب جديد يبدأ من راس الصفحة (حتى لو نزلت قبلها)
+    if (prev !== tab && typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    }
+  },
   setShowSendLink: (showSendLink) => set({ showSendLink }),
   setShowTestLink: (showTestLink) => set({ showTestLink }),
   setShowAttendanceLink: (showAttendanceLink) => set({ showAttendanceLink }),
