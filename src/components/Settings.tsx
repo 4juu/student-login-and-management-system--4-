@@ -119,13 +119,6 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
   const firebaseQuotaKB = firebaseQuotaMB * 1024;
   const usagePercent = useMemo(() => stats ? (stats.totalSizeKB / firebaseQuotaKB) * 100 : 0, [stats?.totalSizeKB]);
 
-  useEffect(() => {
-    if (isAdmin && currentUser) {
-      loadStats();
-      loadYears();
-    }
-  }, [isAdmin, currentUser]);
-
   // 🤖 تهيئة التلغرام من المتجر (تُحمَّل مرة واحدة في loadInitialData) — بلا جلب مكرر
   useEffect(() => {
     if (initialTelegramConfig) {
@@ -283,6 +276,14 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
       console.warn('فشل تحميل السنوات:', e);
     }
   }, []);
+
+  // ✅ قراءة فهرس السنوات الصغير فقط عند الفتح — الإحصائيات عند الطلب (زر "تحديث")
+  //    حتى لا يُسحب شجرة عام كامل وتتجمّد الواجهة كل مرة تُفتح فيها الإعدادات
+  useEffect(() => {
+    if (isAdmin && currentUser) {
+      loadYears();
+    }
+  }, [isAdmin, currentUser, loadYears]);
 
   const handleResetAcademicYear = useCallback(() => {
     if (!currentUser || currentUser.role !== 'admin') return;

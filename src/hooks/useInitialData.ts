@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ref as dbRef, get } from 'firebase/database';
+import { ref as dbRef, get, query, orderByChild, equalTo } from 'firebase/database';
 import { database } from '../firebase/config';
 import {
   loadColleges,
@@ -71,11 +71,12 @@ export default function useInitialData({ currentUser }: UseInitialDataParams): U
         .catch(e => console.warn('فشل تحميل تهيئة التلغرام:', e));
 
       if (user.role === 'admin') {
-        void get(dbRef(database, 'users'))
+        // ✅ استعلام مفهرس (adminId) بدل قراءة users كاملة
+        void get(query(dbRef(database, 'users'), orderByChild('adminId'), equalTo(user.uid)))
           .then(usersSnap => {
             if (usersSnap.exists()) {
               const teachersList = (Object.values(usersSnap.val()) as User[]).filter(
-                (u) => u.role === 'teacher' && u.adminId === user.uid
+                (u) => u.role === 'teacher'
               );
               setAllTeachers(teachersList);
             }

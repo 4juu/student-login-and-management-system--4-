@@ -1,6 +1,6 @@
 // New academic year reset + database statistics
 
-import { ref, set, get, remove, update } from "firebase/database";
+import { ref, set, get, remove, update, query, orderByChild, equalTo } from "firebase/database";
 import { database } from "./config";
 import {
   getActiveAcademicYear,
@@ -91,16 +91,16 @@ export const resetAcademicYear = async (
 /** تعطيل كل التدريسيين (يبقون مسجّلين لكن بدون صلاحيات) */
 const deactivateAllTeachers = async (adminUid: string): Promise<void> => {
   try {
-    const usersSnap = await get(ref(database, 'users'));
-    if (!usersSnap.exists()) return;
+    // ✅ استعلام مفهرس (adminId) بدل سرد users كاملة
+    const snap = await get(query(ref(database, 'users'), orderByChild('adminId'), equalTo(adminUid)));
+    if (!snap.exists()) return;
 
-    const allUsers = usersSnap.val();
     const updates: { [key: string]: any } = {};
     const now = new Date().toISOString();
 
-    Object.entries(allUsers).forEach(([uid, user]: [string, any]) => {
+    Object.entries(snap.val()).forEach(([uid, user]: [string, any]) => {
       // عطّل التدريسيين فقط (مو الأدمن)
-      if (user.role === 'teacher' && user.adminId === adminUid) {
+      if (user.role === 'teacher') {
         updates[`users/${uid}/active`] = false;
         updates[`users/${uid}/deactivatedAt`] = now;
         updates[`users/${uid}/permissions`] = {

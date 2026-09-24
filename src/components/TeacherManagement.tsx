@@ -77,33 +77,26 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
         return;
       }
 
-      if (isMainAdmin && selectedCollegeId) {
-        if (selectedCollegeId === '__all__') {
-          const { ref, get } = await import('firebase/database');
-          const { database } = await import('../firebase/config');
-          const snapshot = await get(ref(database, 'users'));
-          const allList = snapshot.exists() ? Object.values(snapshot.val()).filter((u: any) => u.role === 'teacher' || u.role === 'college_admin') as User[] : [];
-          setTeachers(allList);
-        } else {
+      if (isMainAdmin) {
+        // كلية محددة → استعلام مفهرس بالـcollegeId
+        if (selectedCollegeId && selectedCollegeId !== '__all__') {
           const list = await getAllTeachersForCollege(selectedCollegeId);
           setTeachers(list);
-        }
-        return;
-      }
-
-      if (isMainAdmin && !selectedCollegeId) {
-        // جلب واحد: users كاملاً ثم تصفية — بدل getAllTeachers ثم get آخر (جلب مزدوج)
-        const { ref, get } = await import('firebase/database');
-        const { database } = await import('../firebase/config');
-        const snapshot = await get(ref(database, 'users'));
-        if (snapshot.exists()) {
-          const allList = Object.values(snapshot.val()).filter(
-            (u: any) => u.role === 'teacher' || u.role === 'college_admin'
-          ) as User[];
-          setTeachers(allList);
           return;
         }
-        setTeachers([]);
+
+        // الكل (بلا اختيار أو "__all__") → استعلامان محدودان بالدور بدل users كاملة
+        const { ref, get, query, orderByChild, equalTo } = await import('firebase/database');
+        const { database } = await import('../firebase/config');
+        const fetchByRole = async (role: string): Promise<User[]> => {
+          const snap = await get(query(ref(database, 'users'), orderByChild('role'), equalTo(role)));
+          return snap.exists() ? (Object.values(snap.val()) as User[]) : [];
+        };
+        const [teachersList, collegeAdminsList] = await Promise.all([
+          fetchByRole('teacher'),
+          fetchByRole('college_admin'),
+        ]);
+        setTeachers([...teachersList, ...collegeAdminsList]);
         return;
       }
 

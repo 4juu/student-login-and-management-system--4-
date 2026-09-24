@@ -6,7 +6,7 @@ import {
   updatePassword,
   User as FirebaseUser
 } from "firebase/auth";
-import { ref, set, get, update, remove } from "firebase/database";
+import { ref, set, get, update, remove, query, orderByChild, equalTo } from "firebase/database";
 import { auth, database, secondaryAuth } from "./config";
 import { User, TeacherPermissions } from "../types/user";
 
@@ -210,22 +210,16 @@ export const reactivateTeacher = async (
 
 // ============================================================
 // 📋 جلب كل التدريسيين
+// ✅ استعلام مفهرس (adminId) بدل قراءة users كاملة ثم تصفية
 // ============================================================
 export const getAllTeachers = async (adminUid: string): Promise<User[]> => {
   try {
-    const snap = await get(ref(database, 'users'));
+    const snap = await get(query(ref(database, 'users'), orderByChild('adminId'), equalTo(adminUid)));
     if (!snap.exists()) return [];
-    
-    const allUsers = snap.val();
-    const teachers: User[] = [];
-    
-    Object.values(allUsers).forEach((user: any) => {
-      if ((user.role === 'teacher' || user.role === 'college_admin') && user.adminId === adminUid) {
-        teachers.push(user);
-      }
-    });
-    
-    return teachers;
+
+    return Object.values(snap.val() as Record<string, any>).filter(
+      (user: any) => user.role === 'teacher' || user.role === 'college_admin'
+    ) as User[];
   } catch (error) {
     console.error('❌ خطأ جلب التدريسيين:', error);
     return [];
@@ -234,14 +228,15 @@ export const getAllTeachers = async (adminUid: string): Promise<User[]> => {
 
 // ============================================================
 // 📋 جلب كل التدريسيين (لأدمن الكلية)
+// ✅ استعلام مفهرس (collegeId) بدل قراءة users كاملة
 // ============================================================
 export const getAllTeachersForCollege = async (collegeId: string): Promise<User[]> => {
   try {
-    const snap = await get(ref(database, 'users'));
+    const snap = await get(query(ref(database, 'users'), orderByChild('collegeId'), equalTo(collegeId)));
     if (!snap.exists()) return [];
-    
+
     return Object.values(snap.val() as Record<string, any>).filter(
-      (user: any) => (user.role === 'teacher' || user.role === 'college_admin') && user.collegeId === collegeId
+      (user: any) => user.role === 'teacher' || user.role === 'college_admin'
     ) as User[];
   } catch (error) {
     console.error('❌ خطأ جلب التدريسيين:', error);

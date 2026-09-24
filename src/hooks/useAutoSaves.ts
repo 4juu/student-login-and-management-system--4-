@@ -35,13 +35,29 @@ interface UseAutoSavesParams {
   setAllStagesData: React.Dispatch<React.SetStateAction<Record<string, { students: Student[]; records: AttendanceRecord[]; sessions: AttendanceSession[] }>>>;
 }
 
-/** بذرة/مقارنة hash لمنع echo writes: إعادة حفظ نفس ما وصل للتو من السيرفر */
-const stableHash = (value: unknown): string => {
-  try {
-    return JSON.stringify(value) ?? '';
-  } catch {
-    return `u_${Date.now()}`;
+/**
+ * قرار الحفظ بمقارنة مرجعية رخيصة O(1) — بديل JSON.stringify الكامل
+ * (المصفوفات تُبنى immutably في التطبيق ولا يوجد مستمع يعيد نفس المحتوى بمرجع جديد)
+ * البذرة: أول ملاحظة تُخزَّن فقط (تمنع echo write عند التحميل)
+ */
+const consumeChange = (
+  saved: Map<string, unknown>,
+  key: string,
+  value: unknown,
+  force: boolean
+): boolean => {
+  if (force) {
+    saved.set(key, value);
+    return true;
   }
+  const last = saved.get(key);
+  if (last === undefined) {
+    saved.set(key, value);
+    return false;
+  }
+  if (last === value) return false;
+  saved.set(key, value);
+  return true;
 };
 
 export function useAutoSaves({
@@ -60,8 +76,8 @@ export function useAutoSaves({
   getTeacherId,
   setAllStagesData,
 }: UseAutoSavesParams) {
-  // hash آخر قيمة حُفظت/فُرِّغت لكل مفتاح (يشمل stageId) — المفتاح غير المعروف يُزرع فقط
-  const lastSavedHashRef = useRef<Map<string, string>>(new Map());
+  // آخر قيمة حُفظت/فُرِّغت لكل مفتاح (يشمل stageId) — مقارنة مرجعية بدل hash نصّي
+  const lastSavedRef = useRef<Map<string, unknown>>(new Map());
   const lastActiveSessionRef = useRef<Map<string, string | null>>(new Map());
 
   useEffect(() => {
@@ -69,17 +85,9 @@ export function useAutoSaves({
     const timeoutId = setTimeout(() => {
       const force = intentionalDeleteRef.current.colleges;
       const key = `colleges:${currentUser.uid}`;
-      const hash = stableHash(colleges);
-      const last = lastSavedHashRef.current.get(key);
-      if (!force) {
-        if (last === undefined) {
-          lastSavedHashRef.current.set(key, hash);
-          return;
-        }
-        if (last === hash) return;
+      if (consumeChange(lastSavedRef.current, key, colleges, force)) {
+        saveColleges(currentUser.uid, colleges, force);
       }
-      saveColleges(currentUser.uid, colleges, force);
-      lastSavedHashRef.current.set(key, hash);
       if (force) intentionalDeleteRef.current.colleges = false;
     }, 500);
     return () => clearTimeout(timeoutId);
@@ -90,17 +98,9 @@ export function useAutoSaves({
     const timeoutId = setTimeout(() => {
       const force = intentionalDeleteRef.current.stages;
       const key = `stages:${currentUser.uid}`;
-      const hash = stableHash(stages);
-      const last = lastSavedHashRef.current.get(key);
-      if (!force) {
-        if (last === undefined) {
-          lastSavedHashRef.current.set(key, hash);
-          return;
-        }
-        if (last === hash) return;
+      if (consumeChange(lastSavedRef.current, key, stages, force)) {
+        saveStages(currentUser.uid, stages, force);
       }
-      saveStages(currentUser.uid, stages, force);
-      lastSavedHashRef.current.set(key, hash);
       if (force) intentionalDeleteRef.current.stages = false;
     }, 500);
     return () => clearTimeout(timeoutId);
@@ -112,20 +112,10 @@ export function useAutoSaves({
       const force = intentionalDeleteRef.current.students;
       const adminUid = getAdminUid();
       const key = `students:${adminUid}:${selectedStageId}`;
-      const hash = stableHash(students);
-      const last = lastSavedHashRef.current.get(key);
-      if (!force) {
-        if (last === undefined) {
-          lastSavedHashRef.current.set(key, hash);
-        } else if (last !== hash) {
-          saveStudents(adminUid, selectedStageId, students, force);
-          lastSavedHashRef.current.set(key, hash);
-        }
-      } else {
+      if (consumeChange(lastSavedRef.current, key, students, force)) {
         saveStudents(adminUid, selectedStageId, students, force);
-        lastSavedHashRef.current.set(key, hash);
-        intentionalDeleteRef.current.students = false;
       }
+      if (force) intentionalDeleteRef.current.students = false;
       if (currentUser.role === 'admin' && universityDataLoaded) {
         setAllStagesData(prev => ({
           ...prev,
@@ -143,18 +133,8 @@ export function useAutoSaves({
       const adminUid = getAdminUid();
       const teacherId = getTeacherId();
       const key = `records:${adminUid}:${selectedStageId}:${teacherId}`;
-      const hash = stableHash(attendanceRecords);
-      const last = lastSavedHashRef.current.get(key);
-      if (!force) {
-        if (last === undefined) {
-          lastSavedHashRef.current.set(key, hash);
-        } else if (last !== hash) {
-          saveAttendanceRecords(adminUid, selectedStageId, teacherId, attendanceRecords, force);
-          lastSavedHashRef.current.set(key, hash);
-        }
-      } else {
+      if (consumeChange(lastSavedRef.current, key, attendanceRecords, force)) {
         saveAttendanceRecords(adminUid, selectedStageId, teacherId, attendanceRecords, force);
-        lastSavedHashRef.current.set(key, hash);
       }
       if (force) intentionalDeleteRef.current.records = false;
       if (currentUser.role === 'admin' && universityDataLoaded) {
@@ -174,18 +154,8 @@ export function useAutoSaves({
       const adminUid = getAdminUid();
       const teacherId = getTeacherId();
       const key = `sessions:${adminUid}:${selectedStageId}:${teacherId}`;
-      const hash = stableHash(sessions);
-      const last = lastSavedHashRef.current.get(key);
-      if (!force) {
-        if (last === undefined) {
-          lastSavedHashRef.current.set(key, hash);
-        } else if (last !== hash) {
-          saveSessions(adminUid, selectedStageId, teacherId, sessions, force);
-          lastSavedHashRef.current.set(key, hash);
-        }
-      } else {
+      if (consumeChange(lastSavedRef.current, key, sessions, force)) {
         saveSessions(adminUid, selectedStageId, teacherId, sessions, force);
-        lastSavedHashRef.current.set(key, hash);
       }
       if (force) intentionalDeleteRef.current.sessions = false;
       if (currentUser.role === 'admin' && universityDataLoaded) {
