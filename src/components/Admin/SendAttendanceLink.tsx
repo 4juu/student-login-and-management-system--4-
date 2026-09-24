@@ -10,6 +10,7 @@ import {
 import { flushAllPendingSaves } from '../../firebase/dataService';
 import { ChevronRight, Clock, Copy, FileSpreadsheet, Landmark, Library, Rocket, Smartphone, Users, CalendarDays, BookOpen } from 'lucide-react';
 import { MorphingSquare } from '../MorphingSquare';
+import { toast } from '@/hooks/use-toast';
 
 interface SendAttendanceLinkProps {
   adminUid: string;
@@ -222,7 +223,7 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
   };
 
   const handleGenerateLink = () => {
-    if (!selectedStageId) { alert('الرجاء اختيار مرحلة'); return; }
+    if (!selectedStageId) { toast({ variant: 'destructive', title: 'الرجاء اختيار مرحلة' }); return; }
     setConfirmState({
       title: 'تأكيد توليد رابط الحضور',
       message: `سيتم توليد رابط تقرير الحضور والغياب للمرحلة: ${selectedStage?.name}\nالمادة: ${subjectName}\nمتابعة؟`,
@@ -254,7 +255,7 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
       setGeneratedLink(generated);
     } catch (e: any) {
       console.error(e);
-      alert('فشل توليد الرابط: ' + (e.message || ''));
+      toast({ variant: 'destructive', title: 'فشل توليد الرابط', description: e.message || undefined });
     } finally {
       setGenerating(false);
     }
@@ -268,7 +269,7 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
       setTimeout(() => {
         setGeneratedLink(prev => prev ? { ...prev, copied: false } : null);
       }, 2000);
-    } catch { alert('فشل النسخ'); }
+    } catch { toast({ variant: 'destructive', title: 'فشل النسخ' }); }
   };
 
   const handleDownloadExcel = async () => {
@@ -358,7 +359,7 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 mb-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                 <div className="bg-slate-800 p-3 rounded-lg border border-white/10">
                   <p className="text-xs text-slate-400">الكلية</p>
                   <p className="font-bold text-white">{generatedLink.collegeName}</p>
@@ -404,9 +405,9 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-bold text-slate-300 mb-1 flex items-center gap-1.5"><Landmark className="w-4 h-4" /> الكلية</label>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label className="block text-sm font-bold text-slate-300 mb-1 flex items-center gap-1.5"><Landmark className="w-4 h-4" /> الكلية</label>
               <select
                 value={selectedCollegeId}
                 onChange={e => { setSelectedCollegeId(e.target.value); setSelectedStageId(''); }}

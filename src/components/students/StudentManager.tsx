@@ -16,6 +16,7 @@ import { BulkActionsBar } from './BulkActionsBar';
 import { StudentTable } from './StudentTable';
 import { Pagination } from './Pagination';
 import { LoadingState } from '../loading/LoadingState';
+import { toast } from '@/hooks/use-toast';
 
 // 🚀 نافذة تسجيل بصمات الوجه (فردية وجماعية) تُحمَّل عند فتحها فقط
 const LazyFaceEnroll = lazy(() =>
@@ -419,7 +420,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
     const trimmedId = editUniversityId.trim();
 
     if (trimmedId && students.some(s => s.id !== editingUniIdStudent && s.universityId === trimmedId)) {
-      alert('هذا الرقم الجامعي مستخدم لطالب آخر');
+      toast({ variant: 'destructive', title: 'هذا الرقم الجامعي مستخدم لطالب آخر' });
       return;
     }
 
@@ -444,7 +445,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
     const cleanQr = editQrCodeId.trim() ? extractQrCodeId(editQrCodeId) : '';
 
     if (cleanQr && students.some(s => s.id !== editingQrStudent && s.qrCodeId === cleanQr)) {
-      alert('رمز QR هذا مستخدم لطالب آخر');
+      toast({ variant: 'destructive', title: 'رمز QR هذا مستخدم لطالب آخر' });
       return;
     }
 

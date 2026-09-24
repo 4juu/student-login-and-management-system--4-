@@ -918,6 +918,13 @@
 .dark button:focus-visible {
   outline-color: rgb(96 165 250 / 0.5);
 }
+
+/* === Focus Visible عام (لوحة المفاتيح) ===
+   :where() صفر أهمية — أي أصناف focus: ring/border/outline-none تتفوق بسهولة */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid rgba(96, 165, 250, 0.75);
+  outline-offset: 2px;
+}
 .dark .focus\:ring-blue-500:focus,
 .dark .focus\:ring-green-500:focus,
 .dark .focus\:ring-emerald-500:focus {

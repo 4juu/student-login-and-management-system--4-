@@ -7,7 +7,6 @@ export type Tab =
   | 'login'
   | 'manage'
   | 'records'
-  | 'settings'
   | 'sessions'
   | 'teachers'
   | 'profile'

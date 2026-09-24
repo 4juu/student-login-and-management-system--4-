@@ -12,3 +12,4 @@ dev_out.log
 dev_stderr.log
 dev_stdout.log
 tmp.json
+test-results/

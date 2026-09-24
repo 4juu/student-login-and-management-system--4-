@@ -15,6 +15,7 @@ import { ArrowLeft, BookOpen, CircleCheck, Crown, GraduationCap, KeyRound, Landm
 import { useConfirm } from '../hooks/useConfirm';
 import { LoadingState } from './loading/LoadingState';
 import { MorphingSquare } from './MorphingSquare';
+import { toast } from '@/hooks/use-toast';
 
 interface TeacherManagementProps {
   currentUser: User;
@@ -146,9 +147,9 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
         }
       }
       await loadTeachers();
-      alert(`تم إصلاح ${fixed} تدريسي.\nالآن تقدر تضغط "الصلاحيات" لكل واحد منهم وتحدد له المراحل.`);
+      toast({ title: `تم إصلاح ${fixed} تدريسي.\nالآن تقدر تضغط "الصلاحيات" لكل واحد منهم وتحدد له المراحل.` });
     } catch (e: any) {
-      alert(e.message);
+      toast({ variant: 'destructive', title: e.message });
     } finally {
       setLoading(false);
     }
@@ -203,7 +204,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
       await loadTeachers();
       setSelectedTeacher({ ...teacher, permissions: newPermissions });
     } catch {
-      alert('فشل تحديث الصلاحيات');
+      toast({ variant: 'destructive', title: 'فشل تحديث الصلاحيات' });
     }
   };
 
@@ -222,7 +223,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
       await loadTeachers();
       setSelectedTeacher({ ...teacher, permissions: newPermissions });
     } catch {
-      alert('فشل تحديث الصلاحيات');
+      toast({ variant: 'destructive', title: 'فشل تحديث الصلاحيات' });
     }
   };
 
@@ -240,7 +241,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
       await loadTeachers();
       setSelectedTeacher({ ...teacher, permissions: newPermissions });
     } catch {
-      alert('فشل تحديث الصلاحيات');
+      toast({ variant: 'destructive', title: 'فشل تحديث الصلاحيات' });
     }
   };
 
@@ -428,10 +429,10 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
         </div>
 
         {success && (
-          <div className="mb-4 p-4 bg-green-500/10 border-2 border-green-500/40 text-green-300 rounded-md font-medium">{success}</div>
+          <div role="status" className="mb-4 p-4 bg-green-500/10 border-2 border-green-500/40 text-green-300 rounded-md font-medium">{success}</div>
         )}
         {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/40 text-red-300 rounded-md">{error}</div>
+          <div role="alert" className="mb-4 p-3 bg-red-500/10 border border-red-500/40 text-red-300 rounded-md">{error}</div>
         )}
 
         {unassignedCount > 0 && (
@@ -590,11 +591,11 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
                           setLoading(true);
                           try {
                             await promoteToCollegeAdmin(t.uid, assignAdminCollegeId, assignAdminCollegeName);
-                            alert(`تم تعيين ${t.displayName} أدمن لكلية ${assignAdminCollegeName}`);
+                            toast({ title: `تم تعيين ${t.displayName} أدمن لكلية ${assignAdminCollegeName}` });
                             setShowAssignAdminModal(false);
                             await loadTeachers();
                           } catch (e: any) {
-                            alert(e.message);
+                            toast({ variant: 'destructive', title: e.message });
                           } finally {
                             setLoading(false);
                           }
@@ -658,11 +659,11 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
                     setLoading(true);
                     try {
                       await demoteFromCollegeAdmin(admin.uid);
-                      alert(`تم إلغاء أدمن الكلية عن ${admin.displayName}`);
+                      toast({ title: `تم إلغاء أدمن الكلية عن ${admin.displayName}` });
                       setShowRemoveAdminConfirm(null);
                       await loadTeachers();
                     } catch (e: any) {
-                      alert(e.message);
+                      toast({ variant: 'destructive', title: e.message });
                     } finally {
                       setLoading(false);
                     }
@@ -767,7 +768,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
       </div>
 
       {displayTeachers.length > 0 && (
-        <div className="mb-4 grid grid-cols-3 gap-3">
+        <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-center">
             <div className="text-2xl font-bold text-blue-300">{displayTeachers.length}</div>
             <div className="text-xs text-blue-400">إجمالي التدريسيين</div>
@@ -800,10 +801,10 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
       )}
 
       {success && (
-        <div className="p-3 bg-green-500/10 border border-green-500/40 text-green-300 rounded mb-4 whitespace-pre-line">{success}</div>
+        <div role="status" className="p-3 bg-green-500/10 border border-green-500/40 text-green-300 rounded mb-4 whitespace-pre-line">{success}</div>
       )}
       {error && (
-        <div className="p-3 bg-red-500/10 border border-red-500/40 text-red-300 rounded mb-4">{error}</div>
+        <div role="alert" className="p-3 bg-red-500/10 border border-red-500/40 text-red-300 rounded mb-4">{error}</div>
       )}
 
       {showAddForm && (

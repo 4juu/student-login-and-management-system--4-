@@ -98,7 +98,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </div>
 
             {error && (
-              <div className="p-3 bg-red-500/15 border border-red-500/30 text-red-300 rounded-lg text-sm">
+              <div role="alert" className="p-3 bg-red-500/15 border border-red-500/30 text-red-300 rounded-lg text-sm">
                 {error}
               </div>
             )}

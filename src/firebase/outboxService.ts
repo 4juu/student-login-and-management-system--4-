@@ -8,6 +8,7 @@ import { getOutboxEntries, removeOutboxEntries } from "../lib/offlineOutbox";
 import { getActiveAcademicYear } from "./academicYear";
 import { getStagePath, getTeacherDataPath } from "./paths";
 import { stripUndefined } from "./localCache";
+import { captureException } from "../lib/sentry";
 import type { AttendanceRecord } from "../types/student";
 
 // ============================================================
@@ -54,6 +55,7 @@ const doApplyOutbox = async (): Promise<void> => {
             }
           } catch (e) {
             console.warn('⚠️ outbox: فشل تحديث فهرس studentAttendance:', e);
+            captureException(e, { fn: 'outbox.buildIndex', entryKey: entry.key });
           }
         } else if (entry.key.startsWith('activeSession_')) {
           updates[entry.path] = entry.data ? (entry.data as string) : null;
@@ -86,6 +88,7 @@ const doApplyOutbox = async (): Promise<void> => {
           Object.assign(updates, await buildStudentAttendanceIndexUpdates(year, uid, sid, tid, raw));
         } catch (e) {
           console.warn('⚠️ outbox: فشل تحديث فهرس studentAttendance:', e);
+          captureException(e, { fn: 'outbox.buildIndex', entryKey: entry.key });
         }
       } else if (entry.key.startsWith('sessions_')) {
         const rest = entry.key.slice('sessions_'.length);
@@ -107,6 +110,7 @@ const doApplyOutbox = async (): Promise<void> => {
       succeededKeys.push(entry.key);
     } catch (e) {
       console.error('❌ فشل تطبيق عنصر من صندوق الأوفلاين:', entry.key, e);
+      captureException(e, { fn: 'outbox.applyEntry', entryKey: entry.key });
     }
   }
 
@@ -116,6 +120,7 @@ const doApplyOutbox = async (): Promise<void> => {
       await update(ref(database), updates);
     } catch (e) {
       console.error('❌ فشل رفع دفعة صندوق الأوفلاين:', e);
+      captureException(e, { fn: 'outbox.batchUpdate', count: succeededKeys.length });
       return; // نُبقي كل العناصر للمحاولة التالية
     }
   }

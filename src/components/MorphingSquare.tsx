@@ -11,7 +11,8 @@ export function MorphingSquare({ className, size = 'lg' }: MorphingSquareProps) 
   return (
     <div
       className={cn('morph-loader', size !== 'lg' && `morph-loader-${size}`, className)}
-      aria-hidden="true"
+      role="status"
+      aria-label="جارٍ التحميل"
     />
   )
 }

@@ -6,6 +6,7 @@ import { getCurrentAcademicYear } from '../firebase/dataService';
 import { AbsenceSendLogEntry, GroupSendProgress } from '../types/telegram';
 import { Calendar, ChartColumn, Check, Circle, CircleCheck, ClipboardList, GraduationCap, Library, Pencil, TriangleAlert } from 'lucide-react';
 import { MorphingSquare } from './MorphingSquare';
+import { toast } from '@/hooks/use-toast';
 
 interface SessionManagerProps {
   sessions: AttendanceSession[];
@@ -138,7 +139,7 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
     e.preventDefault();
     
     if (!sessionName.trim()) {
-      alert('الرجاء إدخال اسم السجل');
+      toast({ variant: 'destructive', title: 'الرجاء إدخال اسم السجل' });
       return;
     }
 

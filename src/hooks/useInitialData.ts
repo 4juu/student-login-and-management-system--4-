@@ -11,6 +11,8 @@ import { Student, AttendanceRecord, AttendanceSession, College, Stage } from '..
 import { User } from '../types/user';
 import { TelegramConfig } from '../types/telegram';
 import { useStageStore } from '../store/useStageStore';
+import { toast } from '@/hooks/use-toast';
+import { captureException } from '../lib/sentry';
 
 interface AllStagesData {
   [stageId: string]: {
@@ -85,6 +87,7 @@ export default function useInitialData({ currentUser }: UseInitialDataParams): U
       }
     } catch (error) {
       console.error('Error loading initial data:', error);
+      captureException(error, { fn: 'loadInitialData' });
     }
   }, []);
 
@@ -152,8 +155,9 @@ export default function useInitialData({ currentUser }: UseInitialDataParams): U
             records: allRecords,
             sessions: allSessions,
           };
-        } catch {
+        } catch (e) {
           console.warn(`فشل تحميل بيانات المرحلة ${stage.id}`);
+          captureException(e, { fn: 'loadAllAdminData.stage', stageId: stage.id });
         }
       }
 
@@ -161,7 +165,8 @@ export default function useInitialData({ currentUser }: UseInitialDataParams): U
       setUniversityDataLoaded(true);
     } catch (error) {
       console.error('❌ خطأ في تحميل بيانات الأدمن الشاملة:', error);
-      alert('❌ فشل تحميل بيانات الجامعة. حاول مرة ثانية.');
+      captureException(error, { fn: 'loadAllAdminData' });
+      toast({ variant: 'destructive', title: '❌ فشل تحميل بيانات الجامعة. حاول مرة ثانية.' });
     } finally {
       setUniversityDataLoading(false);
     }

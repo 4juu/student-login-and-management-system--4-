@@ -15,6 +15,7 @@ import {
 import { Camera, Check, CircleCheck, CircleX, ClipboardList, Mail, QrCode, Save, Smile, Trash2, TriangleAlert } from 'lucide-react';
 import { useConfirm } from '../../hooks/useConfirm';
 import { useNavStore } from '../../store/navStore';
+import { toast } from '@/hooks/use-toast';
 
 interface PendingRegistrationsProps {
   adminUid: string;
@@ -111,13 +112,13 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       if (req.faceDescriptor) {
         const migrated = migrateToV5(req.faceDescriptor);
         if (!migrated) {
-          alert('البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.');
+          toast({ variant: 'destructive', title: 'البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.' });
           return;
         }
 
         const query = parseStoredDescriptor(migrated);
         if (!query) {
-          alert('البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.');
+          toast({ variant: 'destructive', title: 'البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.' });
           return;
         }
         const allStudents: Student[] = (Array.isArray(data) ? data : Object.values(data)).map(s => {
@@ -126,7 +127,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         });
         const tamper = checkForTampering(query, allStudents, req.studentId);
         if (tamper.tampered) {
-          alert(`لا يمكن الموافقة: هذه البصمة مطابقة لبصمة الطالب:\n${tamper.matchedWith}\n\nيرجى التحقق من صالة الطلب.`);
+          toast({ variant: 'destructive', title: 'لا يمكن الموافقة: هذه البصمة مطابقة لبصمة الطالب', description: `${tamper.matchedWith}\n\nيرجى التحقق من صالة الطلب.` });
           return;
         }
         finalDescriptor = migrated;
@@ -157,7 +158,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
 
     } catch (e: any) {
       console.error('❌ خطأ في الموافقة:', e);
-      alert('فشلت العملية: ' + (e.message || 'خطأ غير معروف'));
+      toast({ variant: 'destructive', title: 'فشلت العملية', description: e.message || 'خطأ غير معروف' });
     } finally {
       setProcessing(null);
     }
@@ -178,7 +179,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       setRejectReason('');
     } catch (e: any) {
       console.error(e);
-      alert('فشلت العملية');
+      toast({ variant: 'destructive', title: 'فشلت العملية' });
     } finally {
       setProcessing(null);
     }
@@ -189,7 +190,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       await set(ref(database, `registrationSystem/pending/${adminUid}/${req.id}`), null);
     } catch (e) {
       console.error(e);
-      alert('فشل الحذف');
+      toast({ variant: 'destructive', title: 'فشل الحذف' });
     }
   };
 
@@ -197,7 +198,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
   const handlePurgeCorrupt = async () => {
     const corrupt = requests.filter(r => r.faceDescriptor && migrateToV5(r.faceDescriptor) === null);
     if (corrupt.length === 0) {
-      alert('لا توجد طلبات تالفة — كل البصمات سليمة ✅');
+      toast({ title: 'لا توجد طلبات تالفة — كل البصمات سليمة ✅' });
       return;
     }
     const ok = await confirmAction({
@@ -214,10 +215,10 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         updates[`registrationSystem/pending/${adminUid}/${r.id}`] = null;
       }
       await update(ref(database), updates);
-      alert(`تم حذف ${corrupt.length} طلباً تالفاً.`);
+      toast({ title: `تم حذف ${corrupt.length} طلباً تالفاً.` });
     } catch (e) {
       console.error(e);
-      alert('فشل حذف الطلبات التالفة');
+      toast({ variant: 'destructive', title: 'فشل حذف الطلبات التالفة' });
     } finally {
       setPurging(false);
     }
@@ -267,7 +268,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         </div>
 
         <div className="px-5 py-3 border-b border-white/10 bg-white/5">
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button
               onClick={() => setFilter('all')}
               className={`p-2 rounded-lg text-center transition ${
@@ -369,7 +370,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                     <div className="bg-slate-800 rounded-lg p-3 border border-blue-500/30">
                       <p className="text-xs text-blue-400 font-bold mb-1 flex items-center gap-1"><Save className="w-3.5 h-3.5" /> من النظام:</p>
                       <p className="font-bold text-blue-200 text-sm">{req.nameInSystem}</p>

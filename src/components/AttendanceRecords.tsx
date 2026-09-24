@@ -1,11 +1,13 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { AttendanceRecord, AttendanceSession, Student } from '../types/student';
 import { getCurrentAcademicYear } from '../firebase/dataService';
+import { normalizeDate } from '../lib/date';
 import { CalendarCheck, CalendarRange, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, CircleX, Download, FileSpreadsheet, GraduationCap, Pencil, QrCode, Trash2, X } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useModalBehavior } from '../hooks/useModalBehavior';
 import { useConfirm } from '../hooks/useConfirm';
 import { MorphingSquare } from './MorphingSquare';
+import { toast } from '@/hooks/use-toast';
 
 interface AttendanceRecordsProps {
   records: AttendanceRecord[];
@@ -47,26 +49,8 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
     return () => mql.removeEventListener('change', onChange);
   }, []);
 
-  // 🎯 useCallback للـ helper function
-  const normalizeAnyDate = useCallback((dateStr: string): string => {
-    if (!dateStr) return '';
-    const arabicNumbers = '٠١٢٣٤٥٦٧٨٩';
-    const englishNumbers = '0123456789';
-    let normalized = dateStr.replace(/[٠-٩]/g, (d) => englishNumbers[arabicNumbers.indexOf(d)] ?? d);
-    normalized = normalized.replace(/[‏‎\u200E\u200F]/g, '').trim();
-
-    if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
-
-    const slashMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (slashMatch) {
-      const day = slashMatch[1] ?? '';
-      const month = slashMatch[2] ?? '';
-      const year = slashMatch[3] ?? '';
-      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-    }
-
-    return normalized;
-  }, []);
+  // تطبيع التواريخ — دالة مشتركة من lib/date (ثابتة المرجع فتؤدي دور useCallback تلقائياً)
+  const normalizeAnyDate = normalizeDate;
 
   const sortedSessions = useMemo(() =>
     [...sessions].sort((a, b) =>
@@ -286,60 +270,32 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
   // ============================================================
   const handleExportOfficialExcel = async (): Promise<boolean> => {
     if (students.length === 0) {
-      alert('لا يوجد طلاب مسجلين في هذه المرحلة للتصدير.');
+      toast({ title: 'لا يوجد طلاب مسجلين في هذه المرحلة للتصدير.' });
       return false;
     }
 
     if (sessions.length === 0) {
-      alert('لا توجد أيام حضور (سجلات) مسجلة للتصدير.');
+      toast({ title: 'لا توجد أيام حضور (سجلات) مسجلة للتصدير.' });
       return false;
     }
 
     let targetSessions: AttendanceSession[] = [];
 
-    const normalizeForFilter = (dateStr: string): string => {
-      if (!dateStr) return '';
-      const arabicNumbers = '٠١٢٣٤٥٦٧٨٩';
-      const englishNumbers = '0123456789';
-      let normalized = dateStr.replace(/[٠-٩]/g, (d) => englishNumbers[arabicNumbers.indexOf(d)] ?? d);
-      normalized = normalized.replace(/[‏‎\u200E\u200F]/g, '').trim();
-
-      if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
-
-      const slashMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-      if (slashMatch) {
-        const day = slashMatch[1] ?? '';
-        const month = slashMatch[2] ?? '';
-        const year = slashMatch[3] ?? '';
-        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-      }
-
-      const slashMatchYMD = normalized.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
-      if (slashMatchYMD) {
-        const year = slashMatchYMD[1] ?? '';
-        const month = slashMatchYMD[2] ?? '';
-        const day = slashMatchYMD[3] ?? '';
-        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-      }
-
-      return normalized;
-    };
-
     if (exportType === 'single') {
-      if (!singleDate) { alert('الرجاء تحديد التاريخ'); return false; }
-      targetSessions = sessions.filter(s => normalizeForFilter(s.date) === singleDate);
+      if (!singleDate) { toast({ variant: 'destructive', title: 'الرجاء تحديد التاريخ' }); return false; }
+      targetSessions = sessions.filter(s => normalizeDate(s.date) === singleDate);
       if (targetSessions.length === 0) {
-        alert(`لا توجد سجلات حضور مسجلة في يوم ${singleDate}`);
+        toast({ title: `لا توجد سجلات حضور مسجلة في يوم ${singleDate}` });
         return false;
       }
     } else {
-      if (!startDate || !endDate) { alert('الرجاء تحديد تاريخ البدء والانتهاء'); return false; }
+      if (!startDate || !endDate) { toast({ variant: 'destructive', title: 'الرجاء تحديد تاريخ البدء والانتهاء' }); return false; }
       targetSessions = sessions.filter(s => {
-        const normalized = normalizeForFilter(s.date);
+        const normalized = normalizeDate(s.date);
         return normalized >= startDate && normalized <= endDate;
       });
       if (targetSessions.length === 0) {
-        alert('لا توجد سجلات حضور في هذه المدة الزمنية');
+        toast({ title: 'لا توجد سجلات حضور في هذه المدة الزمنية' });
         return false;
       }
     }
@@ -347,35 +303,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
     // 🚀 تحميل مكتبة Excel عند التصدير فقط (خارج حزمة البداية)
     const XLSX = await import('xlsx-js-style');
 
-    targetSessions.sort((a, b) => normalizeForFilter(a.date).localeCompare(normalizeForFilter(b.date)));
-
-    const normalizeDate = (dateStr: string): string => {
-      if (!dateStr) return '';
-      const arabicNumbers = '٠١٢٣٤٥٦٧٨٩';
-      const englishNumbers = '0123456789';
-      let normalized = dateStr.replace(/[٠-٩]/g, (d) => englishNumbers[arabicNumbers.indexOf(d)] ?? d);
-      normalized = normalized.replace(/[‏‎\u200E\u200F]/g, '').trim();
-
-      if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
-
-      const slashMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-      if (slashMatch) {
-        const day = slashMatch[1] ?? '';
-        const month = slashMatch[2] ?? '';
-        const year = slashMatch[3] ?? '';
-        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-      }
-
-      const slashMatchYMD = normalized.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
-      if (slashMatchYMD) {
-        const year = slashMatchYMD[1] ?? '';
-        const month = slashMatchYMD[2] ?? '';
-        const day = slashMatchYMD[3] ?? '';
-        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-      }
-
-      return normalized;
-    };
+    targetSessions.sort((a, b) => normalizeDate(a.date).localeCompare(normalizeDate(b.date)));
 
     const dateHeaders = targetSessions.map(s => {
       try {

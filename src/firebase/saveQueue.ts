@@ -1,6 +1,7 @@
 // Debounced save queue with automatic retry (3 attempts, exponential backoff)
 
 import { hasOutboxEntries, queueOutbox } from "../lib/offlineOutbox";
+import { captureException } from "../lib/sentry";
 
 const MAX_RETRIES = 3;
 const retryQueues = new Map<string, { fn: () => Promise<void>; attempts: number }>();
@@ -32,8 +33,9 @@ const persistToOutbox = async (saveKey: string): Promise<void> => {
   if (!fb) return;
   try {
     await queueOutbox(fb.key, fb.data, fb.path);
-  } catch {
-    /* localStorage احتياطي */
+  } catch (e) {
+    /* localStorage احتياطي — نُرسل التقرير حتى لا تضيع البيانات بصمت */
+    captureException(e, { fn: 'saveQueue.persistToOutbox', outboxKey: fb.key });
   }
 };
 
@@ -60,6 +62,7 @@ const runRetryLoop = async (key: string, fn: () => Promise<void>, attempt: numbe
       return runRetryLoop(key, fn, attempt + 1);
     }
     console.error(`❌ فشل الحفظ بعد ${MAX_RETRIES} محاولات — يُحفظ في outbox: ${key}`, e);
+    captureException(e, { fn: 'saveQueue.runRetryLoop', saveKey: key, attempts: attempt });
     // ضمان عدم فقد البيانات: نصفيها تلقائياً عند رجوع النت
     await persistToOutbox(key);
     retryQueues.delete(key);

@@ -23,31 +23,50 @@ export const AdminTabBar: FC<AdminTabBarProps> = ({
   onOpenPending,
 }) => (
   <div className="overflow-x-auto scrollbar-none">
-    <div
-      role="tablist"
-      aria-label="أقسام لوحة الإدارة"
-      className="flex flex-nowrap md:flex-wrap gap-2 md:gap-3 pt-3 pb-3 md:pb-3 md:pt-3 justify-start md:justify-center mb-4 md:mb-6"
-    >
-      <button
-        type="button"
-        role="tab"
-        aria-selected={activeTab === 'stage-selector'}
-        onClick={() => onTabChange('stage-selector')}
-        className={`tab-btn shrink-0 ${activeTab === 'stage-selector' ? 'active' : ''}`}
-      >
-        اختيار المرحلة
-      </button>
-      {isMainAdmin && (
-        <>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'colleges'}
-            onClick={() => onTabChange('colleges')}
-            className={`tab-btn shrink-0 ${activeTab === 'colleges' ? 'active' : ''}`}
-          >
-            إدارة الكليات
-          </button>
+    <div className="flex flex-nowrap md:flex-wrap gap-2 md:gap-3 pt-3 pb-3 md:pb-3 md:pt-3 justify-start md:justify-center mb-4 md:mb-6">
+      {/* role=tablist يحتوي أزرار التبويب فقط — أزرار الإجراءات خارجه (شرط ARIA) */}
+      <div role="tablist" aria-label="أقسام لوحة الإدارة" className="contents">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'stage-selector'}
+          onClick={() => onTabChange('stage-selector')}
+          className={`tab-btn shrink-0 ${activeTab === 'stage-selector' ? 'active' : ''}`}
+        >
+          اختيار المرحلة
+        </button>
+        {isMainAdmin && (
+          <>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'colleges'}
+              onClick={() => onTabChange('colleges')}
+              className={`tab-btn shrink-0 ${activeTab === 'colleges' ? 'active' : ''}`}
+            >
+              إدارة الكليات
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'teachers'}
+              onClick={() => onTabChange('teachers')}
+              className={`tab-btn shrink-0 ${activeTab === 'teachers' ? 'active' : ''}`}
+            >
+              التدريسيين
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'system-settings'}
+              onClick={() => onTabChange('system-settings')}
+              className={`tab-btn shrink-0 ${activeTab === 'system-settings' ? 'active' : ''}`}
+            >
+              إعدادات النظام
+            </button>
+          </>
+        )}
+        {isCollegeAdmin && (
           <button
             type="button"
             role="tab"
@@ -55,19 +74,19 @@ export const AdminTabBar: FC<AdminTabBarProps> = ({
             onClick={() => onTabChange('teachers')}
             className={`tab-btn shrink-0 ${activeTab === 'teachers' ? 'active' : ''}`}
           >
-            التدريسيين
+            صلاحيات التدريسيين
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'system-settings'}
-            onClick={() => onTabChange('system-settings')}
-            className={`tab-btn shrink-0 ${activeTab === 'system-settings' ? 'active' : ''}`}
-          >
-            إعدادات النظام
-          </button>
-        </>
-      )}
+        )}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'profile'}
+          onClick={() => onTabChange('profile')}
+          className={`tab-btn shrink-0 ${activeTab === 'profile' ? 'active' : ''}`}
+        >
+          الملف الشخصي
+        </button>
+      </div>
       {isMainAdmin && (
         <>
           <button type="button" onClick={onOpenSendLink} className="btn-base btn-primary shrink-0">
@@ -77,17 +96,6 @@ export const AdminTabBar: FC<AdminTabBarProps> = ({
             اختبار بصمة
           </button>
         </>
-      )}
-      {isCollegeAdmin && (
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'teachers'}
-          onClick={() => onTabChange('teachers')}
-          className={`tab-btn shrink-0 ${activeTab === 'teachers' ? 'active' : ''}`}
-        >
-          صلاحيات التدريسيين
-        </button>
       )}
       {(isMainAdmin || isCollegeAdmin) && (
         <div className="shrink-0 relative" style={{ overflow: 'visible' }}>
@@ -105,15 +113,6 @@ export const AdminTabBar: FC<AdminTabBarProps> = ({
           )}
         </div>
       )}
-      <button
-        type="button"
-        role="tab"
-        aria-selected={activeTab === 'profile'}
-        onClick={() => onTabChange('profile')}
-        className={`tab-btn shrink-0 ${activeTab === 'profile' ? 'active' : ''}`}
-      >
-        الملف الشخصي
-      </button>
     </div>
   </div>
 );

@@ -153,13 +153,13 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
       </h2>
 
       {success && (
-        <div className="mb-4 p-4 bg-green-100 border-2 border-green-400 text-green-700 rounded-md whitespace-pre-line font-medium">
+        <div role="status" className="mb-4 p-4 bg-green-100 border-2 border-green-400 text-green-700 rounded-md whitespace-pre-line font-medium">
           {success}
         </div>
       )}
 
       {error && (
-        <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md">
+        <div role="alert" className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md">
           {error}
         </div>
       )}

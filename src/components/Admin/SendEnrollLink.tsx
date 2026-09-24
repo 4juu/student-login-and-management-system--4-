@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { LoadingState } from '../loading/LoadingState';
 import { MorphingSquare } from '../MorphingSquare';
+import { toast } from '@/hooks/use-toast';
 
 interface SendEnrollLinkProps {
   adminUid: string;
@@ -169,7 +170,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
       setStudents(list.filter(s => s && s.id));
     } catch (e) {
       console.error('فشل تحميل الطلاب:', e);
-      alert('تعذر تحميل قائمة الطلاب');
+      toast({ variant: 'destructive', title: 'تعذر تحميل قائمة الطلاب' });
     } finally {
       setLoadingStudents(false);
     }
@@ -192,8 +193,8 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
   };
 
   const doGenerateIndividual = async () => {
-    if (!selectedStageId) { alert('الرجاء اختيار مرحلة'); return; }
-    if (selectedIds.size === 0) { alert('الرجاء تحديد طالب واحد على الأقل'); return; }
+    if (!selectedStageId) { toast({ variant: 'destructive', title: 'الرجاء اختيار مرحلة' }); return; }
+    if (selectedIds.size === 0) { toast({ variant: 'destructive', title: 'الرجاء تحديد طالب واحد على الأقل' }); return; }
     setGenerating(true);
     try {
       const chosen = students.filter(s => selectedIds.has(s.id));
@@ -210,7 +211,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
       setResultRows(rows);
     } catch (e: any) {
       console.error(e);
-      alert('فشل توليد الروابط: ' + (e?.message || ''));
+      toast({ variant: 'destructive', title: 'فشل توليد الروابط', description: e?.message || undefined });
     } finally {
       setGenerating(false);
     }
@@ -221,7 +222,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
       await navigator.clipboard.writeText(url);
       setResultRows(prev => prev.map((r, i) => i === idx ? { ...r, copied: true } : r));
       setTimeout(() => setResultRows(prev => prev.map((r, i) => i === idx ? { ...r, copied: false } : r)), 2000);
-    } catch { alert('فشل النسخ'); }
+    } catch { toast({ variant: 'destructive', title: 'فشل النسخ' }); }
   };
 
   const downloadStudentExcel = async () => {
@@ -260,8 +261,8 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
     });
     try {
       await navigator.clipboard.writeText(text);
-      alert(`تم نسخ ${resultRows.length} رابطاً مع الأسماء`);
-    } catch { alert('فشل النسخ'); }
+      toast({ title: `تم نسخ ${resultRows.length} رابطاً مع الأسماء` });
+    } catch { toast({ variant: 'destructive', title: 'فشل النسخ' }); }
   };
 
   if (resultRows.length > 0) {

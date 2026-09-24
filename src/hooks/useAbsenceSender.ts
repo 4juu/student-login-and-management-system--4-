@@ -3,6 +3,7 @@ import { Student, AttendanceRecord, Stage } from '../types/student';
 import { User } from '../types/user';
 import { TelegramConfig, AbsenceSendLogEntry, GroupSendProgress } from '../types/telegram';
 import { buildQueueFromGroups, sendQueuedMessages } from '../services/telegramService';
+import { toast } from '@/hooks/use-toast';
 
 interface UseAbsenceSenderParams {
   stages: Stage[];
@@ -129,11 +130,13 @@ export function useAbsenceSender({
       const channel = telegramConfig && selectedStageId ? telegramConfig.channels[selectedStageId] : undefined;
 
       if (!telegramConfig || !selectedStageId || !channel?.chatId) {
-        alert(
-          telegramConfig
-            ? '⚠️ إشعارات الغياب لم تُرسل: لا يوجد Chat ID مرتبط بهذه المرحلة.\nاذهب إلى الإعدادات ← بوت التلغرام وأدخل Chat ID لقناة هذه المادة.'
-            : '⚠️ إشعارات الغياب لم تُرسل: لم يتم إعداد بوت التلغرام.\nاذهب إلى الإعدادات ← بوت التلغرام لربط البوت والقناة أولاً.'
-        );
+        toast({
+          variant: 'destructive',
+          title: '⚠️ إشعارات الغياب لم تُرسل',
+          description: telegramConfig
+            ? 'لا يوجد Chat ID مرتبط بهذه المرحلة.\nاذهب إلى الإعدادات ← بوت التلغرام وأدخل Chat ID لقناة هذه المادة.'
+            : 'لم يتم إعداد بوت التلغرام.\nاذهب إلى الإعدادات ← بوت التلغرام لربط البوت والقناة أولاً.',
+        });
         return;
       }
 

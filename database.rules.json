@@ -151,7 +151,7 @@
                   ".write": "auth != null || newData.exists()",
                   "$studentId": {
                     ".write": "auth != null || (newData.exists() && newData.hasChildren(['faceDescriptor', 'updatedAt']))",
-                    ".validate": "newData.exists() ? (newData.hasChildren(['faceDescriptor', 'updatedAt']) && newData.child('updatedAt').isNumber() && (newData.child('faceDescriptor').isArray() || newData.child('faceDescriptor').isMap() || newData.child('faceDescriptor').isString())) : auth != null"
+                    ".validate": "newData.exists() ? (newData.hasChildren(['faceDescriptor', 'updatedAt']) && newData.child('updatedAt').isNumber() && (newData.child('faceDescriptor').isString() || newData.child('faceDescriptor').hasChildren())) : auth != null"
                   }
                 },
 

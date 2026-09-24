@@ -518,7 +518,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
           </div>
 
           {error && (
-            <div className="mt-4 p-3 bg-[#3A1F28] border border-[#5C2B35] rounded-xl text-red-300 text-sm flex items-start gap-2">
+            <div role="alert" className="mt-4 p-3 bg-[#3A1F28] border border-[#5C2B35] rounded-xl text-red-300 text-sm flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>

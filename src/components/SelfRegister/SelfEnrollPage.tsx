@@ -30,6 +30,7 @@ import './selfRegister.css';
 import { TextScramble } from '../TextScramble';
 import { LoadingState } from '../loading/LoadingState';
 import { MorphingSquare } from '../MorphingSquare';
+import { normalizeDate } from '../../lib/date';
 
 const LazySelfCapture = lazy(() =>
   import('../face/SelfCaptureStep').then(m => ({ default: m.SelfCaptureStep }))
@@ -160,22 +161,6 @@ const buildStudentFromLink = (lnk: RegistrationLink): Student => ({
   code: lnk.studentCode || '',
   qrCodeId: lnk.qrCodeId,
 } as Student);
-
-const normalizeDate = (dateStr: string): string => {
-  if (!dateStr) return '';
-  const arabicNums = '٠١٢٣٤٥٦٧٨٩';
-  const engNums = '0123456789';
-  const n = dateStr.replace(/[٠-٩]/g, d => engNums[arabicNums.indexOf(d)] ?? '').replace(/[\u200E\u200F]/g, '').trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(n)) return n;
-  const m = n.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (m) {
-    const day = m[1] ?? '';
-    const month = m[2] ?? '';
-    const year = m[3] ?? '';
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-  }
-  return n;
-};
 
 export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit }) => {
   const [step, setStep] = useState<Step>('loading');

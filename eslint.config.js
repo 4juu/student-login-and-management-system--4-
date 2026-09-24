@@ -2,6 +2,15 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
+
+// كل قواعد a11y كتحذيرات (warn) — البوابة تمنع الأخطاء فقط، والتحسينات تتراكم تدريجياً
+const a11yRulesWarn = Object.fromEntries(
+  Object.entries(jsxA11y.flatConfigs.recommended.rules).map(([rule, severity]) => [
+    rule,
+    severity === 'off' ? 'off' : 'warn',
+  ]),
+);
 
 export default tseslint.config(
   { ignores: ['dist', 'node_modules', 'stats.html', 'test-results', 'coverage', 'src/public/**'] },
@@ -86,5 +95,10 @@ export default tseslint.config(
       'prefer-const': 'error',
       'no-var': 'error',
     },
+  },
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ...jsxA11y.flatConfigs.recommended,
+    rules: a11yRulesWarn,
   },
 );

@@ -5,6 +5,7 @@ import { suspendAurora, resumeAurora } from '../lib/auraControl';
 import { createPortal } from 'react-dom';
 import { useSafeArea } from '../hooks/useSafeArea';
 import { useModalBehavior } from '../hooks/useModalBehavior';
+import { toast } from '@/hooks/use-toast';
 
 interface QRAttendanceProps {
   students: Student[];
@@ -15,16 +16,7 @@ interface QRAttendanceProps {
   onClose: () => void;
 }
 
-type ToastType = 'success' | 'error' | 'info' | 'warning';
 type CameraFacing = 'environment' | 'user';
-
-interface ToastMessage {
-  id: number;
-  type: ToastType;
-  title: string;
-  text?: string;
-  visible: boolean;
-}
 
 const QR_REGION_ID = 'qr-reader-v3';
 const DUPLICATE_BLOCK_MS = 30_000;
@@ -86,13 +78,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   const lastScansRef = useRef<Record<string, number>>({});
   const mountedRef = useRef(true);
   const startingRef = useRef(false);
-  const toastCounterRef = useRef(0);
-  const toastSequenceRef = useRef<Map<number, number>>(new Map());
   const qrCodeInputRef = useRef<HTMLInputElement | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement | null>(null);
 
   const [cameraReady, setCameraReady] = useState(false);
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [scanCount, setScanCount] = useState(0);
   const [recentStudents, setRecentStudents] = useState<Student[]>([]);
   const [pendingQrId, setPendingQrId] = useState<string | null>(null);
@@ -116,53 +105,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     });
     return m;
   }, [students]);
-
-  const showToast = useCallback((msg: Omit<ToastMessage, 'id' | 'visible'>, _ms = 2500) => {
-    const id = ++toastCounterRef.current;
-    const seqId = id;
-    toastSequenceRef.current.set(id, seqId);
-    setToasts(prev => [{ ...msg, id, visible: false }, ...prev].slice(0, 4));
-
-    const runSequence = async () => {
-      const show = () => setToasts(prev => prev.map(t => (t.id === id ? { ...t, visible: true } : t)));
-      const hide = () => setToasts(prev => prev.map(t => (t.id === id ? { ...t, visible: false } : t)));
-      const remove = () => setToasts(prev => prev.filter(t => t.id !== id));
-      const isActive = () => mountedRef.current && toastSequenceRef.current.get(id) === seqId;
-
-      for (let i = 0; i < 3; i++) {
-        if (!isActive()) return;
-        show();
-        await sleep(500);
-        if (!isActive()) return;
-        hide();
-        if (i < 2) await sleep(200);
-      }
-      await sleep(4000);
-      if (!isActive()) return;
-      for (let i = 0; i < 2; i++) {
-        if (!isActive()) return;
-        show();
-        await sleep(500);
-        if (!isActive()) return;
-        hide();
-        if (i < 1) await sleep(200);
-      }
-      await sleep(2000);
-      if (!isActive()) return;
-      for (let i = 0; i < 2; i++) {
-        if (!isActive()) return;
-        show();
-        await sleep(500);
-        if (!isActive()) return;
-        hide();
-        if (i < 1) await sleep(200);
-      }
-      if (isActive()) { remove(); toastSequenceRef.current.delete(id); }
-    };
-    runSequence();
-  }, []);
-
-  const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
   const hardStop = useCallback(async () => {
     if (trackRef.current && torchOn) {
@@ -301,14 +243,14 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
         if (now - (lastScansRef.current[qrId] || 0) < DUPLICATE_BLOCK_MS) return;
         lastScansRef.current[qrId] = now;
         if (alreadyPresentIds.has(student.id)) {
-          showToast({ type: 'warning', title: '⚠️ مسجل', text: student.name }, 1500);
+          toast({ title: '⚠️ مسجل', description: student.name });
           return;
         }
         await onMarkAttendance(student);
         setScanCount(c => c + 1);
         setRecentStudents(prev => [student, ...prev.filter(s => s.id !== student.id)].slice(0, 8));
         playSuccess();
-        showToast({ type: 'success', title: `✅ ${student.name}`, text: student.group ? `${student.group}` : 'تم' });
+        toast({ title: `✅ ${student.name}`, description: student.group ? `${student.group}` : 'تم' });
       } else {
         const now = Date.now();
         if (now - (lastScansRef.current[qrId] || 0) < DUPLICATE_BLOCK_MS) return;
@@ -322,7 +264,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
     } finally {
       setTimeout(() => { processingRef.current = false; }, 400);
     }
-  }, [studentMap, alreadyPresentIds, onMarkAttendance, showToast]);
+  }, [studentMap, alreadyPresentIds, onMarkAttendance]);
 
   const applyZoom = useCallback(async (val: number) => {
     if (!trackRef.current || !canZoom) return;
@@ -427,19 +369,9 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       await onMarkAttendance({ ...student, qrCodeId: qrId });
       setScanCount(c => c + 1);
       playSuccess();
-      showToast({ type: 'success', title: `✅ ${student.name}`, text: 'تم الربط' });
+      toast({ title: `✅ ${student.name}`, description: 'تم الربط' });
     }
-  }, [pendingQrId, onUpdateStudent, students, alreadyPresentIds, onMarkAttendance, showToast]);
-
-  const toastBg: Record<ToastType, string> = {
-    success: 'from-emerald-500 to-green-600',
-    error: 'from-red-500 to-rose-600',
-    info: 'from-blue-500 to-cyan-600',
-    warning: 'from-amber-500 to-orange-500',
-  };
-  const toastIcon: Record<ToastType, string> = {
-    success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️',
-  };
+  }, [pendingQrId, onUpdateStudent, students, alreadyPresentIds, onMarkAttendance]);
 
   return createPortal(
     <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="qr-scanner-title" tabIndex={-1} className="fixed inset-0 z-[9999] bg-black/80 text-white flex flex-col overscroll-none focus:outline-none" dir="rtl">
@@ -533,22 +465,6 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             </div>
           )}
         </div>
-      </div>
-
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 z-[10001] flex flex-col gap-2 w-[92%] max-w-md pointer-events-none"
-        style={{ paddingTop: `${topSafe + 8}px` }}>
-        {toasts.map(t => (
-          <div key={t.id}
-            className={`bg-gradient-to-r ${toastBg[t.type]} rounded-xl px-4 py-3 shadow-2xl transition-all duration-200 ${t.visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'}`}>
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">{toastIcon[t.type]}</span>
-              <div className="min-w-0 flex-1">
-                <p className="font-bold text-sm truncate">{t.title}</p>
-                {t.text && <p className="text-xs opacity-90 truncate">{t.text}</p>}
-              </div>
-            </div>
-          </div>
-        ))}
       </div>
 
       {pendingQrId && (

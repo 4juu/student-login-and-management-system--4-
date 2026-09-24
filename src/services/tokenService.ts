@@ -4,6 +4,7 @@ import { database } from '../firebase/config';
 import { nanoid } from 'nanoid';
 import { RegistrationLink } from '../types/registration';
 import { getActiveAcademicYear } from '../firebase/dataService';
+import { stripUndefined } from '../lib/sanitize';
 
 // ============================================================
 // 🔑 إدارة روابط التسجيل الذاتي
@@ -28,17 +29,6 @@ export const syncServerTimeOffset = async (): Promise<void> => {
 
 /** الوقت الحالي حسب سيرفر Firebase */
 export const getServerNow = (): number => Date.now() + serverTimeOffset;
-
-/**
- * 🧹 تنظيف الكائن من أي حقل قيمته undefined — Firebase RTDB يرفض undefined ويرمي خطأ فوري
- */
-const stripUndefined = <T extends object>(obj: T): T => {
-  const out: any = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (v !== undefined) out[k] = v;
-  }
-  return out;
-};
 
 /**
  * 🔒 تحقق من أيام الصلاحية: رقم غير صالح (NaN/سالب/أكبر من سنة) → الافتراضي

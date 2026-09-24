@@ -15,7 +15,9 @@ import {
 import { User } from '../types/user';
 import { MorphPanel } from './MorphPanel';
 import { ArrowUp, ChevronLeft, CircleCheck, CircleX, ClipboardList, MessageCircle, Mic, Search, Sparkles, Square } from 'lucide-react';
-import { normalizeArabic } from '../services/nameMatching';
+import { formatDateWithDay } from '../lib/date';
+import { buildLocalReply } from '../lib/chatBrain';
+import { useChatBrain } from '../hooks/useChatBrain';
 
 interface Message {
   id: string;
@@ -41,118 +43,6 @@ interface SmartChatBotProps {
   } | undefined;
 }
 
-const pad2 = (n: number) => String(n).padStart(2, '0');
-
-const toEnglishDigits = (str: string): string => {
-  if (!str) return '';
-  return String(str).replace(/[\u0660-\u0669\u06F0-\u06F9]/g, (ch) => {
-    const code = ch.charCodeAt(0);
-    if (code >= 0x0660 && code <= 0x0669) return String(code - 0x0660);
-    if (code >= 0x06F0 && code <= 0x06F9) return String(code - 0x06F0);
-    return ch;
-  });
-};
-
-const normalizeDateKey = (value?: string | Date | null): string => {
-  try {
-    if (!value) return '';
-    if (value instanceof Date) {
-      if (isNaN(value.getTime())) return '';
-      return `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(value.getDate())}`;
-    }
-    let text = String(value).trim();
-    if (!text) return '';
-    text = toEnglishDigits(text);
-    text = text.replace(/[/\\.]/g, '-');
-    const ymdMatch = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-    if (ymdMatch) {
-      return `${ymdMatch[1] ?? ''}-${pad2(parseInt(ymdMatch[2] ?? '1'))}-${pad2(parseInt(ymdMatch[3] ?? '1'))}`;
-    }
-    const dmyMatch = text.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
-    if (dmyMatch && (dmyMatch[3] ?? '').length === 4) {
-      return `${dmyMatch[3] ?? ''}-${pad2(parseInt(dmyMatch[2] ?? '1'))}-${pad2(parseInt(dmyMatch[1] ?? '1'))}`;
-    }
-    const dateObj = new Date(text);
-    if (!isNaN(dateObj.getTime())) {
-      return `${dateObj.getFullYear()}-${pad2(dateObj.getMonth() + 1)}-${pad2(dateObj.getDate())}`;
-    }
-    return '';
-  } catch {
-    return '';
-  }
-};
-
-const formatDateWithDay = (value?: string | Date | null): string => {
-  const key = normalizeDateKey(value);
-  if (!key) return '-';
-  const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-  const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-  const d = new Date(`${key}T12:00:00`);
-  if (isNaN(d.getTime())) return key;
-  return `${days[d.getDay()] ?? ''} ${d.getDate()} ${months[d.getMonth()] ?? ''} ${d.getFullYear()}`;
-};
-
-// ─────────────────────────────────────────────────────────────
-// مطابقة أسماء الطلاب — تسجيل حسب الدقة
-// ─────────────────────────────────────────────────────────────
-const scoreStudentMatch = (q: string, student: Student): number => {
-  const ql = q.toLowerCase().trim();
-  if (!ql) return 0;
-  const nameL = (student.name || '').toLowerCase();
-  const codeL = (student.code || '').toLowerCase();
-  const groupL = (student.group || '').toLowerCase();
-
-  const qN = normalizeArabic(ql);
-  const nameN = normalizeArabic(nameL);
-
-  let score = 0;
-  if (qN === nameN) score += 250;
-  else if (qN.includes(nameN)) score += 200;
-  if (nameN.includes(qN) && nameN.length < 60) score += 100;
-  if (codeL && (ql.includes(codeL) || codeL.includes(ql))) score += 50;
-  if (groupL && groupL.includes(ql)) score += 20;
-  const nameWords = nameL.split(/\s+/).filter(w => normalizeArabic(w).length > 2);
-  score += nameWords.filter(w => qN.includes(normalizeArabic(w))).length * 15;
-  return score;
-};
-
-const pickBestStudentMatch = (q: string, students: Student[]): Student | null => {
-  const ql = q.toLowerCase().trim();
-  if (!ql || !students.length) return null;
-  const qN = normalizeArabic(ql);
-  let best: Student | null = null;
-  let bestScore = 0;
-  for (const s of students) {
-    const nameL = (s.name || '').toLowerCase();
-    const nameN = normalizeArabic(nameL);
-    const codeL = (s.code || '').toLowerCase();
-    const firstName = normalizeArabic(nameL.split(' ')[0] ?? '');
-    const basicMatch =
-      (nameN && qN.includes(nameN)) ||
-      (firstName.length > 2 && qN.includes(firstName)) ||
-      (codeL && ql.includes(codeL));
-    if (!basicMatch) continue;
-    const sc = scoreStudentMatch(q, s);
-    if (sc > bestScore) {
-      bestScore = sc;
-      best = s;
-    }
-  }
-  return best;
-};
-
-interface StudentQuickCard {
-  student: Student;
-  attendedCount: number;
-  absentCount: number;
-  percentage: string;
-  isPresentToday: boolean;
-  isAbsentToday: boolean;
-  attendedSessions: { session: AttendanceSession & { _normalizedDate: string }; present: boolean; absent: boolean }[];
-  attendedDays: { date: string; label: string; count: number }[];
-  absentDays: { date: string; label: string; count: number }[];
-}
-
 export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
   user,
   colleges,
@@ -170,12 +60,6 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [studentSearchQuery, setStudentSearchQuery] = useState('');
-  const [studentSuggestions, setStudentSuggestions] = useState<Student[]>([]);
-  const [selectedStudentCard, setSelectedStudentCard] = useState<StudentQuickCard | null>(null);
-  const [showStudentCard, setShowStudentCard] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
   const [showSessionsModal, setShowSessionsModal] = useState(false);
   const [showDayDetails, setShowDayDetails] = useState(false);
 
@@ -193,16 +77,6 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
   const recognitionLangIndex = useRef(0);
   const lastTranscriptRef = useRef('');
   const manualStopRef = useRef(false);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (studentSearchRef.current && !studentSearchRef.current.contains(event.target as Node)) {
-        setShowSuggestions(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const accessibleData = useMemo(() => {
     if (isAdmin) {
@@ -271,135 +145,30 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
     return { students, records, sessions };
   }, [isAdmin, currentStageId, accessibleData, students, records, sessions]);
 
-  const fixDate = useCallback((rawDate: any): string => {
-    if (!rawDate) return '';
-    if (rawDate instanceof Date) {
-      const y = rawDate.getFullYear();
-      const m = String(rawDate.getMonth() + 1).padStart(2, '0');
-      const d = String(rawDate.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    }
-    let text = String(rawDate).trim();
-    text = text.replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '');
-    let cleaned = '';
-    for (let i = 0; i < text.length; i++) {
-      const code = text.charCodeAt(i);
-      if (code >= 0x0660 && code <= 0x0669) cleaned += String(code - 0x0660);
-      else if (code >= 0x06F0 && code <= 0x06F9) cleaned += String(code - 0x06F0);
-      else cleaned += text[i];
-    }
-    const numbers = cleaned.match(/\d+/g);
-    if (!numbers || numbers.length < 3) return cleaned;
-    let yearIdx = -1;
-    for (let i = 0; i < numbers.length; i++) {
-      if ((numbers[i] ?? '').length === 4) { yearIdx = i; break; }
-    }
-    let year = '', month = '', day = '';
-    if (yearIdx === 0) { year = numbers[0] ?? ''; month = numbers[1] ?? ''; day = numbers[2] ?? ''; }
-    else if (yearIdx === 2) { day = numbers[0] ?? ''; month = numbers[1] ?? ''; year = numbers[2] ?? ''; }
-    else if (yearIdx === 1) { month = numbers[0] ?? ''; year = numbers[1] ?? ''; day = numbers[2] ?? ''; }
-    else { year = numbers[0] ?? ''; month = numbers[1] ?? ''; day = numbers[2] ?? ''; }
-    if (!year || !month || !day) return cleaned;
-    return `${year}-${String(parseInt(month)).padStart(2, '0')}-${String(parseInt(day)).padStart(2, '0')}`;
-  }, []);
+  // بحث الطلاب + بطاقة الطالب + الاقتراحات — حالة معزولة في useChatBrain
+  // (الدوال النقية في lib/chatBrain: buildLocalReply/computeStudentCard/fixDate)
+  const {
+    studentSearchQuery,
+    studentSuggestions,
+    selectedStudentCard,
+    showStudentCard,
+    showSuggestions,
+    setShowSuggestions,
+    handleStudentSearch,
+    handleSelectStudent,
+    sendStudentQuestion,
+    clearStudentSearch,
+  } = useChatBrain({ scope, setInput, inputRef });
 
-  const computeStudentCard = useCallback((student: Student): StudentQuickCard => {
-    const todayKey = fixDate(new Date());
-    const scRecords = scope.records;
-    const scSessions = scope.sessions;
-
-    const fixedSessions = scSessions.map(s => ({
-      ...s,
-      _normalizedDate: fixDate((s as any).date),
-    }));
-
-    const sortedSessions = [...fixedSessions].sort((a, b) => {
-      if (a._normalizedDate !== b._normalizedDate) return a._normalizedDate.localeCompare(b._normalizedDate);
-      return String(a.name || '').localeCompare(String(b.name || ''), 'ar');
-    });
-
-    const studentRecords = scRecords.filter(r => r.studentId === student.id);
-    const presentSessionIds = new Set(studentRecords.filter(r => r.status === 'present').map(r => r.sessionId));
-
-    const todaySessionIds = new Set<string>();
-    fixedSessions.forEach(s => { if (s._normalizedDate === todayKey) todaySessionIds.add(s.id); });
-    const isPresentToday = studentRecords.some(r => r.status === 'present' && todaySessionIds.has(r.sessionId));
-    const isAbsentToday = studentRecords.some(r => r.status === 'absent' && todaySessionIds.has(r.sessionId));
-
-    // الحضور = السجلات اللي عليها حضور، الغياب = بقية السجلات
-    const attendedCount = sortedSessions.filter(s => presentSessionIds.has(s.id)).length;
-    const absentCount = sortedSessions.length - attendedCount;
-    const percentage = sortedSessions.length > 0
-      ? ((attendedCount / sortedSessions.length) * 100).toFixed(1)
-      : '0';
-
-    const attendedSessions = sortedSessions.map(s => ({
-      session: s,
-      present: presentSessionIds.has(s.id),
-      absent: !presentSessionIds.has(s.id),
-    }));
-
-    const attendedDateMap = new Map<string, number>();
-    const absentDateMap = new Map<string, number>();
-    sortedSessions.forEach(s => {
-      const d = s._normalizedDate;
-      if (!d) return;
-      if (presentSessionIds.has(s.id)) attendedDateMap.set(d, (attendedDateMap.get(d) || 0) + 1);
-      else absentDateMap.set(d, (absentDateMap.get(d) || 0) + 1);
-    });
-    const attendedDays = [...attendedDateMap.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([date, count]) => ({
-      date,
-      label: formatDateWithDay(date),
-      count,
-    }));
-    const absentDays = [...absentDateMap.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([date, count]) => ({
-      date,
-      label: formatDateWithDay(date),
-      count,
-    }));
-
-    return { student, attendedCount, absentCount, percentage, isPresentToday, isAbsentToday, attendedSessions, attendedDays, absentDays };
-  }, [scope, fixDate]);
-
-  const handleStudentSearch = useCallback((query: string) => {
-    setStudentSearchQuery(query);
-    setShowStudentCard(false);
-    setSelectedStudentCard(null);
-
-    if (query.trim().length < 2) {
-      setStudentSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-
-    const q = query.trim().toLowerCase();
-    const matches = scope.students
-      .map(s => ({ s, score: scoreStudentMatch(q, s) }))
-      .filter(x => x.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 15)
-      .map(x => x.s);
-
-    setStudentSuggestions(matches);
-    setShowSuggestions(matches.length > 0);
-  }, [scope]);
-
-  const handleSelectStudent = useCallback((student: Student) => {
-    const card = computeStudentCard(student);
-    setSelectedStudentCard(card);
-    setShowStudentCard(true);
-    setShowSuggestions(false);
-    setStudentSearchQuery(student.name);
-  }, [computeStudentCard]);
-
-  const sendStudentQuestion = useCallback((student: Student) => {
-    const question = `أعطني تفاصيل حضور وغياب الطالب ${student.name}`;
-    setInput(question);
-    setShowStudentCard(false);
-    setShowSuggestions(false);
-    setStudentSearchQuery('');
-    setTimeout(() => inputRef.current?.focus(), 100);
-  }, []);
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (studentSearchRef.current && !studentSearchRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [setShowSuggestions]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -431,125 +200,6 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
     return () => clearTimeout(timer);
   }, [isOpen]);
 
-  // 🚀 محرك الرد المحلي — يعمل 100% بدون API (يقرأ من قاعدة البيانات مباشرة)
-  const buildLocalReply = useCallback((question: string): { handled: boolean; text: string } => {
-    const q = question.trim();
-    const todayKey = fixDate(new Date());
-    const scStudents = scope.students;
-    const scRecords = scope.records;
-    const scSessions = scope.sessions;
-
-    const fixedSessions = scSessions.map(s => ({ ...s, _normalizedDate: fixDate((s as any).date) }));
-
-    const todaySessions = fixedSessions.filter(s => s._normalizedDate === todayKey);
-    const todaySessionIdSet = new Set(todaySessions.map(s => s.id));
-    const todayPresentIds = new Set(
-      scRecords.filter(r => todaySessionIdSet.has(r.sessionId) && r.status === 'present').map(r => r.studentId)
-    );
-    const todayAbsentIds = new Set(
-      scRecords.filter(r => todaySessionIdSet.has(r.sessionId) && r.status === 'absent').map(r => r.studentId)
-    );
-
-    // 1) من سوى الموقع / الأدمن
-    if (/مدير|مسؤول|من سوى|من صمم|من برمج|صاحب الموقع|owner|admin|developer/i.test(q)) {
-      return { handled: true, text: '👨‍⚕️ مدير الموقع/النظام هو "الدكتور الصيدلاني مجتبى هيثم محمد"' };
-    }
-
-    // 2) بحث عن طالب بالاسم أو الكود (رقم الطالب)
-    const bestStudent = pickBestStudentMatch(q, scStudents);
-    if (bestStudent) {
-      const student = bestStudent;
-
-      const sRecs = scRecords.filter(r => r.studentId === student.id);
-      const presentSessionIds = new Set(sRecs.filter(r => r.status === 'present').map(r => r.sessionId));
-
-      let todayStatus = '';
-      if (todaySessions.length === 0) todayStatus = 'لا توجد محاضرات اليوم';
-      else if (todayPresentIds.has(student.id)) todayStatus = '✅ حاضر';
-      else if (todayAbsentIds.has(student.id)) todayStatus = '❌ غائب';
-      else todayStatus = 'غير مسجل اليوم';
-
-      // كل السجلات بأسمائها الفعلية (حاضر / غائب)
-      const allSessions = [...fixedSessions].sort((a, b) => {
-        if (a._normalizedDate !== b._normalizedDate) return a._normalizedDate.localeCompare(b._normalizedDate);
-        return String(a.name || '').localeCompare(String(b.name || ''), 'ar');
-      });
-
-      // الغياب = كل سجل ما عليه حضور
-      const attendedCount = allSessions.filter(s => presentSessionIds.has(s.id)).length;
-      const absentCount = allSessions.length - attendedCount;
-      const pct = allSessions.length > 0 ? ((attendedCount / allSessions.length) * 100).toFixed(1) : '0';
-
-      let text = `📋 الطالب: **${student.name}**\n`;
-      text += `🆔 الكود: ${student.code || '-'} | كروب: ${student.group || '-'}\n`;
-      text += `📅 اليوم: ${todayStatus}\n\n`;
-      text += `📅 كل السجلات (${allSessions.length}):\n`;
-      if (allSessions.length === 0) text += `  لا يوجد\n`;
-      allSessions.forEach(s => {
-        const isPresent = presentSessionIds.has(s.id);
-        const mark = isPresent ? '✅' : '❌';
-        const state = isPresent ? 'حاضر' : 'غائب';
-        text += `  ${mark} ${s.name || 'سجل بدون اسم'} — ${formatDateWithDay(s._normalizedDate)} (${state})\n`;
-      });
-      text += `\n📊 النسبة: **${pct}%**\n`;
-      text += `✅ الحضور: ${attendedCount} سجل\n`;
-      text += `❌ الغياب: ${absentCount} سجل`;
-      return { handled: true, text };
-    }
-
-    // 3) منو حضر اليوم — حضور اليوم فقط
-    if (/منو حضر|اللي حضر|من حضر|الموجودين|الحاضرين اليوم|حضور اليوم|شو حاضر/i.test(q)) {
-      if (todaySessions.length === 0) {
-        return { handled: true, text: `📅 لا توجد بيانات حضور لليوم (${formatDateWithDay(todayKey)})` };
-      }
-      const present = scStudents.filter(s => todayPresentIds.has(s.id));
-      if (present.length === 0) return { handled: true, text: '🚨 لا يوجد حاضرين اليوم' };
-      let text = `✅ حضور اليوم فقط (${present.length}):\n`;
-      present.forEach(s => { text += `  • ${s.name} (${s.code || '-'}${s.group ? `, ${s.group}` : ''})\n`; });
-      return { handled: true, text };
-    }
-
-    // 4) منو غاب اليوم
-    if (/منو غاب|الغايبين اليوم|اللي ما حضر|من ما حضر|غياب اليوم|الناقصين|مو موجودين/i.test(q)) {
-      if (todaySessions.length === 0) {
-        return { handled: true, text: `📅 لا توجد بيانات حضور لليوم (${formatDateWithDay(todayKey)})` };
-      }
-      const absent = scStudents.filter(s => todayAbsentIds.has(s.id));
-      if (absent.length === 0) return { handled: true, text: '✅ لا يوجد طلاب مسجلين غياب اليوم' };
-      let text = `❌ غياب اليوم (${absent.length}):\n`;
-      absent.forEach(s => { text += `  • ${s.name} (${s.code || '-'}${s.group ? `, ${s.group}` : ''})\n`; });
-      return { handled: true, text };
-    }
-
-    // 5) إحصائيات اليوم
-    if (/اليوم|إحصائيات|نسبة الحضور|عدد الحاضر|عدد الغايب|الحضور والغياب/i.test(q)) {
-      if (todaySessions.length === 0) {
-        return { handled: true, text: `📅 لا توجد محاضرات اليوم (${formatDateWithDay(todayKey)})` };
-      }
-      const presentCount = scStudents.filter(s => todayPresentIds.has(s.id)).length;
-      const absentCount = scStudents.filter(s => todayAbsentIds.has(s.id)).length;
-      const notRecordedCount = scStudents.length - presentCount - absentCount;
-      const pct = scStudents.length > 0 ? ((presentCount / scStudents.length) * 100).toFixed(1) : '0';
-      let text = `📊 إحصائيات اليوم (${formatDateWithDay(todayKey)}):\n`;
-      text += `  ✅ الحاضرون: **${presentCount}**\n`;
-      text += `  ❌ الغائبون: **${absentCount}**\n`;
-      if (notRecordedCount > 0) text += `  ⬜ غير مسجل اليوم: **${notRecordedCount}**\n`;
-      text += `  📈 نسبة الحضور: **${pct}%**`;
-      return { handled: true, text };
-    }
-
-    // 6) لم يتم التعرف — دليل الاستخدام (يشتغل بدون API)
-    const exampleStudent = scStudents[0];
-    const example = exampleStudent ? `(مثال: ${exampleStudent.name} أو ${exampleStudent.code || 'الكود'})` : '(مثال: اسم الطالب أو الكود)';
-    return {
-      handled: false,
-      text: `🤖 أعمل حالياً بدون مفاتيح AI وأقدر أساعدك بـ:\n` +
-        `  • اكتب اسم الطالب أو رقمه (الكود) → أيام حضوره وغيابه ${example}\n` +
-        `  • اسأل "منو حضر اليوم؟" → حضور اليوم فقط\n` +
-        `  • اسأل "منو غاب اليوم؟" → غياب اليوم فقط\n` +
-        `  • اسأل "إحصائيات اليوم"`,
-    };
-  }, [scope, fixDate]);
 
   const sendMessage = useCallback((text: string) => {
     if (!text.trim() || isTyping) return;
@@ -571,11 +221,11 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
     // الرد المحلي — يعمل 100% بدون أي API خارجي
     setIsTyping(true);
     setTimeout(() => {
-      const local = buildLocalReply(text.trim());
+      const local = buildLocalReply(text.trim(), scope);
       setMessages(prev => [...prev, { id: `${Date.now()}_bot`, type: 'bot', content: local.text, timestamp: new Date() }]);
       setIsTyping(false);
     }, 150);
-  }, [isTyping, buildLocalReply]);
+  }, [isTyping, scope]);
 
   const sendMessageRef = useRef(sendMessage);
   sendMessageRef.current = sendMessage;
@@ -764,7 +414,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
                           />
                           {studentSearchQuery && (
                             <button
-                              onClick={() => { setStudentSearchQuery(''); setStudentSuggestions([]); setShowSuggestions(false); setShowStudentCard(false); setSelectedStudentCard(null); }}
+                              onClick={clearStudentSearch}
                               className="pl-2 pr-1 text-slate-400 hover:text-slate-200 transition"
                             >
                               ×
@@ -844,7 +494,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
                               </div>
                             )}
                             <button
-                              onClick={() => { setShowStudentCard(false); setSelectedStudentCard(null); setStudentSearchQuery(''); }}
+                              onClick={clearStudentSearch}
                               className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-red-500/20 text-red-400 hover:text-red-300 text-sm transition flex-shrink-0"
                             >
                               ✕
@@ -1032,7 +682,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
 
               {/* ⚠️ شريط الأخطاء */}
               {error && (
-                <div className="px-3 py-2 bg-red-500/10 border-t border-red-500/30">
+                <div role="alert" className="px-3 py-2 bg-red-500/10 border-t border-red-500/30">
                   <p className="text-xs text-red-300 flex items-center gap-1.5"><CircleX className="w-3.5 h-3.5 shrink-0" /> {error}</p>
                 </div>
               )}

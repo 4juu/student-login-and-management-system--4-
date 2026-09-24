@@ -5,6 +5,7 @@ import { College, Stage } from '../../types/student';
 import { createTestLink, formatRemainingMs, getServerNow } from '../../services/tokenService';
 import { Copy, ScanFace, Check, Landmark, Library, Clock } from 'lucide-react';
 import { MorphingSquare } from '../MorphingSquare';
+import { toast } from '@/hooks/use-toast';
 
 interface SendTestLinkProps {
   adminUid: string;
@@ -50,7 +51,7 @@ export function SendTestLink({ adminUid, colleges, stages, onClose }: SendTestLi
       setGeneratedUrl(url);
       setGeneratedExpiry(expiresAt);
     } catch {
-      alert('فشل إنشاء الرابط');
+      toast({ variant: 'destructive', title: 'فشل إنشاء الرابط' });
     } finally {
       setGenerating(false);
     }

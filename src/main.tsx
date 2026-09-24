@@ -4,6 +4,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { ChunkLoadErrorBoundary } from './components/ChunkLoadErrorBoundary';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { LoadingState } from './components/loading/LoadingState';
+import { Toaster } from './components/ui/toaster';
 import { initSentry } from './lib/sentry';
 import './index.css';
 
@@ -127,6 +128,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           }>
             <Entry />
           </Suspense>
+          <Toaster />
         </AppErrorBoundary>
       </ChunkLoadErrorBoundary>
     </ThemeProvider>
