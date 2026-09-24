@@ -8,13 +8,19 @@ import { getOutboxEntries, removeOutboxEntry } from "../lib/offlineOutbox";
 import { getActiveAcademicYear } from "./academicYear";
 import { getStagePath, getTeacherDataPath } from "./paths";
 import { stripUndefined } from "./localCache";
+import type { AttendanceRecord } from "../types/student";
 
 // ============================================================
 // ⚡️ رفع صندوق الأوفلاين بالتوازي (بدل عنصرٍ بعنصر تسلسلياً)
 // عند رجوع النت مع صندوق مليء، كل العناصر تُرفع دفعةً واحدة
 // مما يختصر زمن الانتظار إلى جزءٍ يسير من الزمن السابق.
+// single-flight: نداءات متزامنة (main.tsx + saveQueue online + useOnlineStatus)
+// تندمج في جولة رفع واحدة بدل تشغيل عدة جولات متوازية على نفس العناصر.
 // ============================================================
-export const applyOutbox = async (): Promise<void> => {
+let applyFlight: Promise<void> | null = null;
+let applyRerun = false;
+
+const doApplyOutbox = async (): Promise<void> => {
   const entries = await getOutboxEntries();
   if (entries.length === 0) return;
 
@@ -39,9 +45,13 @@ export const applyOutbox = async (): Promise<void> => {
           const middle = rest.slice(0, rest.lastIndexOf('_'));
           const sid = middle.slice(middle.lastIndexOf('_') + 1);
           const uid = middle.slice(0, middle.lastIndexOf('_'));
+          // loadAttendanceRecords يقرأ recordsCompressed أولاً — يجب أن نكتب هنا
+          // (dynamic import لتجنب تحميل XLSX في المسار الحرج)
+          const { compressRecord } = await import('./dataServiceCompressed');
+          const compressed = (entry.data as AttendanceRecord[]).map(compressRecord);
           await set(
-            ref(database, getTeacherDataPath(year, uid, sid, tid, 'records')),
-            (entry.data as unknown[]).map(stripUndefined as any)
+            ref(database, getTeacherDataPath(year, uid, sid, tid, 'recordsCompressed')),
+            compressed
           );
         } else if (entry.key.startsWith('sessions_')) {
           const rest = entry.key.slice('sessions_'.length);
@@ -68,4 +78,22 @@ export const applyOutbox = async (): Promise<void> => {
   if (succeededKeys.length !== entries.length) {
     console.warn(`⚠️ بقي ${entries.length - succeededKeys.length} عنصر في صندوق الأوفلاين لمحاولة لاحقة`);
   }
+};
+
+export const applyOutbox = async (): Promise<void> => {
+  if (applyFlight) {
+    applyRerun = true;
+    return applyFlight;
+  }
+  applyFlight = (async () => {
+    try {
+      do {
+        applyRerun = false;
+        await doApplyOutbox();
+      } while (applyRerun);
+    } finally {
+      applyFlight = null;
+    }
+  })();
+  return applyFlight;
 };

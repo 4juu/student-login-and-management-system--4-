@@ -66,27 +66,37 @@ export function useOnlineStatus(): { isOffline: boolean; syncDone: boolean } {
     };
   }, []);
 
+  const syncRunningRef = useRef(false);
+
   const syncNow = useCallback(async () => {
+    // حاجز reentrancy: المُستمعون المتعددون (online event + interval 600ms)
+    // لا يُطلقون جولة مزامنة جديدة أثناء تنفيذ جولة حالية
+    if (syncRunningRef.current) return;
+    syncRunningRef.current = true;
     try {
-      goOnline(database);
-    } catch {}
-    // 1) أعد المحاولات الفاشلة (مثبّتة سابقاً وسقطت بعد 3 محاولات)
-    try {
-      await retryFailedSaves();
-    } catch (e) {
-      console.error('❌ فشل إعادة محاولات الحفظ:', e);
-    }
-    // 2) ارفع صندوق الأوفلاين
-    try {
-      await applyOutbox();
-    } catch (e) {
-      console.error('❌ فشل تطبيق صندوق الأوفلاين:', e);
-    }
-    // 3) صفّي أي كتابات معلّقة متبقية
-    try {
-      await flushAllPendingSaves();
-    } catch (e) {
-      console.error('❌ فشل تصفير الكتابات المعلقة:', e);
+      try {
+        goOnline(database);
+      } catch {}
+      // 1) أعد المحاولات الفاشلة (مثبّتة سابقاً وسقطت بعد 3 محاولات)
+      try {
+        await retryFailedSaves();
+      } catch (e) {
+        console.error('❌ فشل إعادة محاولات الحفظ:', e);
+      }
+      // 2) ارفع صندوق الأوفلاين
+      try {
+        await applyOutbox();
+      } catch (e) {
+        console.error('❌ فشل تطبيق صندوق الأوفلاين:', e);
+      }
+      // 3) صفّي أي كتابات معلّقة متبقية
+      try {
+        await flushAllPendingSaves();
+      } catch (e) {
+        console.error('❌ فشل تصفير الكتابات المعلقة:', e);
+      }
+    } finally {
+      syncRunningRef.current = false;
     }
   }, []);
 
@@ -116,8 +126,9 @@ export function useOnlineStatus(): { isOffline: boolean; syncDone: boolean } {
         } else {
           void syncNow();
         }
-      } catch {
-        window.clearInterval(id);
+      } catch (e) {
+        // لا نوقف المتابعة عند خطأ مؤقت — توقف INTERVAL هنا كان يُجمّد العلامة الحمراء للأبد
+        console.warn('⏳ تعذر التحقق من الكتابات المعلقة — ستُعاد المحاولة في الدورة القادمة', e);
       }
     }, POLL_MS);
 
