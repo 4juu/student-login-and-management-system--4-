@@ -6,8 +6,8 @@ const MAX_RETRIES = 3;
 const retryQueues = new Map<string, { fn: () => Promise<void>; attempts: number }>();
 const pendingSaves = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingSaveFunctions = new Map<string, () => Promise<void>>();
-/** بيانات أوفلاين لوكيل التخزين الاحتياطي عند فشل كل المحاولات */
-const outboxFallbacks = new Map<string, { key: string; data: unknown }>();
+// بيانات أوفلاين لوكيل التخزين الاحتياطي عند فشل كل المحاولات
+const outboxFallbacks = new Map<string, { key: string; data: unknown; path?: string | undefined }>();
 
 export const cancelAllPendingSaves = (): void => {
   for (const [key, timeout] of pendingSaves) {
@@ -23,15 +23,15 @@ export const cancelAllPendingSaves = (): void => {
  * يسجّل نسخة احتياطية تُرفع لاحقاً إلى outbox إذا فشلت كل محاولات الحفظ.
  * يمنع ضياع البيانات عند طول الانقطاع أو فشل Firebase رغم وجود النت.
  */
-export const registerOutboxFallback = (saveKey: string, outboxKey: string, data: unknown): void => {
-  outboxFallbacks.set(saveKey, { key: outboxKey, data });
+export const registerOutboxFallback = (saveKey: string, outboxKey: string, data: unknown, path?: string): void => {
+  outboxFallbacks.set(saveKey, { key: outboxKey, data, path });
 };
 
 const persistToOutbox = async (saveKey: string): Promise<void> => {
   const fb = outboxFallbacks.get(saveKey);
   if (!fb) return;
   try {
-    await queueOutbox(fb.key, fb.data);
+    await queueOutbox(fb.key, fb.data, fb.path);
   } catch {
     /* localStorage احتياطي */
   }

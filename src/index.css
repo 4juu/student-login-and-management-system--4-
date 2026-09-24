@@ -966,13 +966,7 @@
 }
 
 /* == انتقال أنيق لأزرار التبويب == */
-.tab-btn {
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.tab-btn.active {
-  transform: translateY(-1px);
-}
+/* .tab-btn الكامل في design-system.css (مصدر واحد للتوأم) */
 
 /* == Page Transitions (fade + translateY) == */
 @keyframes pageEnter {
@@ -981,7 +975,7 @@
 }
 
 .animate-pageEnter {
-  animation: pageEnter 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: pageEnter 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes pageExit {

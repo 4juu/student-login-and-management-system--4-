@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  createTeacherAccount, 
+import {
+  createTeacherAccount,
   updateTeacherPermissions,
   updateTeacherPassword,
   deleteTeacherAccount,
   reactivateTeacher,
-  getAllTeachers,
   getAllTeachersForCollege,
   promoteToCollegeAdmin,
   demoteFromCollegeAdmin
@@ -92,7 +91,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
       }
 
       if (isMainAdmin && !selectedCollegeId) {
-        const list = await getAllTeachers(currentUser.uid);
+        // جلب واحد: users كاملاً ثم تصفية — بدل getAllTeachers ثم get آخر (جلب مزدوج)
         const { ref, get } = await import('firebase/database');
         const { database } = await import('../firebase/config');
         const snapshot = await get(ref(database, 'users'));
@@ -100,16 +99,10 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
           const allList = Object.values(snapshot.val()).filter(
             (u: any) => u.role === 'teacher' || u.role === 'college_admin'
           ) as User[];
-          const merged = [...list];
-          for (const t of allList) {
-            if (!merged.find(m => m.uid === t.uid)) {
-              merged.push(t);
-            }
-          }
-          setTeachers(merged);
+          setTeachers(allList);
           return;
         }
-        setTeachers(list);
+        setTeachers([]);
         return;
       }
 

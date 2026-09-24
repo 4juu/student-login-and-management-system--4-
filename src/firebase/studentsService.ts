@@ -26,15 +26,47 @@ export const saveStudents = async (
 
   const year = await getActiveAcademicYear();
   const saveKey = `students_${adminUid}_${stageId}`;
+
+  // فصل faceDescriptor إلى عقدة منفصلة — students تبقى خفيفة (بلا بصمات ضخمة)
+  const descriptors: Record<string, unknown> = {};
+  const stripped = students.map(s => {
+    if (s.faceDescriptor !== undefined && s.faceDescriptor !== null) {
+      descriptors[s.id] = s.faceDescriptor;
+    }
+    const { faceDescriptor: _fd, ...rest } = s;
+    return rest;
+  });
+
+  const studentsPath = getStagePath(year, adminUid, stageId, 'students');
+  const descriptorsPath = getStagePath(year, adminUid, stageId, 'descriptors');
+
   // نسخة احتياطية تُرفع تلقائياً إذا فشل الحفظ (قطع نت متقطع / Firebase مقطوع)
-  registerOutboxFallback(saveKey, saveKey, students);
+  registerOutboxFallback(saveKey, saveKey, stripped, studentsPath);
+  registerOutboxFallback(`${saveKey}_desc`, `${saveKey}_desc`, descriptors, descriptorsPath);
 
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    void queueOutbox(saveKey, students);
+    void queueOutbox(saveKey, stripped, studentsPath);
+    void queueOutbox(`${saveKey}_desc`, descriptors, descriptorsPath);
   }
 
   debouncedSave(saveKey, async () => {
-    await set(ref(database, getStagePath(year, adminUid, stageId, 'students')), students.map(s => stripUndefined(s as any)));
+    await set(ref(database, studentsPath), stripped.map(s => stripUndefined(s as any)));
+    await set(ref(database, descriptorsPath), descriptors);
+  });
+};
+
+/**
+ * دمج faceDescriptor من العقدة المنفصلة descriptors/ (إن وُجدت) فوق قائمة الطلاب.
+ * البصمة المدمجة في student نفسه تبقى للمتوافقة العكسية.
+ */
+export const mergeDescriptorsIntoStudents = (
+  students: Student[],
+  descriptors: Record<string, unknown> | null | undefined,
+): Student[] => {
+  if (!descriptors || typeof descriptors !== 'object') return students;
+  return students.map(s => {
+    const d = descriptors[s.id];
+    return d !== undefined && d !== null ? { ...s, faceDescriptor: d } : s;
   });
 };
 
@@ -42,20 +74,25 @@ export const loadStudents = async (adminUid: string, stageId: string): Promise<S
   const local = loadLocal<Student[]>(LS.students(adminUid, stageId), []);
   try {
     const year = await getActiveAcademicYear();
-    const snap = await get(ref(database, getStagePath(year, adminUid, stageId, 'students')));
+    const [snap, descSnap] = await Promise.all([
+      get(ref(database, getStagePath(year, adminUid, stageId, 'students'))),
+      get(ref(database, getStagePath(year, adminUid, stageId, 'descriptors'))),
+    ]);
     if (snap.exists()) {
       const data = snap.val();
       const arr: Student[] = Array.isArray(data) ? data : Object.values(data);
-      if (arr.length > 0 || local.length === 0) {
+      const descriptors = descSnap.exists() ? (descSnap.val() as Record<string, unknown>) : null;
+      const merged = mergeDescriptorsIntoStudents(arr, descriptors);
+      if (merged.length > 0 || local.length === 0) {
         // كاش localStorage الصغير (~5MB) ينفجر مع المراحل الكبيرة ويخنق البيانات الجديدة —
         // نتجاوز الكتابة عليه للقوائم الكبيرة ونعتمد على كاش IndexedDB الأساسي
         try {
-          const size = JSON.stringify(arr).length;
-          if (size < 1_500_000) saveLocal(LS.students(adminUid, stageId), arr);
+          const size = JSON.stringify(merged).length;
+          if (size < 1_500_000) saveLocal(LS.students(adminUid, stageId), merged);
         } catch {
           /* تجاهل — الكاش الرئيسي (IndexedDB) يتولى الحفظ */
         }
-        return arr;
+        return merged;
       }
       return local;
     }

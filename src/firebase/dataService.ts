@@ -31,6 +31,7 @@ export {
 export {
   saveStudents,
   loadStudents,
+  mergeDescriptorsIntoStudents,
   updateStudentDescriptorOverride,
   loadDescriptorOverrides,
   clearDescriptorOverrides,
@@ -45,6 +46,7 @@ export {
   loadActiveSession,
   loadStageData,
   deleteStageData,
+  writeStudentAttendanceIndex,
 } from './attendanceService';
 
 export {

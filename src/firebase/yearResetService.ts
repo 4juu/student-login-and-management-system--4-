@@ -10,6 +10,7 @@ import {
 } from "./academicYear";
 import { getYearBasePath, getCollegesPath, getStagesPath } from "./paths";
 import { flushAllPendingSaves } from "./saveQueue";
+import { clearLocalDatabases } from "../lib/offlineOutbox";
 
 /**
  * بدء سنة أكاديمية جديدة
@@ -57,14 +58,16 @@ export const resetAcademicYear = async (
       await update(ref(database, getYearBasePath(newYear, adminUid)), preserved);
     }
 
-    // 4️⃣ احذف الطلاب وسجلات الحضور والجلسات فقط من السنة القديمة
+    // 4️⃣ احذف الطلاب وسجلات الحضور والجلسات وفهرس studentAttendance فقط من السنة القديمة
     await remove(ref(database, `${getYearBasePath(oldYear, adminUid)}/stageData`));
+    await remove(ref(database, `${getYearBasePath(oldYear, adminUid)}/studentAttendance`));
 
     // 5️⃣ تعطيل صلاحيات كل التدريسيين (الحسابات تبقى)
     await deactivateAllTeachers(adminUid);
 
-    // 6️⃣ امسح LocalStorage بالكامل (إلا الإعدادات الشخصية)
+    // 6️⃣ امسح LocalStorage + IndexedDB بالكامل (إلا الإعدادات الشخصية)
     clearAllLocalData(adminUid);
+    void clearLocalDatabases();
 
     // 7️⃣ حدّث السنة الأكاديمية الحالية
     await setActiveAcademicYear(newYear);

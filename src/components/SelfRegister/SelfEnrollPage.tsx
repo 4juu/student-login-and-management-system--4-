@@ -64,11 +64,19 @@ export const loadStageStudentsPublic = async (
   year: string,
   stageId: string,
 ): Promise<Student[]> => {
-  const base = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}/students`;
-  const data = await dbFetch<any>(base);
+  const base = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}`;
+  const [data, descData] = await Promise.all([
+    dbFetch<any>(`${base}/students`),
+    dbFetch<Record<string, unknown>>(`${base}/descriptors`),
+  ]);
   if (!data) return [];
   const arr: any[] = Array.isArray(data) ? data : Object.values(data);
-  return arr.filter(s => s && s.id && s.name) as Student[];
+  const students = arr.filter(s => s && s.id && s.name) as Student[];
+  if (!descData || typeof descData !== 'object') return students;
+  return students.map(s => {
+    const d = descData[s.id];
+    return d !== undefined && d !== null ? { ...s, faceDescriptor: d } : s;
+  });
 };
 
 // ── تحميل الطلاب مع دمج التحسينات المحفوظة (descriptorOverrides) ──
@@ -224,10 +232,58 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     if (!year) { try { year = await getActiveAcademicYear(); } catch { year = ''; } }
 if (!year) return { records: [], sessions: [], sessionNameMap: {} };
 
-    // نجمع سجلات وجلسات الطالب من كل المدرّسين في المرحلة —
-    // السجلات قد تُحفظ بحساب من يسجّل الحضور فعلياً (ليس بالضرورة مُرسل الرابط)
     const senderTeacherId = lnk.teacherId || lnk.adminUid;
     const allTeachersPath = `academicYears/${year}/userData/${lnk.adminUid}/stageData/${lnk.stageId}/teacherRecords`;
+    const idxBase = `academicYears/${year}/userData/${lnk.adminUid}/studentAttendance/${lnk.stageId}`;
+
+    // ── مسار محسّن: فهرس per-student + جلسات من كل المدرّسين ──
+    // نجلب فهرس الطالب و `_tids` (من فُهرس)؛ إن وُجد فهرس نستخدمه للسجلات
+    // ونجيب الجلسات فقط من teacherRecords/{tid}/sessions (أصغر بكثير من teacherRecords كاملة)
+    const [idxSnap, tidsSnap] = await Promise.all([
+      dbFetch<any>(`${idxBase}/${studentId}`, signal),
+      dbFetch<Record<string, number>>(`${idxBase}/_tids`, signal),
+    ]);
+
+    const tids: string[] = tidsSnap && typeof tidsSnap === 'object' ? Object.keys(tidsSnap) : [];
+    const useIndex = !!(idxSnap && typeof idxSnap === 'object' && Object.keys(idxSnap).length > 0);
+
+    if (useIndex && tids.length > 0) {
+      const { decompressRecord } = await import('../../firebase/dataServiceCompressed');
+      const records: AttendanceRecord[] = [];
+      const seenRecords = new Set<string>();
+      for (const val of Object.values(idxSnap as Record<string, any>)) {
+        if (!val || typeof val !== 'object') continue;
+        try {
+          const rec = val.i ? decompressRecord(val) : (val as AttendanceRecord);
+          if (rec?.id && !seenRecords.has(rec.id)) {
+            seenRecords.add(rec.id);
+            records.push(rec);
+          }
+        } catch { /* سجل تالف */ }
+      }
+
+      const sessions: AttendanceSession[] = [];
+      const seenSessions = new Set<string>();
+      const sessResults = await Promise.all(
+        tids.map((tid: string) => dbFetch<any>(`${allTeachersPath}/${tid}/sessions`, signal)),
+      );
+      for (const data of sessResults) {
+        if (!data) continue;
+        const arr: any[] = Array.isArray(data) ? data : Object.values(data);
+        for (const s of arr) {
+          if (s && s.id && !seenSessions.has(s.id)) {
+            seenSessions.add(s.id);
+            sessions.push(s as AttendanceSession);
+          }
+        }
+      }
+
+      const sessionNameMap: Record<string, string> = {};
+      for (const s of sessions) { if (s.id && s.name) sessionNameMap[s.id] = s.name; }
+      return { records, sessions, sessionNameMap };
+    }
+
+    // ── مسار احتياطي: teacherRecords كاملة (فهرس غير متاح بعد) ──
     const all = await dbFetch<any>(allTeachersPath, signal);
 
     const datasets: any[] = [];

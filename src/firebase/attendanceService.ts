@@ -1,14 +1,62 @@
 // Attendance records (compressed), sessions, active session, stage load/delete
 
-import { ref, set, get, remove } from "firebase/database";
+import { ref, set, get, remove, update } from "firebase/database";
 import { database } from "./config";
 import { AttendanceRecord, AttendanceSession } from "../types/student";
 import { getActiveAcademicYear } from "./academicYear";
-import { getYearBasePath, getTeacherDataPath } from "./paths";
+import { getYearBasePath, getTeacherDataPath, getStudentAttendancePath, getStudentAttendanceTidsPath } from "./paths";
 import { LS, saveLocal, loadLocal, isDangerousEmpty, stripUndefined } from "./localCache";
 import { debouncedSave, cancelPendingSavesWhere, registerOutboxFallback } from "./saveQueue";
 import { queueOutbox } from "../lib/offlineOutbox";
 import { loadStudents, loadDescriptorOverrides } from "./studentsService";
+
+// lastIndexed: recordId → studentId لكل مفتاح حفظ — لكتابة فارق فقط في فهرس studentAttendance
+const attIndexState = new Map<string, Map<string, string>>();
+
+const attIndexKey = (year: string, adminUid: string, stageId: string, teacherId: string) =>
+  `${year}/${adminUid}/${stageId}/${teacherId}`;
+
+/**
+ * يكتب فهرس studentAttendance بالفارق فقط (ما تغيّر منذ آخر حفظ).
+ * يُستدعى من الحفظ المؤجّل ومن تطبيق outbox.
+ */
+export const writeStudentAttendanceIndex = async (
+  year: string,
+  adminUid: string,
+  stageId: string,
+  teacherId: string,
+  records: AttendanceRecord[],
+): Promise<void> => {
+  const { compressRecord } = await import('./dataServiceCompressed');
+  const key = attIndexKey(year, adminUid, stageId, teacherId);
+  const prev = attIndexState.get(key);
+  const current = new Map<string, string>();
+  const updates: Record<string, unknown> = {};
+  const base = getStudentAttendancePath(year, adminUid, stageId);
+
+  for (const rec of records) {
+    if (!rec?.id || !rec.studentId) continue;
+    current.set(rec.id, rec.studentId);
+    if (!prev || prev.get(rec.id) !== rec.studentId) {
+      updates[`${base}/${rec.studentId}/${rec.id}`] = compressRecord(rec);
+    }
+  }
+
+  if (prev) {
+    for (const [rid, sid] of prev) {
+      if (!current.has(rid)) {
+        updates[`${base}/${sid}/${rid}`] = null;
+      }
+    }
+  }
+
+  updates[getStudentAttendanceTidsPath(year, adminUid, stageId) + `/${teacherId}`] = Date.now();
+  attIndexState.set(key, current);
+
+  if (Object.keys(updates).length > 0) {
+    await update(ref(database), updates);
+  }
+};
 
 export const saveAttendanceRecords = async (
   adminUid: string,
@@ -28,10 +76,10 @@ export const saveAttendanceRecords = async (
 
   const year = await getActiveAcademicYear();
   const saveKey = `records_${adminUid}_${stageId}_${teacherId}`;
-  registerOutboxFallback(saveKey, saveKey, records);
+  registerOutboxFallback(saveKey, saveKey, records, getTeacherDataPath(year, adminUid, stageId, teacherId, 'recordsCompressed'));
 
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    void queueOutbox(saveKey, records);
+    void queueOutbox(saveKey, records, getTeacherDataPath(year, adminUid, stageId, teacherId, 'recordsCompressed'));
   }
 
   debouncedSave(saveKey, async () => {
@@ -43,6 +91,11 @@ export const saveAttendanceRecords = async (
       compressed
     );
 
+    try {
+      await writeStudentAttendanceIndex(year, adminUid, stageId, teacherId, records);
+    } catch (e) {
+      console.warn('⚠️ فشل تحديث فهرس studentAttendance:', e);
+    }
   });
 };
 
@@ -107,10 +160,10 @@ export const saveSessions = async (
 
   const year = await getActiveAcademicYear();
   const saveKey = `sessions_${adminUid}_${stageId}_${teacherId}`;
-  registerOutboxFallback(saveKey, saveKey, sessions);
+  registerOutboxFallback(saveKey, saveKey, sessions, getTeacherDataPath(year, adminUid, stageId, teacherId, 'sessions'));
 
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    void queueOutbox(saveKey, sessions);
+    void queueOutbox(saveKey, sessions, getTeacherDataPath(year, adminUid, stageId, teacherId, 'sessions'));
   }
 
   debouncedSave(saveKey, async () => {
@@ -155,16 +208,22 @@ export const saveActiveSession = async (
   saveLocal(LS.activeSession(adminUid, stageId, teacherId), sessionId);
   try {
     const year = await getActiveAcademicYear();
-    if (sessionId) {
-      await set(
-        ref(database, getTeacherDataPath(year, adminUid, stageId, teacherId, 'activeSession')),
-        sessionId
-      );
-    } else {
-      await remove(
-        ref(database, getTeacherDataPath(year, adminUid, stageId, teacherId, 'activeSession'))
-      );
+    const saveKey = `activeSession_${adminUid}_${stageId}_${teacherId}`;
+    // نسخة احتياطية تُرفع عند عودة الاتصال (نفس نمط بقية الحفظ)
+    registerOutboxFallback(saveKey, saveKey, sessionId, getTeacherDataPath(year, adminUid, stageId, teacherId, 'activeSession'));
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      void queueOutbox(saveKey, sessionId, getTeacherDataPath(year, adminUid, stageId, teacherId, 'activeSession'));
     }
+
+    debouncedSave(saveKey, async () => {
+      const path = getTeacherDataPath(year, adminUid, stageId, teacherId, 'activeSession');
+      if (sessionId) {
+        await set(ref(database, path), sessionId);
+      } else {
+        await remove(ref(database, path));
+      }
+    });
   } catch (e) {
     console.warn('⚠️ فشل حفظ الجلسة النشطة:', e);
   }
@@ -227,7 +286,13 @@ export const deleteStageData = async (adminUid: string, stageId: string): Promis
 
     const year = await getActiveAcademicYear();
     await remove(ref(database, `${getYearBasePath(year, adminUid)}/stageData/${stageId}`));
+    await remove(ref(database, `${getYearBasePath(year, adminUid)}/studentAttendance/${stageId}`));
     localStorage.removeItem(LS.students(adminUid, stageId));
+
+    // مسح حالة فهرس studentAttendance في الذاكرة لهذه المرحلة
+    for (const k of Array.from(attIndexState.keys())) {
+      if (k.includes(`/${adminUid}/${stageId}/`)) attIndexState.delete(k);
+    }
 
     Object.keys(localStorage).forEach((k) => {
       if (

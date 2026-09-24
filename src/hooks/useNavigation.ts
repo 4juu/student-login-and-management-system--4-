@@ -19,10 +19,12 @@ function useNavigation(currentUser: User | null) {
   const setShowPendingRegistrations = useNavStore((s) => s.setShowPendingRegistrations);
   const pendingCount = useNavStore((s) => s.pendingCount);
   const setPendingCount = useNavStore((s) => s.setPendingCount);
+  const setPendingRequests = useNavStore((s) => s.setPendingRequests);
 
   useEffect(() => {
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'college_admin')) {
       setPendingCount(0);
+      setPendingRequests([]);
       return;
     }
 
@@ -30,10 +32,16 @@ function useNavigation(currentUser: User | null) {
     const requestsRef = dbRef(database, path);
 
     const handleSnapshot = (snapshot: any) => {
-      if (!snapshot.exists()) { setPendingCount(0); return; }
+      if (!snapshot.exists()) {
+        setPendingCount(0);
+        setPendingRequests([]);
+        return;
+      }
       const data = snapshot.val();
-      const count = Object.values(data).filter((r: any) => r.status === 'pending').length;
-      setPendingCount(count);
+      const arr = Object.entries(data).map(([id, r]: [string, any]) => ({ ...r, id }));
+      arr.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setPendingCount(arr.filter((r: any) => r.status === 'pending').length);
+      setPendingRequests(arr);
     };
 
     const unsubscribe = onValue(requestsRef, handleSnapshot, (error) => {
@@ -41,7 +49,7 @@ function useNavigation(currentUser: User | null) {
     });
 
     return () => { off(requestsRef); unsubscribe(); };
-  }, [currentUser, setPendingCount]);
+  }, [currentUser, setPendingCount, setPendingRequests]);
 
   return {
     activeTab,

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { PendingRegistration } from '../types/registration';
 
 export type Tab =
   | 'stage-selector'
@@ -19,12 +20,15 @@ interface NavState {
   showAttendanceLink: boolean;
   showPendingRegistrations: boolean;
   pendingCount: number;
+  /** قائمة الطلبات الكاملة — يملؤها useNavigation (مشترك واحد) وتقرؤها نافذة PendingRegistrations */
+  pendingRequests: PendingRegistration[];
   setActiveTab: (tab: Tab) => void;
   setShowSendLink: (open: boolean) => void;
   setShowTestLink: (open: boolean) => void;
   setShowAttendanceLink: (open: boolean) => void;
   setShowPendingRegistrations: (open: boolean) => void;
   setPendingCount: (count: number) => void;
+  setPendingRequests: (requests: PendingRegistration[]) => void;
   resetNav: () => void;
 }
 
@@ -35,6 +39,7 @@ export const useNavStore = create<NavState>((set, get) => ({
   showAttendanceLink: false,
   showPendingRegistrations: false,
   pendingCount: 0,
+  pendingRequests: [],
   setActiveTab: (tab) => {
     const prev = get().activeTab;
     set({ activeTab: tab });
@@ -48,6 +53,7 @@ export const useNavStore = create<NavState>((set, get) => ({
   setShowAttendanceLink: (showAttendanceLink) => set({ showAttendanceLink }),
   setShowPendingRegistrations: (showPendingRegistrations) => set({ showPendingRegistrations }),
   setPendingCount: (pendingCount) => set({ pendingCount }),
+  setPendingRequests: (pendingRequests) => set({ pendingRequests }),
   resetNav: () =>
     set({
       activeTab: 'stage-selector',
@@ -55,5 +61,6 @@ export const useNavStore = create<NavState>((set, get) => ({
       showTestLink: false,
       showAttendanceLink: false,
       showPendingRegistrations: false,
+      pendingRequests: [],
     }),
 }));

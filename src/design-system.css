@@ -211,10 +211,7 @@
   overflow-y: auto;
 }
 
-@keyframes modalEnter {
-  from { opacity: 0; transform: scale(0.92) translateY(20px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
-}
+/* @keyframes modalEnter — معرّف مسبقاً في index.css (مصدر واحد للتوأم) */
 
 /* ============================================ */
 /* 🪟 Glass Input                               */
@@ -416,13 +413,7 @@
 /* ============================================ */
 /* 🎬 Animations                                */
 /* ============================================ */
-@keyframes pageEnter {
-  from { opacity: 0.6; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-pageEnter {
-  animation: pageEnter 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
+/* @keyframes pageEnter + .animate-pageEnter — في index.css (مصدر واحد للتوأم) */
 
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(12px); }
@@ -451,6 +442,7 @@
 /* ============================================ */
 /* 🦴 Skeleton Shimmer                          */
 /* ============================================ */
+/* @keyframes skeletonPulse + .animate-skeleton — في index.css (مصدر واحد للتوأم) */
 @keyframes skeletonShimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
@@ -465,11 +457,6 @@
   background-size: 200% 100%;
   animation: skeletonShimmer 1.6s ease-in-out infinite;
 }
-@keyframes skeletonPulse {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
-}
-.animate-skeleton { animation: skeletonPulse 1.6s ease-in-out infinite; }
 
 /* ============================================ */
 /* 🌟 Scrollbar                                 */

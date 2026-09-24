@@ -1,18 +1,17 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalBehavior } from '../hooks/useModalBehavior';
-import { Student, AttendanceRecord, Stage, College } from '../types/student';
+import { Stage, College } from '../types/student';
 import { User } from '../types/user';
 import { TelegramConfig } from '../types/telegram';
 import {
-  resetAcademicYear, 
-  getDatabaseStats, 
+  resetAcademicYear,
+  getDatabaseStats,
   listAllAcademicYears,
   getCurrentAcademicYear,
   getNextAcademicYear,
   isValidAcademicYearFormat,
   saveTelegramConfig,
-  loadTelegramConfig,
   saveSystemTitle,
 } from '../firebase/dataService';
 import {
@@ -22,13 +21,12 @@ import {
 import { Bot, CalendarDays, ChartColumn, CircleCheck, ClipboardList, GraduationCap, Info, KeyRound, Landmark, Library, LoaderCircle, Megaphone, RefreshCw, Save, Search, Send, Settings as SettingsIcon, Smile, SquarePen, TriangleAlert, User as UserIcon } from 'lucide-react';
 
 interface SettingsProps {
-  students: Student[];
-  attendanceRecords: AttendanceRecord[];
   currentUser?: User;
   onResetComplete?: () => void;
   stages?: Stage[];
   colleges?: College[];
   onTelegramConfigChange?: (config: TelegramConfig | null) => void;
+  initialTelegramConfig?: TelegramConfig | null;
   systemTitle?: string;
   onSystemTitleChange?: (title: string) => void;
 }
@@ -39,6 +37,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
   stages = [],
   colleges = [],
   onTelegramConfigChange,
+  initialTelegramConfig = null,
   systemTitle = '',
   onSystemTitleChange,
 }) => {
@@ -126,21 +125,18 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
     }
   }, [isAdmin, currentUser]);
 
-  // 🤖 تحميل تهيئة التلغرام
+  // 🤖 تهيئة التلغرام من المتجر (تُحمَّل مرة واحدة في loadInitialData) — بلا جلب مكرر
   useEffect(() => {
-    if (!currentUser) return;
-    loadTelegramConfig(getAdminUid()).then(config => {
-      if (config) {
-        setTelegramConfig(config);
-        setTelegramBotToken(config.botToken);
-        if (config.botToken) {
-          verifyBotToken(config.botToken).then(r => {
-            if (r.ok) { setBotVerified(true); setBotUsername(r.username || ''); }
-          });
-        }
+    if (initialTelegramConfig) {
+      setTelegramConfig(initialTelegramConfig);
+      setTelegramBotToken(initialTelegramConfig.botToken);
+      if (initialTelegramConfig.botToken) {
+        verifyBotToken(initialTelegramConfig.botToken).then(r => {
+          if (r.ok) { setBotVerified(true); setBotUsername(r.username || ''); }
+        });
       }
-    });
-  }, [currentUser]);
+    }
+  }, [initialTelegramConfig]);
 
   const getAdminUid = useCallback((): string => {
     if (!currentUser) return '';

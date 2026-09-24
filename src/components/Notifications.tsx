@@ -28,14 +28,15 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
   const isMainAdmin = currentUser?.role === 'admin';
   const mainAdminCanSend = isMainAdmin;
 
+  // الاشتراك فقط عند فتح اللوحة — يخفّض استهلاك الاتصال والذاكرة في الخلفية
   useEffect(() => {
-    if (!uid) return;
+    if (!uid || !open) return;
     const unsub = subscribeNotifications(
       (list) => { setItems(list); setLoaded(true); },
       () => { setError('فشل تحميل الإشعارات'); setLoaded(true); }
     );
     return unsub;
-  }, [uid]);
+  }, [uid, open]);
 
   const unreadCount = useMemo(
     () => items.filter(n => !isNotificationRead(n, uid)).length,

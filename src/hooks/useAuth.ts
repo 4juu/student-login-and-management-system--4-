@@ -4,6 +4,7 @@ import { User } from '../types/user';
 import { auth, database } from '../firebase/config';
 import { signIn, signOut } from '../firebase/authService';
 import { saveUserData, flushAllPendingSaves } from '../firebase/dataService';
+import { clearLocalDatabases } from '../lib/offlineOutbox';
 import {
   useAuthStore,
   selectIsAdmin,
@@ -113,6 +114,8 @@ export function useAuth({ resetData, loadInitialData, registerToken = null }: Us
     await signOut();
     setCurrentUser(null);
     resetData();
+    // مسح IndexedDB (كاش المرحلة + الأوفلاين) — يمنع تسريب بيانات مستخدم سابق
+    void clearLocalDatabases();
     setLogoutConfirmOpen(false);
     setLoggingOut(false);
   };
@@ -125,15 +128,15 @@ export function useAuth({ resetData, loadInitialData, registerToken = null }: Us
   const isMainAdmin = isAdmin;
   const canSendAttendanceLink = useAuthStore(selectCanSendAttendanceLink);
 
-  const getAdminUid = (): string => {
+  const getAdminUid = useCallback((): string => {
     if (!currentUser) return '';
     if (currentUser.role === 'admin') return currentUser.uid;
     return currentUser.adminId || currentUser.uid;
-  };
+  }, [currentUser]);
 
-  const getTeacherId = (): string => {
+  const getTeacherId = useCallback((): string => {
     return currentUser?.uid || '';
-  };
+  }, [currentUser]);
 
   return {
     currentUser,

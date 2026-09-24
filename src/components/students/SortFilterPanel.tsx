@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Student } from '../../types/student';
 import type { useConfirm } from '../../hooks/useConfirm';
 import { CaseSensitive, ChartColumn, RefreshCw, Users } from 'lucide-react';
@@ -32,6 +32,15 @@ export const SortFilterPanel: React.FC<SortFilterPanelProps> = ({
   onSortByGroup,
   confirm,
 }) => {
+  // عدّ المجموعات مرة واحدة بدل students.filter داخل كل خيار
+  const groupCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of students) {
+      if (s.group) counts.set(s.group, (counts.get(s.group) || 0) + 1);
+    }
+    return counts;
+  }, [students]);
+
   return (
     <>
       {studentsCount > 1 && (onSortByName || onSortByGroup) && (
@@ -104,7 +113,7 @@ export const SortFilterPanel: React.FC<SortFilterPanelProps> = ({
               <option value="all">جميع الكروبات</option>
               {uniqueGroups.map(g => (
                 <option key={g} value={g}>
-                  {g} ({students.filter(s => s.group === g).length})
+                  {g} ({groupCounts.get(g) || 0})
                 </option>
               ))}
             </select>

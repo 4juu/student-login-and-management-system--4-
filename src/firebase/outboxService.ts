@@ -31,6 +31,43 @@ const doApplyOutbox = async (): Promise<void> => {
   await Promise.allSettled(
     entries.map(async entry => {
       try {
+        // المسار المثبّت وقت الطبع يحمي من تغيّر السنة الأكاديمية قبل التصفيية
+        if (entry.path) {
+          if (entry.key.startsWith('records_')) {
+            const { compressRecord } = await import('./dataServiceCompressed');
+            const raw = entry.data as AttendanceRecord[];
+            const compressed = raw.map(compressRecord);
+            await set(ref(database, entry.path), compressed);
+            // فهرس per-student: اشتق المسار من مسار recordsCompressed
+            try {
+              const m = entry.path.match(/^(.*)\/stageData\/([^/]+)\/teacherRecords\/([^/]+)\/recordsCompressed$/);
+              if (m && m[1]) {
+                const [, yearBase, sid, tid] = m;
+                const ym = yearBase.match(/^academicYears\/([^/]+)\/userData\/([^/]+)$/);
+                if (ym && ym[1] && ym[2] && sid && tid) {
+                  const { writeStudentAttendanceIndex } = await import('./attendanceService');
+                  await writeStudentAttendanceIndex(ym[1], ym[2], sid, tid, raw);
+                }
+              }
+            } catch (e) {
+              console.warn('⚠️ outbox: فشل تحديث فهرس studentAttendance:', e);
+            }
+          } else if (entry.key.startsWith('activeSession_')) {
+            if (entry.data) {
+              await set(ref(database, entry.path), entry.data as string);
+            } else {
+              await set(ref(database, entry.path), null);
+            }
+          } else {
+            const payload = Array.isArray(entry.data)
+              ? (entry.data as unknown[]).map(stripUndefined as any)
+              : entry.data;
+            await set(ref(database, entry.path), payload);
+          }
+          succeededKeys.push(entry.key);
+          return;
+        }
+
         if (entry.key.startsWith('students_')) {
           const rest = entry.key.slice('students_'.length);
           const sid = rest.slice(rest.lastIndexOf('_') + 1);
@@ -48,11 +85,18 @@ const doApplyOutbox = async (): Promise<void> => {
           // loadAttendanceRecords يقرأ recordsCompressed أولاً — يجب أن نكتب هنا
           // (dynamic import لتجنب تحميل XLSX في المسار الحرج)
           const { compressRecord } = await import('./dataServiceCompressed');
-          const compressed = (entry.data as AttendanceRecord[]).map(compressRecord);
+          const raw = entry.data as AttendanceRecord[];
+          const compressed = raw.map(compressRecord);
           await set(
             ref(database, getTeacherDataPath(year, uid, sid, tid, 'recordsCompressed')),
             compressed
           );
+          try {
+            const { writeStudentAttendanceIndex } = await import('./attendanceService');
+            await writeStudentAttendanceIndex(year, uid, sid, tid, raw);
+          } catch (e) {
+            console.warn('⚠️ outbox: فشل تحديث فهرس studentAttendance:', e);
+          }
         } else if (entry.key.startsWith('sessions_')) {
           const rest = entry.key.slice('sessions_'.length);
           const tid = rest.slice(rest.lastIndexOf('_') + 1);
@@ -63,6 +107,18 @@ const doApplyOutbox = async (): Promise<void> => {
             ref(database, getTeacherDataPath(year, uid, sid, tid, 'sessions')),
             (entry.data as unknown[]).map(stripUndefined as any)
           );
+        } else if (entry.key.startsWith('activeSession_')) {
+          const rest = entry.key.slice('activeSession_'.length);
+          const tid = rest.slice(rest.lastIndexOf('_') + 1);
+          const middle = rest.slice(0, rest.lastIndexOf('_'));
+          const sid = middle.slice(middle.lastIndexOf('_') + 1);
+          const uid = middle.slice(0, middle.lastIndexOf('_'));
+          const path = getTeacherDataPath(year, uid, sid, tid, 'activeSession');
+          if (entry.data) {
+            await set(ref(database, path), entry.data as string);
+          } else {
+            await set(ref(database, path), null);
+          }
         }
         succeededKeys.push(entry.key);
       } catch (e) {

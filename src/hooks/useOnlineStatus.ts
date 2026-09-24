@@ -14,8 +14,10 @@ import { applyOutbox, flushAllPendingSaves, hasPendingWrites, retryFailedSaves }
 // مدة سماح: لا نعتبر الاتصال بالسيرفر مقطوعاً إلا بعد بقاء
 // .info/connected = false لمدة كافية (يمنع التذبذب عند إعادة الاتصال)
 const FIREBASE_GRACE_MS = 6000;
-// المدة بين محاولات التأكد من اكتمال المزامنة
-const POLL_MS = 600;
+// متابعة تصاعدية: تبدأ سريعة عند رجوع الاتصال ثم تتباطأ لتقليل الاستعلام
+const POLL_MIN_MS = 2000;
+const POLL_MAX_MS = 10000;
+const POLL_BACKOFF_FACTOR = 1.5;
 
 export function useOnlineStatus(): { isOffline: boolean; syncDone: boolean } {
   const [navigatorOnline, setNavigatorOnline] = useState<boolean>(
@@ -115,24 +117,36 @@ export function useOnlineStatus(): { isOffline: boolean; syncDone: boolean } {
       void syncNow();
     }
 
-    // متابعة دورية حتى اكتمال كل الكتابات (مع إعادة محاولة مستمرة)
-    const id = window.setInterval(async () => {
-      if (!navigatorOnline) return;
-      try {
-        const pending = await hasPendingWrites();
-        if (!pending) {
-          setSyncDone(true);
-          window.clearInterval(id);
-        } else {
-          void syncNow();
-        }
-      } catch (e) {
-        // لا نوقف المتابعة عند خطأ مؤقت — توقف INTERVAL هنا كان يُجمّد العلامة الحمراء للأبد
-        console.warn('⏳ تعذر التحقق من الكتابات المعلقة — ستُعاد المحاولة في الدورة القادمة', e);
-      }
-    }, POLL_MS);
+    // متابعة دورية حتى اكتمال كل الكتابات — تصاعدية (سريع ثم بطيء)
+    let delay = POLL_MIN_MS;
+    let timer: number | undefined;
 
-    return () => window.clearInterval(id);
+    const schedule = () => {
+      timer = window.setTimeout(async () => {
+        if (!navigatorOnline) {
+          schedule();
+          return;
+        }
+        try {
+          const pending = await hasPendingWrites();
+          if (!pending) {
+            setSyncDone(true);
+            return;
+          }
+          void syncNow();
+        } catch (e) {
+          // لا نتوقف عند خطأ مؤقت — التوقف كان يُجمّد العلامة الحمراء للأبد
+          console.warn('⏳ تعذر التحقق من الكتابات المعلقة — ستُعاد المحاولة', e);
+        }
+        delay = Math.min(Math.round(delay * POLL_BACKOFF_FACTOR), POLL_MAX_MS);
+        schedule();
+      }, delay);
+    };
+    schedule();
+
+    return () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
   }, [isOffline, navigatorOnline, syncNow]);
 
   return { isOffline, syncDone };

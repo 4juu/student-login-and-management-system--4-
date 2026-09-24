@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { ref, onValue, off, update, set, get } from 'firebase/database';
+import React, { useState, useMemo } from 'react';
+import { ref, update, set, get } from 'firebase/database';
 import { database } from '../../firebase/config';
 import { Student } from '../../types/student';
 import { PendingRegistration } from '../../types/registration';
@@ -13,6 +13,7 @@ import {
 } from '../../services/faceAI/descriptors';
 import { Camera, Check, CircleCheck, CircleX, ClipboardList, LoaderCircle, Mail, QrCode, Save, Smile, Trash2, TriangleAlert } from 'lucide-react';
 import { useConfirm } from '../../hooks/useConfirm';
+import { useNavStore } from '../../store/navStore';
 
 interface PendingRegistrationsProps {
   adminUid: string;
@@ -27,8 +28,8 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
   dataAdminUid,
   onClose,
 }) => {
-  const [requests, setRequests] = useState<PendingRegistration[]>([]);
-  const [loading, setLoading] = useState(true);
+  // استماع واحد فقط في useNavigation — النافذة تقرأ من المتجر (لا اشتراك مكرر على نفس المسار)
+  const [requests] = [useNavStore((s) => s.pendingRequests)];
   const [filter, setFilter] = useState<FilterStatus>('pending');
   const [processing, setProcessing] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -36,34 +37,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [purging, setPurging] = useState(false);
   const { confirm: confirmAction, ConfirmDialog: ConfirmDialogEl } = useConfirm();
-
-  useEffect(() => {
-    const path = `registrationSystem/pending/${adminUid}`;
-    const requestsRef = ref(database, path);
-
-    const unsubscribe = onValue(requestsRef, (snapshot) => {
-      if (!snapshot.exists()) {
-        setRequests([]);
-        setLoading(false);
-        return;
-      }
-
-      const data = snapshot.val();
-      const arr: PendingRegistration[] = Object.values(data);
-      arr.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-      setRequests(arr);
-      setLoading(false);
-    }, (error) => {
-      console.error('❌ خطأ في جلب الطلبات:', error);
-      setLoading(false);
-    });
-
-    return () => {
-      off(requestsRef);
-      unsubscribe();
-    };
-  }, [adminUid]);
+  const loading = false;
 
   const filteredRequests = useMemo(() => {
     return requests.filter(r => {
@@ -93,14 +67,19 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       }
 
       const basePath = `academicYears/${year}/userData/${storageUid}/stageData/${req.stageId}/students`;
+      const descriptorsPath = `academicYears/${year}/userData/${storageUid}/stageData/${req.stageId}/descriptors`;
 
       // ── 1) Find the student's key first (array index or object key)
-      const snap = await get(ref(database, basePath));
+      const [snap, descSnap] = await Promise.all([
+        get(ref(database, basePath)),
+        get(ref(database, descriptorsPath)),
+      ]);
       if (!snap.exists()) {
         throw new Error('لم نجد بيانات الطلاب');
       }
 
       const data = snap.val();
+      const descriptors = descSnap.exists() ? (descSnap.val() as Record<string, unknown>) : null;
       let studentKey: string | number | null = null;
       let studentData: Student | null = null;
 
@@ -140,7 +119,10 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
           alert('البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.');
           return;
         }
-        const allStudents: Student[] = Array.isArray(data) ? data : Object.values(data);
+        const allStudents: Student[] = (Array.isArray(data) ? data : Object.values(data)).map(s => {
+          const d = descriptors?.[s.id];
+          return d !== undefined && d !== null ? { ...s, faceDescriptor: d } : s;
+        });
         const tamper = checkForTampering(query, allStudents, req.studentId);
         if (tamper.tampered) {
           alert(`لا يمكن الموافقة: هذه البصمة مطابقة لبصمة الطالب:\n${tamper.matchedWith}\n\nيرجى التحقق من صالة الطلب.`);
@@ -150,12 +132,15 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       }
 
       // ── 3) Update ONLY this student using update() — avoids rewriting whole array
+      // faceDescriptor يُكتب في العقدة المنفصلة descriptors/ (بلا مساس بمصفوفة students)
       const studentRef = ref(database, `${basePath}/${studentKey}`);
       await update(studentRef, {
         qrCodeId: req.qrCodeId,
-        faceDescriptor: finalDescriptor,
         faceRegisteredAt: new Date().toISOString(),
       });
+      if (finalDescriptor !== undefined) {
+        await set(ref(database, `${descriptorsPath}/${req.studentId}`), finalDescriptor);
+      }
 
       // ── 4) Update pending request status
       await update(ref(database, `registrationSystem/pending/${adminUid}/${req.id}`), {

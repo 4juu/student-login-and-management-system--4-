@@ -62,9 +62,25 @@ const setup = (overrides: Partial<React.ComponentProps<typeof AttendanceRecords>
   return { onClearRecords, onDeleteRecord, onUpdateRecord };
 };
 
+// jsdom matchMedia في setup.ts يعيد matches:false دائماً — نحاكي سطح المكتب لعرض الجدول
+const mockDesktopMatchMedia = () => {
+  window.matchMedia = (query: string): MediaQueryList =>
+    ({
+      matches: query.includes('min-width: 768px'),
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }) as MediaQueryList;
+};
+
 describe('AttendanceRecords', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    mockDesktopMatchMedia();
   });
 
   it('renders records list with student names', () => {

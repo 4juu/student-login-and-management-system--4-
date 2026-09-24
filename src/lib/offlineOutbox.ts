@@ -43,9 +43,10 @@ export const requestOutboxBackgroundSync = async (): Promise<void> => {
   }
 };
 
-export const queueOutbox = async (key: string, data: unknown): Promise<void> => {
+export const queueOutbox = async (key: string, data: unknown, path?: string): Promise<void> => {
   try {
-    await dbSet(`outbox:${key}`, data);
+    // تثبيت المسار وقت الطبع: سنة أكاديمية قد تتغير قبل التصفيية
+    await dbSet(`outbox:${key}`, path ? { data, path } : { data });
     const keys = getKeys();
     if (!keys.includes(key)) {
       keys.push(key);
@@ -53,16 +54,23 @@ export const queueOutbox = async (key: string, data: unknown): Promise<void> => 
     }
     await requestOutboxBackgroundSync();
   } catch {
-    // تجاهل - التخزين المحلي العادي (localStorage) يبقى احتياطاً
+    // تجاهل - التخزين المحلي الع:normal (localStorage) يبقى احتياطاً
   }
 };
 
-export const getOutboxEntries = async (): Promise<{ key: string; data: unknown }[]> => {
-  const entries: { key: string; data: unknown }[] = [];
+export const getOutboxEntries = async (): Promise<{ key: string; data: unknown; path?: string | undefined }[]> => {
+  const entries: { key: string; data: unknown; path?: string | undefined }[] = [];
   for (const key of getKeys()) {
     try {
-      const data = await dbGet<unknown>(`outbox:${key}`);
-      if (data !== undefined) entries.push({ key, data });
+      const raw = await dbGet<unknown>(`outbox:${key}`);
+      if (raw === undefined) continue;
+      // الصيغة الجديدة { data, path? } مقابل البيانات الخام في النسخ القديمة
+      if (raw && typeof raw === 'object' && 'data' in (raw as Record<string, unknown>)) {
+        const wrapped = raw as { data: unknown; path?: string };
+        entries.push({ key, data: wrapped.data, path: wrapped.path });
+      } else {
+        entries.push({ key, data: raw });
+      }
     } catch {}
   }
   return entries;
@@ -87,4 +95,19 @@ export const clearOutbox = async (): Promise<void> => {
     } catch {}
   }
   setKeys([]);
+};
+
+/** مسح كل محتويات IndexedDB (كاش المرحلة + الأوفلاين) — عند تسجيل الخروج/تغيير السنة */
+export const clearLocalDatabases = async (): Promise<void> => {
+  try {
+    if (typeof indexedDB === 'undefined') return;
+    await new Promise<void>((resolve) => {
+      const req = indexedDB.deleteDatabase('attendance_system_cache');
+      req.onsuccess = () => resolve();
+      req.onerror = () => resolve();
+      req.onblocked = () => resolve();
+    });
+  } catch {
+    // تجاهل
+  }
 };

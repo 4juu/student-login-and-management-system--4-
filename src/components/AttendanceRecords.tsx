@@ -34,6 +34,18 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
   const currentAcademicYear = useMemo(() => getCurrentAcademicYear(), []);
   const { confirm: confirmAction, ConfirmDialog: ConfirmDialogEl } = useConfirm();
 
+  // جدول واحد فقط في DOM حسب مقاس الشاشة (بدل جدول + بطاقات مزدوجين مخفيين بـCSS)
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+  );
+  React.useEffect(() => {
+    const mql = window.matchMedia('(min-width: 768px)');
+    const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    setIsDesktop(mql.matches);
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+
   // 🎯 useCallback للـ helper function
   const normalizeAnyDate = useCallback((dateStr: string): string => {
     if (!dateStr) return '';
@@ -389,6 +401,12 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
       }
     });
 
+    // خريطة حضور: key = sessionId_studentId → قيمة present — بدل records.some لكل خلية (O(N) → O(1))
+    const presentSet = new Set<string>();
+    for (const r of records) {
+      if (r.status === 'present') presentSet.add(`${r.sessionId}_${r.studentId}`);
+    }
+
     const generateStyledSheet = (orderedStudents: Student[]): any => {
       const headerRow = ['ت', 'اسم الطالب', 'الرمز', 'الكروب', ...dateHeaders, 'إجمالي الغياب'];
       const rows: any[][] = [headerRow];
@@ -403,7 +421,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
         ];
 
         targetSessions.forEach(session => {
-          const isPresent = records.some(r => r.sessionId === session.id && r.studentId === student.id && r.status === 'present');
+          const isPresent = presentSet.has(`${session.id}_${student.id}`);
           if (isPresent) {
             row.push('✅');
           } else {
@@ -638,8 +656,9 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
           />
         </div>
 
-        {/* 📊 الجدول (سطح المكتب) */}
-        <div className="table-container hidden md:block">
+        {/* 📊 الجدول (سطح المكتب) — يُبنى فقط على الشاشات الكبيرة (matchMedia) لتفادي DOM مزدوج */}
+        {isDesktop && (
+        <div className="table-container">
           <table className="glass-table min-w-[640px]">
             <thead>
               <tr>
@@ -732,9 +751,11 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
             </tbody>
           </table>
         </div>
+        )}
 
-        {/* 🃏 بطاقات الجوال (الموبايل) */}
-        <div className="md:hidden space-y-3">
+        {/* 🃏 بطاقات الجوال (الموبايل) — تُبنى فقط على الشاشات الصغيرة */}
+        {!isDesktop && (
+        <div className="space-y-3">
           {paginatedRecords.length > 0 ? paginatedRecords.map((rec, idx) => {
             const stu = studentMap.get(rec.studentId);
             const isPresent = rec.status === 'present';
@@ -805,6 +826,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
             </div>
           )}
         </div>
+        )}
 
         {/* ⏳ شريط الترقيم الموحد */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-white/10">

@@ -127,7 +127,7 @@ describe('useOnlineStatus', () => {
     expect(result.current.isOffline).toBe(false);
   });
 
-  it('sets syncDone=true when hasPendingWrites returns false (after interval)', async () => {
+  it('sets syncDone=true when hasPendingWrites returns false (after poll backoff)', async () => {
     vi.useFakeTimers();
     vi.mocked(hasPendingWrites).mockResolvedValue(false);
 
@@ -147,9 +147,9 @@ describe('useOnlineStatus', () => {
     });
     rerender();
 
-    // advance past POLL_MS (600ms)
+    // أول استطلاع بعد POLL_MIN_MS (2000ms)
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(700);
+      await vi.advanceTimersByTimeAsync(2100);
     });
 
     expect(hasPendingWrites).toHaveBeenCalled();

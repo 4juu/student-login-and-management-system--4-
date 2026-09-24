@@ -1,15 +1,17 @@
-import { ref, set, get, update, onValue, off, remove, push } from "firebase/database";
+import { ref, set, get, update, onValue, off, remove, push, query, limitToLast } from "firebase/database";
 import { database } from "../firebase/config";
 import { AdminNotification, isNotificationRead } from "../types/notification";
 
 const messagesRef = () => ref(database, "notifications/messages");
+// حد أقصى 20 إشعاراً — يمنع سحب كل التاريخ عند كل اشتراك
+const NOTIFICATIONS_LIMIT = 20;
 
 // ── Subscription ──
 export const subscribeNotifications = (
   cb: (items: AdminNotification[]) => void,
   onError?: (e: Error) => void
 ): (() => void) => {
-  const r = messagesRef();
+  const r = query(messagesRef(), limitToLast(NOTIFICATIONS_LIMIT));
   const handler = (snap: any) => {
     const val = snap.val();
     if (!val) { cb([]); return; }

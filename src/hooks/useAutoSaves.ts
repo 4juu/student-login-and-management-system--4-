@@ -1,4 +1,4 @@
-import { useEffect, type MutableRefObject } from 'react';
+import { useEffect, useRef, type MutableRefObject } from 'react';
 import { Student, AttendanceRecord, AttendanceSession, College, Stage } from '../types/student';
 import { User } from '../types/user';
 import {
@@ -35,6 +35,15 @@ interface UseAutoSavesParams {
   setAllStagesData: React.Dispatch<React.SetStateAction<Record<string, { students: Student[]; records: AttendanceRecord[]; sessions: AttendanceSession[] }>>>;
 }
 
+/** بذرة/مقارنة hash لمنع echo writes: إعادة حفظ نفس ما وصل للتو من السيرفر */
+const stableHash = (value: unknown): string => {
+  try {
+    return JSON.stringify(value) ?? '';
+  } catch {
+    return `u_${Date.now()}`;
+  }
+};
+
 export function useAutoSaves({
   currentUser,
   dataLoaded,
@@ -51,11 +60,26 @@ export function useAutoSaves({
   getTeacherId,
   setAllStagesData,
 }: UseAutoSavesParams) {
+  // hash آخر قيمة حُفظت/فُرِّغت لكل مفتاح (يشمل stageId) — المفتاح غير المعروف يُزرع فقط
+  const lastSavedHashRef = useRef<Map<string, string>>(new Map());
+  const lastActiveSessionRef = useRef<Map<string, string | null>>(new Map());
+
   useEffect(() => {
     if (!(currentUser?.role === 'admin' && dataLoaded)) return;
     const timeoutId = setTimeout(() => {
       const force = intentionalDeleteRef.current.colleges;
+      const key = `colleges:${currentUser.uid}`;
+      const hash = stableHash(colleges);
+      const last = lastSavedHashRef.current.get(key);
+      if (!force) {
+        if (last === undefined) {
+          lastSavedHashRef.current.set(key, hash);
+          return;
+        }
+        if (last === hash) return;
+      }
       saveColleges(currentUser.uid, colleges, force);
+      lastSavedHashRef.current.set(key, hash);
       if (force) intentionalDeleteRef.current.colleges = false;
     }, 500);
     return () => clearTimeout(timeoutId);
@@ -65,7 +89,18 @@ export function useAutoSaves({
     if (!(currentUser?.role === 'admin' && dataLoaded)) return;
     const timeoutId = setTimeout(() => {
       const force = intentionalDeleteRef.current.stages;
+      const key = `stages:${currentUser.uid}`;
+      const hash = stableHash(stages);
+      const last = lastSavedHashRef.current.get(key);
+      if (!force) {
+        if (last === undefined) {
+          lastSavedHashRef.current.set(key, hash);
+          return;
+        }
+        if (last === hash) return;
+      }
       saveStages(currentUser.uid, stages, force);
+      lastSavedHashRef.current.set(key, hash);
       if (force) intentionalDeleteRef.current.stages = false;
     }, 500);
     return () => clearTimeout(timeoutId);
@@ -75,8 +110,22 @@ export function useAutoSaves({
     if (!(currentUser && dataLoaded && selectedStageId && (currentUser.role === 'admin' || currentUser.role === 'college_admin'))) return;
     const timeoutId = setTimeout(() => {
       const force = intentionalDeleteRef.current.students;
-      saveStudents(getAdminUid(), selectedStageId, students, force);
-      if (force) intentionalDeleteRef.current.students = false;
+      const adminUid = getAdminUid();
+      const key = `students:${adminUid}:${selectedStageId}`;
+      const hash = stableHash(students);
+      const last = lastSavedHashRef.current.get(key);
+      if (!force) {
+        if (last === undefined) {
+          lastSavedHashRef.current.set(key, hash);
+        } else if (last !== hash) {
+          saveStudents(adminUid, selectedStageId, students, force);
+          lastSavedHashRef.current.set(key, hash);
+        }
+      } else {
+        saveStudents(adminUid, selectedStageId, students, force);
+        lastSavedHashRef.current.set(key, hash);
+        intentionalDeleteRef.current.students = false;
+      }
       if (currentUser.role === 'admin' && universityDataLoaded) {
         setAllStagesData(prev => ({
           ...prev,
@@ -91,7 +140,22 @@ export function useAutoSaves({
     if (!(currentUser && dataLoaded && selectedStageId)) return;
     const timeoutId = setTimeout(() => {
       const force = intentionalDeleteRef.current.records;
-      saveAttendanceRecords(getAdminUid(), selectedStageId, getTeacherId(), attendanceRecords, force);
+      const adminUid = getAdminUid();
+      const teacherId = getTeacherId();
+      const key = `records:${adminUid}:${selectedStageId}:${teacherId}`;
+      const hash = stableHash(attendanceRecords);
+      const last = lastSavedHashRef.current.get(key);
+      if (!force) {
+        if (last === undefined) {
+          lastSavedHashRef.current.set(key, hash);
+        } else if (last !== hash) {
+          saveAttendanceRecords(adminUid, selectedStageId, teacherId, attendanceRecords, force);
+          lastSavedHashRef.current.set(key, hash);
+        }
+      } else {
+        saveAttendanceRecords(adminUid, selectedStageId, teacherId, attendanceRecords, force);
+        lastSavedHashRef.current.set(key, hash);
+      }
       if (force) intentionalDeleteRef.current.records = false;
       if (currentUser.role === 'admin' && universityDataLoaded) {
         setAllStagesData(prev => ({
@@ -107,7 +171,22 @@ export function useAutoSaves({
     if (!(currentUser && dataLoaded && selectedStageId)) return;
     const timeoutId = setTimeout(() => {
       const force = intentionalDeleteRef.current.sessions;
-      saveSessions(getAdminUid(), selectedStageId, getTeacherId(), sessions, force);
+      const adminUid = getAdminUid();
+      const teacherId = getTeacherId();
+      const key = `sessions:${adminUid}:${selectedStageId}:${teacherId}`;
+      const hash = stableHash(sessions);
+      const last = lastSavedHashRef.current.get(key);
+      if (!force) {
+        if (last === undefined) {
+          lastSavedHashRef.current.set(key, hash);
+        } else if (last !== hash) {
+          saveSessions(adminUid, selectedStageId, teacherId, sessions, force);
+          lastSavedHashRef.current.set(key, hash);
+        }
+      } else {
+        saveSessions(adminUid, selectedStageId, teacherId, sessions, force);
+        lastSavedHashRef.current.set(key, hash);
+      }
       if (force) intentionalDeleteRef.current.sessions = false;
       if (currentUser.role === 'admin' && universityDataLoaded) {
         setAllStagesData(prev => ({
@@ -119,9 +198,18 @@ export function useAutoSaves({
     return () => clearTimeout(timeoutId);
   }, [sessions, currentUser, dataLoaded, selectedStageId, universityDataLoaded, intentionalDeleteRef, getAdminUid, getTeacherId, setAllStagesData]);
 
+  // activeSession: بذرة عند أول ملاحظة لكل مرحلة/معلّم + حارس "لم يتغيّر" — يمنع echo write عند التحميل
   useEffect(() => {
-    if (currentUser && dataLoaded && selectedStageId) {
-      saveActiveSession(getAdminUid(), selectedStageId, getTeacherId(), activeSessionId);
+    if (!(currentUser && dataLoaded && selectedStageId)) return;
+    const adminUid = getAdminUid();
+    const teacherId = getTeacherId();
+    const key = `${adminUid}:${selectedStageId}:${teacherId}`;
+    if (!lastActiveSessionRef.current.has(key)) {
+      lastActiveSessionRef.current.set(key, activeSessionId);
+      return;
     }
+    if (lastActiveSessionRef.current.get(key) === activeSessionId) return;
+    lastActiveSessionRef.current.set(key, activeSessionId);
+    saveActiveSession(adminUid, selectedStageId, teacherId, activeSessionId);
   }, [activeSessionId, currentUser, dataLoaded, selectedStageId, getAdminUid, getTeacherId]);
 }

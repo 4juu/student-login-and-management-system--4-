@@ -92,58 +92,69 @@ export default function useInitialData({ currentUser }: UseInitialDataParams): U
     setUniversityDataLoading(true);
     try {
       const adminUid = currentUser.uid;
-      const allUserIds = [adminUid, ...allTeachers.map((t) => t.uid)];
       const stagesDataMap: AllStagesData = {};
       const yearPath = `academicYears/${currentAcademicYear}/userData/${adminUid}`;
 
-      await Promise.all(
-        stages.map(async (stage) => {
-          try {
-            const studentsSnap = await get(
-              dbRef(database, `${yearPath}/stageData/${stage.id}/students`)
-            );
-            let stageStudents: Student[] = [];
-            if (studentsSnap.exists()) {
-              const data = studentsSnap.val();
-              stageStudents = Array.isArray(data) ? data : Object.values(data);
+      // طلب واحد على كل stageData بدل S + 2·S·U طلبات منفصلة
+      const stageDataSnap = await get(dbRef(database, `${yearPath}/stageData`));
+      const stageData = stageDataSnap.exists() ? (stageDataSnap.val() as Record<string, any>) : {};
+      const { decompressRecord } = await import('../firebase/dataServiceCompressed');
+
+      for (const stage of stages) {
+        try {
+          const sd = stageData[stage.id];
+          let stageStudents: Student[] = [];
+          const allRecords: AttendanceRecord[] = [];
+          const allSessions: AttendanceSession[] = [];
+
+          if (sd) {
+            if (sd.students) {
+              stageStudents = Array.isArray(sd.students) ? sd.students : Object.values(sd.students);
+              // دمج faceDescriptor من العقدة المنفصلة descriptors/ (إن وُجدت)
+              const descriptors = sd.descriptors as Record<string, unknown> | undefined;
+              if (descriptors && typeof descriptors === 'object') {
+                stageStudents = stageStudents.map(s =>
+                  s && s.id && descriptors[s.id] !== undefined && descriptors[s.id] !== null
+                    ? { ...s, faceDescriptor: descriptors[s.id] }
+                    : s
+                );
+              }
             }
-
-            const allRecords: AttendanceRecord[] = [];
-            const allSessions: AttendanceSession[] = [];
-
-            await Promise.all(
-              allUserIds.map(async (userId) => {
-                try {
-                  const recSnap = await get(
-                    dbRef(database, `${yearPath}/stageData/${stage.id}/teacherRecords/${userId}/records`)
-                  );
-                  if (recSnap.exists()) {
-                    const data = recSnap.val();
-                    allRecords.push(...(Array.isArray(data) ? data : Object.values(data)));
+            const teacherRecords = sd.teacherRecords || {};
+            for (const teacher of Object.values(teacherRecords) as any[]) {
+              if (!teacher) continue;
+              if (teacher.records) {
+                const arr = Array.isArray(teacher.records) ? teacher.records : Object.values(teacher.records);
+                allRecords.push(...(arr as AttendanceRecord[]));
+              }
+              if (teacher.recordsCompressed) {
+                const arr = Array.isArray(teacher.recordsCompressed)
+                  ? teacher.recordsCompressed
+                  : Object.values(teacher.recordsCompressed);
+                for (const c of arr as any[]) {
+                  try {
+                    allRecords.push(decompressRecord(c));
+                  } catch {
+                    /* سجل تالف — نتجاهله */
                   }
-                  const sesSnap = await get(
-                    dbRef(database, `${yearPath}/stageData/${stage.id}/teacherRecords/${userId}/sessions`)
-                  );
-                  if (sesSnap.exists()) {
-                    const data = sesSnap.val();
-                    allSessions.push(...(Array.isArray(data) ? data : Object.values(data)));
-                  }
-                } catch {
-                  console.warn(`فشل جلب بيانات المستخدم ${userId}`);
                 }
-              })
-            );
-
-            stagesDataMap[stage.id] = {
-              students: stageStudents,
-              records: allRecords,
-              sessions: allSessions,
-            };
-          } catch {
-            console.warn(`فشل تحميل بيانات المرحلة ${stage.id}`);
+              }
+              if (teacher.sessions) {
+                const arr = Array.isArray(teacher.sessions) ? teacher.sessions : Object.values(teacher.sessions);
+                allSessions.push(...(arr as AttendanceSession[]));
+              }
+            }
           }
-        })
-      );
+
+          stagesDataMap[stage.id] = {
+            students: stageStudents,
+            records: allRecords,
+            sessions: allSessions,
+          };
+        } catch {
+          console.warn(`فشل تحميل بيانات المرحلة ${stage.id}`);
+        }
+      }
 
       setAllStagesData(stagesDataMap);
       setUniversityDataLoaded(true);
@@ -153,7 +164,7 @@ export default function useInitialData({ currentUser }: UseInitialDataParams): U
     } finally {
       setUniversityDataLoading(false);
     }
-  }, [currentUser, allTeachers, stages]);
+  }, [currentUser, stages]);
 
   return {
     allTeachers,

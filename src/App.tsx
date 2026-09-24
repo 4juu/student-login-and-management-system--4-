@@ -69,30 +69,44 @@ const StudentProfileModal = lazy(() =>
   import('./components/StudentProfile/StudentProfileModal').then(m => ({ default: m.StudentProfileModal }))
 );
 
-import { loadStageData, loadStudents as loadStudentsForStage, deleteStageData, flushAllPendingSaves, cancelAllPendingSaves, applyOutbox, loadTelegramConfig } from './firebase/dataService';
+import { loadStageData, loadStudents as loadStudentsForStage, deleteStageData, flushAllPendingSaves, cancelAllPendingSaves, applyOutbox } from './firebase/dataService';
 import { getCachedStageData, setCachedStageData } from './lib/stageCache';
 import { TelegramConfig } from './types/telegram';
+
+// ثوابت مشتركة — تمنع إنشاء مصفوفات/كائنات جديدة في كل رسم (يُمرَّر لـ SmartChatBot)
+const EMPTY_TEACHERS_ARRAY: User[] = [];
+const EMPTY_STAGES_DATA: Record<string, { students: Student[]; records: AttendanceRecord[]; sessions: AttendanceSession[] }> = {};
 
 function App() {
   const { registerToken, testToken, attToken, tokenChecked, handleExitSelfRegister, handleExitTest, handleExitAtt } = useRegistrationToken();
   const { systemTitle, setSystemTitle, currentAcademicYear } = useSystemConfig();
 
-  const {
-    dataLoaded, setDataLoaded,
-    stageSyncing, setStageSyncing,
-    profileStudent, setProfileStudent,
-    offlineModalDismissed, setOfflineModalDismissed,
-  } = useUIStore();
+  // selectors مجزّأة: يمنع إعادة رسم App عند تغيّر أي جزء من المتجر
+  const dataLoaded = useUIStore((s) => s.dataLoaded);
+  const setDataLoaded = useUIStore((s) => s.setDataLoaded);
+  const stageSyncing = useUIStore((s) => s.stageSyncing);
+  const setStageSyncing = useUIStore((s) => s.setStageSyncing);
+  const profileStudent = useUIStore((s) => s.profileStudent);
+  const setProfileStudent = useUIStore((s) => s.setProfileStudent);
+  const offlineModalDismissed = useUIStore((s) => s.offlineModalDismissed);
+  const setOfflineModalDismissed = useUIStore((s) => s.setOfflineModalDismissed);
 
-  const {
-    colleges, stages, setColleges, setStages,
-    selectedCollegeId, setSelectedCollegeId,
-    selectedStageId, setSelectedStageId,
-    students, setStudents,
-    records: attendanceRecords, setRecords: setAttendanceRecords,
-    sessions, setSessions,
-    activeSessionId, setActiveSessionId,
-  } = useStageStore();
+  const colleges = useStageStore((s) => s.colleges);
+  const stages = useStageStore((s) => s.stages);
+  const setColleges = useStageStore((s) => s.setColleges);
+  const setStages = useStageStore((s) => s.setStages);
+  const selectedCollegeId = useStageStore((s) => s.selectedCollegeId);
+  const setSelectedCollegeId = useStageStore((s) => s.setSelectedCollegeId);
+  const selectedStageId = useStageStore((s) => s.selectedStageId);
+  const setSelectedStageId = useStageStore((s) => s.setSelectedStageId);
+  const students = useStageStore((s) => s.students);
+  const setStudents = useStageStore((s) => s.setStudents);
+  const attendanceRecords = useStageStore((s) => s.records);
+  const setAttendanceRecords = useStageStore((s) => s.setRecords);
+  const sessions = useStageStore((s) => s.sessions);
+  const setSessions = useStageStore((s) => s.setSessions);
+  const activeSessionId = useStageStore((s) => s.activeSessionId);
+  const setActiveSessionId = useStageStore((s) => s.setActiveSessionId);
 
   const { isOffline, syncDone } = useOnlineStatus();
 
@@ -253,13 +267,7 @@ function App() {
         console.error('Error loading stage:', e);
       });
 
-    // التيليجرام في الخلفية — لا يؤخر عرض البيانات ولا شارة المزامنة
-    void loadTelegramConfig(adminUid)
-      .then(config => {
-        if (stageRunIdRef.current === runId) setTelegramConfig(config);
-      })
-      .catch(() => {});
-
+    // التيليجرام يُحمَّل مرة واحدة في loadInitialData — لا نعيد جلبه عند كل دخول مرحلة
     try {
       await Promise.all([cachePromise, networkPromise]);
     } finally {
@@ -268,7 +276,7 @@ function App() {
         setDataLoaded(true);
       }
     }
-  }, [currentUser, currentAcademicYear, getAdminUid, getTeacherId, setActiveTab, setTelegramConfig]);
+  }, [currentUser, currentAcademicYear, getAdminUid, getTeacherId, setActiveTab]);
 
   const handleBackToStages = () => {
     flushAllPendingSaves();
@@ -626,9 +634,10 @@ function App() {
               {activeTab === 'system-settings' && isMainAdmin && (
                 <Suspense fallback={<TabFallback />}>
                   <Settings
-                    students={students} attendanceRecords={attendanceRecords} currentUser={currentUser}
+                    currentUser={currentUser}
                     onResetComplete={handleResetComplete}
                     stages={stages} colleges={colleges} onTelegramConfigChange={handleTelegramConfigChange}
+                    initialTelegramConfig={telegramConfig}
                     systemTitle={systemTitle} onSystemTitleChange={setSystemTitle}
                   />
                 </Suspense>
@@ -695,8 +704,8 @@ function App() {
             currentCollegeId={selectedCollegeId} currentStageId={selectedStageId}
             students={students} records={attendanceRecords} sessions={sessions}
             activeSessionId={activeSessionId}
-            allTeachers={isMainAdmin ? allTeachers : []}
-            allStagesData={isMainAdmin && universityDataLoaded ? allStagesData : {}}
+            allTeachers={isMainAdmin ? allTeachers : EMPTY_TEACHERS_ARRAY}
+            allStagesData={isMainAdmin && universityDataLoaded ? allStagesData : EMPTY_STAGES_DATA}
             onRequestUniversityData={isAdmin ? loadAllAdminData : undefined}
             universityDataLoaded={universityDataLoaded}
             universityDataLoading={universityDataLoading}

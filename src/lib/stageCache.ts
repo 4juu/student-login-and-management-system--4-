@@ -12,6 +12,9 @@ export interface StageCacheData {
 const cacheKey = (adminUid: string, year: string, stageId: string, teacherId: string): string =>
   `stage:${adminUid}:${year}:${stageId}:${teacherId}`;
 
+// TTL: بعد 24 ساعة نعتبر الكاش قديماً ونعيد الجلب من الشبكة
+const STAGE_CACHE_TTL = 24 * 60 * 60 * 1000;
+
 // 🆕 قراءة كاش المرحلة من IndexedDB (مع احتياط من localStorage للتوافق مع النسخ السابقة)
 export const getCachedStageData = async (
   adminUid: string,
@@ -21,7 +24,13 @@ export const getCachedStageData = async (
 ): Promise<StageCacheData | null> => {
   try {
     const data = await dbGet<StageCacheData>(cacheKey(adminUid, year, stageId, teacherId));
-    if (data && Array.isArray(data.students) && Array.isArray(data.records) && Array.isArray(data.sessions)) {
+    if (
+      data &&
+      Array.isArray(data.students) &&
+      Array.isArray(data.records) &&
+      Array.isArray(data.sessions) &&
+      Date.now() - (data.cachedAt || 0) <= STAGE_CACHE_TTL
+    ) {
       return data;
     }
   } catch {

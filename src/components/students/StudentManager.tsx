@@ -559,9 +559,13 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const studentsWithFace = students.filter(s => hasValidDescriptor(s.faceDescriptor)).length;
-  const studentsWithoutFace = students.length - studentsWithFace;
-  const health = getGalleryHealthSummary(students);
+  const { studentsWithoutFace, health } = useMemo(() => {
+    const withFace = students.filter(s => hasValidDescriptor(s.faceDescriptor)).length;
+    return {
+      studentsWithoutFace: students.length - withFace,
+      health: getGalleryHealthSummary(students),
+    };
+  }, [students]);
 
   const pageIds = paginatedStudents.map(s => s.id);
   const allInPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id));

@@ -152,7 +152,24 @@
                     ".read": true,
                     ".write": "auth != null && (auth.uid == $teacherId || auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)"
                   }
+                },
+
+                // ✅ عقدة faceDescriptor المنفصلة (بصمات خارج مصفوفة students)
+                "descriptors": {
+                  ".read": true,
+                  ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)"
                 }
+              }
+            },
+
+            // ✅ فهرس حضور لكل طالب — خارج stageData حتى لا يُسحب مع طلب الأدمن الضخم
+            //    قراءة مفتوحة (ل صفحة الطالب)، كتابة للأدمن/المدرّس فقط
+            "studentAttendance": {
+              ".read": true,
+              ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
+              "$stageId": {
+                ".read": true,
+                ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)"
               }
             }
           }
