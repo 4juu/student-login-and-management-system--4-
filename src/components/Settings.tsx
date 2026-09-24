@@ -18,7 +18,8 @@ import {
   sendTestMessage,
   verifyBotToken,
 } from '../services/telegramService';
-import { Bot, CalendarDays, ChartColumn, CircleCheck, ClipboardList, GraduationCap, Info, KeyRound, Landmark, Library, LoaderCircle, Megaphone, RefreshCw, Save, Search, Send, Settings as SettingsIcon, Smile, SquarePen, TriangleAlert, User as UserIcon } from 'lucide-react';
+import { Bot, CalendarDays, ChartColumn, CircleCheck, ClipboardList, GraduationCap, Info, KeyRound, Landmark, Library, Megaphone, RefreshCw, Save, Search, Send, Settings as SettingsIcon, Smile, SquarePen, TriangleAlert, User as UserIcon } from 'lucide-react';
+import { MorphingSquare } from './MorphingSquare';
 
 interface SettingsProps {
   currentUser?: User;
@@ -376,7 +377,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
               disabled={systemTitleSaving}
               className="btn-base btn-primary shrink-0 flex items-center justify-center gap-2"
             >
-              {systemTitleSaving ? <><LoaderCircle className="w-4 h-4 animate-spin" /> جاري الحفظ...</> : <><Save className="w-4 h-4" /> حفظ العنوان</>}
+              {systemTitleSaving ? <><MorphingSquare size="sm" /> جاري الحفظ...</> : <><Save className="w-4 h-4" /> حفظ العنوان</>}
             </button>
           </div>
           {systemTitleMessage && (
@@ -397,7 +398,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
               disabled={loadingStats}
               className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1.5"
             >
-              {loadingStats ? <><LoaderCircle className="w-4 h-4 animate-spin" /> ...</> : <><RefreshCw className="w-4 h-4" /> تحديث</>}
+              {loadingStats ? <><MorphingSquare size="sm" /> ...</> : <><RefreshCw className="w-4 h-4" /> تحديث</>}
             </button>
           </div>
 
@@ -455,7 +456,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
             </div>
           ) : (
             <div className="bg-slate-800/30 border border-white/10 rounded-lg p-4 text-center text-slate-500 flex items-center justify-center gap-2">
-              {loadingStats ? <><LoaderCircle className="w-4 h-4 animate-spin" /> جاري تحميل الإحصائيات...</> : 'اضغط "تحديث" لعرض الإحصائيات'}
+              {loadingStats ? <><MorphingSquare size="sm" /> جاري تحميل الإحصائيات...</> : 'اضغط "تحديث" لعرض الإحصائيات'}
             </div>
           )}
         </div>
@@ -504,7 +505,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
               className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-lg shadow-md transition flex items-center justify-center gap-2"
             >
               {resetting ? (
-                <><LoaderCircle className="w-5 h-5 animate-spin" /> جاري البدء... لا تغلق الصفحة!</>
+                <><MorphingSquare size="sm" /> جاري البدء... لا تغلق الصفحة!</>
               ) : (
                 <><RefreshCw className="w-5 h-5" /> بدء سنة أكاديمية جديدة</>
               )}
@@ -691,7 +692,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
             className="mt-4 w-full bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-700 hover:to-blue-800 disabled:opacity-50 text-white font-bold py-2.5 sm:py-3 px-4 sm:px-6 rounded-lg shadow-md transition flex items-center justify-center gap-2 text-sm sm:text-base"
           >
             {telegramSaving ? (
-              <><LoaderCircle className="w-5 h-5 animate-spin" /> جاري الحفظ...</>
+              <><MorphingSquare size="sm" /> جاري الحفظ...</>
             ) : (
               <><Save className="w-5 h-5" /> حفظ إعدادات التلغرام</>
             )}

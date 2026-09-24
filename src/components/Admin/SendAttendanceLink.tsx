@@ -9,6 +9,7 @@ import {
 } from '../../services/tokenService';
 import { flushAllPendingSaves } from '../../firebase/dataService';
 import { ChevronRight, Clock, Copy, FileSpreadsheet, Landmark, Library, Rocket, Smartphone, Users, CalendarDays, BookOpen } from 'lucide-react';
+import { MorphingSquare } from '../MorphingSquare';
 
 interface SendAttendanceLinkProps {
   adminUid: string;
@@ -468,7 +469,7 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
             className="w-full bg-gradient-to-l from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl active:scale-[0.98] transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 text-lg"
           >
             {generating
-              ? <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> جاري التوليد...</>
+              ? <><MorphingSquare size="sm" /> جاري التوليد...</>
               : <><Rocket className="w-5 h-5" /> توليد رابط الحضور</>}
           </button>
         </div>

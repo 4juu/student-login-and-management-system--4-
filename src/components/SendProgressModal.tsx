@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { CircleCheck, Library, Send, Target } from 'lucide-react';
+import { MorphingSquare } from './MorphingSquare';
 
 const styles = `
 @keyframes draw-check {
@@ -64,12 +65,7 @@ const AnimatedCheck: React.FC = () => {
   );
 };
 
-const Spinner: React.FC = () => (
-  <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
-    <circle cx="12" cy="12" r="10" stroke="#e5e7eb" strokeWidth="3" />
-    <path d="M12 2a10 10 0 019.95 9" stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" />
-  </svg>
-);
+const Spinner: React.FC = () => <MorphingSquare size="sm" />;
 
 const PendingDot: React.FC = () => (
   <div className="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center">

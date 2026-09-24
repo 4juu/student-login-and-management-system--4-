@@ -15,7 +15,7 @@ import { SortFilterPanel } from './SortFilterPanel';
 import { BulkActionsBar } from './BulkActionsBar';
 import { StudentTable } from './StudentTable';
 import { Pagination } from './Pagination';
-import { CardSkeleton } from '../loading/CardSkeleton';
+import { LoadingState } from '../loading/LoadingState';
 
 // 🚀 نافذة تسجيل بصمات الوجه (فردية وجماعية) تُحمَّل عند فتحها فقط
 const LazyFaceEnroll = lazy(() =>
@@ -702,7 +702,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
       {showFaceRegister && onUpdateStudent && (
         <Suspense fallback={
           <div className="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-sm flex items-center justify-center p-4">
-            <CardSkeleton />
+            <LoadingState size="md" />
           </div>
         }>
           <LazyFaceEnroll

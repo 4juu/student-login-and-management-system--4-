@@ -11,9 +11,10 @@ import {
 } from '../firebase/authService';
 import { User, TeacherPermissions } from '../types/user';
 import { College, Stage } from '../types/student';
-import { ArrowLeft, BookOpen, CircleCheck, Crown, GraduationCap, KeyRound, Landmark, Lightbulb, LoaderCircle, Lock, Plus, RefreshCw, Save, Settings, SquarePen, Trash2, TriangleAlert, Truck, User as UserIcon, UserCheck, Users, Wrench } from 'lucide-react';
+import { ArrowLeft, BookOpen, CircleCheck, Crown, GraduationCap, KeyRound, Landmark, Lightbulb, Lock, Plus, RefreshCw, Save, Settings, SquarePen, Trash2, TriangleAlert, Truck, User as UserIcon, UserCheck, Users, Wrench } from 'lucide-react';
 import { useConfirm } from '../hooks/useConfirm';
-import { TableSkeleton } from './loading/TableSkeleton';
+import { LoadingState } from './loading/LoadingState';
+import { MorphingSquare } from './MorphingSquare';
 
 interface TeacherManagementProps {
   currentUser: User;
@@ -842,7 +843,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
           )}
           <div className="flex gap-2">
             <button type="submit" disabled={loading} className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-6 rounded-md flex items-center justify-center gap-2">
-              {loading ? <><LoaderCircle className="w-4 h-4 animate-spin" /> جارٍ الإنشاء...</> : <><CircleCheck className="w-4 h-4" /> إنشاء الحساب</>}
+              {loading ? <><MorphingSquare size="sm" /> جارٍ الإنشاء...</> : <><CircleCheck className="w-4 h-4" /> إنشاء الحساب</>}
             </button>
             <button type="button" onClick={() => { setShowAddForm(false); setFormData({ email: '', password: '', displayName: '', collegeId: '' }); setError(''); }} className="bg-white/10 hover:bg-white/20 text-white font-medium py-2 px-4 rounded-md">
               إلغاء
@@ -869,7 +870,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
             {teachersLoading ? (
               <tr>
                 <td colSpan={5} className="px-4 py-4">
-                  <TableSkeleton rows={4} cols={5} />
+                  <LoadingState size="sm" className="py-6" />
                 </td>
               </tr>
             ) : displayTeachers.length === 0 ? (
@@ -1033,7 +1034,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
             {error && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/40 text-red-300 rounded text-sm">{error}</div>}
             <div className="flex gap-2 justify-end">
               <button onClick={() => { setShowProfileModal(false); setError(''); }} disabled={loading} className="bg-white/10 hover:bg-white/20 text-white font-medium py-2 px-4 rounded">إلغاء</button>
-              <button onClick={handleEditProfile} disabled={loading} className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-2 px-4 rounded flex items-center gap-2">{loading ? <><LoaderCircle className="w-4 h-4 animate-spin" /> جارٍ الحفظ...</> : <><Save className="w-4 h-4" /> حفظ</>}</button>
+              <button onClick={handleEditProfile} disabled={loading} className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-2 px-4 rounded flex items-center gap-2">{loading ? <><MorphingSquare size="sm" /> جارٍ الحفظ...</> : <><Save className="w-4 h-4" /> حفظ</>}</button>
             </div>
           </div>
         </div>

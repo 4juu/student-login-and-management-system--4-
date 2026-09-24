@@ -440,25 +440,6 @@
 }
 
 /* ============================================ */
-/* 🦴 Skeleton Shimmer                          */
-/* ============================================ */
-/* @keyframes skeletonPulse + .animate-skeleton — في index.css (مصدر واحد للتوأم) */
-@keyframes skeletonShimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-.skeleton-block {
-  background: linear-gradient(
-    90deg,
-    rgba(148, 163, 184, 0.12) 25%,
-    rgba(148, 163, 184, 0.22) 50%,
-    rgba(148, 163, 184, 0.12) 75%
-  );
-  background-size: 200% 100%;
-  animation: skeletonShimmer 1.6s ease-in-out infinite;
-}
-
-/* ============================================ */
 /* 🌟 Scrollbar                                 */
 /* ============================================ */
 ::-webkit-scrollbar { width: 6px; height: 6px; }

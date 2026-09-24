@@ -28,8 +28,7 @@ import { useStageStore } from './store/useStageStore';
 import { AppHeader } from './layouts/AppHeader';
 import { StageContent } from './layouts/StageContent';
 import { TabFallback, ModalFallback } from './layouts/Fallbacks';
-import { TableSkeleton } from './components/loading/TableSkeleton';
-import { StageSkeleton } from './components/loading/StageSkeleton';
+import { LoadingState } from './components/loading/LoadingState';
 
 // 🚀 تحميل متأخر للمكونات الثقيلة (تُحمَّل عند الحاجة فقط — خفض حجم الحزمة الأولية)
 const SmartChatBot = lazy(() =>
@@ -480,8 +479,8 @@ function App() {
   if (registerToken) {
     return (
       <Suspense fallback={
-        <div className="min-h-screen bg-[#0B1220] p-4 md:p-8" dir="rtl">
-          <StageSkeleton />
+        <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
+          <LoadingState size="lg" />
         </div>
       }>
         <SelfEnrollPage token={registerToken} onExit={handleExitSelfRegister} />
@@ -492,8 +491,8 @@ function App() {
   if (attToken) {
     return (
       <Suspense fallback={
-        <div className="min-h-screen bg-[#0B1220] p-4 md:p-8" dir="rtl">
-          <StageSkeleton />
+        <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
+          <LoadingState size="lg" />
         </div>
       }>
         <SelfEnrollPage token={attToken} onExit={handleExitAtt} />
@@ -504,8 +503,8 @@ function App() {
   if (testToken) {
     return (
       <Suspense fallback={
-        <div className="min-h-screen bg-[#0B1220] p-4 md:p-8" dir="rtl">
-          <StageSkeleton />
+        <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
+          <LoadingState size="lg" />
         </div>
       }>
         <FaceTestPage testToken={testToken} onExit={handleExitTest} />
@@ -516,10 +515,7 @@ function App() {
   if (loading || !tokenChecked) {
     return (
       <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4">
-        <div className="flex flex-col items-center gap-5">
-          <MorphingSquare />
-          <p className="text-sm text-slate-400 font-medium">جاري تحميل النظام…</p>
-        </div>
+        <MorphingSquare />
       </div>
     );
   }
@@ -597,7 +593,7 @@ function App() {
                         : 'btn-primary'
                     } ${stages.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    {universityDataLoading ? '⏳ جاري التحميل...' : universityDataLoaded ? '🔄 تحديث البيانات' : '⚡ تحميل بيانات الجامعة'}
+                    {universityDataLoading ? <><MorphingSquare size="sm" /> جاري التحميل...</> : universityDataLoaded ? '🔄 تحديث البيانات' : '⚡ تحميل بيانات الجامعة'}
                   </button>
                 </div>
               </div>
@@ -623,7 +619,7 @@ function App() {
                 </Suspense>
               )}
               {activeTab === 'teachers' && (isMainAdmin || isCollegeAdmin) && (
-                <Suspense fallback={<TableSkeleton />}>
+                <Suspense fallback={<LoadingState size="md" className="py-24" />}>
                   <TeacherManagement
                     currentUser={currentUser}
                     colleges={isCollegeAdmin ? colleges.filter(c => c.id === currentUser.collegeId) : colleges}

@@ -7,7 +7,7 @@ import { useStageStore } from '../store/useStageStore';
 import { useAuthStore, selectCanEditStudents } from '../store/useAuthStore';
 import { StageTabs } from './StageTabs';
 import { TabFallback, StageLoading } from './Fallbacks';
-import { TableSkeleton } from '../components/loading/TableSkeleton';
+import { LoadingState } from '../components/loading/LoadingState';
 
 // 🚀 تحميل متأخر للمكونات الثقيلة (تُحمَّل عند الحاجة فقط — خفض حجم الحزمة الأولية)
 const StudentManager = lazy(() =>
@@ -147,7 +147,7 @@ export const StageContent: FC<StageContentProps> = ({
           </div>
         )}
         {activeTab === 'manage' && (
-          <Suspense fallback={<TableSkeleton />}>
+          <Suspense fallback={<LoadingState size="md" className="py-24" />}>
             {canEditStudents ? (
               <StudentManager
                 students={students} onAddStudent={onAddStudent}
@@ -162,7 +162,7 @@ export const StageContent: FC<StageContentProps> = ({
           </Suspense>
         )}
         {activeTab === 'records' && (
-          <Suspense fallback={<TableSkeleton rows={8} />}>
+          <Suspense fallback={<LoadingState size="md" className="py-24" />}>
             <AttendanceRecords
               records={records} sessions={sessions} students={students}
               activeSessionId={activeSessionId} onClearRecords={onClearRecords}

@@ -5,10 +5,11 @@ import { useModalBehavior } from '../../hooks/useModalBehavior';
 import { Student, Stage, College } from '../../types/student';
 import { createBulkRegistrationLinks } from '../../services/tokenService';
 import {
-  Check, Clock, Copy, FileSpreadsheet, Landmark, Library, Link2, LoaderCircle,
+  Check, Clock, Copy, FileSpreadsheet, Landmark, Library, Link2,
   Rocket, Smartphone, Users, ScanFace, UserCheck,
 } from 'lucide-react';
-import { TableSkeleton } from '../loading/TableSkeleton';
+import { LoadingState } from '../loading/LoadingState';
+import { MorphingSquare } from '../MorphingSquare';
 
 interface SendEnrollLinkProps {
   adminUid: string;
@@ -407,7 +408,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
               </div>
 
               {loadingStudents ? (
-                <TableSkeleton rows={5} cols={3} className="py-2" />
+                <LoadingState size="sm" className="py-6" />
               ) : (
                 <div className="max-h-64 overflow-y-auto space-y-1.5 border border-white/10 rounded-lg p-2">
                   {filteredStudents.length === 0 && (
@@ -452,7 +453,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
             disabled={!selectedStageId || generating}
             className="w-full bg-gradient-to-l from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl active:scale-[0.98] transition-all shadow-lg flex items-center justify-center gap-2 text-lg"
           >
-            {generating ? <><LoaderCircle className="w-5 h-5 animate-spin" /> جاري التوليد...</> : <><Rocket className="w-5 h-5" /> توليد الروابط المحددة</>}
+            {generating ? <><MorphingSquare size="sm" /> جاري التوليد...</> : <><Rocket className="w-5 h-5" /> توليد الروابط المحددة</>}
           </button>
         </div>
 

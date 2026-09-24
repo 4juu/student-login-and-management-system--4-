@@ -17,7 +17,6 @@
   --sel-bg-note: #15203A;
   --sel-bg-dot: #10203C;
   --sel-bg-blue: #132747;
-  --sel-shimmer: #1C2A4A;
 
   /* الحدود */
   --sel-line: #22334F;
@@ -653,26 +652,7 @@
 .sel-pill-green { background: var(--sel-green-soft); color: var(--sel-green); }
 .sel-pill-red { background: var(--sel-red-soft); color: var(--sel-red); }
 
-/* ── سكلتون / حركات ───────────────────────────────────── */
-.sel-skeleton {
-  border-radius: var(--sel-radius-xl);
-  background: var(--sel-bg-card);
-  border: 1px solid var(--sel-line);
-  padding: 1.5rem;
-}
-
-.sel-shimmer {
-  background: linear-gradient(90deg, var(--sel-bg-ghost) 25%, var(--sel-shimmer) 50%, var(--sel-bg-ghost) 75%);
-  background-size: 200% 100%;
-  animation: sel-shimmer 1.4s infinite;
-  border-radius: 12px;
-}
-
-@keyframes sel-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
+/* ── حركات ─────────────────────────────────────────────── */
 .sel-fade { animation: sel-fade 0.3s ease; }
 
 @keyframes sel-fade {
@@ -694,7 +674,6 @@
 @media (prefers-reduced-motion: reduce) {
   .sel-progress-fill,
   .sel-pulse,
-  .sel-shimmer,
   .sel-corner,
   .sel-fade {
     animation: none !important;

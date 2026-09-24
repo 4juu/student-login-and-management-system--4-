@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Student } from '../../types/student';
 import { useFaceAI } from '../../hooks/useFaceAI';
 import { EngineOverlay } from './EngineOverlay';
+import { MorphingSquare } from '../MorphingSquare';
 import {
   faceDetectorService,
   grabVideoFrame,
@@ -368,7 +369,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
 
             {!cameraReady && !camError && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="inline-block w-9 h-9 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              <MorphingSquare size="md" />
               </div>
             )}
 

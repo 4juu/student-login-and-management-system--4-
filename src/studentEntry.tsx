@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from 'react';
-import { StageSkeleton } from './components/loading/StageSkeleton';
+import { LoadingState } from './components/loading/LoadingState';
 import './components/SelfRegister/selfRegister.css';
 
 const SelfEnrollPage = lazy(() =>
@@ -89,8 +89,8 @@ export default function StudentEntry() {
   if (tokens.test) {
     return (
       <Suspense fallback={
-        <div className="min-h-screen p-4 md:p-8" style={{ background: '#0A1224' }} dir="rtl">
-          <StageSkeleton />
+        <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#0A1224' }} dir="rtl">
+          <LoadingState size="lg" />
         </div>
       }>
         <FaceTestPage testToken={tokens.test} onExit={handleExit} />
@@ -101,8 +101,8 @@ export default function StudentEntry() {
   // صفحة تسجيل البصمة (حضور أو تسجيل ذاتي)
   return (
     <Suspense fallback={
-      <div className="min-h-screen p-4 md:p-8" style={{ background: '#0A1224' }} dir="rtl">
-        <StageSkeleton />
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#0A1224' }} dir="rtl">
+        <LoadingState size="lg" />
       </div>
     }>
       <SelfEnrollPage token={tokens.att || tokens.reg!} onExit={handleExit} />

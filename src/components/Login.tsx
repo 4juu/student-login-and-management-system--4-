@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Lock, Eye, EyeOff, GraduationCap, LogIn } from 'lucide-react';
+import { MorphingSquare } from './MorphingSquare';
 import { loadSystemTitle } from '../firebase/dataService';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -104,7 +105,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
             <Button type="submit" disabled={isLoading} className="btn-base btn-primary w-full py-2.5">
               {isLoading ? (
-                <span className="w-4 h-4 border-2 border-white/60 border-t-white rounded-full animate-spin" />
+                <MorphingSquare size="sm" />
               ) : (
                 <>
                   <LogIn className="w-4 h-4" />

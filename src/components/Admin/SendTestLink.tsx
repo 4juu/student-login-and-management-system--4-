@@ -4,6 +4,7 @@ import { useModalBehavior } from '../../hooks/useModalBehavior';
 import { College, Stage } from '../../types/student';
 import { createTestLink, formatRemainingMs, getServerNow } from '../../services/tokenService';
 import { Copy, ScanFace, Check, Landmark, Library, Clock } from 'lucide-react';
+import { MorphingSquare } from '../MorphingSquare';
 
 interface SendTestLinkProps {
   adminUid: string;
@@ -148,7 +149,7 @@ export function SendTestLink({ adminUid, colleges, stages, onClose }: SendTestLi
                 disabled={!selectedStageId || generating}
                 className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition disabled:opacity-40"
               >
-                {generating ? 'جاري الإنشاء...' : 'إنشاء رابط الاختبار'}
+                {generating ? <span className="inline-flex items-center gap-2"><MorphingSquare size="sm" /> جاري الإنشاء...</span> : 'إنشاء رابط الاختبار'}
               </button>
             </>
           ) : (

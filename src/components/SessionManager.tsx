@@ -5,6 +5,7 @@ import { AttendanceSession, Student, AttendanceRecord } from '../types/student';
 import { getCurrentAcademicYear } from '../firebase/dataService';
 import { AbsenceSendLogEntry, GroupSendProgress } from '../types/telegram';
 import { Calendar, ChartColumn, Check, Circle, CircleCheck, ClipboardList, GraduationCap, Library, Pencil, TriangleAlert } from 'lucide-react';
+import { MorphingSquare } from './MorphingSquare';
 
 interface SessionManagerProps {
   sessions: AttendanceSession[];
@@ -250,10 +251,7 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
                         <path d="M7 13l3 3 7-7" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
                       </svg>
                     ) : (
-                      <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
-                        <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="3" />
-                        <path d="M12 2a10 10 0 019.95 9" stroke="#60a5fa" strokeWidth="3" strokeLinecap="round" />
-                      </svg>
+                      <MorphingSquare size="sm" />
                     )}
                   </div>
                   <div className="min-w-0 flex-1">

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Student, AttendanceSession } from '../../types/student';
 import { useFaceAI } from '../../hooks/useFaceAI';
 import { EngineOverlay } from './EngineOverlay';
+import { MorphingSquare } from '../MorphingSquare';
 import {
   faceDetectorService,
   grabVideoFrame,
@@ -713,7 +714,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
         {!cameraReady && engineReady && (
           <div className="absolute inset-0 flex items-center justify-center bg-black">
             <div className="text-center">
-              <div className="inline-block w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3" />
+              <MorphingSquare size="md" className="mb-3" />
               <p className="text-slate-300 text-sm font-bold">جاري فتح الكاميرا...</p>
             </div>
           </div>

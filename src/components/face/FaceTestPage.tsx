@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { Student } from '../../types/student';
 import { useFaceAI } from '../../hooks/useFaceAI';
 import { EngineOverlay } from './EngineOverlay';
+import { MorphingSquare } from '../MorphingSquare';
 import {
   faceDetectorService,
   grabVideoFrame,
@@ -553,7 +554,7 @@ setEnhanceCountdown(20);
       return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm" dir="rtl">
           <div className="text-center">
-            <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-[3px] border-indigo-500 border-t-transparent" />
+            <MorphingSquare size="md" className="mx-auto mb-4" />
             <p className="text-slate-300 text-sm font-bold">جاري التحقق من الرابط...</p>
           </div>
         </div>
@@ -735,7 +736,7 @@ setEnhanceCountdown(20);
             {!cameraReady && engineReady && (
               <div className="absolute inset-0 flex items-center justify-center bg-black">
                 <div className="text-center">
-                  <div className="inline-block w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3" />
+                  <MorphingSquare size="md" className="mx-auto mb-3" />
                   <p className="text-slate-300 text-sm font-bold">جاري فتح الكاميرا...</p>
                 </div>
               </div>

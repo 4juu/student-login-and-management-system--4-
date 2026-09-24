@@ -5,6 +5,7 @@ import { CalendarCheck, CalendarRange, Check, ChevronLeft, ChevronRight, Chevron
 import { createPortal } from 'react-dom';
 import { useModalBehavior } from '../hooks/useModalBehavior';
 import { useConfirm } from '../hooks/useConfirm';
+import { MorphingSquare } from './MorphingSquare';
 
 interface AttendanceRecordsProps {
   records: AttendanceRecord[];
@@ -1007,7 +1008,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                   className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-700 hover:from-indigo-500 hover:to-violet-600 text-white font-bold text-base flex items-center justify-center gap-2 shadow-lg shadow-indigo-700/30 hover:shadow-indigo-600/40 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {exporting ? (
-                    <span className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white inline-block animate-spin" />
+                    <MorphingSquare size="sm" />
                   ) : (
                     <Download className="w-5 h-5" />
                   )}

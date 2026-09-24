@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ChunkLoadErrorBoundary } from './components/ChunkLoadErrorBoundary';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
-import { StageSkeleton } from './components/loading/StageSkeleton';
+import { LoadingState } from './components/loading/LoadingState';
 import { initSentry } from './lib/sentry';
 import './index.css';
 
@@ -121,8 +121,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <ChunkLoadErrorBoundary>
         <AppErrorBoundary>
           <Suspense fallback={
-            <div className="min-h-screen bg-[#0B1220] p-4 md:p-8" dir="rtl">
-              <StageSkeleton />
+            <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
+              <LoadingState size="lg" />
             </div>
           }>
             <Entry />

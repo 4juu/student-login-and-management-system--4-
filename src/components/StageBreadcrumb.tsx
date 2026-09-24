@@ -1,5 +1,6 @@
 import type { FC } from 'react';
 import { Home, ChevronLeft } from 'lucide-react';
+import { MorphingSquare } from './MorphingSquare';
 import { College, Stage } from '../types/student';
 
 interface StageBreadcrumbProps {
@@ -25,7 +26,7 @@ export const StageBreadcrumb: FC<StageBreadcrumbProps> = ({
     <span className="font-bold text-blue-400">{selectedStage.name}</span>
     {stageSyncing && (
       <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-blue-500/10 text-blue-300 text-xs font-medium rounded-full border border-blue-500/20">
-        <span className="w-3 h-3 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
+        <MorphingSquare size="xs" />
         مزامنة خلفية…
       </span>
     )}

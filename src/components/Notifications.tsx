@@ -7,7 +7,7 @@ import {
 } from '../services/notificationService';
 import { User } from '../types/user';
 import { useConfirm } from '../hooks/useConfirm';
-import { TableSkeleton } from './loading/TableSkeleton';
+import { LoadingState } from './loading/LoadingState';
 
 interface NotificationsProps {
   currentUser: User | null;
@@ -195,7 +195,7 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
             {/* List */}
             <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-2.5" style={{ WebkitOverflowScrolling: 'touch' }}>
               {!loaded && (
-                <TableSkeleton rows={4} cols={1} aria-label="جاري تحميل الإشعارات…" />
+                <LoadingState size="sm" className="py-10" aria-label="جاري تحميل الإشعارات…" />
               )}
 
               {loaded && items.length === 0 && (

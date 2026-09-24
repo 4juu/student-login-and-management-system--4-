@@ -1,5 +1,6 @@
 import React from 'react';
-import { FolderOpen, Hash, IdCard, Lightbulb, LoaderCircle, QrCode, SquarePen, Upload, Users } from 'lucide-react';
+import { FolderOpen, Hash, IdCard, Lightbulb, QrCode, SquarePen, Upload, Users } from 'lucide-react';
+import { MorphingSquare } from '../MorphingSquare';
 
 interface StudentImportPanelProps {
   selectedPrefix: number;
@@ -75,7 +76,7 @@ export const StudentImportPanel: React.FC<StudentImportPanelProps> = ({
             importLoading ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         >
-          {importLoading ? <><LoaderCircle className="w-4 h-4 animate-spin" /> جاري المعالجة...</> : <><Upload className="w-4 h-4" /> رفع ملف Excel</>}
+          {importLoading ? <><MorphingSquare size="sm" /> جاري المعالجة...</> : <><Upload className="w-4 h-4" /> رفع ملف Excel</>}
         </label>
       </div>
 

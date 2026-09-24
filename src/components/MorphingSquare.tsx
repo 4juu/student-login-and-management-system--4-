@@ -1,9 +1,17 @@
 import { cn } from "../lib/utils"
 
+export type MorphingSquareSize = 'xs' | 'sm' | 'md' | 'lg'
+
 interface MorphingSquareProps {
   className?: string
+  size?: MorphingSquareSize
 }
 
-export function MorphingSquare({ className }: MorphingSquareProps) {
-  return <div className={cn("morph-loader", className)} aria-hidden="true" />
+export function MorphingSquare({ className, size = 'lg' }: MorphingSquareProps) {
+  return (
+    <div
+      className={cn('morph-loader', size !== 'lg' && `morph-loader-${size}`, className)}
+      aria-hidden="true"
+    />
+  )
 }

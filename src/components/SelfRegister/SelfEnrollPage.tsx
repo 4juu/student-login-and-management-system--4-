@@ -20,7 +20,6 @@ import {
   BookOpen,
   ArrowLeft,
   ScanFace,
-  ShieldCheck,
   IdCard,
   Fingerprint,
   Clock,
@@ -29,7 +28,8 @@ import {
 } from 'lucide-react';
 import './selfRegister.css';
 import { TextScramble } from '../TextScramble';
-import { StageSkeleton } from '../loading/StageSkeleton';
+import { LoadingState } from '../loading/LoadingState';
+import { MorphingSquare } from '../MorphingSquare';
 
 const LazySelfCapture = lazy(() =>
   import('../face/SelfCaptureStep').then(m => ({ default: m.SelfCaptureStep }))
@@ -599,8 +599,8 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
   if (step === 'capture-face' && expected) {
     return (
       <Suspense fallback={
-        <div className="min-h-screen bg-[#0B1220] p-4 md:p-8" dir="rtl">
-          <StageSkeleton />
+        <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
+          <LoadingState size="lg" />
         </div>
       }>
         <LazySelfCapture
@@ -655,13 +655,10 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
         <main className="flex-1" style={{ minHeight: 0 }}>
           {step === 'loading' && (
             <div className="sel-card mt-6 sel-fade">
-              <div className="sel-scan-wrap mb-4">
-                <div className="sel-scan-icon"><ShieldCheck className="w-8 h-8" /></div>
-                <div className="sel-pulse" />
+              <div className="flex justify-center py-8">
+                <MorphingSquare size="md" />
               </div>
-              <div className="sel-shimmer h-4 w-1/2 mx-auto mb-3" />
-              <div className="sel-shimmer h-3 w-3/4 mx-auto" />
-              <p className="text-center text-sm text-[#93A5C8] mt-6 font-semibold">
+              <p className="text-center text-sm text-[#93A5C8] -mt-2 font-semibold">
                 جاري التحقق من صحة الرابط…
               </p>
             </div>

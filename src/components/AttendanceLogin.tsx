@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect, lazy, Suspense } from 'react';
 import { Student, AttendanceRecord, AttendanceSession } from '../types/student';
 import { User } from '../types/user';
-import { CardSkeleton } from './loading/CardSkeleton';
+import { LoadingState } from './loading/LoadingState';
 import { Camera, Info, TriangleAlert, User as UserIcon } from 'lucide-react';
 
 // 🚀 ماسح الحضور بالوجه يُحمَّل عند فتحه فقط (محرك الوجه ثقيل)
@@ -341,7 +341,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
           fallback={
             <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-              <CardSkeleton className="relative" />
+              <LoadingState size="md" className="relative" />
             </div>
           }
         >
@@ -357,7 +357,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
       )}
 
       {showQRScanner && (
-        <Suspense fallback={<CardSkeleton />}>
+        <Suspense fallback={<LoadingState size="md" className="py-16" />}>
           <LazyQRAttendance
             students={students}
             activeSession={activeSession || null}
