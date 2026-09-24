@@ -55,7 +55,7 @@ const runRetryLoop = async (key: string, fn: () => Promise<void>, attempt: numbe
   } catch (e) {
     console.warn(`⚠️ [${attempt}/${MAX_RETRIES}] فشلت محاولة الحفظ: ${key}`);
     if (attempt < MAX_RETRIES) {
-      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+      const delay = Math.min(400 * Math.pow(2, attempt - 1), 4000);
       await new Promise(r => setTimeout(r, delay));
       return runRetryLoop(key, fn, attempt + 1);
     }
@@ -84,7 +84,7 @@ export const getDebouncedSavesCount = (): number => pendingSaves.size;
 export const hasPendingWrites = async (): Promise<boolean> =>
   pendingSaves.size > 0 || retryQueues.size > 0 || outboxFallbacks.size > 0 || (await hasOutboxEntries());
 
-const SAVE_DELAY = 2000;
+const SAVE_DELAY = 400;
 
 export const debouncedSave = (key: string, saveFn: () => Promise<void>): void => {
   const existing = pendingSaves.get(key);
@@ -118,16 +118,20 @@ let retryFlight: Promise<void> | null = null;
 let retryRerun = false;
 
 const doRetryFailedSaves = async (): Promise<void> => {
-  for (const [key, { fn, attempts }] of Array.from(retryQueues.entries())) {
-    await retryWithBackoff(key, fn, attempts);
-  }
-  // أي عنصر سقط من retryQueues وله outbox fallback → يُرفع الآن
-  for (const key of Array.from(outboxFallbacks.keys())) {
-    if (!retryQueues.has(key)) {
+  // توازي: كل المفاتيح الفاشلة تُعاد معاً بدل تسلسل N×backoff
+  await Promise.allSettled(
+    Array.from(retryQueues.entries()).map(([key, { fn, attempts }]) =>
+      retryWithBackoff(key, fn, attempts)
+    )
+  );
+  // أي عنصر سقط من retryQueues وله outbox fallback → يُرفع الآن (متوازياً)
+  const fallbackKeys = Array.from(outboxFallbacks.keys()).filter(k => !retryQueues.has(k));
+  await Promise.allSettled(
+    fallbackKeys.map(async key => {
       await persistToOutbox(key);
       outboxFallbacks.delete(key);
-    }
-  }
+    })
+  );
 };
 
 export const retryFailedSaves = async (): Promise<void> => {
@@ -191,6 +195,8 @@ const doFlushAllPendingSaves = async (): Promise<void> => {
   const hasRetry = retryQueues.size > 0 || outboxFallbacks.size > 0;
   if (keys.length === 0 && !hasRetry) return;
 
+  // توازي: كل المفاتيح المعلقة تُصفّي معاً
+  const flushPromises: Promise<void>[] = [];
   for (const key of keys) {
     const timeout = pendingSaves.get(key);
     if (timeout) clearTimeout(timeout);
@@ -201,22 +207,26 @@ const doFlushAllPendingSaves = async (): Promise<void> => {
 
     if (fn) {
       retryQueues.set(key, { fn, attempts: 0 });
-      await retryWithBackoff(key, fn);
+      flushPromises.push(retryWithBackoff(key, fn));
     }
   }
+  await Promise.allSettled(flushPromises);
 
-  // Also flush any remaining retry items
-  for (const [key, { fn, attempts }] of Array.from(retryQueues.entries())) {
-    await retryWithBackoff(key, fn, attempts + 1);
-  }
+  // Also flush any remaining retry items (متوازياً)
+  await Promise.allSettled(
+    Array.from(retryQueues.entries()).map(([key, { fn, attempts }]) =>
+      retryWithBackoff(key, fn, attempts + 1)
+    )
+  );
 
-  // ما تبقى في outbox fallback ولم يُرفع
-  for (const key of Array.from(outboxFallbacks.keys())) {
-    if (!retryQueues.has(key)) {
+  // ما تبقى في outbox fallback ولم يُرفع (متوازياً)
+  const fallbackKeys = Array.from(outboxFallbacks.keys()).filter(k => !retryQueues.has(k));
+  await Promise.allSettled(
+    fallbackKeys.map(async key => {
       await persistToOutbox(key);
       outboxFallbacks.delete(key);
-    }
-  }
+    })
+  );
 };
 
 export const flushAllPendingSaves = async (): Promise<void> => {

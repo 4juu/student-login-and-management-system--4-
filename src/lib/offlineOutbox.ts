@@ -59,25 +59,35 @@ export const queueOutbox = async (key: string, data: unknown, path?: string): Pr
 };
 
 export const getOutboxEntries = async (): Promise<{ key: string; data: unknown; path?: string | undefined }[]> => {
-  const entries: { key: string; data: unknown; path?: string | undefined }[] = [];
-  for (const key of getKeys()) {
-    try {
-      const raw = await dbGet<unknown>(`outbox:${key}`);
-      if (raw === undefined) continue;
-      // الصيغة الجديدة { data, path? } مقابل البيانات الخام في النسخ القديمة
-      if (raw && typeof raw === 'object' && 'data' in (raw as Record<string, unknown>)) {
-        const wrapped = raw as { data: unknown; path?: string };
-        entries.push({ key, data: wrapped.data, path: wrapped.path });
-      } else {
-        entries.push({ key, data: raw });
+  const keys = getKeys();
+  if (keys.length === 0) return [];
+  // توازي: قراءة كل العناصر دفعة واحدة بدل تسلسل IDB
+  const loaded = await Promise.all(
+    keys.map(async key => {
+      try {
+        const raw = await dbGet<unknown>(`outbox:${key}`);
+        return { key, raw };
+      } catch {
+        return { key, raw: undefined as unknown };
       }
-    } catch {}
+    })
+  );
+  const entries: { key: string; data: unknown; path?: string | undefined }[] = [];
+  for (const { key, raw } of loaded) {
+    if (raw === undefined) continue;
+    // الصيغة الجديدة { data, path? } مقابل البيانات الخام في النسخ القديمة
+    if (raw && typeof raw === 'object' && 'data' in (raw as Record<string, unknown>)) {
+      const wrapped = raw as { data: unknown; path?: string };
+      entries.push({ key, data: wrapped.data, path: wrapped.path });
+    } else {
+      entries.push({ key, data: raw });
+    }
   }
   return entries;
 };
 
-export const hasOutboxEntries = async (): Promise<boolean> =>
-  (await getOutboxEntries()).length > 0;
+// O(1): يفحص سجل المفاتيح فقط (بدون قراءة كل الحمولات في كل استطلاع)
+export const hasOutboxEntries = async (): Promise<boolean> => getKeys().length > 0;
 
 export const removeOutboxEntry = async (key: string): Promise<void> => {
   try {
@@ -87,13 +97,25 @@ export const removeOutboxEntry = async (key: string): Promise<void> => {
   setKeys(keys);
 };
 
+/** حذف عدة عناصر دفعة واحدة: IDB متوازٍ + تحديث مفاتيح localStorage مرة وحدة */
+export const removeOutboxEntries = async (keys: string[]): Promise<void> => {
+  if (keys.length === 0) return;
+  await Promise.all(
+    keys.map(k =>
+      dbDelete(`outbox:${k}`).catch(() => {})
+    )
+  );
+  const toRemove = new Set(keys);
+  setKeys(getKeys().filter(k => !toRemove.has(k)));
+};
+
 export const clearOutbox = async (): Promise<void> => {
   const keys = getKeys();
-  for (const key of keys) {
-    try {
-      await dbDelete(`outbox:${key}`);
-    } catch {}
-  }
+  await Promise.all(
+    keys.map(k =>
+      dbDelete(`outbox:${k}`).catch(() => {})
+    )
+  );
   setKeys([]);
 };
 

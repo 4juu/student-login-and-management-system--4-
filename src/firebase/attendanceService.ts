@@ -6,7 +6,7 @@ import { AttendanceRecord, AttendanceSession } from "../types/student";
 import { getActiveAcademicYear } from "./academicYear";
 import { getYearBasePath, getTeacherDataPath, getStudentAttendancePath, getStudentAttendanceTidsPath } from "./paths";
 import { LS, saveLocal, loadLocal, isDangerousEmpty, stripUndefined } from "./localCache";
-import { debouncedSave, cancelPendingSavesWhere, registerOutboxFallback } from "./saveQueue";
+import { debouncedSave, scheduleSave, cancelPendingSavesWhere, registerOutboxFallback } from "./saveQueue";
 import { queueOutbox } from "../lib/offlineOutbox";
 import { loadStudents, loadDescriptorOverrides } from "./studentsService";
 
@@ -17,17 +17,17 @@ const attIndexKey = (year: string, adminUid: string, stageId: string, teacherId:
   `${year}/${adminUid}/${stageId}/${teacherId}`;
 
 /**
- * يكتب فهرس studentAttendance بالفارق فقط (ما تغيّر منذ آخر حفظ).
- * يُستدعى من الحفظ المؤجّل ومن تطبيق outbox.
+ * يبني تحديثات فهرس studentAttendance بالفارق فقط (ما تغيّر منذ آخر حفظ)
+ * بدون إرسالها — لتجميعها مع كتابات أخرى في طلب update() واحد.
  */
-export const writeStudentAttendanceIndex = async (
+export const buildStudentAttendanceIndexUpdates = async (
   year: string,
   adminUid: string,
   stageId: string,
   teacherId: string,
   records: AttendanceRecord[],
-): Promise<void> => {
-  const { compressRecord } = await import('./dataServiceCompressed');
+): Promise<Record<string, unknown>> => {
+  const { compressRecord } = await import("./dataServiceCompressed");
   const key = attIndexKey(year, adminUid, stageId, teacherId);
   const prev = attIndexState.get(key);
   const current = new Map<string, string>();
@@ -52,7 +52,21 @@ export const writeStudentAttendanceIndex = async (
 
   updates[getStudentAttendanceTidsPath(year, adminUid, stageId) + `/${teacherId}`] = Date.now();
   attIndexState.set(key, current);
+  return updates;
+};
 
+/**
+ * يكتب فهرس studentAttendance بالفارق فقط (ما تغيّر منذ آخر حفظ).
+ * يُستدعى من الحفظ المؤجّل ومن تطبيق outbox.
+ */
+export const writeStudentAttendanceIndex = async (
+  year: string,
+  adminUid: string,
+  stageId: string,
+  teacherId: string,
+  records: AttendanceRecord[],
+): Promise<void> => {
+  const updates = await buildStudentAttendanceIndexUpdates(year, adminUid, stageId, teacherId, records);
   if (Object.keys(updates).length > 0) {
     await update(ref(database), updates);
   }
@@ -85,17 +99,16 @@ export const saveAttendanceRecords = async (
   debouncedSave(saveKey, async () => {
     const { compressRecord } = await import('./dataServiceCompressed');
     const compressed = records.map(compressRecord);
+    const recordsPath = `${getYearBasePath(year, adminUid)}/stageData/${stageId}/teacherRecords/${teacherId}/recordsCompressed`;
 
-    await set(
-      ref(database, `${getYearBasePath(year, adminUid)}/stageData/${stageId}/teacherRecords/${teacherId}/recordsCompressed`),
-      compressed
-    );
-
+    // طلب update() واحد: السجلات المضغوطة + فهرس studentAttendance (بدون round-trip ثانٍ)
+    let indexUpdates: Record<string, unknown> = {};
     try {
-      await writeStudentAttendanceIndex(year, adminUid, stageId, teacherId, records);
+      indexUpdates = await buildStudentAttendanceIndexUpdates(year, adminUid, stageId, teacherId, records);
     } catch (e) {
       console.warn('⚠️ فشل تحديث فهرس studentAttendance:', e);
     }
+    await update(ref(database), { [recordsPath]: compressed, ...indexUpdates });
   });
 };
 
@@ -216,14 +229,15 @@ export const saveActiveSession = async (
       void queueOutbox(saveKey, sessionId, getTeacherDataPath(year, adminUid, stageId, teacherId, 'activeSession'));
     }
 
-    debouncedSave(saveKey, async () => {
+    // delay قصير (250ms) — الجلسة النشطة حساسة لزمن التبديل
+    scheduleSave(saveKey, async () => {
       const path = getTeacherDataPath(year, adminUid, stageId, teacherId, 'activeSession');
       if (sessionId) {
         await set(ref(database, path), sessionId);
       } else {
         await remove(ref(database, path));
       }
-    });
+    }, 250);
   } catch (e) {
     console.warn('⚠️ فشل حفظ الجلسة النشطة:', e);
   }
@@ -285,8 +299,10 @@ export const deleteStageData = async (adminUid: string, stageId: string): Promis
     cancelPendingSavesWhere(key => key.includes(stageId));
 
     const year = await getActiveAcademicYear();
-    await remove(ref(database, `${getYearBasePath(year, adminUid)}/stageData/${stageId}`));
-    await remove(ref(database, `${getYearBasePath(year, adminUid)}/studentAttendance/${stageId}`));
+    await Promise.all([
+      remove(ref(database, `${getYearBasePath(year, adminUid)}/stageData/${stageId}`)),
+      remove(ref(database, `${getYearBasePath(year, adminUid)}/studentAttendance/${stageId}`)),
+    ]);
     localStorage.removeItem(LS.students(adminUid, stageId));
 
     // مسح حالة فهرس studentAttendance في الذاكرة لهذه المرحلة

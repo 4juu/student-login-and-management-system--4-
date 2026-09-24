@@ -79,18 +79,15 @@ export function useOnlineStatus(): { isOffline: boolean; syncDone: boolean } {
       try {
         goOnline(database);
       } catch {}
-      // 1) أعد المحاولات الفاشلة (مثبّتة سابقاً وسقطت بعد 3 محاولات)
-      try {
-        await retryFailedSaves();
-      } catch (e) {
-        console.error('❌ فشل إعادة محاولات الحفظ:', e);
-      }
-      // 2) ارفع صندوق الأوفلاين
-      try {
-        await applyOutbox();
-      } catch (e) {
-        console.error('❌ فشل تطبيق صندوق الأوفلاين:', e);
-      }
+      // 1+2 بالتوازي (مستقلتان وكلتاهما single-flight) ثم 3 بعد اكتمالهما
+      await Promise.allSettled([
+        retryFailedSaves().catch(e => {
+          console.error('❌ فشل إعادة محاولات الحفظ:', e);
+        }),
+        applyOutbox().catch(e => {
+          console.error('❌ فشل تطبيق صندوق الأوفلاين:', e);
+        }),
+      ]);
       // 3) صفّي أي كتابات معلّقة متبقية
       try {
         await flushAllPendingSaves();
@@ -124,6 +121,8 @@ export function useOnlineStatus(): { isOffline: boolean; syncDone: boolean } {
     const schedule = () => {
       timer = window.setTimeout(async () => {
         if (!navigatorOnline) {
+          // إعادة ضبط التأخير أثناء الانقطاع — عند الرجوع نبدأ بفحص سريع again
+          delay = POLL_MIN_MS;
           schedule();
           return;
         }

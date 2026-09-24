@@ -50,8 +50,11 @@ export const saveStudents = async (
   }
 
   debouncedSave(saveKey, async () => {
-    await set(ref(database, studentsPath), stripped.map(s => stripUndefined(s as any)));
-    await set(ref(database, descriptorsPath), descriptors);
+    // update() واحد للمسارين: students + descriptors (round-trip بدل اثنين)
+    await update(ref(database), {
+      [studentsPath]: stripped.map(s => stripUndefined(s as any)),
+      [descriptorsPath]: descriptors,
+    });
   });
 };
 
