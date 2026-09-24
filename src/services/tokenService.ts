@@ -1,5 +1,5 @@
 // src/services/tokenService.ts
-import { ref, set, get, update } from 'firebase/database';
+import { ref, set, get, update, query, orderByChild, equalTo } from 'firebase/database';
 import { database } from '../firebase/config';
 import { nanoid } from 'nanoid';
 import { RegistrationLink } from '../types/registration';
@@ -41,6 +41,13 @@ const stripUndefined = <T extends object>(obj: T): T => {
 };
 
 /**
+ * 🔒 تحقق من أيام الصلاحية: رقم غير صالح (NaN/سالب/أكبر من سنة) → الافتراضي
+ * (يمنع expiresAt = NaN الذي يجعل الرابط لا ينتهي أبداً)
+ */
+const safeExpiryDays = (days: number): number =>
+  Number.isFinite(days) && days > 0 ? Math.min(Math.floor(days), 365) : DEFAULT_EXPIRY_DAYS;
+
+/**
  * 🆕 توليد رابط تسجيل لطالب واحد
  */
 export const createSingleRegistrationLink = async (
@@ -50,7 +57,9 @@ export const createSingleRegistrationLink = async (
   expiryDays: number = DEFAULT_EXPIRY_DAYS
 ): Promise<{ token: string; url: string }> => {
   const token = nanoid(20);
-  const now = Date.now();
+  await syncServerTimeOffset();
+  const now = getServerNow();
+  const days = safeExpiryDays(expiryDays);
   let academicYear = '';
   try { academicYear = await getActiveAcademicYear(); } catch {}
   
@@ -62,7 +71,7 @@ export const createSingleRegistrationLink = async (
     type: 'single',
     createdBy: adminUid,
     createdAt: new Date().toISOString(),
-    expiresAt: now + expiryDays * 24 * 60 * 60 * 1000,
+    expiresAt: now + days * 24 * 60 * 60 * 1000,
     used: false,
     academicYear: academicYear || undefined,
   };
@@ -83,8 +92,9 @@ export const createBulkRegistrationLinks = async (
   expiryDays: number = DEFAULT_EXPIRY_DAYS
 ): Promise<Array<{ studentId: string; token: string; url: string }>> => {
   const results: Array<{ studentId: string; token: string; url: string }> = [];
-  const now = Date.now();
-  const expiresAt = now + expiryDays * 24 * 60 * 60 * 1000;
+  await syncServerTimeOffset();
+  const now = getServerNow();
+  const expiresAt = now + safeExpiryDays(expiryDays) * 24 * 60 * 60 * 1000;
   let academicYear = '';
   try { academicYear = await getActiveAcademicYear(); } catch {}
   const ay = academicYear || undefined;
@@ -135,7 +145,9 @@ export const createAttendanceLink = async (
   teacherId?: string
 ): Promise<{ token: string; url: string }> => {
   const token = nanoid(20);
-  const now = Date.now();
+  await syncServerTimeOffset();
+  const now = getServerNow();
+  const days = safeExpiryDays(expiryDays);
   let academicYear = '';
   try { academicYear = await getActiveAcademicYear(); } catch {}
   
@@ -147,7 +159,7 @@ export const createAttendanceLink = async (
     type: 'attendance',
     createdBy: adminUid,
     createdAt: new Date().toISOString(),
-    expiresAt: now + expiryDays * 24 * 60 * 60 * 1000,
+    expiresAt: now + days * 24 * 60 * 60 * 1000,
     used: false,
     academicYear: academicYear || undefined,
     subjectName,
@@ -161,6 +173,7 @@ export const createAttendanceLink = async (
 };
 export const getRegistrationLink = async (token: string): Promise<RegistrationLink | null> => {
   try {
+    await syncServerTimeOffset();
     const snap = await get(ref(database, `${LINKS_PATH}/${token}`));
     if (!snap.exists()) return null;
     return snap.val() as RegistrationLink;
@@ -215,22 +228,18 @@ export const deleteRegistrationLink = async (token: string): Promise<void> => {
 };
 
 /**
- * 📋 جلب كل الروابط لأدمن معين
+ * 📋 جلب كل الروابط لأدمن معين — استعلام محدود بدل سرد كل الروابط (P6)
  */
 export const getAdminLinks = async (adminUid: string): Promise<RegistrationLink[]> => {
   try {
-    const snap = await get(ref(database, LINKS_PATH));
+    const snap = await get(query(ref(database, LINKS_PATH), orderByChild('adminUid'), equalTo(adminUid)));
     if (!snap.exists()) return [];
-    
-    const allLinks = snap.val();
+
     const adminLinks: RegistrationLink[] = [];
-    
-    Object.values(allLinks).forEach((link: any) => {
-      if (link.adminUid === adminUid) {
-        adminLinks.push(link);
-      }
+    Object.values(snap.val()).forEach((link: any) => {
+      if (link) adminLinks.push(link);
     });
-    
+
     return adminLinks.sort((a, b) => b.expiresAt - a.expiresAt);
   } catch (e) {
     console.error('❌ فشل جلب روابط الأدمن:', e);
@@ -239,29 +248,30 @@ export const getAdminLinks = async (adminUid: string): Promise<RegistrationLink[
 };
 
 /**
- * 🧹 حذف الروابط المنتهية الصلاحية
+ * 🧹 حذف الروابط المنتهية الصلاحية — استعلام محدود بروابط الأدمن فقط
  */
 export const cleanExpiredLinks = async (adminUid: string): Promise<number> => {
   try {
-    const snap = await get(ref(database, LINKS_PATH));
+    const snap = await get(query(ref(database, LINKS_PATH), orderByChild('adminUid'), equalTo(adminUid)));
     if (!snap.exists()) return 0;
-    
-    const now = Date.now();
+
+    await syncServerTimeOffset();
+    const now = getServerNow();
     const allLinks = snap.val();
     const updates: { [key: string]: null } = {};
     let count = 0;
-    
+
     Object.entries(allLinks).forEach(([token, link]: [string, any]) => {
-      if (link.adminUid === adminUid && link.expiresAt < now) {
+      if (link && Number.isFinite(link.expiresAt) && link.expiresAt < now) {
         updates[`${LINKS_PATH}/${token}`] = null;
         count++;
       }
     });
-    
+
     if (count > 0) {
       await update(ref(database), updates);
     }
-    
+
     return count;
   } catch (e) {
     console.error('❌ فشل تنظيف الروابط:', e);
@@ -280,7 +290,9 @@ export const validateLink = (link: RegistrationLink | null): {
   reason?: string;
 } => {
   if (!link) return { valid: false, reason: 'الرابط غير موجود' };
-  if (link.expiresAt < Date.now()) return { valid: false, reason: 'انتهت صلاحية الرابط' };
+  if (!Number.isFinite(link.expiresAt)) return { valid: false, reason: 'الرابط غير صالح' };
+  // ✅ حسب وقت سيرفر Firebase لا ساعة الجهاز (serverTimeOffset يُزامَن عند دخول الصفحة)
+  if (link.expiresAt < getServerNow()) return { valid: false, reason: 'انتهت صلاحية الرابط' };
   return { valid: true };
 };
 

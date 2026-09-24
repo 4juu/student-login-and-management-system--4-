@@ -4,11 +4,17 @@
     // 👥 المستخدمون
     // ══════════════════════════════════════════════════════════
     "users": {
-      // ✅ سرد كل المستخدمين: أدمن/أدمن كلية فقط — التدريسي يقرأ ملفه عبر $uid
+      // ✅ فهرس لاستعلامات الدور/المالك (getAllTeachers, فلترة الأدمن)
+      ".indexOn": ["role", "adminId", "collegeId"],
+      // ✅ سرد كل المستخدمين: أدمن/أدمن الكلية فقط — التدريسي يقرأ ملفه عبر $uid
       ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')",
       "$uid": {
         ".read": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')",
-        ".write": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin' || (root.child('users').child(auth.uid).child('role').val() == 'college_admin' && root.child('users').child($uid).child('role').val() == 'teacher'))"
+        ".write": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin' || (root.child('users').child(auth.uid).child('role').val() == 'college_admin' && root.child('users').child($uid).child('role').val() == 'teacher'))",
+        // 🔒 منع تصعيد الصلاحيات الذاتي: الدور لا يتغير إلا:
+        //    (1) بقاءه كما هو، أو (2) أي دور جديد = 'teacher' (بلا ترقية)، أو
+        //    (3) كتابة الأدمن، أو (4) بريد الأدمن الرئيسي (موثوق من توكن Firebase)
+        ".validate": "!newData.exists() || (data.exists() && data.child('role').val() == newData.child('role').val()) || newData.child('role').val() == 'teacher' || root.child('users').child(auth.uid).child('role').val() == 'admin' || auth.token.email == 'mujtabahaitham@gmail.com'"
       }
     },
 
@@ -58,6 +64,8 @@
         ".read": "auth != null",
         "$token": {
           ".read": true,
+          // ✅ فهرس لاستعلام روابط أدمن معيّن (getAdminLinks/cleanExpiredLinks)
+          ".indexOn": ["adminUid"],
           // ✅ الأدمن/أدمن الكلية ينشئون أي رابط، والتدريسي العادي ينشئ روابط الحضور فقط
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin' || (root.child('users').child(auth.uid).child('role').val() == 'teacher' && newData.child('type').val() == 'attendance'))",
           // ✅ يسمح للطالب بتعليم الرابط كمستخدم بعد إتمام التسجيل الذاتي
@@ -104,10 +112,10 @@
 
         "userData": {
           "$adminUid": {
-            // ✅ القراءة مفتوحة للجميع — الأبناء كلهم (.read: true) أصلاً
-            //    (students، colleges، stages، teacherRecords — كلها مفتوحة للقراءة)
-            //    هذا يسمح لصفحات الاختبار والتسجيل الذاتي بقراءة بيانات الطلاب بدون تسجيل دخول
-            ".read": true,
+            // 🔒 القراءة للمستخدمين المسجّلين فقط — يمنع سرقة telegramConfig (توكن بوت تيليغرام)
+            //    عبر الروابط العامة. صفحات الطالب تقرأ أبناءها المحدّدين (students, descriptors...)
+            //    التي تحتفظ بـ .read: true الخاص بها في القواعد أدناه.
+            ".read": "auth != null",
             ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
 
             "colleges": {

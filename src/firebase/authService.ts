@@ -18,79 +18,10 @@ const ADMIN_EMAIL = "mujtabahaitham@gmail.com";
 // ============================================================
 export const signIn = async (email: string, password: string): Promise<User> => {
   try {
-    
-    // 🆕 سجّل دخول مباشرة أولاً (قبل أي قراءة من DB)
-    let userCredential;
-    let actualPassword = password;
-    let needsPasswordUpdate = false;
-    let storedPasswordForUpdate = '';
-    
-    try {
-      userCredential = await signInWithEmailAndPassword(auth, email, password);
-    } catch (firstError: any) {
-      // إذا فشل، شوف هل الأدمن غيّر كلمة المرور
-      
-      try {
-        const usersRef = ref(database, 'users');
-        const usersSnapshot = await get(usersRef);
-        
-        if (usersSnapshot.exists()) {
-          const allUsers = usersSnapshot.val();
-          const userEntry = Object.entries(allUsers).find(([_, user]: [string, any]) => 
-            user.email?.toLowerCase() === email.toLowerCase()
-          );
-          
-          if (userEntry) {
-            const [uid] = userEntry as [string, any];
-            const teacherAccountRef = ref(database, `teacherAccounts/${uid}`);
-            const teacherSnapshot = await get(teacherAccountRef);
-            
-            if (teacherSnapshot.exists()) {
-              const teacherData = teacherSnapshot.val();
-              
-              if (teacherData.newPassword && password === teacherData.newPassword && teacherData.storedPassword) {
-                actualPassword = teacherData.storedPassword;
-                storedPasswordForUpdate = password;
-                needsPasswordUpdate = true;
-                
-                userCredential = await signInWithEmailAndPassword(auth, email, actualPassword);
-              } else {
-                throw firstError;
-              }
-            } else {
-              throw firstError;
-            }
-          } else {
-            throw firstError;
-          }
-        } else {
-          throw firstError;
-        }
-      } catch {
-        throw firstError;
-      }
-    }
-    
-    if (!userCredential) {
-      throw new Error('فشل تسجيل الدخول');
-    }
-    
+    // ✅ تسجيل الدخول عبر Firebase Auth مباشرة — لا تُخزَّن كلمات المرور نصّاً في قاعدة البيانات
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const firebaseUser = userCredential.user;
-    
-    // 🔄 تحديث كلمة المرور إذا لزم الأمر
-    if (needsPasswordUpdate && firebaseUser) {
-      try {
-        await updatePassword(firebaseUser, storedPasswordForUpdate);
-        await update(ref(database, `teacherAccounts/${firebaseUser.uid}`), {
-          newPassword: null,
-          storedPassword: storedPasswordForUpdate,
-          passwordLastUpdated: new Date().toISOString()
-        });
-      } catch (error) {
-        console.error("⚠️ خطأ في تحديث كلمة المرور:", error);
-      }
-    }
-    
+
     // 📥 جلب أو إنشاء بروفايل المستخدم
     const userRef = ref(database, `users/${firebaseUser.uid}`);
     const snapshot = await get(userRef);
@@ -188,7 +119,6 @@ export const createTeacherAccount = async (
       displayName,
       createdBy: adminUid,
       createdAt: new Date().toISOString(),
-      storedPassword: password,
       passwordLastReset: new Date().toISOString()
     });
     
@@ -359,10 +289,10 @@ export const updateTeacherPassword = async (
       try { await firebaseSignOut(secondaryAuth); } catch { /* تجاهل */ }
     }
 
-    // مزامنة النسخة المحفوظة مع كلمة السر الجديدة الحقيقية
+    // 🔒 مزامنة النسخة المحلية: مسح أي كلمة مرور محفوظة نصّاً (لم نعد نخزّنها)
     await update(ref(database, `teacherAccounts/${uid}`), {
       newPassword: null,
-      storedPassword: newPassword,
+      storedPassword: null,
       passwordLastReset: new Date().toISOString(),
       passwordResetBy: 'admin'
     });

@@ -14,6 +14,9 @@ vi.mock('firebase/database', () => ({
     val: () => null,
   })),
   update: vi.fn(async () => undefined),
+  query: vi.fn((...args: unknown[]) => ({ args })),
+  orderByChild: vi.fn((key: string) => ({ key })),
+  equalTo: vi.fn((value: unknown) => ({ value })),
 }));
 
 vi.mock('../../firebase/dataService', () => ({
@@ -122,6 +125,11 @@ describe('validateLink (RegistrationLink)', () => {
 
   it('rejects expired', () => {
     expect(validateLink({ ...base, expiresAt: Date.now() - 1 }).valid).toBe(false);
+  });
+
+  it('rejects non-finite expiresAt (NaN never-valid links)', () => {
+    expect(validateLink({ ...base, expiresAt: NaN }).valid).toBe(false);
+    expect(validateLink({ ...base, expiresAt: NaN }).reason).toBe('الرابط غير صالح');
   });
 
   it('accepts valid future link even if used=true (single links stay open)', () => {
