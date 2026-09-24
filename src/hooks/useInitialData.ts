@@ -65,25 +65,22 @@ export default function useInitialData({ currentUser }: UseInitialDataParams): U
       setColleges(collegesData);
       setStages(stagesData);
 
-      try {
-        const config = await loadTelegramConfig(adminUid);
-        setTelegramConfig(config);
-      } catch (e) {
-        console.warn('فشل تحميل تهيئة التلغرام:', e);
-      }
+      // ما بعد هذه النقطة لا يحكم ظهور الشاشة الرئيسية — يُحمَّل في الخلفية
+      void loadTelegramConfig(adminUid)
+        .then(config => setTelegramConfig(config))
+        .catch(e => console.warn('فشل تحميل تهيئة التلغرام:', e));
 
       if (user.role === 'admin') {
-        try {
-          const usersSnap = await get(dbRef(database, 'users'));
-          if (usersSnap.exists()) {
-            const teachersList = (Object.values(usersSnap.val()) as User[]).filter(
-              (u) => u.role === 'teacher' && u.adminId === user.uid
-            );
-            setAllTeachers(teachersList);
-          }
-        } catch (e) {
-          console.warn('فشل تحميل قائمة التدريسيين:', e);
-        }
+        void get(dbRef(database, 'users'))
+          .then(usersSnap => {
+            if (usersSnap.exists()) {
+              const teachersList = (Object.values(usersSnap.val()) as User[]).filter(
+                (u) => u.role === 'teacher' && u.adminId === user.uid
+              );
+              setAllTeachers(teachersList);
+            }
+          })
+          .catch(e => console.warn('فشل تحميل قائمة التدريسيين:', e));
       }
     } catch (error) {
       console.error('Error loading initial data:', error);

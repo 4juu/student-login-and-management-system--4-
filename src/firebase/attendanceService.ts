@@ -198,25 +198,26 @@ export const loadStageData = async (
   stageId: string,
   teacherId: string
 ) => {
-  const [students, records, sessions, activeSessionId] = await Promise.all([
+  const [students, records, sessions, activeSessionId, overrides] = await Promise.all([
     loadStudents(adminUid, stageId),
     loadAttendanceRecords(adminUid, stageId, teacherId),
     loadSessions(adminUid, stageId, teacherId),
     loadActiveSession(adminUid, stageId, teacherId),
+    loadDescriptorOverrides(adminUid, stageId).catch(e => {
+      console.warn('[loadStageData] فشل جلب descriptorOverrides:', e);
+      return null;
+    }),
   ]);
-  try {
-    const overrides = await loadDescriptorOverrides(adminUid, stageId);
-    if (overrides) {
-      for (let i = 0; i < students.length; i++) {
-        const student = students[i];
-        if (!student) continue;
-        const ov = overrides[student.id];
-        if (ov?.faceDescriptor && ov.updatedAt > 0) {
-          students[i] = { ...student, faceDescriptor: ov.faceDescriptor };
-        }
+  if (overrides) {
+    for (let i = 0; i < students.length; i++) {
+      const student = students[i];
+      if (!student) continue;
+      const ov = overrides[student.id];
+      if (ov?.faceDescriptor && ov.updatedAt > 0) {
+        students[i] = { ...student, faceDescriptor: ov.faceDescriptor };
       }
     }
-  } catch (e) { console.warn('[loadStageData] فشل دمج descriptorOverrides:', e); }
+  }
   return { students, records, sessions, activeSessionId };
 };
 

@@ -69,7 +69,7 @@ const StudentProfileModal = lazy(() =>
   import('./components/StudentProfile/StudentProfileModal').then(m => ({ default: m.StudentProfileModal }))
 );
 
-import { loadStageData, loadStudents as loadStudentsForStage, deleteStageData, flushAllPendingSaves, cancelAllPendingSaves, applyOutbox } from './firebase/dataService';
+import { loadStageData, loadStudents as loadStudentsForStage, deleteStageData, flushAllPendingSaves, cancelAllPendingSaves, applyOutbox, loadTelegramConfig } from './firebase/dataService';
 import { getCachedStageData, setCachedStageData } from './lib/stageCache';
 import { TelegramConfig } from './types/telegram';
 
@@ -123,6 +123,8 @@ function App() {
   });
   const userModifiedStudentsRef = useRef(false);
   const processedAttendanceRef = useRef(new Set<string>());
+  // رقم تشغيل دخول المرحلة — يمنع تعارض دخولين متتاليين (آخر دخول يفوز دائماً)
+  const stageRunIdRef = useRef(0);
 
   // مراجع لكسر تسلسل الاستدعاء بين useAuth و useInitialData
   const loadInitialDataRef = useRef<(user: User) => Promise<void>>(async () => {});
@@ -161,7 +163,7 @@ function App() {
     setDataLoaded(false);
     await loadInitialDataBase(user);
     setActiveTab('stage-selector');
-    setTimeout(() => setDataLoaded(true), 500);
+    setDataLoaded(true);
   }, [loadInitialDataBase, setActiveTab]);
 
   const resetData = useCallback(() => {
@@ -210,50 +212,61 @@ function App() {
   }, []);
 
   const handleSelectStage = useCallback(async (collegeId: string, stageId: string) => {
+    const runId = ++stageRunIdRef.current;
     setSelectedCollegeId(collegeId);
     setSelectedStageId(stageId);
     setDataLoaded(false);
     setStageSyncing(true);
+    // صفحة الهبوط تُضبط مرة واحدة عند الدخول — لا تبديل تبويب تلقائي لاحق بسبب المزامنة
+    setActiveTab('sessions');
     setProfileStudent(null);
     userModifiedStudentsRef.current = false;
 
     const adminUid = getAdminUid();
     const teacherId = getTeacherId();
 
-    try {
-      const cached = await getCachedStageData(adminUid, currentAcademicYear, stageId, teacherId);
-      if (cached) {
+    // الكاش والشبكة بالتوازي: الكاش يعرض المحتوى فوراً والشبكة تحدّث عند وصولها
+    const cachePromise = getCachedStageData(adminUid, currentAcademicYear, stageId, teacherId)
+      .then(cached => {
+        if (!cached || stageRunIdRef.current !== runId) return;
         if (!userModifiedStudentsRef.current) setStudents(cached.students);
         setAttendanceRecords(cached.records);
         setSessions(cached.sessions);
         setActiveSessionId(cached.activeSessionId);
-        setActiveTab('sessions');
         setDataLoaded(true);
-      }
-    } catch {
-      // تجاهل - نعرض شاشة التحميل العادية
-    }
+      })
+      .catch(() => {
+        // تجاهل - نعرض شاشة التحميل العادية
+      });
+
+    const networkPromise = loadStageData(adminUid, stageId, teacherId)
+      .then(data => {
+        if (stageRunIdRef.current !== runId) return;
+        if (!userModifiedStudentsRef.current) setStudents(data.students);
+        setAttendanceRecords(data.records);
+        setSessions(data.sessions);
+        setActiveSessionId(data.activeSessionId);
+        setDataLoaded(true);
+        void setCachedStageData(adminUid, currentAcademicYear, stageId, teacherId, data);
+      })
+      .catch(e => {
+        console.error('Error loading stage:', e);
+      });
+
+    // التيليجرام في الخلفية — لا يؤخر عرض البيانات ولا شارة المزامنة
+    void loadTelegramConfig(adminUid)
+      .then(config => {
+        if (stageRunIdRef.current === runId) setTelegramConfig(config);
+      })
+      .catch(() => {});
 
     try {
-      const data = await loadStageData(adminUid, stageId, teacherId);
-
-      if (!userModifiedStudentsRef.current) setStudents(data.students);
-      setAttendanceRecords(data.records);
-      setSessions(data.sessions);
-      setActiveSessionId(data.activeSessionId);
-      setActiveTab('sessions');
-      setDataLoaded(true);
-
-      void setCachedStageData(adminUid, currentAcademicYear, stageId, teacherId, data);
-
-      const { loadTelegramConfig } = await import('./firebase/dataService');
-      const config = await loadTelegramConfig(adminUid);
-      setTelegramConfig(config);
-    } catch (e) {
-      console.error('Error loading stage:', e);
+      await Promise.all([cachePromise, networkPromise]);
     } finally {
-      setStageSyncing(false);
-      setTimeout(() => setDataLoaded(true), 300);
+      if (stageRunIdRef.current === runId) {
+        setStageSyncing(false);
+        setDataLoaded(true);
+      }
     }
   }, [currentUser, currentAcademicYear, getAdminUid, getTeacherId, setActiveTab, setTelegramConfig]);
 
@@ -583,6 +596,11 @@ function App() {
             )}
 
             <div key={`tab-${activeTab}`} className="animate-pageEnter">
+              {!dataLoaded ? (
+                // أثناء التحميل الأولي: هيكل تحميل بدل الشاشة الفارغة/الصلاحيات المبكرة
+                <TabFallback />
+              ) : (
+                <>
               {activeTab === 'stage-selector' && (
                 <StageSelector user={currentUser} colleges={colleges} stages={stages} onSelect={handleSelectStage} />
               )}
@@ -619,6 +637,12 @@ function App() {
                 <Suspense fallback={<TabFallback />}>
                   <ProfileSettings currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />
                 </Suspense>
+              )}
+              {/* fallback: أي تبويب غير مطابق (أو غير مسموح للدور) يعود لاختيار المراحل بدل شاشة فارغة */}
+              {!['stage-selector', 'colleges', 'teachers', 'system-settings', 'profile'].includes(activeTab) && (
+                <StageSelector user={currentUser} colleges={colleges} stages={stages} onSelect={handleSelectStage} />
+              )}
+                </>
               )}
             </div>
           </div>

@@ -77,8 +77,13 @@ export const StageContent: FC<StageContentProps> = ({
   sendTotalGroups,
   completedGroupData,
 }) => {
-  const activeTab = useNavStore((s) => s.activeTab);
+  const storeActiveTab = useNavStore((s) => s.activeTab);
   const setActiveTab = useNavStore((s) => s.setActiveTab);
+  // أي تبويب غير تابع للمرحلة (أو غير معروف) يُعامَل كـ«السجلات» بدل شاشة فارغة
+  const activeTab =
+    storeActiveTab === 'sessions' || storeActiveTab === 'login' || storeActiveTab === 'manage' || storeActiveTab === 'records'
+      ? storeActiveTab
+      : 'sessions';
   const dataLoaded = useUIStore((s) => s.dataLoaded);
   const setProfileStudent = useUIStore((s) => s.setProfileStudent);
   const students = useStageStore((s) => s.students);

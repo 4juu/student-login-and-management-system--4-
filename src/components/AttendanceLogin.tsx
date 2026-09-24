@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect, lazy, Suspense } from 'react';
 import { Student, AttendanceRecord, AttendanceSession } from '../types/student';
 import { User } from '../types/user';
-import { QRAttendance } from './QRAttendance';
 import { CardSkeleton } from './loading/CardSkeleton';
 import { Camera, Info, TriangleAlert, User as UserIcon } from 'lucide-react';
 
 // 🚀 ماسح الحضور بالوجه يُحمَّل عند فتحه فقط (محرك الوجه ثقيل)
 const LazyFaceScanner = lazy(() =>
   import('./face/FaceScanner').then(m => ({ default: m.FaceScanner }))
+);
+// 🚀 ماسح QR يُحمَّل عند فتحه فقط (حزمة html5-qrcode ~366KB)
+const LazyQRAttendance = lazy(() =>
+  import('./QRAttendance').then(m => ({ default: m.QRAttendance }))
 );
 
 interface AttendanceLoginProps {
@@ -354,14 +357,16 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
       )}
 
       {showQRScanner && (
-<QRAttendance
-  students={students}
-  activeSession={activeSession || null}
-  onMarkAttendance={handleQRMarkAttendance}
-  onUpdateStudent={onUpdateStudent}
-  alreadyPresentIds={alreadyPresentIds}
-  onClose={() => setShowQRScanner(false)}
-/>
+        <Suspense fallback={<CardSkeleton />}>
+          <LazyQRAttendance
+            students={students}
+            activeSession={activeSession || null}
+            onMarkAttendance={handleQRMarkAttendance}
+            onUpdateStudent={onUpdateStudent}
+            alreadyPresentIds={alreadyPresentIds}
+            onClose={() => setShowQRScanner(false)}
+          />
+        </Suspense>
       )}
     </>
   );

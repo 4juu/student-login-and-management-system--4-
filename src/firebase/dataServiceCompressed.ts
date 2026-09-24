@@ -2,7 +2,8 @@ import { ref, set, get, remove } from "firebase/database";
 import { database } from "./config";
 import { AttendanceRecord } from "../types/student";
 import { getActiveAcademicYear } from "./dataService";
-import * as XLSX from 'xlsx-js-style';
+// XLSX يُحمَّل ديناميكياً داخل archiveOldRecords فقط — خارج مسار تحميل البيانات
+// (كان استيراده الثابت يسحب حزمة 849KB مع كل فتح مرحلة)
 
 // ============================================================
 // 🗜️ SMART COMPRESSED RECORDS - الضغط الذكي
@@ -302,6 +303,7 @@ export const archiveOldRecords = async (
     }
     
     // إنشاء ملف Excel للأرشيف
+    const XLSX = await import('xlsx-js-style');
     const archiveData = toArchive.map((r, i) => ({
       'ت': i + 1,
       'اسم الطالب': r.studentName,
