@@ -5,11 +5,7 @@
 declare const __APP_VERSION__: string;
 
 interface ImportMetaEnv {
-  readonly VITE_HF_TOKEN: string;
-  readonly VITE_GEMINI_KEY: string;
-  readonly VITE_GEMINI_API_KEY: string;
-  readonly VITE_OPENROUTER_API_KEY: string;
-  readonly VITE_GROQ_API_KEY: string;
+  readonly VITE_SENTRY_DSN?: string;
 }
 
 interface ImportMeta {

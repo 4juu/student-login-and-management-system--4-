@@ -72,8 +72,7 @@ import { loadStageData, loadStudents as loadStudentsForStage, deleteStageData, f
 import { getCachedStageData, setCachedStageData } from './lib/stageCache';
 import { TelegramConfig } from './types/telegram';
 
-// ثوابت مشتركة — تمنع إنشاء مصفوفات/كائنات جديدة في كل رسم (يُمرَّر لـ SmartChatBot)
-const EMPTY_TEACHERS_ARRAY: User[] = [];
+// ثابت مشترك — يمنع إنشاء كائن جديد في كل رسم (يُمرَّر لـ SmartChatBot)
 const EMPTY_STAGES_DATA: Record<string, { students: Student[]; records: AttendanceRecord[]; sessions: AttendanceSession[] }> = {};
 
 function App() {
@@ -151,12 +150,12 @@ function App() {
   const {
     currentUser, loading, logoutConfirmOpen, loggingOut,
     handleLogin, handleLogout, confirmLogout, cancelLogout, handleUpdateProfile,
-    isAdmin, isMainAdmin, isCollegeAdmin,
+    isMainAdmin, isCollegeAdmin,
     getAdminUid, getTeacherId,
   } = auth;
 
   const {
-    allTeachers, allStagesData, universityDataLoading, universityDataLoaded,
+    allStagesData, universityDataLoading, universityDataLoaded,
     telegramConfig,
     loadInitialData: loadInitialDataBase, loadAllAdminData,
     setTelegramConfig, setAllStagesData,
@@ -697,14 +696,9 @@ function App() {
         <Suspense fallback={null}>
           <SmartChatBot
             user={currentUser} colleges={colleges} stages={stages}
-            currentCollegeId={selectedCollegeId} currentStageId={selectedStageId}
+            currentStageId={selectedStageId}
             students={students} records={attendanceRecords} sessions={sessions}
-            activeSessionId={activeSessionId}
-            allTeachers={isMainAdmin ? allTeachers : EMPTY_TEACHERS_ARRAY}
             allStagesData={isMainAdmin && universityDataLoaded ? allStagesData : EMPTY_STAGES_DATA}
-            onRequestUniversityData={isAdmin ? loadAllAdminData : undefined}
-            universityDataLoaded={universityDataLoaded}
-            universityDataLoading={universityDataLoading}
           />
         </Suspense>
       )}

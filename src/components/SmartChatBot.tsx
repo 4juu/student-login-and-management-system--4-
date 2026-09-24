@@ -28,13 +28,10 @@ interface SmartChatBotProps {
   user: User;
   colleges: College[];
   stages: Stage[];
-  currentCollegeId?: string | null | undefined;
   currentStageId?: string | null | undefined;
   students: Student[];
   records: AttendanceRecord[];
   sessions: AttendanceSession[];
-  activeSessionId?: string | null | undefined;
-  allTeachers?: User[] | undefined;
   allStagesData?: {
     [stageId: string]: {
       students: Student[];
@@ -42,49 +39,7 @@ interface SmartChatBotProps {
       sessions: AttendanceSession[];
     };
   } | undefined;
-  // 🆕 3 Props جديدة فقط
-  onRequestUniversityData?: (() => Promise<void>) | undefined;
-  universityDataLoaded?: boolean | undefined;
-  universityDataLoading?: boolean | undefined;
 }
-
-// ✅ API Keys
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
-const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY as string;
-
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY as string;
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
-
-interface AIModel {
-  id: string;
-  name: string;
-  provider: 'gemini' | 'openrouter' | 'groq';
-  model: string;
-  emoji: string;
-}
-
-const AI_MODELS: AIModel[] = [
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash ⚡', provider: 'gemini', model: 'gemini-2.5-flash', emoji: '🟡' },
-  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'gemini', model: 'gemini-2.0-flash', emoji: '🟡' },
-  { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Exp 🧪', provider: 'gemini', model: 'gemini-2.0-flash-exp', emoji: '🟡' },
-  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', provider: 'gemini', model: 'gemini-1.5-flash', emoji: '🟡' },
-  { id: 'gemini-1.5-flash-8b', name: 'Gemini 1.5 Flash 8B', provider: 'gemini', model: 'gemini-1.5-flash-8b', emoji: '🟡' },
-  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro 🧠', provider: 'gemini', model: 'gemini-1.5-pro', emoji: '🟡' },
-  { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B ⚡', provider: 'groq', model: 'llama-3.3-70b-versatile', emoji: '⚡' },
-  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B (سريع جداً)', provider: 'groq', model: 'llama-3.1-8b-instant', emoji: '⚡' },
-  { id: 'llama3-70b-8192', name: 'Llama 3 70B', provider: 'groq', model: 'llama3-70b-8192', emoji: '⚡' },
-  { id: 'llama3-8b-8192', name: 'Llama 3 8B', provider: 'groq', model: 'llama3-8b-8192', emoji: '⚡' },
-  { id: 'gemma2-9b-it', name: 'Gemma 2 9B', provider: 'groq', model: 'gemma2-9b-it', emoji: '⚡' },
-  { id: 'mixtral-8x7b', name: 'Mixtral 8x7B', provider: 'groq', model: 'mixtral-8x7b-32768', emoji: '⚡' },
-  { id: 'deepseek-r1-distill-llama-70b', name: 'DeepSeek R1 70B 🧠', provider: 'groq', model: 'deepseek-r1-distill-llama-70b', emoji: '⚡' },
-  { id: 'qwen-qwq-32b', name: 'Qwen QwQ 32B 🧠', provider: 'groq', model: 'qwen-qwq-32b', emoji: '⚡' },
-];
-
-const getGeminiUrl = (model: string) =>
-  `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
@@ -186,131 +141,6 @@ const pickBestStudentMatch = (q: string, students: Student[]): Student | null =>
   return best;
 };
 
-const getGeminiText = (data: any): string => {
-  const parts = data?.candidates?.[0]?.content?.parts;
-  if (!Array.isArray(parts)) return '';
-  return parts.map((p: any) => p?.text || '').join('').trim();
-};
-
-const getErrorMessage = (status: number, errorData: any): string => {
-  const msg = errorData?.error?.message || '';
-  switch (status) {
-    case 400: return `طلب غير صحيح: ${msg}`;
-    case 401: return 'API Key غير صحيحة';
-    case 403: return 'API Key ما عندها صلاحية';
-    case 404: return 'الموديل غير موجود';
-    case 429: return 'تم تجاوز الحد المسموح';
-    case 500: return 'خطأ داخلي من السيرفر';
-    case 503: return 'الخدمة مزدحمة حالياً';
-    default: return `خطأ ${status}: ${msg}`;
-  }
-};
-
-const callGeminiDirect = async (model: string, contents: any[]): Promise<string> => {
-  const response = await fetch(getGeminiUrl(model), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents,
-      generationConfig: { temperature: 0.1, topK: 20, topP: 0.85, maxOutputTokens: 8192 },
-      safetySettings: [
-        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-      ],
-    }),
-  });
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const err: any = new Error(getErrorMessage(response.status, errorData));
-    err.status = response.status;
-    throw err;
-  }
-  const data = await response.json();
-  const text = getGeminiText(data);
-  if (!text) {
-    const finishReason = data?.candidates?.[0]?.finishReason;
-    const err: any = new Error(finishReason === 'SAFETY' ? 'SAFETY_BLOCKED' : 'EMPTY_RESPONSE');
-    err.status = 0;
-    throw err;
-  }
-  return text;
-};
-
-const callGroqDirect = async (
-  model: string,
-  systemInstruction: string,
-  conversationHistory: Message[],
-  userMessage: string
-): Promise<string> => {
-  if (!GROQ_API_KEY) {
-    const err: any = new Error('NO_GROQ_KEY');
-    err.status = 401;
-    throw err;
-  }
-  const messages: any[] = [{ role: 'system', content: systemInstruction }];
-  conversationHistory.slice(-6).forEach(msg => {
-    messages.push({ role: msg.type === 'user' ? 'user' : 'assistant', content: msg.content });
-  });
-  messages.push({ role: 'user', content: userMessage });
-
-  const response = await fetch(GROQ_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_API_KEY}` },
-    body: JSON.stringify({ model, messages, temperature: 0.1, max_tokens: 8192, top_p: 0.85, stream: false }),
-  });
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const err: any = new Error(errorData?.error?.message || `Error ${response.status}`);
-    err.status = response.status;
-    throw err;
-  }
-  const data = await response.json();
-  const text = data?.choices?.[0]?.message?.content?.trim();
-  if (!text) { const err: any = new Error('EMPTY_RESPONSE'); err.status = 0; throw err; }
-  return text;
-};
-
-const callOpenRouterDirect = async (
-  model: string,
-  systemInstruction: string,
-  conversationHistory: Message[],
-  userMessage: string
-): Promise<string> => {
-  if (!OPENROUTER_API_KEY) {
-    const err: any = new Error('NO_OPENROUTER_KEY');
-    err.status = 401;
-    throw err;
-  }
-  const messages: any[] = [{ role: 'system', content: systemInstruction }];
-  conversationHistory.slice(-6).forEach(msg => {
-    messages.push({ role: msg.type === 'user' ? 'user' : 'assistant', content: msg.content });
-  });
-  messages.push({ role: 'user', content: userMessage });
-
-  const response = await fetch(OPENROUTER_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : '',
-      'X-Title': 'Attendance System AI',
-    },
-    body: JSON.stringify({ model, messages, temperature: 0.1, max_tokens: 8192, top_p: 0.85 }),
-  });
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const err: any = new Error(errorData?.error?.message || `Error ${response.status}`);
-    err.status = response.status;
-    throw err;
-  }
-  const data = await response.json();
-  const text = data?.choices?.[0]?.message?.content?.trim();
-  if (!text) { const err: any = new Error('EMPTY_RESPONSE'); err.status = 0; throw err; }
-  return text;
-};
-
 interface StudentQuickCard {
   student: Student;
   attendedCount: number;
@@ -327,29 +157,19 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
   user,
   colleges,
   stages,
-  currentCollegeId,
   currentStageId,
   students,
   records,
   sessions,
-  activeSessionId: _activeSessionId,
-  allTeachers: _allTeachers = [],
   allStagesData = {},
-  // 🆕 Props جديدة
-  universityDataLoaded = false,
 }) => {
   const isAdmin = user.role === 'admin';
-  const currentCollege = colleges.find(c => c.id === currentCollegeId);
-  const currentStage = stages.find(s => s.id === currentStageId);
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentModelIndex, setCurrentModelIndex] = useState(0);
-  const [failedModels, setFailedModels] = useState<Set<string>>(new Set());
-  const selectedModelId = 'auto';
 
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [studentSuggestions, setStudentSuggestions] = useState<Student[]>([]);
@@ -363,7 +183,6 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastRequestTime = useRef<number>(0);
   const studentSearchRef = useRef<HTMLDivElement>(null);
-  const contextCacheRef = useRef<{ key: string; value: string }>({ key: '', value: '' });
 
   const [isListening, setIsListening] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -612,252 +431,6 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
     return () => clearTimeout(timer);
   }, [isOpen]);
 
-  const buildDataContext = useCallback((): string => {
-    // تخزين مؤقت — نعيد الاستخدام إذا البيانات ما تغيرت
-    const dataKey = JSON.stringify({
-      sl: students.length,
-      rl: records.length,
-      sel: sessions.length,
-      cid: currentStageId,
-      uid: user.uid,
-      m: isAdmin,
-      ul: universityDataLoaded ? '1' : '0',
-    });
-    if (contextCacheRef.current.key === dataKey) return contextCacheRef.current.value;
-
-    const now = new Date();
-    const todayDate = fixDate(now);
-
-    const fixedSessions = sessions.map(s => ({
-      ...s,
-      date: fixDate((s as any).date),
-    }));
-
-    const sortedSessions = [...fixedSessions].sort((a, b) => {
-      if (a.date !== b.date) return a.date.localeCompare(b.date);
-      return String(a.name || '').localeCompare(String(b.name || ''), 'ar');
-    });
-
-    const groups = Array.from(new Set(students.map(s => s.group).filter(Boolean))) as string[];
-    groups.sort((a, b) => a.localeCompare(b, 'ar'));
-
-    // 📊 إحصاءات اليوم
-    const todaySessionIds = new Set<string>();
-    sortedSessions.forEach(s => { if (s.date === todayDate) todaySessionIds.add(s.id); });
-    const todayRecords = records.filter(r => todaySessionIds.has(r.sessionId));
-    const presentTodayIds = new Set(todayRecords.filter(r => r.status === 'present').map(r => r.studentId));
-    const absentTodayIds = new Set(todayRecords.filter(r => r.status === 'absent').map(r => r.studentId));
-    const todaySessionList = sortedSessions.filter(s => todaySessionIds.has(s.id));
-    const presentToday = students.filter(s => presentTodayIds.has(s.id));
-    const absentToday = students.filter(s => absentTodayIds.has(s.id));
-    const unrecordedToday = students.length - presentToday.length - absentToday.length;
-
-    // 🚨 إجابات مؤكدة
-    let context = `# 🚨 إجابات مؤكدة 100% من قاعدة البيانات\n\n`;
-    context += `## 📊 إحصاءات دقيقة (محسوبة من النظام مباشرة):\n`;
-    context += `- إجمالي الطلاب: **${students.length}**\n`;
-    context += `- إجمالي المحاضرات: **${sortedSessions.length}**\n`;
-    if (todaySessionList.length > 0) {
-      context += `- حضور اليوم: ✅ **${presentToday.length}** حاضر / ❌ **${absentToday.length}** غائب${unrecordedToday > 0 ? ` / ⬜ **${unrecordedToday}** غير مسجل` : ''}\n`;
-      context += `- نسبة حضور اليوم: **${students.length > 0 ? ((presentToday.length / students.length) * 100).toFixed(1) : '0'}%**\n`;
-      context += `- محاضرات اليوم: **${todaySessionList.length}**\n`;
-    }
-    if (groups.length > 0) {
-      context += `\n### 📊 إحصاءات الكروبات:\n`;
-      groups.forEach(g => {
-        const gStudents = students.filter(s => s.group === g);
-        const gIds = new Set(gStudents.map(s => s.id));
-        const gRecs = records.filter(r => gIds.has(r.studentId) && r.status === 'present');
-        const possible = gStudents.length * sortedSessions.length;
-        const rate = possible > 0 ? ((gRecs.length / possible) * 100).toFixed(1) : '0';
-        const gp = gStudents.filter(s => presentTodayIds.has(s.id)).length;
-        context += `- **${g}**: ${gStudents.length} طالب | حضور عام ${rate}% | اليوم ✅${gp} ❌${gStudents.length - gp}\n`;
-      });
-    }
-    const totalPossible = students.length * sortedSessions.length;
-    const overallRate = totalPossible > 0 ? ((records.filter(r => r.status === 'present').length / totalPossible) * 100).toFixed(2) : '0';
-    context += `\n- 📈 نسبة الحضور العامة: **${overallRate}%**\n\n`;
-    context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-
-    // معلومات المستخدم والتاريخ
-    context += `## معلومات المستخدم:\n- الاسم: ${user.displayName}\n- الدور: ${isAdmin ? 'أدمن' : 'تدريسي'}\n\n`;
-    context += `## التاريخ الحالي:\n- اليوم: ${formatDateWithDay(todayDate)}\n- التاريخ: ${todayDate}\n- الوقت: ${now.toLocaleTimeString('ar-EG')}\n\n`;
-    if (currentCollege && currentStage) {
-      context += `## الموقع الحالي:\n- الكلية: ${currentCollege.name}\n- المرحلة: ${currentStage.name}\n\n`;
-    }
-
-    if (currentStageId && students.length > 0) {
-      // تفصيل محاضرات اليوم
-      if (todaySessionList.length > 0) {
-        context += `## 🌟 تفصيل محاضرات اليوم:\n\n`;
-        todaySessionList.forEach((session, idx) => {
-          const sRecs = records.filter(r => r.sessionId === session.id && r.status === 'present');
-          const sPresentCount = sRecs.length;
-          const sAbsentCount = records.filter(r => r.sessionId === session.id && r.status === 'absent').length;
-          const sRate = students.length > 0 ? ((sPresentCount / students.length) * 100).toFixed(1) : '0';
-          context += `**${idx + 1}. ${session.name}** | ✅${sPresentCount} ❌${sAbsentCount} | ${sRate}%\n`;
-        });
-        context += `\n`;
-      }
-
-      // جميع المحاضرات بالتفصيل — أسماء الحاضرين والغائبين لكل سجل
-      context += `## 📅 تفاصيل جميع المحاضرات:\n`;
-      sortedSessions.forEach((session, idx) => {
-        const presentIds = new Set(records.filter(r => r.sessionId === session.id && r.status === 'present').map(r => r.studentId));
-        const absentIds = new Set(records.filter(r => r.sessionId === session.id && r.status === 'absent').map(r => r.studentId));
-        const presentStudents = students.filter(s => presentIds.has(s.id));
-        const absentStudents = students.filter(s => absentIds.has(s.id));
-        const isT = session.date === todayDate ? ' 🌟' : '';
-        context += `\n---\n### ${idx + 1}. ${session.name}${isT}\n`;
-        context += `📅 التاريخ: ${formatDateWithDay(session.date)}\n`;
-        context += `✅ الحاضرون (${presentStudents.length}): ${presentStudents.map(s => s.name).join(', ')}\n`;
-        context += `❌ الغائبون (${absentStudents.length}): ${absentStudents.map(s => s.name).join(', ')}\n`;
-      });
-      context += `\n`;
-
-      // الطلاب — سطر واحد لكل طالب (بدون سجل كل محاضرة)
-      context += `## 👥 الطلاب:\n`;
-      const sortedStudents = [...students].sort((a, b) => {
-        const ga = a.group || 'ZZZ', gb = b.group || 'ZZZ';
-        if (ga !== gb) return ga.localeCompare(gb, 'ar');
-        return a.name.localeCompare(b.name, 'ar');
-      });
-      sortedStudents.forEach(student => {
-        const studentRecords = records.filter(r => r.studentId === student.id);
-        const attendedCount = studentRecords.filter(r => r.status === 'present').length;
-        const absentCount = studentRecords.filter(r => r.status === 'absent').length;
-        const pct = (attendedCount + absentCount) > 0 ? ((attendedCount / (attendedCount + absentCount)) * 100).toFixed(1) : '0';
-        const isPresent = presentTodayIds.has(student.id);
-        context += `${isPresent ? '✅' : '❌'} ${student.name} | كود:${student.code || '-'} | كروب:${student.group || '-'} | حضور:${attendedCount} | غياب:${absentCount} | ${pct}%\n`;
-      });
-      context += `\n`;
-    } else {
-      context += `## ⚠️ لا توجد مرحلة مختارة حالياً\n`;
-    }
-
-    // بيانات الجامعة للأدمن
-    if (isAdmin && !currentStageId) {
-      if (Object.keys(accessibleData.stagesMap).length > 0) {
-        context += `## 🏛️ ملخص المراحل:\n`;
-        Object.entries(accessibleData.stagesMap).forEach(([_stageId, stageData]) => {
-          const tp = stageData.students.length * stageData.sessions.length;
-          const r = tp > 0 ? ((stageData.records.filter(rr => rr.status === 'present').length / tp) * 100).toFixed(1) : '0';
-          context += `- **${stageData.collegeName} / ${stageData.stageName}**: ${stageData.students.length} طالب | ${stageData.sessions.length} جلسة | ${r}%\n`;
-        });
-      } else if (!universityDataLoaded) {
-        context += `## ⚠️ بيانات الجامعة غير محملة\nإذا سألك المستخدم عن الجامعة كاملة، اطلب منه الضغط على زر "📊 تحميل بيانات الجامعة" بالأعلى.\n\n`;
-      }
-    }
-
-    // 🚨 تنبيه مهم: الـ AI يلتزم بالإجابات المؤكدة
-    context += `\n## 🚨 تعليمات مهمة:\n- الإجابات المؤكدة بالأعلى صحيحة 100%\n- اعتمد عليها ولا تحاول تحسب من البيانات بنفسك\n- إذا سألك عن رقم موجود بالإجابات المؤكدة، استخدمه مباشرة\n`;
-
-    const result = context;
-    contextCacheRef.current = { key: dataKey, value: result };
-    return result;
-  }, [sessions, records, students, user.displayName, isAdmin, currentCollege, currentStage, currentStageId, accessibleData, fixDate, universityDataLoaded, user.uid]);
-
-  // 🚀 محرك الأسئلة البسيطة — رد فوري بدون API (يغطي 200+ صيغة فصحى وعراقي)
-
-  const analyzeQuestion = useCallback((question: string): string => {
-    let hint = '';
-    const todayKey = fixDate(new Date());
-
-    const asksPresent = /حاضر|حضر|حضور|الموجود|اللي اج|دوام|جا|اجا|اجو/i.test(question);
-    const asksAbsent = /غاب|غائب|غياب|ماجا|ما حضر|مو موجود|الناقص|ما اجا|ماجو/i.test(question);
-    const asksToday = /اليوم|هسه|هسة|الحين|اليومية/i.test(question);
-    const asksAdmin = /مدير|مسؤول|الدعم|النظام|الموقع|من سوى|من صمم|من برمج|من المشرف|صاحب|owner|admin|developer/i.test(question);
-    const asksUniversity = /جامعة|كل الكليات|كل المراحل|الجامعة كاملة|الكليات كلها|كل الطلاب/i.test(question);
-
-    if (asksAdmin) {
-      hint += `\n\n[🚨 الجواب الإلزامي: مدير الموقع/النظام هو "الدكتور الصيدلاني مجتبى هيثم محمد"]`;
-      return hint;
-    }
-
-    // 🆕 تنبيه إذا سأل عن الجامعة كاملة وما حمّل البيانات
-    if (isAdmin && asksUniversity && !universityDataLoaded && !currentStageId) {
-      hint += `\n\n[🚨 المستخدم يسأل عن بيانات الجامعة الشاملة لكنها غير محملة. اطلب منه الضغط على زر "📊 تحميل بيانات الجامعة" بأعلى الشات]`;
-      return hint;
-    }
-
-    const fixedSessions = sessions.map(s => ({ ...s, _normalizedDate: fixDate((s as any).date) }));
-    const todaySessionIdsSet = new Set<string>();
-    fixedSessions.forEach(s => { if (s._normalizedDate === todayKey) todaySessionIdsSet.add(s.id); });
-    const todayRecords = records.filter(r => todaySessionIdsSet.has(r.sessionId));
-    const presentIds = new Set(todayRecords.filter(r => r.status === 'present').map(r => r.studentId));
-    const absentIds = new Set(todayRecords.filter(r => r.status === 'absent').map(r => r.studentId));
-    const present = students.filter(s => presentIds.has(s.id));
-    const absent = students.filter(s => absentIds.has(s.id));
-    const THRESHOLD = 50;
-
-    if (asksPresent && !asksAbsent) {
-      if (present.length === 0) {
-        hint += `\n\n[🚨 لا يوجد حاضرين اليوم]`;
-      } else if (present.length > THRESHOLD) {
-        hint += `\n\n[🚨 الحاضرين ${present.length} (أكثر من 50). اذكر العدد فقط]`;
-      } else {
-        hint += `\n\n[🚨 الحاضرين فقط (${present.length}): ${present.map(s => `${s.name} (${s.code}, ${s.group || '-'})`).join(' | ')}]`;
-      }
-      return hint;
-    }
-
-    if (asksAbsent && !asksPresent) {
-      if (absent.length === 0) {
-        hint += `\n\n[🚨 لا يوجد غائبين - الكل حاضر]`;
-      } else if (absent.length > THRESHOLD) {
-        hint += `\n\n[🚨 الغائبين ${absent.length} (أكثر من 50). اذكر العدد فقط]`;
-      } else {
-        hint += `\n\n[🚨 الغائبين فقط (${absent.length}): ${absent.map(s => `${s.name} (${s.code}, ${s.group || '-'})`).join(' | ')}]`;
-      }
-      return hint;
-    }
-
-    if (asksToday || asksPresent || asksAbsent) {
-      const todaySessionsList = fixedSessions.filter(s => todaySessionIdsSet.has(s.id));
-      if (todaySessionsList.length === 0) {
-        hint += `\n\n[🚨 لا توجد بيانات حضور لليوم (${todayKey})]`;
-        return hint;
-      }
-      if (students.length > THRESHOLD) {
-        let perSessionSummary = '';
-        todaySessionsList.forEach(sess => {
-          const presentCount = records.filter(r => r.sessionId === sess.id && r.status === 'present').length;
-          perSessionSummary += `\n• سجل "${sess.name}": ${presentCount}/${students.length} حاضر`;
-        });
-        hint += `\n\n[🚨 عدد كبير (${students.length}). فصّل كل سجل:${perSessionSummary}]`;
-        return hint;
-      }
-      let sessionsBreakdown = `\n\n[🚨 فصّل كل سجل لحاله:\n`;
-      todaySessionsList.forEach((sess, idx) => {
-        const sRecs = records.filter(r => r.sessionId === sess.id);
-        const sPresentIds = new Set(sRecs.filter(r => r.status === 'present').map(r => r.studentId));
-        const sAbsentIds = new Set(sRecs.filter(r => r.status === 'absent').map(r => r.studentId));
-        const sPresent = students.filter(s => sPresentIds.has(s.id));
-        const sAbsent = students.filter(s => sAbsentIds.has(s.id));
-        sessionsBreakdown += `━━━ السجل ${idx + 1}: "${sess.name}" ━━━\n`;
-        sessionsBreakdown += `✅ (${sPresent.length}): ${sPresent.map(s => `${s.name}`).join(' | ') || 'لا أحد'}\n`;
-        sessionsBreakdown += `❌ (${sAbsent.length}): ${sAbsent.map(s => `${s.name}`).join(' | ') || 'لا أحد'}\n\n`;
-      });
-      sessionsBreakdown += `]`;
-      hint += sessionsBreakdown;
-      return hint;
-    }
-
-    const bestStudent = pickBestStudentMatch(question, students);
-    if (bestStudent) {
-      const studentRecords = records.filter(r => r.studentId === bestStudent.id);
-      const attendedSessionIds = new Set(studentRecords.filter(r => r.status === 'present').map(r => r.sessionId));
-      const absentSessionIds = new Set(studentRecords.filter(r => r.status === 'absent').map(r => r.sessionId));
-      const attendedCount = attendedSessionIds.size;
-      const absentCount = absentSessionIds.size;
-      const percentage = (attendedCount + absentCount) > 0 ? ((attendedCount / (attendedCount + absentCount)) * 100).toFixed(1) : '0';
-      const isPresentToday = presentIds.has(bestStudent.id);
-      hint += `\n\n[🚨 الطالب "${bestStudent.name}": كود ${bestStudent.code} | كروب ${bestStudent.group || '-'} | حضور ${attendedCount}/${sessions.length} | غياب ${absentCount} | نسبة ${percentage}% | اليوم: ${isPresentToday ? '✅ حاضر' : '❌ غائب'}]`;
-    }
-
-    return hint;
-  }, [students, records, sessions, fixDate, isAdmin, universityDataLoaded, currentStageId]);
-
   // 🚀 محرك الرد المحلي — يعمل 100% بدون API (يقرأ من قاعدة البيانات مباشرة)
   const buildLocalReply = useCallback((question: string): { handled: boolean; text: string } => {
     const q = question.trim();
@@ -978,92 +551,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
     };
   }, [scope, fixDate]);
 
-  const callGeminiAPI = useCallback(
-    async (userMessage: string, conversationHistory: Message[]): Promise<string> => {
-      // 🚀 أولاً: الرد المحلي بدون API — فوري ومجاني
-      const localReply = buildLocalReply(userMessage);
-      if (localReply.handled) return localReply.text;
-
-      // إذا ما هناك API Keys → نرجّع دليل الاستخدام المحلي
-      if (!GEMINI_API_KEY && !OPENROUTER_API_KEY && !GROQ_API_KEY) {
-        return localReply.text;
-      }
-
-      const dataContext = buildDataContext();
-      const questionHint = analyzeQuestion(userMessage);
-      const enhancedMessage = userMessage + questionHint;
-
-      const systemInstruction = `أنت مساعد ذكي متخصص فقط بنظام حضور الطلاب.
-
-# 🚨 قواعد إلزامية:
-- ❌ ممنوع تجمع سجلات اليوم - كل سجل لحاله
-- ❌ ممنوع تخمين أي شي
-- ✅ اقرأ التلميحات [🚨] واعتمد عليها
-- ✅ أجب بالعربية العراقية
-- ✅ استخدم ✅ للحاضر و ❌ للغائب
-- ✅ خاطب التدريسي بـ "دكتور"
-- 👨‍⚕️ مدير الموقع: **الدكتور الصيدلاني مجتبى هيثم محمد**
-
----
-${dataContext}`;
-
-      const geminiContents = [
-        { role: 'user', parts: [{ text: systemInstruction }] },
-        { role: 'model', parts: [{ text: 'تمام دكتور، جاهز.' }] },
-        ...conversationHistory.slice(-6).map(msg => ({
-          role: msg.type === 'user' ? 'user' : 'model',
-          parts: [{ text: msg.content }],
-        })),
-        { role: 'user', parts: [{ text: enhancedMessage }] },
-      ];
-
-      let lastError = '';
-
-      if (selectedModelId !== 'auto') {
-        const chosen = AI_MODELS.find(m => m.id === selectedModelId);
-        if (!chosen) return 'الموديل المختار غير موجود';
-        try {
-          if (chosen.provider === 'gemini') return await callGeminiDirect(chosen.model, geminiContents);
-          if (chosen.provider === 'groq') return await callGroqDirect(chosen.model, systemInstruction, conversationHistory, enhancedMessage);
-          return await callOpenRouterDirect(chosen.model, systemInstruction, conversationHistory, enhancedMessage);
-        } catch (err: any) {
-          return `${chosen.name} فشل: ${err?.message || 'خطأ غير معروف'}`;
-        }
-      }
-
-      for (let i = currentModelIndex; i < AI_MODELS.length; i++) {
-        const aiModel = AI_MODELS[i];
-        if (!aiModel) continue;
-        if (failedModels.has(aiModel.id)) continue;
-        if (aiModel.provider === 'gemini' && !GEMINI_API_KEY) continue;
-        if (aiModel.provider === 'openrouter' && !OPENROUTER_API_KEY) continue;
-        if (aiModel.provider === 'groq' && !GROQ_API_KEY) continue;
-
-        try {
-          let text = '';
-          if (aiModel.provider === 'gemini') text = await callGeminiDirect(aiModel.model, geminiContents);
-          else if (aiModel.provider === 'groq') text = await callGroqDirect(aiModel.model, systemInstruction, conversationHistory, enhancedMessage);
-          else text = await callOpenRouterDirect(aiModel.model, systemInstruction, conversationHistory, enhancedMessage);
-          if (i !== currentModelIndex) setCurrentModelIndex(i);
-          return text;
-        } catch (err: any) {
-          const status = err?.status || 0;
-          lastError = `${aiModel.name}: ${err?.message || 'خطأ'}`;
-          if (status === 401 || status === 403) {
-            setFailedModels(prev => new Set([...prev, aiModel.id]));
-            continue;
-          }
-          setFailedModels(prev => new Set([...prev, aiModel.id]));
-          if (i < AI_MODELS.length - 1) { await sleep([429, 503].includes(status) ? 1200 : 300); continue; }
-        }
-      }
-
-      return `جميع الموديلات توقفت\n\nآخر خطأ: ${lastError}`;
-    },
-    [buildDataContext, currentModelIndex, analyzeQuestion, failedModels, selectedModelId, buildLocalReply]
-  );
-
-  const sendMessage = useCallback(async (text: string) => {
+  const sendMessage = useCallback((text: string) => {
     if (!text.trim() || isTyping) return;
     const now = Date.now();
     if (now - lastRequestTime.current < 500) {
@@ -1080,17 +568,14 @@ ${dataContext}`;
     setInput('');
     if (inputRef.current) inputRef.current.style.height = '40px';
 
-    // نرسل السؤال لـ Gemini مع كامل البيانات
+    // الرد المحلي — يعمل 100% بدون أي API خارجي
     setIsTyping(true);
-    try {
-      const response = await callGeminiAPI(text.trim(), messages);
-      setMessages(prev => [...prev, { id: `${Date.now()}_bot`, type: 'bot', content: response, timestamp: new Date() }]);
-    } catch (err: any) {
-      setError(err?.message || 'حدث خطأ غير متوقع');
-    } finally {
+    setTimeout(() => {
+      const local = buildLocalReply(text.trim());
+      setMessages(prev => [...prev, { id: `${Date.now()}_bot`, type: 'bot', content: local.text, timestamp: new Date() }]);
       setIsTyping(false);
-    }
-  }, [messages, isTyping, callGeminiAPI]);
+    }, 150);
+  }, [isTyping, buildLocalReply]);
 
   const sendMessageRef = useRef(sendMessage);
   sendMessageRef.current = sendMessage;
