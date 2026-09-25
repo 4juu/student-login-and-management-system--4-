@@ -139,7 +139,7 @@ export const VerifyNameStep: React.FC<VerifyNameStepProps> = ({ expected, onVeri
               aria-label="اسم الطالب الكامل"
               value={typed}
               onChange={e => { setTyped(e.target.value); if (error) setError(''); }}
-              placeholder="مثال: مجتبى هيثم محمد محسن"
+              placeholder="مثال: محمد أحمد علي حسن"
               aria-invalid={!!error}
               aria-describedby={error ? 'namecheck-error' : undefined}
               className="sel-input w-full mt-1.5"
