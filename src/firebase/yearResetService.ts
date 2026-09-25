@@ -139,7 +139,7 @@ const clearAllLocalData = (adminUid: string): void => {
   keysToRemove.forEach(k => localStorage.removeItem(k));
 };
 
-/** إحصائيات حجم البيانات للفاتورة والمراقبة */
+/** إحصايات حجم البيانات للفاتورة والمراقبة */
 export const getDatabaseStats = async (adminUid: string): Promise<{
   academicYear: string;
   totalSizeKB: number;
@@ -218,7 +218,7 @@ export const getDatabaseStats = async (adminUid: string): Promise<{
       totalFaceDescriptors,
     };
   } catch (e) {
-    console.error('❌ فشل جلب الإحصائيات:', e);
+    console.error('❌ فشل جلب الإحصايات:', e);
     throw e;
   }
 };

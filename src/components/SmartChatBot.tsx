@@ -135,15 +135,28 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
   }, [isAdmin, colleges, stages, user.permissions, students, records, sessions, allStagesData]);
 
   const scope = useMemo(() => {
+    const stage = currentStageId ? stages.find(s => s.id === currentStageId) : null;
+    const college = stage ? colleges.find(c => c.id === stage.collegeId) : null;
+    const meta = {
+      colleges: accessibleData.accessibleColleges,
+      stages: accessibleData.accessibleStages,
+      stagesMap: accessibleData.stagesMap,
+      stageName: stage?.name,
+      collegeName: college?.name,
+    };
     if (isAdmin && !currentStageId && accessibleData.allStudents.length > 0) {
       return {
+        ...meta,
         students: accessibleData.allStudents,
         records: accessibleData.allRecords,
         sessions: accessibleData.allSessions,
       };
     }
-    return { students, records, sessions };
-  }, [isAdmin, currentStageId, accessibleData, students, records, sessions]);
+    return { ...meta, students, records, sessions };
+  }, [isAdmin, currentStageId, accessibleData, students, records, sessions, stages, colleges]);
+
+  const dataLoaded = accessibleData.allStudents.length > 0;
+  const firstCollegeName = accessibleData.accessibleColleges[0]?.name;
 
   // بحث الطلاب + بطاقة الطالب + الاقتراحات — حالة معزولة في useChatBrain
   // (الدوال النقية في lib/chatBrain: buildLocalReply/computeStudentCard/fixDate)
@@ -184,15 +197,18 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
           timestamp: new Date(),
         }]);
       } else {
+        const hint = isAdmin && !dataLoaded
+          ? '\n\n💡 اضغط "⚡ تحميل بيانات الجامعة" في أعلى الشاشة حتى أجاوبك عن الإحصايات والغروب والتواريخ.'
+          : '';
         setMessages([{
           id: Date.now().toString(),
           type: 'bot',
-          content: `اهلاً دكتور ${user.displayName}\n\nبشنو أكدر أساعدك اليوم؟`,
+          content: `اهلاً دكتور ${user.displayName}\n\nبشنو أكدر أساعدك اليوم؟${hint}`,
           timestamp: new Date(),
         }]);
       }
     }
-  }, [isOpen, messages.length, user.displayName, isAdmin, currentStageId]);
+  }, [isOpen, messages.length, user.displayName, isAdmin, currentStageId, dataLoaded]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -394,8 +410,8 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
                 </button>
               </div>
 
-              {/* ✅ شريط البحث — يظهر دائماً */}
-              {students.length > 0 && (
+              {/* ✅ شريط البحث — يظهر عند توفر طلاب في النطاق الحالي */}
+              {scope.students.length > 0 && (
                 <div className="w-full px-4 pt-2">
                   <div className="max-w-xl mx-auto">
                     <div className="bg-white/5 border-b border-white/10">
@@ -692,28 +708,37 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
                 const isInputBlocked = !isAdmin && !currentStageId;
                 return (
                   <div className="border-t border-white/10" style={{ backgroundColor: '#0f172a' }}>
-                    {!isTyping && !isInputBlocked && messages.length > 0 && (
-                      <div className="px-3 pt-2 pb-0 flex flex-wrap gap-1.5">
-                        <button
-                          onClick={() => sendMessage('منو حضر اليوم؟')}
-                          className="text-[11px] font-medium text-slate-300 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-3 py-1.5 transition"
-                        >
-                          ✅ منو حضر اليوم؟
-                        </button>
-                        <button
-                          onClick={() => sendMessage('منو غاب اليوم؟')}
-                          className="text-[11px] font-medium text-slate-300 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-3 py-1.5 transition"
-                        >
-                          ❌ منو غاب اليوم؟
-                        </button>
-                        <button
-                          onClick={() => sendMessage('إحصائيات اليوم')}
-                          className="text-[11px] font-medium text-slate-300 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-3 py-1.5 transition"
-                        >
-                          📊 إحصائيات اليوم
-                        </button>
-                      </div>
-                    )}
+                    {!isTyping && !isInputBlocked && messages.length > 0 && (() => {
+                      const chips: { label: string; q: string }[] = !dataLoaded
+                        ? [
+                            { label: '🏫 كم كلية عندنا؟', q: 'كم كلية عندنا؟' },
+                            { label: '📚 شكد مرحلة عندنا؟', q: 'شكد مرحلة عندنا؟' },
+                            ...(firstCollegeName ? [{ label: `📊 إحصايات ${firstCollegeName}`, q: `إحصايات ${firstCollegeName}` }] : []),
+                          ]
+                        : [
+                            { label: '✅ منو حضر اليوم؟', q: 'منو حضر اليوم؟' },
+                            { label: '❌ منو غاب اليوم؟', q: 'منو غاب اليوم؟' },
+                            { label: '📊 إحصايات اليوم', q: 'إحصايات اليوم' },
+                            ...(currentStageId
+                              ? [{ label: '🕐 منو حضر أمس؟', q: 'منو حضر أمس؟' }]
+                              : firstCollegeName
+                                ? [{ label: `🏫 إحصايات ${firstCollegeName}`, q: `إحصايات ${firstCollegeName}` }]
+                                : []),
+                          ];
+                      return (
+                        <div className="px-3 pt-2 pb-0 flex flex-wrap gap-1.5">
+                          {chips.map(c => (
+                            <button
+                              key={c.q}
+                              onClick={() => sendMessage(c.q)}
+                              className="text-[11px] font-medium text-slate-300 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-3 py-1.5 transition"
+                            >
+                              {c.label}
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })()}
                     <div className="px-3 py-2">
                       {(isListening || voiceError) && (
                         <div className="mb-2 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium bg-red-500/10 text-red-300 border border-red-500/30">

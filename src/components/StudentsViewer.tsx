@@ -44,7 +44,7 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
     });
   }, [students, searchQuery, groupFilter]);
 
-  // 🆕 إحصائيات الكروبات (محسّن بـ useMemo)
+  // 🆕 إحصايات الكروبات (محسّن بـ useMemo)
   const groupStats = useMemo(() => {
     return uniqueGroups.reduce((acc, group) => {
       acc[group!] = students.filter(s => s.group === group).length;
@@ -123,10 +123,10 @@ export const StudentsViewer: React.FC<StudentsViewerProps> = React.memo(({ stude
         </div>
       </div>
 
-      {/* إحصائيات الكروبات - أزرار سريعة */}
+      {/* إحصايات الكروبات - أزرار سريعة */}
       {uniqueGroups.length > 0 && uniqueGroups.length <= 20 && (
         <div className="mb-6 p-4 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border-2 border-blue-500/30 rounded-lg">
-          <h3 className="text-sm font-bold text-blue-300 mb-3 flex items-center gap-2"><ChartColumn className="w-4 h-4" /> إحصائيات الكروبات</h3>
+          <h3 className="text-sm font-bold text-blue-300 mb-3 flex items-center gap-2"><ChartColumn className="w-4 h-4" /> إحصايات الكروبات</h3>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setGroupFilter('all')}

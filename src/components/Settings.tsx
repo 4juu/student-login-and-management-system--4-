@@ -262,7 +262,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
       const data = await getDatabaseStats(adminUid);
       setStats(data);
     } catch (e) {
-      console.warn('فشل تحميل الإحصائيات:', e);
+      console.warn('فشل تحميل الإحصايات:', e);
     } finally {
       setLoadingStats(false);
     }
@@ -277,7 +277,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
     }
   }, []);
 
-  // ✅ قراءة فهرس السنوات الصغير فقط عند الفتح — الإحصائيات عند الطلب (زر "تحديث")
+  // ✅ قراءة فهرس السنوات الصغير فقط عند الفتح — الإحصايات عند الطلب (زر "تحديث")
   //    حتى لا يُسحب شجرة عام كامل وتتجمّد الواجهة كل مرة تُفتح فيها الإعدادات
   useEffect(() => {
     if (isAdmin && currentUser) {
@@ -389,7 +389,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
         </div>
       )}
 
-      {/* إحصائيات Firebase (للأدمن) */}
+      {/* إحصايات Firebase (للأدمن) */}
       {isAdmin && (
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
@@ -429,7 +429,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
                 </div>
               </div>
 
-              {/* الإحصائيات */}
+              {/* الإحصايات */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <div className="bg-slate-800 rounded-lg p-3 text-center shadow-sm">
                   <div className="text-2xl font-bold text-blue-400">{stats.totalStudents}</div>
@@ -457,7 +457,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
             </div>
           ) : (
             <div className="bg-slate-800/30 border border-white/10 rounded-lg p-4 text-center text-slate-500 flex items-center justify-center gap-2">
-              {loadingStats ? <><MorphingSquare size="sm" /> جاري تحميل الإحصائيات...</> : 'اضغط "تحديث" لعرض الإحصائيات'}
+              {loadingStats ? <><MorphingSquare size="sm" /> جاري تحميل الإحصايات...</> : 'اضغط "تحديث" لعرض الإحصايات'}
             </div>
           )}
         </div>

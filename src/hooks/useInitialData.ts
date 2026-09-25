@@ -5,8 +5,8 @@ import {
   loadColleges,
   loadStages,
   loadTelegramConfig,
-  getCurrentAcademicYear,
 } from '../firebase/dataService';
+import { getActiveAcademicYear } from '../firebase/academicYear';
 import { Student, AttendanceRecord, AttendanceSession, College, Stage } from '../types/student';
 import { User } from '../types/user';
 import { TelegramConfig } from '../types/telegram';
@@ -41,8 +41,6 @@ interface UseInitialDataReturn {
   setTelegramConfig: React.Dispatch<React.SetStateAction<TelegramConfig | null>>;
   setAllStagesData: React.Dispatch<React.SetStateAction<AllStagesData>>;
 }
-
-const currentAcademicYear = getCurrentAcademicYear();
 
 export default function useInitialData({ currentUser }: UseInitialDataParams): UseInitialDataReturn {
   const [allTeachers, setAllTeachers] = useState<User[]>([]);
@@ -97,7 +95,10 @@ export default function useInitialData({ currentUser }: UseInitialDataParams): U
     try {
       const adminUid = currentUser.uid;
       const stagesDataMap: AllStagesData = {};
-      const yearPath = `academicYears/${currentAcademicYear}/userData/${adminUid}`;
+      // ✅ السنة الأكاديمية الفعّالة من القاعدة — نفس مسار تحميل الطلاب العادي
+      // (getCurrentAcademicYear المحلية تحتسب سبتمبر كبداية سنة جديدة وقد تختلف عن المسار الموجود فعلاً)
+      const year = await getActiveAcademicYear();
+      const yearPath = `academicYears/${year}/userData/${adminUid}`;
 
       // طلب واحد على كل stageData بدل S + 2·S·U طلبات منفصلة
       const stageDataSnap = await get(dbRef(database, `${yearPath}/stageData`));

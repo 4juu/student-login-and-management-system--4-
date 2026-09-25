@@ -345,7 +345,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                   </div>
                 </div>
 
-                {/* الإحصائيات */}
+                {/* الإحصايات */}
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div className="p-2 rounded-lg bg-slate-50">
                     <p className="text-lg font-bold text-gray-800">{clusters.length}<span className="text-xs text-gray-400 mr-0.5">/18</span></p>
