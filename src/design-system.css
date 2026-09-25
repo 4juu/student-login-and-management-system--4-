@@ -428,7 +428,15 @@
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .animate-modalUp {
-  animation: modalUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: modalUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes modalDown {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(24px) scale(0.98); }
+}
+.animate-modalDown {
+  animation: modalDown 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 @keyframes fadePulse {

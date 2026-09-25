@@ -960,7 +960,7 @@
 }
 
 .animate-fadeIn {
-  animation: fadeIn 0.3s ease-out;
+  animation: fadeIn 0.45s ease-out;
 }
 
 @keyframes pulse-badge {
@@ -982,7 +982,7 @@
 }
 
 .animate-pageEnter {
-  animation: pageEnter 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: pageEnter 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes pageExit {
@@ -991,7 +991,7 @@
 }
 
 .animate-pageExit {
-  animation: pageExit 0.18s cubic-bezier(0.4, 0, 1, 1) both;
+  animation: pageExit 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 /* == تحسين انتقالات البطاقات == */

@@ -7,7 +7,7 @@ interface PageTransitionProps {
 }
 
 /** مدة الخروج بالمللي ثانية — تطابق مدة pageExit في index.css */
-const EXIT_MS = 180;
+const EXIT_MS = 350;
 
 /**
  * انتقال سلس بين الصفحات: خروج القديم ثم دخول الجديد (تتابع لا قفزات)،

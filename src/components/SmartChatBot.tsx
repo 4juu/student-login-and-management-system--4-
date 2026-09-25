@@ -57,6 +57,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
   const isAdmin = user.role === 'admin';
 
   const [isOpen, setIsOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -186,7 +187,8 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
   }, [setShowSuggestions]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = messagesEndRef.current?.parentElement;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [messages, isTyping]);
 
   useEffect(() => {
@@ -234,7 +236,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
     const userMessage: Message = { id: Date.now().toString(), type: 'user', content: text.trim(), timestamp: new Date() };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
-    if (inputRef.current) inputRef.current.style.height = '40px';
+    if (inputRef.current) inputRef.current.style.height = '';
 
     // الرد المحلي — يعمل 100% بدون أي API خارجي
     setIsTyping(true);
@@ -242,7 +244,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
       const local = buildLocalReply(text.trim(), scope);
       setMessages(prev => [...prev, { id: `${Date.now()}_bot`, type: 'bot', content: local.text, timestamp: new Date() }]);
       setIsTyping(false);
-    }, 150);
+    }, 650);
   }, [isTyping, scope]);
 
   const sendMessageRef = useRef(sendMessage);
@@ -261,6 +263,11 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
+
+  const requestClose = useCallback(() => {
+    setClosing(true);
+    window.setTimeout(() => { setIsOpen(false); setClosing(false); }, 350);
+  }, []);
 
   const stopRecognition = useCallback((manual = false) => {
     manualStopRef.current = manual;
@@ -395,17 +402,17 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
       {isOpen && (
         <div
           key="chat-window"
-          className="fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-50 overflow-hidden border border-white/10 shadow-2xl max-w-[calc(100vw-1.5rem)] sm:max-w-[calc(100vw-3rem)] h-[min(560px,calc(100vh-3rem))] max-h-[calc(100vh-3rem)] overscroll-contain animate-modalUp"
+          className={`fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-50 overflow-hidden border border-white/10 shadow-2xl max-w-[calc(100vw-1.5rem)] sm:max-w-[calc(100vw-3rem)] h-[min(560px,calc(100vh-3rem))] max-h-[calc(100vh-3rem)] overscroll-contain ${closing ? 'animate-modalDown' : 'animate-modalUp'}`}
           style={{ backgroundColor: '#0f172a' }}
           onKeyDown={e => { e.stopPropagation(); }}
           onKeyUp={e => { e.stopPropagation(); }}
         >
-          <div className="flex flex-col h-full animate-fadeIn" style={{ animationDelay: '0.12s' }}>
+          <div className="flex flex-col h-full">
               {/* شريط علوي: زر الإغلاق (يمين) مع خط فاصل تحته */}
               <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10">
                 <span className="text-xs text-slate-400 font-medium">المساعد الذكي</span>
                 <button
-                  onClick={() => setIsOpen(false)}
+                  onClick={requestClose}
                   className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-red-500/20 text-red-400 hover:text-red-300 text-sm transition"
                 >
                   ✕
