@@ -26,6 +26,19 @@ export interface StudentQuickCard {
 // ─────────────────────────────────────────────────────────────
 // مطابقة أسماء الطلاب — تسجيل حسب الدقة
 // ─────────────────────────────────────────────────────────────
+
+// أفعال البحث الصريحة تسمح بالمطابقة الجزئية الضعيفة (مثال: "اسأل عن ايات")
+const SEARCH_VERB_RE = /ابحث|بحث|اسأل|اسال|من هو|مين|شكد|وين|search|show|find/i;
+
+// سياق تاريخي — يمنع اعتبار أرقام التواريخ كوداً لطالب (مثال: "...24 أغسطس 2026" لا تطابق كود 2026)
+const DATE_CONTEXT_RE =
+  /يناير|فبراير|مارس|أبريل|ابريل|مايو|يونيو|يوليو|أغسطس|اغسطس|سبتمبر|أكتوبر|اكتوبر|نوفمبر|ديسمبر|(?:يوم|تاريخ|بتاريخ)\s*\d|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}/i;
+
+// الحد الأدنى لنقاط المطابقة (تطابق كلمة واحدة داخل الاسم = 15 نقطة فقط)
+const MIN_STUDENT_SCORE = 25;
+
+const hasDateContext = (text: string): boolean => DATE_CONTEXT_RE.test(text);
+
 export const scoreStudentMatch = (q: string, student: Student): number => {
   const ql = q.toLowerCase().trim();
   if (!ql) return 0;
@@ -40,7 +53,7 @@ export const scoreStudentMatch = (q: string, student: Student): number => {
   if (qN === nameN) score += 250;
   else if (qN.includes(nameN)) score += 200;
   if (nameN.includes(qN) && nameN.length < 60) score += 100;
-  if (codeL && (ql.includes(codeL) || codeL.includes(ql))) score += 50;
+  if (codeL && !hasDateContext(ql) && (ql.includes(codeL) || codeL.includes(ql))) score += 50;
   if (groupL && groupL.includes(ql)) score += 20;
   const nameWords = nameL.split(/\s+/).filter(w => normalizeArabic(w).length > 2);
   score += nameWords.filter(w => qN.includes(normalizeArabic(w))).length * 15;
@@ -51,6 +64,8 @@ export const pickBestStudentMatch = (q: string, students: Student[]): Student | 
   const ql = q.toLowerCase().trim();
   if (!ql || !students.length) return null;
   const qN = normalizeArabic(ql);
+  const dateCtx = hasDateContext(ql);
+  const hasVerb = SEARCH_VERB_RE.test(ql);
   let best: Student | null = null;
   let bestScore = 0;
   for (const s of students) {
@@ -61,9 +76,11 @@ export const pickBestStudentMatch = (q: string, students: Student[]): Student | 
     const basicMatch =
       (nameN && qN.includes(nameN)) ||
       (firstName.length > 2 && qN.includes(firstName)) ||
-      (codeL && ql.includes(codeL));
+      (codeL && !dateCtx && ql.includes(codeL));
     if (!basicMatch) continue;
     const sc = scoreStudentMatch(q, s);
+    // مطابقة ضعيفة (كلمة واحدة فقط) تُقبل عند وجود فعل بحث صريح
+    if (sc < MIN_STUDENT_SCORE && !hasVerb) continue;
     if (sc > bestScore) {
       bestScore = sc;
       best = s;
@@ -191,6 +208,15 @@ export const buildLocalReply = (
     return { handled: true, text: '👨‍⚕️ مدير الموقع/النظام هو "الدكتور الصيدلاني مجتبى هيثم محمد"' };
   }
 
+  // 1.5) أسماء السجلات — قبل مطابقة الطلاب لأن كلمة "أسماء" قد تطابق باسم طالب
+  if (/سجل/i.test(q) && /(أسماء|اسماء|اسامي|اسمه|اسم|شنو|ايش|ما هي|قائمة|قائمه|كم)/i.test(q)) {
+    const sorted = [...fixedSessions].sort((a, b) => b._normalizedDate.localeCompare(a._normalizedDate));
+    if (sorted.length === 0) return { handled: true, text: '📋 لا توجد سجلات في هذا النطاق' };
+    let text = `📋 أسماء السجلات (${sorted.length}):\n`;
+    sorted.forEach(s => { text += `  • ${s.name || 'سجل بدون اسم'} — ${formatDateWithDay(s._normalizedDate)}\n`; });
+    return { handled: true, text: text.trimEnd() };
+  }
+
   // 2) بحث عن طالب بالاسم أو الكود (رقم الطالب)
   const bestStudent = pickBestStudentMatch(q, scStudents);
   if (bestStudent) {
@@ -283,6 +309,7 @@ export const buildLocalReply = (
       `  • اكتب اسم الطالب أو رقمه (الكود) → أيام حضوره وغيابه ${example}\n` +
       `  • اسأل "منو حضر اليوم؟" → حضور اليوم فقط\n` +
       `  • اسأل "منو غاب اليوم؟" → غياب اليوم فقط\n` +
-      `  • اسأل "إحصائيات اليوم"`,
+      `  • اسأل "إحصائيات اليوم"\n` +
+      `  • اسأل "شنو أسماء السجلات؟" → قائمة السجلات`,
   };
 };
