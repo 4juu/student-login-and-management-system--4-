@@ -11,6 +11,7 @@ import {
 } from '../../services/faceAI/descriptors';
 import { StudentForm } from './StudentForm';
 import { StudentImportPanel } from './StudentImportPanel';
+import { BulkStudentImportModal } from './BulkStudentImportModal';
 import { FaceHealthPanel } from './FaceHealthPanel';
 import { SortFilterPanel } from './SortFilterPanel';
 import { BulkActionsBar } from './BulkActionsBar';
@@ -18,6 +19,7 @@ import { StudentTable } from './StudentTable';
 import { Pagination } from './Pagination';
 import { LoadingState } from '../loading/LoadingState';
 import { toast } from '@/hooks/use-toast';
+import { Users } from 'lucide-react';
 
 // 🚀 نافذة تسجيل بصمات الوجه (فردية وجماعية) تُحمَّل عند فتحها فقط
 const LazyFaceEnroll = lazy(() =>
@@ -74,6 +76,8 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
   const [importLoading, setImportLoading] = useState(false);
   const [importMessage, setImportMessage] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const [showBulkImport, setShowBulkImport] = useState(false);
 
   const [editingUniIdStudent, setEditingUniIdStudent] = useState<string | null>(null);
   const { confirm: confirmAction, ConfirmDialog: ConfirmDialogEl } = useConfirm();
@@ -363,6 +367,40 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
     }
   };
 
+  const handleBulkImport = (parsedStudents: { name: string; group: string; code: string }[]) => {
+    const existingCodes = new Set(students.map(s => s.code));
+    const existingNames = new Set(students.map(s => s.name));
+
+    const newStudentsBatch: Student[] = [];
+
+    for (const student of parsedStudents) {
+      if (existingNames.has(student.name)) continue;
+      if (existingCodes.has(student.code)) continue;
+
+      const newStudent: Student = {
+        id: crypto.randomUUID(),
+        name: student.name,
+        code: student.code,
+        group: student.group,
+        createdAt: new Date().toISOString(),
+      };
+
+      newStudentsBatch.push(newStudent);
+      existingCodes.add(student.code);
+      existingNames.add(student.name);
+    }
+
+    if (newStudentsBatch.length > 0) {
+      if (onAddMultipleStudents) {
+        onAddMultipleStudents(newStudentsBatch);
+      } else {
+        for (const student of newStudentsBatch) {
+          onAddStudent(student);
+        }
+      }
+    }
+  };
+
   const toggleSelectStudent = useCallback((id: string) => {
     setSelectedIds(prev => {
       const newSet = new Set(prev);
@@ -614,6 +652,17 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
         onFileChange={handleFileUpload}
       />
 
+      <div className="mb-4">
+        <button
+          type="button"
+          onClick={() => setShowBulkImport(true)}
+          className="w-full md:w-auto px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-medium rounded-lg transition duration-200 shadow-md flex items-center justify-center gap-2"
+        >
+          <Users className="w-5 h-5" />
+          استيراد جماعي (لصق أسماء)
+        </button>
+      </div>
+
       <FaceHealthPanel
         variant="health"
         studentsCount={students.length}
@@ -718,6 +767,14 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
       )}
 
       {ConfirmDialogEl}
+
+      <BulkStudentImportModal
+        isOpen={showBulkImport}
+        onClose={() => setShowBulkImport(false)}
+        onImport={handleBulkImport}
+        existingStudents={students.map(s => ({ name: s.name, code: s.code }))}
+        selectedPrefix={selectedPrefix}
+      />
     </div>
   );
 });
