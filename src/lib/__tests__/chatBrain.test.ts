@@ -5,6 +5,8 @@ import {
   buildLocalReply,
   extractDateQuery,
   extractGroupToken,
+  extractAcademicCode,
+  REFUSAL_REPLY,
   type ChatScope,
 } from '../chatBrain';
 import type { Student, AttendanceRecord, AttendanceSession, College } from '../../types/student';
@@ -89,44 +91,43 @@ describe('scoreStudentMatch — كود الطالب داخل تاريخ', () => 
   });
 });
 
-describe('buildLocalReply — إحصايات اليوم لا تُختطف', () => {
-  it('عند وجود محاضرة اليوم → رد الإحصايات الصحيح', () => {
+describe('buildLocalReply — خارج القائمة (إحصايات/سجلات) → رسالة الرفض', () => {
+  it('إحصايات اليوم → رسالة الرفض (لا أرقام)', () => {
     const r = buildLocalReply('إحصايات اليوم', scope({
       sessions: [sess('t', 'حضور اليوم', today)],
       records: [rec('r1', students[0]!, 't', 'present')],
     }));
-    expect(r.handled).toBe(true);
-    expect(r.text).toContain('إحصايات اليوم');
-    expect(r.text).toContain('الحاضرون');
+    expect(r.handled).toBe(false);
+    expect(r.text).toBe(REFUSAL_REPLY);
+    expect(r.text).not.toContain('الحاضرون');
     expect(r.text).not.toContain('الطالب');
   });
 
-  it('بلا محاضرة اليوم → "لا توجد محاضرات اليوم"', () => {
+  it('إحصايات اليوم بنطاق فارغ → رسالة الرفض أيضاً', () => {
     const r = buildLocalReply('إحصايات اليوم', scope());
-    expect(r.handled).toBe(true);
-    expect(r.text).toContain('لا توجد محاضرات اليوم');
+    expect(r.handled).toBe(false);
+    expect(r.text).toBe(REFUSAL_REPLY);
   });
 });
 
-describe('buildLocalReply — أسماء السجلات', () => {
-  it('يعرض قائمة السجلات بدل بطاقة طالب', () => {
+describe('buildLocalReply — أسماء السجلات → رسالة الرفض', () => {
+  it('ما هي أسماء السجلات؟ → رسالة الرفض (لا قائمة سجلات)', () => {
     const r = buildLocalReply('ما هي أسماء السجلات؟', scope({
       sessions: [
         sess('a', 'حضور 24 أغسطس', '2026-08-24'),
         sess('b', 'حضور اليوم', today),
       ],
     }));
-    expect(r.handled).toBe(true);
-    expect(r.text).toContain('أسماء السجلات');
-    expect(r.text).toContain('حضور 24 أغسطس');
-    expect(r.text).toContain('حضور اليوم');
+    expect(r.handled).toBe(false);
+    expect(r.text).toBe(REFUSAL_REPLY);
+    expect(r.text).not.toContain('حضور 24 أغسطس');
     expect(r.text).not.toContain('الطالب');
   });
 
-  it('نطاق بلا سجلات → رسالة واضحة', () => {
+  it('شنو أسماء السجلات؟ بنطاق فارغ → رسالة الرفض', () => {
     const r = buildLocalReply('شنو أسماء السجلات؟', scope());
-    expect(r.handled).toBe(true);
-    expect(r.text).toContain('لا توجد سجلات');
+    expect(r.handled).toBe(false);
+    expect(r.text).toBe(REFUSAL_REPLY);
   });
 });
 
@@ -177,10 +178,10 @@ describe('buildLocalReply — حفاظ على الردود الحالية', () =
     expect(r.text).toContain('محمد رحيم عذيب محمد');
   });
 
-  it('سؤال خارج النطاق → دليل الاستخدام يتضمن سجلات', () => {
+  it('سؤال خارج القائمة → رسالة الرفض الموحدة', () => {
     const r = buildLocalReply('كيف حالك', scope());
     expect(r.handled).toBe(false);
-    expect(r.text).toContain('أسماء السجلات');
+    expect(r.text).toBe(REFUSAL_REPLY);
   });
 });
 
@@ -245,26 +246,23 @@ describe('buildLocalReply — بوابة ⚡ قبل تحميل البيانات'
     expect(r.text).toContain('⚡ تحميل بيانات الجامعة');
   });
 
-  it('قائمة الكليات تعمل قبل ⚡', () => {
+  it('سؤال كليات قبل ⚡ → بوابة التحميل', () => {
     const r = buildLocalReply('كم كلية عندنا؟', scope(gated));
-    expect(r.handled).toBe(true);
-    expect(r.text).toContain('الكليات');
-    expect(r.text).toContain('الصيدلة');
-    expect(r.text).toContain('الهندسة');
+    expect(r.text).toContain('⚡ تحميل بيانات الجامعة');
+    expect(r.text).not.toContain('مفاتيح');
   });
 
-  it('قائمة المراحل تعمل قبل ⚡', () => {
+  it('سؤال مراحل قبل ⚡ → بوابة التحميل', () => {
     const r = buildLocalReply('شنو المراحل؟', scope({
       ...gated,
       stages: [{ id: 's1', name: 'المرحلة الأولى', collegeId: 'c1', createdAt: '2026-01-01' }],
     }));
-    expect(r.text).toContain('المراحل');
-    expect(r.text).toContain('المرحلة الأولى');
+    expect(r.text).toContain('⚡ تحميل بيانات الجامعة');
   });
 });
 
-describe('buildLocalReply — إحصايات تاريخ محدد (06/11/2029)', () => {
-  it('تفصيل كامل بالمجاميع والأسماء', () => {
+describe('buildLocalReply — إحصايات تاريخ محدد → رسالة الرفض', () => {
+  it('إحصايات 06/11/2029 → رسالة الرفض (لا تفصيل ولا مجاميع)', () => {
     const r = buildLocalReply('إحصايات 06/11/2029', scope({
       students: [students[0]!, students[1]!],
       sessions: [sess('d', 'حضور الأربعاء', '2029-11-06')],
@@ -273,35 +271,31 @@ describe('buildLocalReply — إحصايات تاريخ محدد (06/11/2029)', 
         rec('r2', students[1]!, 'd', 'absent'),
       ],
     }));
-    expect(r.handled).toBe(true);
-    expect(r.text).toContain('المتوقع');
-    expect(r.text).toContain('A2');
-    expect(r.text).toContain('A1');
-    expect(r.text).toContain('ايات علي جبار حسن');
-    expect(r.text).toContain('أسماء عباس علي حمود');
+    expect(r.handled).toBe(false);
+    expect(r.text).toBe(REFUSAL_REPLY);
+    expect(r.text).not.toContain('المتوقع');
     expect(r.text).not.toContain('مفاتيح AI');
   });
 
-  it('تاريخ بلا سجلات → رسالة واضحة', () => {
+  it('تاريخ بلا سجلات → رسالة الرفض نفسها', () => {
     const r = buildLocalReply('إحصايات 06/11/2029', scope());
-    expect(r.text).toContain('لا توجد سجلات');
+    expect(r.text).toBe(REFUSAL_REPLY);
   });
 });
 
 describe('buildLocalReply — المجموعات (غروب A1)', () => {
-  it('إحصايات المجموعة العامة', () => {
+  it('إحصايات المجموعة العامة (غروب A1) → رسالة الرفض', () => {
     const r = buildLocalReply('غروب A1', scope({
       students: [students[1]!, students[2]!],
       sessions: [sess('t', 'حضور اليوم', today)],
       records: [rec('r1', students[1]!, 't', 'present')],
     }));
-    expect(r.handled).toBe(true);
-    expect(r.text).toContain('غروب A1');
-    expect(r.text).toContain('الطلاب: 2');
-    expect(r.text).toContain('حضور: 1');
+    expect(r.handled).toBe(false);
+    expect(r.text).toBe(REFUSAL_REPLY);
+    expect(r.text).not.toContain('الطلاب:');
   });
 
-  it('غياب مجموعة اليوم فقط (منو غاب من A2 اليوم)', () => {
+  it('غياب مجموعة اليوم فقط (منو غاب من A2 اليوم) → كشف الغياب', () => {
     const r = buildLocalReply('منو غاب من A2 اليوم؟', scope({
       students: [students[0]!, students[1]!],
       sessions: [sess('t', 'حضور اليوم', today)],
@@ -316,9 +310,9 @@ describe('buildLocalReply — المجموعات (غروب A1)', () => {
     expect(r.text).not.toContain('أسماء عباس');
   });
 
-  it('مجموعة بلا بيانات → رسالة واضحة', () => {
+  it('غروب بلا نية حضور/غياب → رسالة الرفض', () => {
     const r = buildLocalReply('غروب Z9', scope());
-    expect(r.text).toContain('لا توجد بيانات لغروب Z9');
+    expect(r.text).toBe(REFUSAL_REPLY);
   });
 });
 
@@ -363,34 +357,27 @@ describe('buildLocalReply — تجميعات الكليات/المراحل', () 
     ],
   });
 
-  it('إحصايات كلية الصيدلة → مراحلها بأرقامها', () => {
+  it('إحصايات كلية الصيدلة → رسالة الرفض', () => {
     const r = buildLocalReply('إحصايات كلية الصيدلة', withStages());
-    expect(r.handled).toBe(true);
-    expect(r.text).toContain('كلية الصيدلة');
-    expect(r.text).toContain('المرحلة الخامسة');
-    expect(r.text).toContain('المجموع');
-    expect(r.text).not.toContain('الهندسة');
+    expect(r.handled).toBe(false);
+    expect(r.text).toBe(REFUSAL_REPLY);
   });
 
-  it('أكثر الكليات حضوراً → ترتيب بالأرقام', () => {
+  it('أكثر الكليات حضوراً → رسالة الرفض', () => {
     const r = buildLocalReply('منو أكثر الكليات حضوراً؟', withStages());
-    expect(r.text).toContain('أكثر الكليات حضوراً');
-    expect(r.text).toContain('الصيدلة');
-    expect(r.text).toContain('الهندسة');
-    expect(r.text).toContain('✅ 1');
+    expect(r.text).toBe(REFUSAL_REPLY);
+    expect(r.text).not.toContain('الصيادلة');
   });
 
-  it('إحصايات عامه → مجموع عام لكل الكلية', () => {
+  it('إحصايات عامه → رسالة الرفض', () => {
     const r = buildLocalReply('إحصايات عامه', withStages());
-    expect(r.text).toContain('حسب الكلية');
-    expect(r.text).toContain('المجموع');
+    expect(r.text).toBe(REFUSAL_REPLY);
   });
 
-  it('إحصايات مرحلة محددة', () => {
+  it('إحصايات مرحلة محددة → رسالة الرفض', () => {
     const r = buildLocalReply('إحصايات المرحلة الخامسة', withStages());
-    expect(r.text).toContain('المرحلة الخامسة');
-    expect(r.text).toContain('✅ 1');
-    expect(r.text).not.toContain('المرحلة الأولى');
+    expect(r.text).toBe(REFUSAL_REPLY);
+    expect(r.text).not.toContain('✅ 1');
   });
 });
 
@@ -430,15 +417,15 @@ describe('buildLocalReply — بطاقة الطالب الجديدة', () => {
   });
 });
 
-describe('buildLocalReply — عدد الطلاب', () => {
-  it('كم طلابنا؟ → العدد مع تفصيل المراحل عند توفر خرائط', () => {
+describe('buildLocalReply — عدّاد الطلاب → رسالة الرفض', () => {
+  it('كم طلابنا؟ → رسالة الرفض (لا عدّ)', () => {
     const r = buildLocalReply('كم طلابنا؟', scope({ students }));
-    expect(r.handled).toBe(true);
-    expect(r.text).toContain('عدد الطلاب');
-    expect(r.text).toContain('4');
+    expect(r.handled).toBe(false);
+    expect(r.text).toBe(REFUSAL_REPLY);
+    expect(r.text).not.toContain('عدد الطلاب');
   });
 
-  it('عدد الطلاب في كل مرحلة → سطور المراحل بأرقامها', () => {
+  it('عدد الطلاب في كل مرحلة → رسالة الرفض', () => {
     const r = buildLocalReply('عدد الطلاب في كل مرحلة', scope({
       students,
       stagesMap: {
@@ -446,10 +433,9 @@ describe('buildLocalReply — عدد الطلاب', () => {
         s1: { students: [students[1]!], records: [], sessions: [], stageName: 'المرحلة الأولى', collegeName: 'كلية الهندسة' },
       },
     }));
-    expect(r.handled).toBe(true);
-    expect(r.text).toContain('المرحلة الخامسة');
-    expect(r.text).toContain('المرحلة الأولى');
-    expect(r.text).toContain('👨‍🎓 1');
+    expect(r.handled).toBe(false);
+    expect(r.text).toBe(REFUSAL_REPLY);
+    expect(r.text).not.toContain('👨‍🎓 1');
   });
 });
 
@@ -470,29 +456,29 @@ describe('buildLocalReply — لا تظهر رسالة مفاتيح AI أبدا�
     });
   });
 
-  it('نطاق عادي فارغ → دليل جديد بلا ذكر AI', () => {
+  it('نطاق عادي فارغ → رسالة الرفض بلا ذكر AI', () => {
     const r = buildLocalReply('xyzzy بلا إجابة', scope());
     expect(r.handled).toBe(false);
+    expect(r.text).toBe(REFUSAL_REPLY);
     expect(r.text).not.toContain('AI');
-    expect(r.text).toContain('غروب A1');
-    expect(r.text).toContain('كم كلية');
+    expect(r.text).not.toContain('غروب A1');
   });
 });
 
 describe('buildLocalReply — إصلاحات الأسئلة الحية', () => {
-  it('"كم طالب في هذه المرحلة؟" داخل مرحلة → عدّاد لا قائمة مراحل', () => {
+  it('"كم طالب في هذه المرحلة؟" داخل مرحلة → رسالة الرفض', () => {
     const r = buildLocalReply('كم طالب في هذه المرحلة؟', scope({
       students,
       stageName: 'المرحلة الثانية',
       collegeName: 'الصيدلة',
     }));
-    expect(r.handled).toBe(true);
+    expect(r.handled).toBe(false);
+    expect(r.text).toBe(REFUSAL_REPLY);
     expect(r.text).not.toContain('📚 المراحل');
-    expect(r.text).toContain('عدد الطلاب');
-    expect(r.text).toContain('4');
+    expect(r.text).not.toContain('عدد الطلاب');
   });
 
-  it('إحصايات باسم كلية مباشرة بدون كلمة "كلية" → تجميعة الكلية لا إحصايات محاضرات', () => {
+  it('إحصايات باسم كلية مباشرة بدون كلمة "كلية" → رسالة الرفض', () => {
     const r = buildLocalReply('إحصايات الصيدلة', scope({
       colleges: [college('c1', 'الصيدلة')],
       students,
@@ -500,10 +486,9 @@ describe('buildLocalReply — إصلاحات الأسئلة الحية', () => {
         s5: { students: [students[0]!], records: [], sessions: [], stageName: 'المرحلة الخامسة', collegeName: 'الصيدلة' },
       },
     }));
-    expect(r.handled).toBe(true);
-    expect(r.text).not.toContain('لا توجد محاضرات اليوم');
-    expect(r.text).toContain('الصيدلة');
-    expect(r.text).toContain('المرحلة الخامسة');
+    expect(r.handled).toBe(false);
+    expect(r.text).toBe(REFUSAL_REPLY);
+    expect(r.text).not.toContain('المرحلة الخامسة');
   });
 
   it('صاحب كود غير موجود → رد محدد لا دليل عام', () => {
@@ -520,7 +505,7 @@ describe('buildLocalReply — إصلاحات الأسئلة الحية', () => {
     expect(r.text).not.toContain('ما لقيت جواب مباشر');
   });
 
-  it('سؤال مركب: عدد الطلاب + غياب اليوم في رد واحد', () => {
+  it('سؤال مركب: يجيب بقائمة الغياب فقط (بدون عدد الطلاب)', () => {
     const r = buildLocalReply('شكد طالب بالمرحلة الخامسة وشكد غاب اليوم؟', scope({
       students,
       sessions: [sess('t', 'حضور اليوم', today)],
@@ -536,12 +521,12 @@ describe('buildLocalReply — إصلاحات الأسئلة الحية', () => {
       },
     }));
     expect(r.handled).toBe(true);
-    expect(r.text).toContain('عدد الطلاب');
+    expect(r.text).not.toContain('عدد الطلاب');
     expect(r.text).toContain('غياب');
     expect(r.text).toContain('ايات علي جبار حسن');
   });
 
-  it('داخل مرحلة مع stagesMap كامل → يعدّ مرحلة الحالية لا الكل', () => {
+  it('داخل مرحلة مع stagesMap كامل → "كم طالب" رسالة الرفض', () => {
     const inStage = () => scope({
       students: [students[0]!, students[1]!],
       stageName: 'المرحلة الخامسة',
@@ -552,13 +537,13 @@ describe('buildLocalReply — إصلاحات الأسئلة الحية', () => {
       },
     });
     const r = buildLocalReply('كم طالب في هذه المرحلة؟', inStage());
-    expect(r.handled).toBe(true);
-    expect(r.text).toContain('عدد الطلاب');
-    expect(r.text).toContain('**2**');
+    expect(r.handled).toBe(false);
+    expect(r.text).toBe(REFUSAL_REPLY);
+    expect(r.text).not.toContain('**2**');
     expect(r.text).not.toContain('المرحلة الأولى');
   });
 
-  it('"عدد الطلاب في كل مرحلة" داخل مرحلة → يعرض كل المراحل رغم stageName', () => {
+  it('"عدد الطلاب في كل مرحلة" داخل مرحلة → رسالة الرفض', () => {
     const r = buildLocalReply('عدد الطلاب في كل مرحلة', scope({
       students: [students[0]!, students[1]!],
       stageName: 'المرحلة الخامسة',
@@ -568,9 +553,9 @@ describe('buildLocalReply — إصلاحات الأسئلة الحية', () => {
         s1: { students: [students[2]!], records: [], sessions: [], stageName: 'المرحلة الأولى', collegeName: 'كلية الهندسة' },
       },
     }));
-    expect(r.handled).toBe(true);
-    expect(r.text).toContain('المرحلة الأولى');
-    expect(r.text).toContain('عدد الطلاب');
+    expect(r.handled).toBe(false);
+    expect(r.text).toBe(REFUSAL_REPLY);
+    expect(r.text).not.toContain('المرحلة الأولى');
   });
 
   it('بادئة كود لا يطابق طالباً آخر (123456 vs 1234)', () => {
@@ -579,5 +564,98 @@ describe('buildLocalReply — إصلاحات الأسئلة الحية', () => {
     expect(r.handled).toBe(true);
     expect(r.text).toContain('ما لقيت طالب بالكود 123456');
     expect(r.text).not.toContain('حوراء');
+  });
+});
+
+describe('extractAcademicCode — الكود الأكاديمي (4 أرقام)', () => {
+  it('مفرد 4 أرقام خارج سياق التاريخ', () => {
+    expect(extractAcademicCode('5038')).toBe('5038');
+    expect(extractAcademicCode('ما كود 5038؟')).toBe('5038');
+    expect(extractAcademicCode('صاحب الكود 123456')).toBe('123456');
+  });
+
+  it('لا يستخرج رقم من سياق التاريخ', () => {
+    expect(extractAcademicCode('من حضّر يوم 24 أغسطس 2026؟')).toBeUndefined();
+    expect(extractAcademicCode('إحصايات 06/11/2029')).toBeUndefined();
+    expect(extractAcademicCode('2026/09/25')).toBeUndefined();
+  });
+
+  it('بلا أرقام → undefined', () => {
+    expect(extractAcademicCode('منو حضر اليوم؟')).toBeUndefined();
+  });
+});
+
+describe('buildLocalReply — الوضع الصارم: تقرير طالب + كشف اليوم فقط', () => {
+  it('كود أكاديمي مفرد (4 أرقام) بدون كلمة "كود" → تقرير الطالب باسم السجل', () => {
+    const r = buildLocalReply('5038', scope({
+      students,
+      sessions: [sess('t', 'حضور اليوم', today)],
+      records: [rec('r1', students[0]!, 't', 'present')],
+    }));
+    expect(r.handled).toBe(true);
+    expect(r.text).toContain('الطالب:');
+    expect(r.text).toContain('ايات علي جبار حسن');
+    expect(r.text).toContain('✅');   // حضور — يُعرض بالأخضر
+    expect(r.text).toContain('حضور اليوم'); // ذكر اسم السجل
+  });
+
+  it('غياب الطالب يظهر بعلامة ❌ باسم السجل (يُعرض بالأحمر)', () => {
+    const r = buildLocalReply('ايات', scope({
+      students: [students[0]!],
+      sessions: [sess('t', 'حضور اليوم', today)],
+      records: [rec('r1', students[0]!, 't', 'absent')],
+    }));
+    expect(r.handled).toBe(true);
+    expect(r.text).toContain('❌');
+    expect(r.text).toContain('حضور اليوم');
+  });
+
+  it('كود مفرد غير موجود → رد الكود غير الموجود لا رسالة الرفض', () => {
+    const r = buildLocalReply('9999', scope({ students }));
+    expect(r.handled).toBe(true);
+    expect(r.text).toContain('ما لقيت طالب بالكود 9999');
+    expect(r.text).not.toBe(REFUSAL_REPLY);
+  });
+
+  it('"منو حضر اليوم ومنو غاب اليوم" → القائمتان معاً', () => {
+    const r = buildLocalReply('منو حضر اليوم ومنو غاب اليوم؟', scope({
+      students: [students[0]!, students[1]!],
+      sessions: [sess('t', 'حضور اليوم', today)],
+      records: [
+        rec('r1', students[0]!, 't', 'present'),
+        rec('r2', students[1]!, 't', 'absent'),
+      ],
+    }));
+    expect(r.handled).toBe(true);
+    expect(r.text).toContain('حضور اليوم');
+    expect(r.text).toContain('غياب اليوم');
+    expect(r.text).toContain('ايات علي جبار حسن');
+    expect(r.text).toContain('أسماء عباس');
+  });
+
+  it('كل ما عدا الأسئلة الثلاثة → رسالة الرفض الموحدة', () => {
+    const scopeWith = scope({ students, colleges: [pharmCollege] });
+    const others = [
+      'كم طلابنا؟',
+      'إحصايات اليوم',
+      'كم كلية عندنا؟',
+      'إحصايات كلية الصيدلة',
+      'منو أكثر الكليات حضوراً؟',
+      'شنو أسماء السجلات؟',
+      'من صمم الموقع؟',
+      'شو الطقس اليوم',
+      'غروب A1',
+      'إحصايات 2026/09/25',
+    ];
+    others.forEach(q => {
+      const r = buildLocalReply(q, scopeWith);
+      expect(r.text, q).toBe(REFUSAL_REPLY);
+    });
+  });
+
+  it('رسالة الرفض لا تحتوي أي ذكر لمفاتيح AI', () => {
+    const r = buildLocalReply('شو الطقس اليوم', scope({ students }));
+    expect(r.text).not.toContain('مفاتيح');
+    expect(r.text).not.toContain('AI');
   });
 });

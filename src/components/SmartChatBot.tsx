@@ -156,7 +156,8 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
   }, [isAdmin, currentStageId, accessibleData, students, records, sessions, stages, colleges]);
 
   const dataLoaded = accessibleData.allStudents.length > 0;
-  const firstCollegeName = accessibleData.accessibleColleges[0]?.name;
+  const firstStudentName = accessibleData.allStudents[0]?.name;
+  const firstNameOnly = firstStudentName?.split(' ')[0] || '';
 
   // بحث الطلاب + بطاقة الطالب + الاقتراحات — حالة معزولة في useChatBrain
   // (الدوال النقية في lib/chatBrain: buildLocalReply/computeStudentCard/fixDate)
@@ -198,7 +199,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
         }]);
       } else {
         const hint = isAdmin && !dataLoaded
-          ? '\n\n💡 اضغط "⚡ تحميل بيانات الجامعة" في أعلى الشاشة حتى أجاوبك عن الإحصايات والغروب والتواريخ.'
+          ? '\n\n💡 اضغط "⚡ تحميل بيانات الجامعة" في أعلى الشاشة، وبعدها اسألني عن تقرير طالب بالاسم أو "منو حضر اليوم؟".'
           : '';
         setMessages([{
           id: Date.now().toString(),
@@ -711,19 +712,16 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
                     {!isTyping && !isInputBlocked && messages.length > 0 && (() => {
                       const chips: { label: string; q: string }[] = !dataLoaded
                         ? [
-                            { label: '🏫 كم كلية عندنا؟', q: 'كم كلية عندنا؟' },
-                            { label: '📚 شكد مرحلة عندنا؟', q: 'شكد مرحلة عندنا؟' },
-                            ...(firstCollegeName ? [{ label: `📊 إحصايات ${firstCollegeName}`, q: `إحصايات ${firstCollegeName}` }] : []),
+                            { label: '✅ منو حضر اليوم؟', q: 'منو حضر اليوم؟' },
+                            { label: '❌ منو غاب اليوم؟', q: 'منو غاب اليوم؟' },
                           ]
                         : [
                             { label: '✅ منو حضر اليوم؟', q: 'منو حضر اليوم؟' },
                             { label: '❌ منو غاب اليوم؟', q: 'منو غاب اليوم؟' },
-                            { label: '📊 إحصايات اليوم', q: 'إحصايات اليوم' },
-                            ...(currentStageId
-                              ? [{ label: '🕐 منو حضر أمس؟', q: 'منو حضر أمس؟' }]
-                              : firstCollegeName
-                                ? [{ label: `🏫 إحصايات ${firstCollegeName}`, q: `إحصايات ${firstCollegeName}` }]
-                                : []),
+                            { label: '📋 حضر اليوم + غاب اليوم', q: 'منو حضر اليوم ومنو غاب اليوم؟' },
+                            ...(firstStudentName
+                              ? [{ label: `🎓 تقرير ${firstNameOnly}`, q: firstStudentName }]
+                              : []),
                           ];
                       return (
                         <div className="px-3 pt-2 pb-0 flex flex-wrap gap-1.5">
