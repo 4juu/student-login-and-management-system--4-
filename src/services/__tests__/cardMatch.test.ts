@@ -178,6 +178,60 @@ describe('matchesExpectedName — روابط بصمة كود', () => {
   });
 });
 
+describe('matchesExpectedName — ثلاثة طلاب بنفس الأسماء الأولى', () => {
+  const A = 'نور الهدى محمد صالح علي';
+  const B = 'نور الهدى محمد صالح عيسى';
+  const C = 'نور الهدى محمد صالح جواد';
+
+  it('يرفض اسم طالب آخر متشابه (يتجاوز العتبة لكن العائلة تختلف)', () => {
+    const r1 = matchesExpectedName(B, A);
+    expect(r1.matched).toBe(false);
+    expect(r1.score).toBeGreaterThanOrEqual(MATCH_THRESHOLD); // المخاطرة القديمة: العتبة وحدها كانت تقبل
+    expect(matchesExpectedName(C, A).matched).toBe(false);
+    expect(matchesExpectedName(A, B).matched).toBe(false);
+    expect(matchesExpectedName(C, B).matched).toBe(false);
+    expect(matchesExpectedName(A, C).matched).toBe(false);
+    expect(matchesExpectedName(B, C).matched).toBe(false);
+  });
+
+  it('يقبل اسم صاحب الرابط نفسه', () => {
+    expect(matchesExpectedName(A, A).matched).toBe(true);
+    expect(matchesExpectedName(B, B).matched).toBe(true);
+    expect(matchesExpectedName(C, C).matched).toBe(true);
+  });
+
+  it('يرفض الاسم المختصر المشترك بين الثلاثة (بدون العائلة)', () => {
+    const r = matchesExpectedName('نور الهدى محمد صالح', A);
+    expect(r.matched).toBe(false);
+  });
+
+  it('يقبل خطأ إملائياً بسيطاً داخل اسم صاحب الرابط', () => {
+    expect(matchesExpectedName('نور الهدى محمد صلح علي', A).matched).toBe(true);
+  });
+});
+
+describe('tripleNameMatch — ثلاثة طلاب بنفس الأسماء الأولى (الحضور)', () => {
+  const roster = [
+    mkStudent('1', 'نور الهدى محمد صالح علي'),
+    mkStudent('2', 'نور الهدى محمد صالح عيسى'),
+    mkStudent('3', 'نور الهدى محمد صالح جواد'),
+  ];
+
+  it('بطاقة الطالب الصحيح تتصدره دائماً (100 مقابل 80)', () => {
+    const r = tripleNameMatch('الاسم: نور الهدى محمد صالح عيسى', roster, 2);
+    expect(r.length).toBe(3);
+    expect(r[0]!.student.name).toBe('نور الهدى محمد صالح عيسى');
+    expect(r[0]!.score).toBe(100);
+    expect(r.slice(1).every(x => x.score === 80)).toBe(true);
+  });
+
+  it('بطاقة علي تتصدر علي', () => {
+    const r = tripleNameMatch('نور الهدى محمد صالح علي', roster, 2);
+    expect(r[0]!.student.name).toBe('نور الهدى محمد صالح علي');
+    expect(r[0]!.score).toBe(100);
+  });
+});
+
 describe('tripleNameMatch — regression: split BEFORE normalizeArabic', () => {
   const roster = [
     mkStudent('1', 'نور الهدى مؤيد سالم جاسم'),

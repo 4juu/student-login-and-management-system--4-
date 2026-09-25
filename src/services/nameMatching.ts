@@ -100,6 +100,27 @@ function tokenSimilarity(a: string, b: string): number {
 }
 
 // ─────────────────────────────────────────────────────────────
+// بوابة اسم العائلة — تمنع قبول أشخاص يتشابهون في الأسماء الأولى
+// (مثل: نور الهدى محمد صالح علي / عيسى / جواد — تختلف بكلمة العائلة فقط)
+// الاسم الرباعي (3+ كلمات) لا يُعتمد إلا إذا ظهرت آخر كلمته ضمن النص
+// ─────────────────────────────────────────────────────────────
+export function hasFamilyWord(fullName: string, text: string): boolean {
+  const nameWords = fullName.split(/\s+/).filter(w => w.length >= 2);
+  if (nameWords.length < 3) return true; // ليس اسماً رباعياً — لا نفرض
+  const family = normalizeArabic(nameWords[nameWords.length - 1] ?? '');
+  if (!family) return true;
+  const textWords = text.split(/\s+/).filter(w => w.length >= 2);
+  if (!textWords.length) return false;
+  return textWords.some((w) => {
+    const nw = normalizeArabic(w);
+    if (!nw) return false;
+    // كلمة مدمجة في OCR (بلا مسافات) تحتوي العائلة
+    if (family.length >= 3 && nw.includes(family)) return true;
+    return nw === family || levenshteinSimilarity(nw, family) >= 0.6;
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
 // findNameInOCRText — improved with fuzzy + compound support
 // ─────────────────────────────────────────────────────────────
 export function findNameInOCRText(studentName: string, ocrText: string): { matched: boolean; confidence: number } {
@@ -134,6 +155,13 @@ export function findNameInOCRText(studentName: string, ocrText: string): { match
   }
 
   const wordConfidence = found / nameWords.length;
+
+  // ★ بوابة العائلة: النص بلا آخر كلمة من الاسم الرباعي ← لا مطابقة
+  //   (يبقى confidence كما هو لترتيب النتائج، لكن matched يصبح false)
+  if (!hasFamilyWord(studentName, ocrText)) {
+    return { matched: false, confidence: wordConfidence };
+  }
+
   if (wordConfidence >= 0.6) return { matched: true, confidence: wordConfidence };
 
   // Fuzzy token similarity fallback

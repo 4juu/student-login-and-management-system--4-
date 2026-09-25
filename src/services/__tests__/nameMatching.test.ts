@@ -126,6 +126,50 @@ describe('matchStudentFromDatabase', () => {
   });
 });
 
+describe('findNameInOCRText — بوابة العائلة (أسماء متشابهة)', () => {
+  const A = 'نور الهدى محمد صالح علي';
+
+  it('يرفض بطاقة شقيق يختلف بآخر الاسم', () => {
+    const r = findNameInOCRText(A, 'الاسم: نور الهدى محمد صالح عيسى');
+    expect(r.matched).toBe(false);
+  });
+
+  it('يرفض بطاقة شقيق يختلف بآخر الاسم (جواد)', () => {
+    const r = findNameInOCRText(A, 'نور الهدى محمد صالح جواد');
+    expect(r.matched).toBe(false);
+  });
+
+  it('يقبل البطاقة الكاملة لصاحب الاسم', () => {
+    const r = findNameInOCRText(A, 'الاسم: نور الهدى محمد صالح علي');
+    expect(r.matched).toBe(true);
+    expect(r.confidence).toBe(1);
+  });
+
+  it('يرفض عند اقتطاع آخر الاسم من القراءة', () => {
+    const r = findNameInOCRText(A, 'نور الهدى محمد صالح');
+    expect(r.matched).toBe(false);
+  });
+
+  it('يقبل نصاً مدمجاً بلا مسافات يحوي العائلة', () => {
+    const r = findNameInOCRText(A, 'نورالهدىمحمدصالحعلي 12345');
+    expect(r.matched).toBe(true);
+  });
+});
+
+describe('matchStudentFromDatabase — لا يخلط بين أشقاء الاسم', () => {
+  const roster = [{ name: 'نور الهدى محمد صالح علي' }];
+
+  it('يرفض نص شقيق بعائلة مختلفة', () => {
+    expect(matchStudentFromDatabase('نور الهدى محمد صالح عيسى', roster)).toBeNull();
+  });
+
+  it('يقبل نص صاحب الاسم الكامل', () => {
+    const r = matchStudentFromDatabase('الاسم: نور الهدى محمد صالح علي', roster);
+    expect(r).not.toBeNull();
+    expect(r!.name).toBe('نور الهدى محمد صالح علي');
+  });
+});
+
 describe('findStudentByCode', () => {
   const students = [{ code: 'S001' }, { code: 'S002' }];
 

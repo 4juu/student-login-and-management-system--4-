@@ -7,6 +7,7 @@ import type { Student } from '../types/student';
 import {
   extractNameFromOCR,
   findNameInOCRText,
+  hasFamilyWord,
   levenshteinSimilarity,
   normalizeArabic,
   splitMergedName,
@@ -224,6 +225,7 @@ export function rankByNameInput(typed: string, roster: Student[]): StudentMatch[
 /**
  * التحقق من اسم مكتوب يدوياً ضد اسم صاحب الرابط — روابط «بصمة كود»
  * الاسم المكتوب يجب أن يطابق (بعتبة MATCH_THRESHOLD) اسم الطالب المضمّن في الرابط
+ * + بوابة العائلة: أسماء تتشابه في الأولى وتختلف بالآخر (علي/عيسى/جواد) تُرفض
  */
 export function matchesExpectedName(
   typed: string,
@@ -233,5 +235,7 @@ export function matchesExpectedName(
     return { matched: false, score: 0 };
   }
   const score = nameSimilarity(typed.trim(), expectedName.trim());
-  return { matched: score >= MATCH_THRESHOLD, score };
+  if (score < MATCH_THRESHOLD) return { matched: false, score };
+  if (!hasFamilyWord(expectedName, typed)) return { matched: false, score };
+  return { matched: true, score };
 }
