@@ -308,8 +308,8 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
 
   if (generatedLink) {
     return createPortal(
-      <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
-        <div ref={modalBehaviorRefLink} role="dialog" aria-modal="true" aria-labelledby="attendance-link-dialog-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden focus:outline-none">
+      <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4 animate-fadeIn" dir="rtl">
+        <div ref={modalBehaviorRefLink} role="dialog" aria-modal="true" aria-labelledby="attendance-link-dialog-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-modalUp focus:outline-none">
 
           <div className="p-5 border-b border-white/10 bg-gradient-to-l from-emerald-500/15 to-teal-500/15">
             <div className="flex items-center justify-between">
@@ -390,8 +390,8 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
-      <div ref={modalBehaviorRefLink} role="dialog" aria-modal="true" aria-labelledby="attendance-link-create-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden focus:outline-none">
+    <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4 animate-fadeIn" dir="rtl">
+      <div ref={modalBehaviorRefLink} role="dialog" aria-modal="true" aria-labelledby="attendance-link-create-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden animate-modalUp focus:outline-none">
 
         <div className="p-5 border-b border-white/10 bg-gradient-to-l from-teal-500/15 to-emerald-500/15">
           <div className="flex items-center justify-between">
@@ -479,8 +479,8 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
 
         {confirmState &&
           createPortal(
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] p-4" onClick={() => setConfirmState(null)}>
-              <div ref={modalBehaviorRef} role="alertdialog" aria-modal="true" aria-labelledby="send-attendance-confirm-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center focus:outline-none" onClick={e => e.stopPropagation()}>
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] p-4 animate-fadeIn" onClick={() => setConfirmState(null)}>
+              <div ref={modalBehaviorRef} role="alertdialog" aria-modal="true" aria-labelledby="send-attendance-confirm-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center animate-modalUp focus:outline-none" onClick={e => e.stopPropagation()}>
                 <h3 id="send-attendance-confirm-title" className="text-lg font-bold text-white mb-2">{confirmState.title}</h3>
                 <p className="text-sm text-slate-400 mb-6 whitespace-pre-line">{confirmState.message}</p>
                 <div className="flex gap-2">

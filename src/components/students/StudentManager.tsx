@@ -704,7 +704,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
 
       {showFaceRegister && onUpdateStudent && (
         <Suspense fallback={
-          <div className="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
             <LoadingState size="md" />
           </div>
         }>

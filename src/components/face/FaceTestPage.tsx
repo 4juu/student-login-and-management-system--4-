@@ -552,7 +552,7 @@ setEnhanceCountdown(20);
   const preScanUI = (() => {
     if (phase === 'loading') {
       return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm" dir="rtl">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm animate-fadeIn" dir="rtl">
           <div className="text-center">
             <MorphingSquare size="md" className="mx-auto mb-4" />
             <p className="text-slate-300 text-sm font-bold">جاري التحقق من الرابط...</p>
@@ -563,7 +563,7 @@ setEnhanceCountdown(20);
 
     if (phase === 'invalid') {
       return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm" dir="rtl">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm animate-fadeIn" dir="rtl">
           <div className="text-center px-6">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10">
               <svg className="h-8 w-8 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg>
@@ -580,7 +580,7 @@ setEnhanceCountdown(20);
 
     if (phase === 'loadError') {
       return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm" dir="rtl">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm animate-fadeIn" dir="rtl">
           <div className="text-center px-6">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10">
               <svg className="h-8 w-8 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
@@ -602,7 +602,7 @@ setEnhanceCountdown(20);
 
     if (phase === 'ready') {
       return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm" dir="rtl">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm animate-fadeIn" dir="rtl">
           <div className="text-center px-6">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-[0_8px_20px_rgba(99,102,241,0.3)]">
               <svg className="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -646,7 +646,7 @@ setEnhanceCountdown(20);
 
   // ── شاشة النجاح ──
   const successOverlay = phase === 'success' && matchedStudent ? (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto animate-fadeIn">
       <div className="text-center px-6 max-w-sm">
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/15">
           <svg className="h-8 w-8 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
@@ -685,7 +685,7 @@ setEnhanceCountdown(20);
           role="dialog"
           aria-modal="true"
           aria-label="اختبار بصمة الوجه"
-          className="fixed inset-0 z-[9999] flex flex-col bg-slate-950/95 backdrop-blur-sm"
+          className="fixed inset-0 z-[9999] flex flex-col bg-slate-950/95 backdrop-blur-sm animate-fadeIn"
           onTouchMove={(e) => { e.preventDefault(); }}
           style={{ touchAction: 'none' }}
         >
@@ -752,7 +752,7 @@ setEnhanceCountdown(20);
 
             {/* overlay: لا توجد بصمة */}
             {noMatchOverlay && !matchedStudent && (
-<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto">
+<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto animate-fadeIn">
                 <div className="text-center px-6 max-w-sm">
                   <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/15">
                     <svg className="h-8 w-8 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>

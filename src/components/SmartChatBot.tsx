@@ -266,7 +266,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
 
   const requestClose = useCallback(() => {
     setClosing(true);
-    window.setTimeout(() => { setIsOpen(false); setClosing(false); }, 350);
+    window.setTimeout(() => { setIsOpen(false); setClosing(false); }, 450);
   }, []);
 
   const stopRecognition = useCallback((manual = false) => {
@@ -402,7 +402,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
       {isOpen && (
         <div
           key="chat-window"
-          className={`fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-50 overflow-hidden border border-white/10 shadow-2xl max-w-[calc(100vw-1.5rem)] sm:max-w-[calc(100vw-3rem)] h-[min(560px,calc(100vh-3rem))] max-h-[calc(100vh-3rem)] overscroll-contain ${closing ? 'animate-modalDown' : 'animate-modalUp'}`}
+          className={`fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-50 overflow-hidden border border-white/10 shadow-2xl max-w-[calc(100vw-1.5rem)] sm:max-w-[calc(100vw-3rem)] h-[min(560px,calc(100vh-3rem))] max-h-[calc(100vh-3rem)] overscroll-contain ${closing ? 'animate-chatSheetClose' : 'animate-chatSheetOpen'}`}
           style={{ backgroundColor: '#0f172a' }}
           onKeyDown={e => { e.stopPropagation(); }}
           onKeyUp={e => { e.stopPropagation(); }}

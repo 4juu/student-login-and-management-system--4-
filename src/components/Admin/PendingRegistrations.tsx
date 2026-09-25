@@ -235,9 +235,9 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
   }), [requests]);
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
-      {ConfirmDialogEl}
-      <div className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[95vh] flex flex-col">
+<div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4 animate-fadeIn" dir="rtl">
+{ConfirmDialogEl}
+<div className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[95vh] flex flex-col animate-modalUp">
 
         <div className="p-5 border-b border-white/10 flex items-center justify-between">
           <div>

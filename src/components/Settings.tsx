@@ -704,7 +704,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
       {/* 📋 نافذة تأكيد داخلية (بدل window.confirm/prompt التي تتجمد على الجوال) */}
       {resetDialog && createPortal(
         <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4"
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 animate-fadeIn"
           onClick={() => resetDialog.type !== 'success' && setResetDialog(null)}
         >
           <div
@@ -713,7 +713,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
             aria-modal="true"
             aria-labelledby="reset-dialog-title"
             tabIndex={-1}
-            className="modal-panel bg-slate-900 rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center focus:outline-none"
+            className="modal-panel bg-slate-900 rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center animate-modalUp focus:outline-none"
             onClick={e => e.stopPropagation()}
             dir="rtl"
           >

@@ -283,8 +283,8 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
 
   if (resultRows.length > 0) {
     return createPortal(
-      <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
-        <div role="dialog" aria-modal="true" aria-labelledby="enroll-links-result-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden focus:outline-none">
+      <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4 animate-fadeIn" dir="rtl">
+        <div role="dialog" aria-modal="true" aria-labelledby="enroll-links-result-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-modalUp focus:outline-none">
           <div className="p-5 border-b border-white/10 bg-gradient-to-l from-violet-500/15 to-purple-500/15">
             <div className="flex items-center justify-between">
               <div>
@@ -349,8 +349,8 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" dir="rtl">
-      <div role="dialog" aria-modal="true" aria-labelledby="send-enroll-links-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden focus:outline-none">
+    <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4 animate-fadeIn" dir="rtl">
+      <div role="dialog" aria-modal="true" aria-labelledby="send-enroll-links-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-modalUp focus:outline-none">
         <div className="p-5 border-b border-white/10 bg-gradient-to-l from-purple-500/15 to-violet-500/15">
           <div className="flex items-center justify-between">
             <div>
@@ -482,8 +482,8 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
 
         {confirmState &&
           createPortal(
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] p-4" onClick={() => setConfirmState(null)}>
-              <div ref={modalBehaviorRef} role="alertdialog" aria-modal="true" aria-labelledby="send-enroll-confirm-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-xl shadow-2xl max-w-sm w-full p-6 text-center focus:outline-none" onClick={e => e.stopPropagation()}>
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] p-4 animate-fadeIn" onClick={() => setConfirmState(null)}>
+              <div ref={modalBehaviorRef} role="alertdialog" aria-modal="true" aria-labelledby="send-enroll-confirm-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-xl shadow-2xl max-w-sm w-full p-6 text-center animate-modalUp focus:outline-none" onClick={e => e.stopPropagation()}>
                 <h3 id="send-enroll-confirm-title" className="text-lg font-bold text-white mb-2">{confirmState.title}</h3>
                 <p className="text-sm text-slate-400 mb-6 whitespace-pre-line">{confirmState.message}</p>
                 <div className="flex gap-2">

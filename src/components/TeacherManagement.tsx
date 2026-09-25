@@ -548,7 +548,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
         {/* 🆕 مودال تعيين أدمن لكلية */}
         {showAssignAdminModal && assignAdminCollegeId && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
-            <div className="bg-slate-900 border border-white/10 text-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
+            <div className="bg-slate-900 border border-white/10 text-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl animate-modalUp">
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-xl font-bold text-white flex items-center gap-2"><Landmark className="w-5 h-5 text-amber-300" /> تعيين أدمن لكلية {assignAdminCollegeName}</h3>
@@ -642,7 +642,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
         {/* 🆕 تأكيد إلغاء أدمن كلية */}
         {showRemoveAdminConfirm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
-            <div className="bg-slate-900 border border-white/10 text-white rounded-2xl max-w-sm w-full p-6 shadow-2xl">
+            <div className="bg-slate-900 border border-white/10 text-white rounded-2xl max-w-sm w-full p-6 shadow-2xl animate-modalUp">
               <div className="text-center mb-6">
                 <div className="mx-auto w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-4"><TriangleAlert className="w-7 h-7 text-red-400" /></div>
                 <h3 className="text-xl font-bold text-white">إلغاء أدمن الكلية</h3>
@@ -685,8 +685,8 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
         )}
 
         {showMigrationModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-slate-900 border border-white/10 text-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
+            <div className="bg-slate-900 border border-white/10 text-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 animate-modalUp">
               <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Truck className="w-5 h-5" /> ترحيل التدريسيين القدامى — تعيين كلية</h3>
               <p className="text-sm text-slate-400 mb-4">اختر الكلية المناسبة لكل تدريسي:</p>
               <div className="space-y-3">
@@ -956,8 +956,8 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
       </div>
 
       {showPermissionModal && selectedTeacher && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-white/10 text-white rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
+          <div className="bg-slate-900 border border-white/10 text-white rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto animate-modalUp">
             <div className="p-6 border-b flex justify-between items-center sticky top-0 bg-slate-900 z-10">
               <div>
                 <h3 className="text-xl font-bold flex items-center gap-2"><Settings className="w-5 h-5" /> صلاحيات: {selectedTeacher.displayName}</h3>
@@ -1020,8 +1020,8 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
       )}
 
       {showProfileModal && selectedTeacher && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-white/10 text-white rounded-lg p-6 max-w-md w-full">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
+          <div className="bg-slate-900 border border-white/10 text-white rounded-lg p-6 max-w-md w-full animate-modalUp">
             <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><SquarePen className="w-5 h-5" /> تعديل ملف التدريسي</h3>
             <div className="mb-4">
               <label className="block text-sm font-medium text-slate-300 mb-2">الاسم الكامل</label>
@@ -1041,8 +1041,8 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
       )}
 
       {showPasswordModal && selectedTeacher && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-white/10 text-white rounded-lg p-6 max-w-md w-full">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
+          <div className="bg-slate-900 border border-white/10 text-white rounded-lg p-6 max-w-md w-full animate-modalUp">
             <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><KeyRound className="w-5 h-5" /> تغيير كلمة المرور - {selectedTeacher.displayName}</h3>
             <div className="mb-4">
               <label className="block text-sm font-medium text-slate-300 mb-2">كلمة المرور الجديدة</label>

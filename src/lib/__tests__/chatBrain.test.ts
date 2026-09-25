@@ -6,6 +6,7 @@ import {
   extractDateQuery,
   extractGroupToken,
   extractAcademicCode,
+  fixDate,
   REFUSAL_REPLY,
   type ChatScope,
 } from '../chatBrain';
@@ -22,7 +23,7 @@ const students: Student[] = [
   stu('s4', 'محمد رحيم عذيب محمد', '2257', 'A7'),
 ];
 
-const today = new Date().toISOString().slice(0, 10);
+const today = fixDate(new Date());
 
 const sess = (id: string, name: string, date: string): AttendanceSession => ({
   id, name, date, createdAt: date, isActive: date === today,

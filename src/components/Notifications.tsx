@@ -111,7 +111,7 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
 
       {/* 📬 Panel */}
       {open && createPortal(
-        <div className="fixed inset-0 z-[9010] flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-[9010] flex items-end sm:items-center justify-center animate-fadeIn">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { setOpen(false); setComposeOpen(false); }} />
           <div
             ref={panelRef}

@@ -641,7 +641,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label="ماسح بصمة الوجه"
-      className={`fixed inset-0 z-[9999] flex flex-col ${kiosk ? 'bg-black' : 'bg-slate-950/95 backdrop-blur-sm'}`}
+      className={`fixed inset-0 z-[9999] flex flex-col ${kiosk ? 'bg-black' : 'bg-slate-950/95 backdrop-blur-sm'} animate-fadeIn`}
       onTouchMove={(e) => { e.preventDefault(); }}
       style={{ touchAction: 'none' }}
     >

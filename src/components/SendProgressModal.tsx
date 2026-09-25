@@ -98,9 +98,9 @@ export const SendProgressModal: React.FC<SendProgressModalProps> = ({
   return (
     <>
       <style>{styles}</style>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onHide} />
-      <div className="relative bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden border border-slate-600">
+<div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fadeIn">
+<div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onHide} />
+<div className="relative bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden border border-slate-600 animate-modalUp">
         <div className="shrink-0 px-6 pt-6 pb-4 border-b border-slate-700">
           <div className="flex items-center justify-between mb-1">
             <h2 className="text-lg font-bold text-white flex items-center gap-2"><Target className="w-5 h-5 text-emerald-400" /> إرسال إشعارات الغياب</h2>

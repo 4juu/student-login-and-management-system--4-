@@ -329,19 +329,12 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
           </button>
         </div>
 
-        <style>{`
-          @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-          .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
-        `}</style>
       </div>
 
       {showFaceAttendance && (
         <Suspense
           fallback={
-            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 animate-fadeIn">
               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
               <LoadingState size="md" className="relative" />
             </div>

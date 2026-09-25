@@ -99,8 +99,8 @@ export const FaceEnrollModal: React.FC<FaceEnrollModalProps> = ({
   const okCount = results.filter(r => r.ok).length;
 
   return createPortal(
-    <div dir="rtl" className="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-sm flex items-center justify-center p-3">
-      <div role="dialog" aria-modal="true" aria-labelledby="face-enroll-modal-title" tabIndex={-1} className="bg-slate-900 border border-white/10 rounded-3xl shadow-2xl w-full max-w-lg max-h-[96vh] overflow-y-auto overscroll-contain focus:outline-none">
+<div dir="rtl" className="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn">
+<div role="dialog" aria-modal="true" aria-labelledby="face-enroll-modal-title" tabIndex={-1} className="bg-slate-900 border border-white/10 rounded-3xl shadow-2xl w-full max-w-lg max-h-[96vh] overflow-y-auto overscroll-contain animate-modalUp focus:outline-none">
         {/* رأس */}
         <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur px-5 py-4 border-b border-white/8 flex items-center gap-3">
           <div className="flex-1 min-w-0">

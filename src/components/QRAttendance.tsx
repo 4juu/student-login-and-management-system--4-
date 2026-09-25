@@ -371,7 +371,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
   }, [pendingQrId, onUpdateStudent, students, alreadyPresentIds, onMarkAttendance]);
 
   return createPortal(
-    <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="qr-scanner-title" tabIndex={-1} className="fixed inset-0 z-[9999] bg-black/80 text-white flex flex-col overscroll-none focus:outline-none" dir="rtl">
+    <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="qr-scanner-title" tabIndex={-1} className="fixed inset-0 z-[9999] bg-black/80 text-white flex flex-col overscroll-none animate-fadeIn focus:outline-none" dir="rtl">
       <div className="w-full bg-black flex flex-col flex-1 overflow-hidden">
       <header className="flex items-center justify-between px-3 py-2 bg-gray-900/95 border-b border-white/10"
         style={{ paddingTop: `${topSafe + 8}px` }}>
@@ -465,8 +465,8 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       </div>
 
       {pendingQrId && (
-        <div className="fixed inset-0 z-[10000] bg-black/90 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-white/10 text-white rounded-2xl p-5 w-full max-w-sm">
+<div className="fixed inset-0 z-[10000] bg-black/90 flex items-center justify-center p-4 animate-fadeIn">
+<div className="bg-slate-900 border border-white/10 text-white rounded-2xl p-5 w-full max-w-sm animate-modalUp">
             <div className="text-center mb-4">
               <div className="text-4xl mb-2">🔗</div>
               <h3 className="text-lg font-bold">ربط هوية</h3>

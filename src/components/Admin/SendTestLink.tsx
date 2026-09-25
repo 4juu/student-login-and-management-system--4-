@@ -66,8 +66,8 @@ export function SendTestLink({ adminUid, colleges, stages, onClose }: SendTestLi
   };
 
   return createPortal(
-    <div ref={modalRef as React.Ref<HTMLDivElement>} className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div role="dialog" aria-modal="true" aria-labelledby="send-test-link-title" tabIndex={-1} className="w-full max-w-md bg-[#0E1930] border border-[#22334F] rounded-2xl shadow-2xl overflow-hidden focus:outline-none" dir="rtl">
+    <div ref={modalRef as React.Ref<HTMLDivElement>} className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="send-test-link-title" tabIndex={-1} className="w-full max-w-md bg-[#0E1930] border border-[#22334F] rounded-2xl shadow-2xl overflow-hidden animate-modalUp focus:outline-none" dir="rtl">
         {/* Header */}
         <div className="p-4 border-b border-[#22334F] flex items-center justify-between">
           <div className="flex items-center gap-2">

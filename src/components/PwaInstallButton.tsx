@@ -72,9 +72,9 @@ export const PwaInstallButton: React.FC = () => {
       </button>
 
       {showGuide && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4" onClick={() => setShowGuide(false)}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4 animate-fadeIn" onClick={() => setShowGuide(false)}>
           <div
-            className="modal-panel w-full max-w-sm rounded-2xl border border-white/10 bg-[#0F1A30] p-5 text-white shadow-2xl"
+            className="modal-panel w-full max-w-sm rounded-2xl border border-white/10 bg-[#0F1A30] p-5 text-white shadow-2xl animate-modalUp"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-3">

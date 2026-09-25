@@ -133,7 +133,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 sm:p-6"
+      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 sm:p-6 animate-fadeIn"
       onClick={onClose}
       dir="rtl"
     >
@@ -143,7 +143,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
         aria-modal="true"
         aria-labelledby="student-profile-modal-title"
         tabIndex={-1}
-        className="modal-height bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden border border-slate-200 focus:outline-none"
+        className="modal-height bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden border border-slate-200 animate-modalUp focus:outline-none"
         onClick={e => e.stopPropagation()}
       >
         {/* ── الهيدر ── */}
