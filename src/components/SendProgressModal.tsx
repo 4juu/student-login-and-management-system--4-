@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { CircleCheck, Library, Send, Target } from 'lucide-react';
 import { MorphingSquare } from './MorphingSquare';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 const styles = `
 @keyframes draw-check {
@@ -89,6 +90,7 @@ export const SendProgressModal: React.FC<SendProgressModalProps> = ({
   totalDone,
   totalGroups,
 }) => {
+  useBodyScrollLock(isOpen);
   if (!isOpen) return null;
 
   const percent = totalGroups > 0 ? Math.round((totalDone / totalGroups) * 100) : 0;

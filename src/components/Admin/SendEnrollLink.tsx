@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalBehavior } from '../../hooks/useModalBehavior';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { Student, Stage, College } from '../../types/student';
 import { createBulkRegistrationLinks } from '../../services/tokenService';
 import {
@@ -149,6 +150,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
     title: string; message: string; confirmLabel?: string; onConfirm: () => void;
   } | null>(null);
 
+  useBodyScrollLock(true);
   const modalBehaviorRef = useModalBehavior({ open: !!confirmState, onClose: () => setConfirmState(null) });
 
   const selectedCollege = colleges.find(c => c.id === selectedCollegeId);

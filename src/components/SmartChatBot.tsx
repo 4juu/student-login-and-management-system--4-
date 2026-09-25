@@ -5,6 +5,7 @@ import React, {
   useCallback,
   useMemo,
 } from 'react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import {
   Student,
   AttendanceRecord,
@@ -62,6 +63,8 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
   const [error, setError] = useState<string | null>(null);
   const [showSessionsModal, setShowSessionsModal] = useState(false);
   const [showDayDetails, setShowDayDetails] = useState(false);
+
+  useBodyScrollLock(isOpen || showSessionsModal || showDayDetails);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);

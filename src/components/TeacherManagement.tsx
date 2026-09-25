@@ -13,6 +13,7 @@ import { User, TeacherPermissions } from '../types/user';
 import { College, Stage } from '../types/student';
 import { ArrowLeft, BookOpen, CircleCheck, Crown, GraduationCap, KeyRound, Landmark, Lightbulb, Lock, Plus, RefreshCw, Save, Settings, SquarePen, Trash2, TriangleAlert, Truck, User as UserIcon, UserCheck, Users, Wrench } from 'lucide-react';
 import { useConfirm } from '../hooks/useConfirm';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { LoadingState } from './loading/LoadingState';
 import { MorphingSquare } from './MorphingSquare';
 import { toast } from '@/hooks/use-toast';
@@ -54,6 +55,11 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
   const [assignAdminCollegeId, setAssignAdminCollegeId] = useState<string | null>(null);
   const [assignAdminCollegeName, setAssignAdminCollegeName] = useState('');
   const [showRemoveAdminConfirm, setShowRemoveAdminConfirm] = useState<string | null>(null);
+
+  useBodyScrollLock(
+    (showAssignAdminModal && !!assignAdminCollegeId) || !!showRemoveAdminConfirm || showMigrationModal ||
+    (showPermissionModal && !!selectedTeacher) || (showProfileModal && !!selectedTeacher) || (showPasswordModal && !!selectedTeacher)
+  );
 
   const [formData, setFormData] = useState({
     email: '',

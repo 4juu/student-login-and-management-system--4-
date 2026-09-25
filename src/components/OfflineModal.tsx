@@ -1,5 +1,6 @@
 import React from 'react';
 import { WifiOff } from 'lucide-react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 interface OfflineModalProps {
   open: boolean;
@@ -7,6 +8,7 @@ interface OfflineModalProps {
 }
 
 export const OfflineModal: React.FC<OfflineModalProps> = ({ open, onDismiss }) => {
+  useBodyScrollLock(open);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 animate-fadeIn">

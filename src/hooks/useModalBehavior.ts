@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useBodyScrollLock } from './useBodyScrollLock';
 
 interface ModalBehaviorOptions {
   open: boolean;
@@ -12,12 +13,7 @@ export function useModalBehavior({ open, onClose }: ModalBehaviorOptions) {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prevOverflow; };
-  }, [open]);
+  useBodyScrollLock(open);
 
   // 🎯 نقل التركيز إلى اللوحة عند الفتح + إعادته للمُنشئ عند الإغلاق
   useEffect(() => {

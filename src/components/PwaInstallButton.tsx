@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Download, Share, X } from 'lucide-react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -27,6 +28,7 @@ export const PwaInstallButton: React.FC = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(isStandalone);
   const [showGuide, setShowGuide] = useState(false);
+  useBodyScrollLock(showGuide);
 
   useEffect(() => {
     const onPrompt = (e: Event) => {

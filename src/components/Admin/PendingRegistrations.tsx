@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { ref, update, set, get } from 'firebase/database';
 import { database } from '../../firebase/config';
 import { Student } from '../../types/student';
@@ -40,6 +41,8 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
   const [purging, setPurging] = useState(false);
   const { confirm: confirmAction, ConfirmDialog: ConfirmDialogEl } = useConfirm();
   const loading = false;
+
+  useBodyScrollLock(true);
 
   const filteredRequests = useMemo(() => {
     return requests.filter(r => {

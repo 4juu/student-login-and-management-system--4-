@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface EngineOverlayProps {
   progress: { percent: number; detail: string };
@@ -14,6 +15,7 @@ const STEPS = [
 ] as const;
 
 export const EngineOverlay: React.FC<EngineOverlayProps> = ({ progress, error, onCancel, onRetry }) => {
+  useBodyScrollLock(true);
   const pct = Math.min(100, Math.max(0, Math.round(progress.percent)));
   const isError = !!error;
   const isDone = pct >= 100;

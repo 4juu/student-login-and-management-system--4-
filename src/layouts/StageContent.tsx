@@ -8,6 +8,7 @@ import { useAuthStore, selectCanEditStudents } from '../store/useAuthStore';
 import { StageTabs } from './StageTabs';
 import { TabFallback, StageLoading } from './Fallbacks';
 import { LoadingState } from '../components/loading/LoadingState';
+import { PageTransition } from '../components/PageTransition';
 
 // 🚀 تحميل متأخر للمكونات الثقيلة (تُحمَّل عند الحاجة فقط — خفض حجم الحزمة الأولية)
 const StudentManager = lazy(() =>
@@ -103,7 +104,7 @@ export const StageContent: FC<StageContentProps> = ({
       {!dataLoaded ? (
         <StageLoading />
       ) : (
-      <div key={`stage-tab-${activeTab}`} className="animate-pageEnter">
+      <PageTransition dep={`stage-tab-${activeTab}`}>
         {activeTab === 'sessions' && (
           <Suspense fallback={<TabFallback />}>
             <SessionManager
@@ -171,7 +172,7 @@ export const StageContent: FC<StageContentProps> = ({
             />
           </Suspense>
         )}
-      </div>
+      </PageTransition>
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { Student } from '../../types/student';
 import { useConfirm } from '../../hooks/useConfirm';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import {
   hasValidDescriptor,
   getGalleryHealthSummary,
@@ -85,6 +86,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
   const [transferGroupValue, setTransferGroupValue] = useState('');
 
   const [showFaceRegister, setShowFaceRegister] = useState(false);
+  useBodyScrollLock(showFaceRegister && !!onUpdateStudent);
   const [faceEnrollPreset, setFaceEnrollPreset] = useState<string[] | undefined>(undefined);
 
   const [searchQuery, setSearchQuery] = useState('');

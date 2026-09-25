@@ -5,6 +5,7 @@ import { User } from './types/user';
 import './design-system.css';
 
 import { OfflineModal } from './components/OfflineModal';
+import { PageTransition } from './components/PageTransition';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { usePeriodicSync } from './hooks/usePeriodicSync';
 import { Login } from './components/Login';
@@ -439,6 +440,7 @@ function App() {
         )}
 
         <main id="main-content">
+        <PageTransition dep={selectedStageId || 'stages'}>
         {!selectedStageId && (
           <div className="max-w-6xl mx-auto">
             <AdminTabBar
@@ -484,7 +486,7 @@ function App() {
               </div>
             )}
 
-            <div key={`tab-${activeTab}`} className="animate-pageEnter">
+            <PageTransition dep={`tab-${activeTab}`}>
               {!dataLoaded ? (
                 // أثناء التحميل الأولي: هيكل تحميل بدل الشاشة الفارغة/الصلاحيات المبكرة
                 <TabFallback />
@@ -534,7 +536,7 @@ function App() {
               )}
                 </>
               )}
-            </div>
+            </PageTransition>
           </div>
         )}
 
@@ -566,6 +568,7 @@ function App() {
           />
         )}
 
+        </PageTransition>
         </main>
 
         {/* ✨ Footer */}

@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalBehavior } from '../../hooks/useModalBehavior';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { Student, Stage, College } from '../../types/student';
 import { TelegramConfig } from '../../types/telegram';
 import {
@@ -200,6 +201,7 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
     onConfirm: () => void;
   } | null>(null);
 
+  useBodyScrollLock(true);
   const modalBehaviorRef = useModalBehavior({
     open: !!confirmState && !generatedLink,
     onClose: () => setConfirmState(null),

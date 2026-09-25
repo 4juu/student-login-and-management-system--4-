@@ -3,6 +3,7 @@ import { Student, AttendanceRecord, AttendanceSession } from '../types/student';
 import { User } from '../types/user';
 import { LoadingState } from './loading/LoadingState';
 import { Camera, Info, TriangleAlert, User as UserIcon } from 'lucide-react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 // 🚀 ماسح الحضور بالوجه يُحمَّل عند فتحه فقط (محرك الوجه ثقيل)
 const LazyFaceScanner = lazy(() =>
@@ -36,6 +37,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
   const [pressedKey, setPressedKey] = useState<string | null>(null);
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [showFaceAttendance, setShowFaceAttendance] = useState(false);
+  useBodyScrollLock(showFaceAttendance);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {

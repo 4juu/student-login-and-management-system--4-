@@ -975,23 +975,23 @@
 /* == انتقال أنيق لأزرار التبويب == */
 /* .tab-btn الكامل في design-system.css (مصدر واحد للتوأم) */
 
-/* == Page Transitions (fade + translateY) == */
+/* == Page Transitions (خروج ثم دخول — تتابع بلا قفزات) == */
 @keyframes pageEnter {
-  from { opacity: 0.6; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-pageEnter {
-  animation: pageEnter 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: pageEnter 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes pageExit {
-  from { opacity: 1; transform: translateY(0) scale(1); }
-  to { opacity: 0; transform: translateY(-20px) scale(0.97); }
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-8px); }
 }
 
 .animate-pageExit {
-  animation: pageExit 0.25s ease-in forwards;
+  animation: pageExit 0.18s cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 /* == تحسين انتقالات البطاقات == */

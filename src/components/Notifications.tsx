@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { createPortal } from 'react-dom';
 import { Bell, Send, Trash2, X } from 'lucide-react';
 import { AdminNotification, isNotificationRead } from '../types/notification';
@@ -79,12 +80,7 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
   };
 
   // Body scroll lock while panel open
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, [open]);
+  useBodyScrollLock(open);
 
   // Escape to close
   useEffect(() => {
