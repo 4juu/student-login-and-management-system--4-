@@ -79,7 +79,8 @@ export const createBulkRegistrationLinks = async (
   adminUid: string,
   stageId: string,
   students: Array<{ id: string; name?: string | undefined; code?: string | undefined; qrCodeId?: string | undefined }>,
-  expiryDays: number = DEFAULT_EXPIRY_DAYS
+  expiryDays: number = DEFAULT_EXPIRY_DAYS,
+  linkType: 'single' | 'namecheck' = 'single'
 ): Promise<Array<{ studentId: string; token: string; url: string }>> => {
   const results: Array<{ studentId: string; token: string; url: string }> = [];
   await syncServerTimeOffset();
@@ -98,7 +99,7 @@ export const createBulkRegistrationLinks = async (
       adminUid,
       stageId,
       studentId: st.id,
-      type: 'single',  // كل واحد رابطه خاص
+      type: linkType,  // 'single' (رفع هوية) أو 'namecheck' (كتابة الاسم)
       createdBy: adminUid,
       createdAt: new Date().toISOString(),
       expiresAt,

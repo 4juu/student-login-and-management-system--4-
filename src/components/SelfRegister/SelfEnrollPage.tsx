@@ -5,6 +5,7 @@ import { AttendanceRecord, AttendanceSession, Student } from '../../types/studen
 import { RegistrationLink } from '../../types/registration';
 import { getRegistrationLink, validateLink } from '../../services/tokenService';
 import { VerifyIdStep, type QrScanResult } from './VerifyIdStep';
+import { VerifyNameStep } from './VerifyNameStep';
 import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear } from '../../firebase/dataService';
 import { decompressRecord } from '../../firebase/dataServiceCompressed';
@@ -611,6 +612,8 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
     step === 'verify'
       ? link?.type === 'attendance'
         ? { title: 'رابط معرفة الحضور اليومي الخاص بالطلبة', subtitle: 'تحقق من هويتك عبر بطاقتك الجامعية لعرض تقريرك' }
+        : link?.type === 'namecheck'
+        ? { title: 'تسجيل بصمة الوجه — بصمة كود', subtitle: 'اكتب اسمك كما هو مسجّل ثم سجّل بصمتك الذاتية' }
         : { title: 'تسجيل بصمة الوجه ورمز QR code', subtitle: 'تحقق من هويتك عبر بطاقتك الجامعية ثم سجّل بصمتك الذاتية' }
       : step === 'confirm'
       ? { title: 'تأكيد هويتك', subtitle: `الطالب: ${expected?.name || ''}` }
@@ -662,13 +665,21 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
 
           {step === 'verify' && (
             <div className="mt-6">
-              <VerifyIdStep
-                roster={link?.type === 'attendance' ? stageStudents : []}
-                expected={link?.type === 'attendance' ? undefined : expected}
-                linkType={link?.type}
-                onVerified={handleVerified}
-                onCancel={() => { setErrorMsg(''); transitionTo('verify'); }}
-              />
+              {link?.type === 'namecheck' ? (
+                <VerifyNameStep
+                  expected={expected}
+                  onVerified={handleVerified}
+                  onCancel={() => { setErrorMsg(''); transitionTo('verify'); }}
+                />
+              ) : (
+                <VerifyIdStep
+                  roster={link?.type === 'attendance' ? stageStudents : []}
+                  expected={link?.type === 'attendance' ? undefined : expected}
+                  linkType={link?.type}
+                  onVerified={handleVerified}
+                  onCancel={() => { setErrorMsg(''); transitionTo('verify'); }}
+                />
+              )}
             </div>
           )}
 

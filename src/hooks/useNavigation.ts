@@ -11,6 +11,8 @@ function useNavigation(currentUser: User | null) {
   const setActiveTab = useNavStore((s) => s.setActiveTab);
   const showSendLink = useNavStore((s) => s.showSendLink);
   const setShowSendLink = useNavStore((s) => s.setShowSendLink);
+  const showSendCodeLink = useNavStore((s) => s.showSendCodeLink);
+  const setShowSendCodeLink = useNavStore((s) => s.setShowSendCodeLink);
   const showTestLink = useNavStore((s) => s.showTestLink);
   const setShowTestLink = useNavStore((s) => s.setShowTestLink);
   const showAttendanceLink = useNavStore((s) => s.showAttendanceLink);
@@ -56,6 +58,8 @@ function useNavigation(currentUser: User | null) {
     setActiveTab,
     showSendLink,
     setShowSendLink,
+    showSendCodeLink,
+    setShowSendCodeLink,
     showTestLink,
     setShowTestLink,
     showAttendanceLink,

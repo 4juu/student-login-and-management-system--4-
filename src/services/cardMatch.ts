@@ -220,3 +220,18 @@ export function rankByNameInput(typed: string, roster: Student[]): StudentMatch[
     .sort((a, b) => b.score - a.score)
     .slice(0, 6);
 }
+
+/**
+ * التحقق من اسم مكتوب يدوياً ضد اسم صاحب الرابط — روابط «بصمة كود»
+ * الاسم المكتوب يجب أن يطابق (بعتبة MATCH_THRESHOLD) اسم الطالب المضمّن في الرابط
+ */
+export function matchesExpectedName(
+  typed: string,
+  expectedName: string | null | undefined,
+): { matched: boolean; score: number } {
+  if (!typed || !typed.trim() || !expectedName || !expectedName.trim()) {
+    return { matched: false, score: 0 };
+  }
+  const score = nameSimilarity(typed.trim(), expectedName.trim());
+  return { matched: score >= MATCH_THRESHOLD, score };
+}

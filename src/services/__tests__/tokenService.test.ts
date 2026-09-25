@@ -32,13 +32,14 @@ import {
   validateTestLink,
   validateLink,
   createTestLink,
+  createBulkRegistrationLinks,
   getTestLink,
   getServerNow,
   syncServerTimeOffset,
   DEFAULT_TEST_LINK_MS,
   type TestLinkData,
 } from '../tokenService';
-import { get, set } from 'firebase/database';
+import { get, set, update } from 'firebase/database';
 import { RegistrationLink } from '../../types/registration';
 
 describe('formatRemainingMs', () => {
@@ -228,5 +229,52 @@ describe('getServerNow / syncServerTimeOffset', () => {
   it('syncServerTimeOffset does not throw when Firebase fails', async () => {
     vi.mocked(get).mockRejectedValueOnce(new Error('offline'));
     await expect(syncServerTimeOffset()).resolves.toBeUndefined();
+  });
+});
+
+describe('createBulkRegistrationLinks — single vs namecheck', () => {
+  const students = [{ id: 's1', name: 'أحمد علي حسن', code: 'C1' }];
+
+  const lastUpdatedLink = (): RegistrationLink => {
+    const calls = vi.mocked(update).mock.calls;
+    const updates = calls[calls.length - 1]![1] as Record<string, RegistrationLink>;
+    const keys = Object.keys(updates);
+    expect(keys).toHaveLength(1);
+    return updates[keys[0]!]!;
+  };
+
+  beforeEach(() => {
+    vi.mocked(update).mockClear();
+  });
+
+  it('defaults to type single with register URL', async () => {
+    const res = await createBulkRegistrationLinks('adm1', 'stg1', students);
+    expect(res).toHaveLength(1);
+    expect(res[0]!.token).toBe('TESTTOKEN1234567890');
+    expect(res[0]!.url).toContain('/register.html?reg=TESTTOKEN1234567890');
+    const link = lastUpdatedLink();
+    expect(link.type).toBe('single');
+    expect(link.studentName).toBe('أحمد علي حسن');
+    expect(link.studentCode).toBe('C1');
+  });
+
+  it('writes type namecheck when requested', async () => {
+    const res = await createBulkRegistrationLinks('adm1', 'stg1', students, 7, 'namecheck');
+    expect(res).toHaveLength(1);
+    expect(lastUpdatedLink().type).toBe('namecheck');
+  });
+
+  it('validateLink accepts an unused non-expired namecheck link', () => {
+    const link = {
+      token: 't',
+      adminUid: 'a',
+      stageId: 's',
+      type: 'namecheck',
+      createdBy: 'a',
+      createdAt: new Date().toISOString(),
+      expiresAt: Date.now() + 60_000,
+      used: false,
+    } as RegistrationLink;
+    expect(validateLink(link).valid).toBe(true);
   });
 });

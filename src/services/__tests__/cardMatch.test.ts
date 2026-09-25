@@ -7,6 +7,7 @@ import {
   rankStudents,
   rankByNameInput,
   tripleNameMatch,
+  matchesExpectedName,
   MATCH_THRESHOLD,
 } from '../cardMatch';
 
@@ -147,6 +148,33 @@ describe('rankByNameInput', () => {
     const results = rankByNameInput('أحمد علي حسن', roster);
     expect(results[0]!.student.name).toBe('أحمد علي حسن');
     expect(results[0]!.score).toBe(100);
+  });
+});
+
+describe('matchesExpectedName — روابط بصمة كود', () => {
+  const expectedName = 'مجتبى هيثم محمد محسن';
+
+  it('returns {matched:false, score:0} for empty typed or missing expected name', () => {
+    expect(matchesExpectedName('', expectedName)).toEqual({ matched: false, score: 0 });
+    expect(matchesExpectedName('   ', expectedName)).toEqual({ matched: false, score: 0 });
+    expect(matchesExpectedName('مجتبى', null)).toEqual({ matched: false, score: 0 });
+    expect(matchesExpectedName('مجتبى', undefined)).toEqual({ matched: false, score: 0 });
+  });
+
+  it('matches exact name (trims whitespace)', () => {
+    const r = matchesExpectedName('  مجتبى هيثم محمد محسن  ', expectedName);
+    expect(r.matched).toBe(true);
+    expect(r.score).toBe(100);
+  });
+
+  it('matches hamza/alef variations', () => {
+    expect(matchesExpectedName('احمد علي', 'أحمد علي').matched).toBe(true);
+  });
+
+  it('rejects a completely different name', () => {
+    const r = matchesExpectedName('خالد سعد كريم', expectedName);
+    expect(r.matched).toBe(false);
+    expect(r.score).toBeLessThan(MATCH_THRESHOLD);
   });
 });
 

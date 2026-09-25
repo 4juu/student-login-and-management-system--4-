@@ -166,6 +166,7 @@ function App() {
   const {
     activeTab, setActiveTab,
     showSendLink, setShowSendLink,
+    showSendCodeLink, setShowSendCodeLink,
     showTestLink, setShowTestLink,
     showAttendanceLink, setShowAttendanceLink,
     showPendingRegistrations, setShowPendingRegistrations,
@@ -447,6 +448,7 @@ function App() {
               pendingCount={pendingCount}
               onTabChange={setActiveTab}
               onOpenSendLink={() => setShowSendLink(true)}
+              onOpenCodeLink={() => setShowSendCodeLink(true)}
               onOpenTestLink={() => setShowTestLink(true)}
               onOpenPending={() => setShowPendingRegistrations(true)}
             />
@@ -595,6 +597,19 @@ function App() {
             stages={stages}
             loadStudents={async (stageId: string) => loadStudentsForStage(getAdminUid(), stageId)}
             onClose={() => setShowSendLink(false)}
+          />
+        </Suspense>
+      )}
+
+      {showSendCodeLink && currentUser && isMainAdmin && (
+        <Suspense fallback={<ModalFallback />}>
+          <SendEnrollLink
+            mode="name"
+            adminUid={currentUser.uid}
+            colleges={colleges}
+            stages={stages}
+            loadStudents={async (stageId: string) => loadStudentsForStage(getAdminUid(), stageId)}
+            onClose={() => setShowSendCodeLink(false)}
           />
         </Suspense>
       )}

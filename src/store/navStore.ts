@@ -15,6 +15,7 @@ export type Tab =
 interface NavState {
   activeTab: Tab;
   showSendLink: boolean;
+  showSendCodeLink: boolean;
   showTestLink: boolean;
   showAttendanceLink: boolean;
   showPendingRegistrations: boolean;
@@ -23,6 +24,7 @@ interface NavState {
   pendingRequests: PendingRegistration[];
   setActiveTab: (tab: Tab) => void;
   setShowSendLink: (open: boolean) => void;
+  setShowSendCodeLink: (open: boolean) => void;
   setShowTestLink: (open: boolean) => void;
   setShowAttendanceLink: (open: boolean) => void;
   setShowPendingRegistrations: (open: boolean) => void;
@@ -34,6 +36,7 @@ interface NavState {
 export const useNavStore = create<NavState>((set, get) => ({
   activeTab: 'stage-selector',
   showSendLink: false,
+  showSendCodeLink: false,
   showTestLink: false,
   showAttendanceLink: false,
   showPendingRegistrations: false,
@@ -48,6 +51,7 @@ export const useNavStore = create<NavState>((set, get) => ({
     }
   },
   setShowSendLink: (showSendLink) => set({ showSendLink }),
+  setShowSendCodeLink: (showSendCodeLink) => set({ showSendCodeLink }),
   setShowTestLink: (showTestLink) => set({ showTestLink }),
   setShowAttendanceLink: (showAttendanceLink) => set({ showAttendanceLink }),
   setShowPendingRegistrations: (showPendingRegistrations) => set({ showPendingRegistrations }),
@@ -57,6 +61,7 @@ export const useNavStore = create<NavState>((set, get) => ({
     set({
       activeTab: 'stage-selector',
       showSendLink: false,
+      showSendCodeLink: false,
       showTestLink: false,
       showAttendanceLink: false,
       showPendingRegistrations: false,

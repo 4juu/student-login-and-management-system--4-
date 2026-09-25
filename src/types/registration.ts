@@ -1,4 +1,4 @@
-export type RegistrationLinkType = 'single' | 'bulk' | 'attendance' | 'test';
+export type RegistrationLinkType = 'single' | 'bulk' | 'attendance' | 'test' | 'namecheck';
 
 export interface RegistrationLink {
   token: string;

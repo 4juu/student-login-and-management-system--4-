@@ -18,6 +18,8 @@ interface SendEnrollLinkProps {
   stages: Stage[];
   loadStudents: (stageId: string) => Promise<Student[]>;
   onClose: () => void;
+  /** 'id' (افتراضي): رفع صورة الهوية · 'name': رابط بصمة كود — الطالب يكتب اسمه */
+  mode?: 'id' | 'name' | undefined;
 }
 
 interface StudentLinkRow {
@@ -26,7 +28,8 @@ interface StudentLinkRow {
   copied: boolean;
 }
 
-const FILE_PREFIX = 'enroll_links';
+const FILE_PREFIX_ID = 'enroll_links';
+const FILE_PREFIX_NAME = 'namecode_links';
 
 const getFormattedDate = () => {
   const now = new Date();
@@ -36,21 +39,21 @@ const getFormattedDate = () => {
   };
 };
 
-const getFileName = (collegeName: string, stageName: string): string => {
+const getFileName = (collegeName: string, stageName: string, prefix: string): string => {
   const { timestamp } = getFormattedDate();
   const cleanCollege = collegeName.replace(/[^\u0600-\u06FFa-zA-Z0-9]/g, '_');
   const cleanStage = stageName.replace(/[^\u0600-\u06FFa-zA-Z0-9]/g, '_');
-  return `${FILE_PREFIX}_${cleanCollege}_${cleanStage}_${timestamp}.xlsx`;
+  return `${prefix}_${cleanCollege}_${cleanStage}_${timestamp}.xlsx`;
 };
 
 const generateStudentExcel = async (
   rows: StudentLinkRow[],
-  meta: { collegeName: string; stageName: string; expiryDays: number; date: string },
+  meta: { collegeName: string; stageName: string; expiryDays: number; date: string; mode: 'id' | 'name' },
 ): Promise<Blob> => {
   const XLSX = await import('xlsx-js-style');
 
   const data: any[][] = [];
-  data.push(['روابط تسجيل بصمة الوجه للطلاب', '', '', '']);
+  data.push([meta.mode === 'name' ? 'روابط بصمة كود للطلاب (كتابة الاسم)' : 'روابط تسجيل بصمة الوجه للطلاب', '', '', '']);
   data.push(['', '', '', '']);
   data.push(['الكلية', 'المرحلة', 'صلاحية الرابط', '']);
   data.push([meta.collegeName, meta.stageName, `${meta.expiryDays} يوم`, '']);
@@ -109,18 +112,27 @@ const generateStudentExcel = async (
   return new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 };
 
-const buildShareText = (rows: StudentLinkRow[], meta: { collegeName: string; stageName: string }): string => {
-  let text = `🔐 روابط تسجيل بصمة الوجه\n\nالكلية: ${meta.collegeName}\nالمرحلة: ${meta.stageName}\nعدد الطلاب: ${rows.length}\n\n`;
+const buildShareText = (
+  rows: StudentLinkRow[],
+  meta: { collegeName: string; stageName: string },
+  mode: 'id' | 'name',
+): string => {
+  let text = mode === 'name'
+    ? `🔐 روابط بصمة كود\n\nالكلية: ${meta.collegeName}\nالمرحلة: ${meta.stageName}\nعدد الطلاب: ${rows.length}\n\n`
+    : `🔐 روابط تسجيل بصمة الوجه\n\nالكلية: ${meta.collegeName}\nالمرحلة: ${meta.stageName}\nعدد الطلاب: ${rows.length}\n\n`;
   rows.forEach((r, i) => {
     text += `${i + 1}. ${r.student.name}${r.student.code ? ` (${r.student.code})` : ''}\n${r.url}\n\n`;
   });
-  text += `لكل طالب رابطه الخاص — يفتحه ويرفع صورة هويته ويسجل بصمة وجهه.`;
+  text += mode === 'name'
+    ? 'لكل طالب رابطه الخاص — يفتحه ويكتب اسمه، وإذا طابق مع سجله يسجّل بصمة وجهه.'
+    : 'لكل طالب رابطه الخاص — يفتحه ويرفع صورة هويته ويسجل بصمة وجهه.';
   return text;
 };
 
 export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
-  adminUid, colleges, stages, loadStudents, onClose,
+  adminUid, colleges, stages, loadStudents, onClose, mode = 'id',
 }) => {
+  const isNameMode = mode === 'name';
   const [selectedCollegeId, setSelectedCollegeId] = useState('');
   const [selectedStageId, setSelectedStageId] = useState('');
 
@@ -203,6 +215,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
         selectedStageId,
         chosen.map(s => ({ id: s.id, name: s.name, code: s.code, qrCodeId: s.qrCodeId })),
         expiryDays,
+        isNameMode ? 'namecheck' : 'single',
       );
       const byId = new Map(results.map(r => [r.studentId, r.url]));
       const rows: StudentLinkRow[] = chosen
@@ -232,11 +245,12 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
       stageName: selectedStage?.name || 'غير محدد',
       expiryDays,
       date: getFormattedDate().date,
+      mode,
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = getFileName(selectedCollege?.name || 'كل', selectedStage?.name || 'الكل');
+    a.download = getFileName(selectedCollege?.name || 'كل', selectedStage?.name || 'الكل', isNameMode ? FILE_PREFIX_NAME : FILE_PREFIX_ID);
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
@@ -246,7 +260,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
     const text = encodeURIComponent(buildShareText(resultRows, {
       collegeName: selectedCollege?.name || 'غير محدد',
       stageName: selectedStage?.name || 'غير محدد',
-    }));
+    }, mode));
     const a = document.createElement('a');
     a.href = `https://wa.me/?text=${text}`;
     a.target = '_blank'; a.rel = 'noopener noreferrer';
@@ -258,7 +272,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
     const text = buildShareText(resultRows, {
       collegeName: selectedCollege?.name || 'غير محدد',
       stageName: selectedStage?.name || 'غير محدد',
-    });
+    }, mode);
     try {
       await navigator.clipboard.writeText(text);
       toast({ title: `تم نسخ ${resultRows.length} رابطاً مع الأسماء` });
@@ -273,7 +287,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <h2 id="enroll-links-result-title" className="text-xl font-bold text-white flex items-center gap-2">
-                  <UserCheck className="w-5 h-5 text-violet-400" /> تم توليد {resultRows.length} رابط بصمة
+                  <UserCheck className="w-5 h-5 text-violet-400" /> تم توليد {resultRows.length} {isNameMode ? 'رابط بصمة كود' : 'رابط بصمة'}
                 </h2>
                 <p className="text-sm text-slate-400 mt-1">
                   <strong className="text-violet-300">{selectedStage?.name}</strong> • {selectedCollege?.name}
@@ -339,9 +353,13 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
           <div className="flex items-center justify-between">
             <div>
               <h2 id="send-enroll-links-title" className="text-xl font-bold text-white flex items-center gap-2">
-                <ScanFace className="w-5 h-5 text-purple-400" /> إرسال روابط تسجيل بصمة الوجه
+                <ScanFace className="w-5 h-5 text-purple-400" /> {isNameMode ? 'إرسال رابط بصمة كود' : 'إرسال روابط تسجيل بصمة الوجه'}
               </h2>
-              <p className="text-sm text-slate-400 mt-1">اختر الكلية والمرحلة ثم حدد الطلاب لإنشاء رابط خاص لكل طالب</p>
+              <p className="text-sm text-slate-400 mt-1">
+                {isNameMode
+                  ? 'اختر الكلية والمرحلة ثم حدد الطلاب — كل طالب يفتح رابطه ويكتب اسمه بدل رفع الهوية'
+                  : 'اختر الكلية والمرحلة ثم حدد الطلاب لإنشاء رابط خاص لكل طالب'}
+              </p>
             </div>
             <button onClick={onClose} aria-label="إغلاق" className="bg-red-500/20 hover:bg-red-500/30 text-red-300 w-10 h-10 rounded-full font-bold text-lg transition-all hover:scale-110">✕</button>
           </div>
@@ -431,7 +449,9 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
               )}
 
               <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2 text-sm text-emerald-300">
-                تم تحديد <strong>{selectedIds.size}</strong> طالب — سيُولَّد رابط خاص بكل طالب يحمل اسمه وكوده، ولا يعمل إلا له.
+                {isNameMode
+                  ? <>تم تحديد <strong>{selectedIds.size}</strong> طالب — سيُولَّد رابط خاص بكل طالب، يفتحه ويكتب اسمه ويُطابق مع سجله قبل تسجيل البصمة.</>
+                  : <>تم تحديد <strong>{selectedIds.size}</strong> طالب — سيُولَّد رابط خاص بكل طالب يحمل اسمه وكوده، ولا يعمل إلا له.</>}
               </div>
             </div>
           )}
