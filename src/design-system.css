@@ -439,20 +439,23 @@
   animation: modalDown 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
-@keyframes chatSheetOpen {
-  from { opacity: 0; transform: translate(48px, 56px) scale(0.96); }
-  to { opacity: 1; transform: translate(0, 0) scale(1); }
+/* ورقة الشات — تظهر بانبساط ناعم من زر الماسنجر (الزاوية السفلية اليمنى) */
+@keyframes chatOpen {
+  from { opacity: 0; transform: translateY(24px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
-.animate-chatSheetOpen {
-  animation: chatSheetOpen 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+.animate-chatOpen {
+  transform-origin: bottom right;
+  animation: chatOpen 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-@keyframes chatSheetClose {
-  from { opacity: 1; transform: translate(0, 0) scale(1); }
-  to { opacity: 0; transform: translate(48px, 56px) scale(0.96); }
+@keyframes chatClose {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(16px) scale(0.92); }
 }
-.animate-chatSheetClose {
-  animation: chatSheetClose 0.45s cubic-bezier(0.4, 0, 0.2, 1) both;
+.animate-chatClose {
+  transform-origin: bottom right;
+  animation: chatClose 0.28s cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 @keyframes fadePulse {

@@ -15,6 +15,7 @@ import { ArrowLeft, BookOpen, CircleCheck, Crown, GraduationCap, KeyRound, Landm
 import { useConfirm } from '../hooks/useConfirm';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { LoadingState } from './loading/LoadingState';
+import { PageTransition } from './PageTransition';
 import { MorphingSquare } from './MorphingSquare';
 import { toast } from '@/hooks/use-toast';
 
@@ -742,7 +743,8 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
     : '';
 
   return (
-    <div className="glass-card rounded-xl p-6 animate-cardEnter">
+    <div className="glass-card rounded-xl p-6">
+      <PageTransition dep={`college-${selectedCollegeId}`}>
       <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
           {isMainAdmin && (
@@ -954,6 +956,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
           </tbody>
         </table>
       </div>
+      </PageTransition>
 
       {showPermissionModal && selectedTeacher && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
