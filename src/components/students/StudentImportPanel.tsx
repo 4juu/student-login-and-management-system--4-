@@ -1,5 +1,5 @@
-import React from 'react';
-import { FolderOpen, Hash, IdCard, Lightbulb, QrCode, SquarePen, Upload, Users } from 'lucide-react';
+import React, { useState } from 'react';
+import { FolderOpen, Hash, IdCard, Lightbulb, QrCode, SquarePen, Upload, Users, Edit2 } from 'lucide-react';
 import { MorphingSquare } from '../MorphingSquare';
 
 interface StudentImportPanelProps {
@@ -19,6 +19,28 @@ export const StudentImportPanel: React.FC<StudentImportPanelProps> = ({
   onPrefixSelect,
   onFileChange,
 }) => {
+  const [customPrefix, setCustomPrefix] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+
+  const handleCustomPrefixSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const val = parseInt(customPrefix.trim(), 10);
+    if (!isNaN(val) && val >= 1 && val <= 9) {
+      onPrefixSelect(val);
+      setCustomPrefix('');
+      setShowCustomInput(false);
+    }
+  };
+
+  const handleCustomPrefixBlur = () => {
+    const val = parseInt(customPrefix.trim(), 10);
+    if (!isNaN(val) && val >= 1 && val <= 9) {
+      onPrefixSelect(val);
+    }
+    setCustomPrefix('');
+    setShowCustomInput(false);
+  };
+
   return (
     <div className="mb-6 p-5 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border-2 border-blue-500/30 rounded-lg">
       <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
@@ -40,11 +62,11 @@ export const StudentImportPanel: React.FC<StudentImportPanelProps> = ({
       <div className="mb-4">
         <label className="block text-sm font-medium text-slate-300 mb-2">اختر بادئة الكود:</label>
         <div className="flex flex-wrap gap-2">
-          {[1, 2, 3, 4, 5].map((num) => (
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
             <button
               key={num}
               type="button"
-              onClick={() => onPrefixSelect(num)}
+              onClick={() => { onPrefixSelect(num); setShowCustomInput(false); }}
               className={`w-14 h-14 rounded-lg font-bold text-lg transition duration-200 ${
                 selectedPrefix === num
                   ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg scale-110'
@@ -54,7 +76,35 @@ export const StudentImportPanel: React.FC<StudentImportPanelProps> = ({
               {num}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => setShowCustomInput(true)}
+            className="w-14 h-14 rounded-lg border-2 border-dashed border-slate-500 text-slate-400 hover:border-blue-400 hover:text-blue-300 transition flex items-center justify-center"
+            title="بادئة مخصصة"
+          >
+            <Edit2 className="w-5 h-5" />
+          </button>
         </div>
+        
+        {showCustomInput && (
+          <form onSubmit={handleCustomPrefixSubmit} className="mt-3 flex items-center gap-2">
+            <input
+              type="text"
+              value={customPrefix}
+              onChange={e => setCustomPrefix(e.target.value)}
+              onBlur={handleCustomPrefixBlur}
+              onKeyDown={e => e.key === 'Enter' && handleCustomPrefixSubmit(e as any)}
+              autoFocus
+              className="w-24 px-3 py-2 bg-slate-800 border-2 border-slate-600 rounded-lg text-white text-center font-mono text-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="1-9"
+              maxLength={1}
+              inputMode="numeric"
+            />
+            <span className="text-xs text-slate-500">(1-9)</span>
+            <button type="submit" className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition">تطبيق</button>
+          </form>
+        )}
+
         <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
           <Hash className="w-3.5 h-3.5" /> الأكواد ستبدأ من: <strong>{selectedPrefix}001</strong>
         </p>

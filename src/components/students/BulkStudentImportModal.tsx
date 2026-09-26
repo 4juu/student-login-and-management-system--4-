@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Users, X, CheckCircle, AlertCircle, Loader2, ChevronDown } from 'lucide-react';
+import { Users, X, CheckCircle, AlertCircle, Loader2, ChevronDown, Hash, Edit2 } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 const GROUPS = [
@@ -35,6 +35,11 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [parsedPreview, setParsedPreview] = useState<ParsedStudent[]>([]);
   const [showGroupDropdown, setShowGroupDropdown] = useState(false);
+  const [localPrefix, setLocalPrefix] = useState(selectedPrefix);
+  const [showCustomPrefix, setShowCustomPrefix] = useState(false);
+  const [customPrefixVal, setCustomPrefixVal] = useState('');
+
+  useEffect(() => { setLocalPrefix(selectedPrefix); }, [selectedPrefix]);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -60,7 +65,7 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
     const lines = input.trim().split('\n');
     const existingCodes = new Set(existingStudents.map(s => s.code));
     const existingNames = new Set(existingStudents.map(s => s.name));
-    let currentCode = selectedPrefix * 1000 + 1;
+    let currentCode = localPrefix * 1000 + 1;
     const results: ParsedStudent[] = [];
 
     for (const line of lines) {
@@ -99,7 +104,7 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
     } else {
       setParsedPreview([]);
     }
-  }, [textInput, selectedGroup, selectedPrefix, existingStudents]);
+  }, [textInput, selectedGroup, localPrefix, existingStudents]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -216,6 +221,54 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="mb-5">
+            <label className="block text-sm font-medium text-slate-300 mb-2 flex items-center gap-1.5">
+              <Hash className="w-4 h-4 text-blue-400" /> بادئة الكود <span className="text-red-400">*</span>
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => { setLocalPrefix(num); setShowCustomPrefix(false); }}
+                  className={`w-12 h-12 rounded-lg font-bold text-sm transition duration-200 ${
+                    localPrefix === num
+                      ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg scale-110'
+                      : 'bg-white/10 text-slate-200 border-2 border-slate-600 hover:border-blue-400'
+                  }`}
+                >
+                  {num}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => { setShowCustomPrefix(v => !v); }}
+                className={`w-12 h-12 rounded-lg font-bold text-xs border-2 transition ${showCustomPrefix ? 'border-blue-400 bg-blue-500/20 text-blue-300' : 'border-dashed border-slate-500 text-slate-400 hover:border-blue-400'}`}
+                title="بادئة مخصصة"
+              >
+                <Edit2 className="w-4 h-4 mx-auto" />
+              </button>
+            </div>
+            {showCustomPrefix && (
+              <div className="mt-3 flex items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={9}
+                  value={customPrefixVal}
+                  onChange={e => setCustomPrefixVal(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const v = parseInt(customPrefixVal, 10); if (!isNaN(v) && v >= 1 && v <= 9) { setLocalPrefix(v); setShowCustomPrefix(false); setCustomPrefixVal(''); } } }}
+                  placeholder="رقم 1-9"
+                  className="w-28 px-3 py-2 bg-slate-800 border-2 border-slate-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <button type="button" onClick={() => { const v = parseInt(customPrefixVal, 10); if (!isNaN(v) && v >= 1 && v <= 9) { setLocalPrefix(v); setShowCustomPrefix(false); setCustomPrefixVal(''); } }} className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition">تطبيق</button>
+              </div>
+            )}
+            <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
+              <Hash className="w-3.5 h-3.5" /> الأكواد ستبدأ من: <strong>{localPrefix}001</strong>
+            </p>
           </div>
 
           <div className="mb-5">
