@@ -147,11 +147,16 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         await set(ref(database, `${descriptorsPath}/${req.studentId}`), finalDescriptor);
       }
 
-      // ── 4) Update pending request status
-      await update(ref(database, `registrationSystem/pending/${adminUid}/${req.id}`), {
-        status: 'approved',
-        reviewedAt: new Date().toISOString(),
-        reviewedBy: adminUid,
+      // ── 4) Update pending request status + إزالة قيد فهرس البصمة المعلقة
+      await update(ref(database), {
+        [`registrationSystem/pending/${adminUid}/${req.id}`]: {
+          status: 'approved',
+          reviewedAt: new Date().toISOString(),
+          reviewedBy: adminUid,
+        },
+        ...(req.stageId
+          ? { [`registrationSystem/pendingFaceIndex/${adminUid}/${req.stageId}/${req.id}`]: null }
+          : {}),
       });
 
       // ── 5) تعليم الرابط المخصص لطالب واحد «مستخدماً» بعد الموافقة فقط
@@ -171,11 +176,16 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
     setProcessing(req.id);
 
     try {
-      await update(ref(database, `registrationSystem/pending/${adminUid}/${req.id}`), {
-        status: 'rejected',
-        rejectionReason: reason || 'بدون سبب محدد',
-        reviewedAt: new Date().toISOString(),
-        reviewedBy: adminUid,
+      await update(ref(database), {
+        [`registrationSystem/pending/${adminUid}/${req.id}`]: {
+          status: 'rejected',
+          rejectionReason: reason || 'بدون سبب محدد',
+          reviewedAt: new Date().toISOString(),
+          reviewedBy: adminUid,
+        },
+        ...(req.stageId
+          ? { [`registrationSystem/pendingFaceIndex/${adminUid}/${req.stageId}/${req.id}`]: null }
+          : {}),
       });
 
       setRejectingId(null);
@@ -190,7 +200,12 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
 
   const handleDelete = async (req: PendingRegistration) => {
     try {
-      await set(ref(database, `registrationSystem/pending/${adminUid}/${req.id}`), null);
+      await update(ref(database), {
+        [`registrationSystem/pending/${adminUid}/${req.id}`]: null,
+        ...(req.stageId
+          ? { [`registrationSystem/pendingFaceIndex/${adminUid}/${req.stageId}/${req.id}`]: null }
+          : {}),
+      });
     } catch (e) {
       console.error(e);
       toast({ variant: 'destructive', title: 'فشل الحذف' });
@@ -216,6 +231,9 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       const updates: { [key: string]: null } = {};
       for (const r of corrupt) {
         updates[`registrationSystem/pending/${adminUid}/${r.id}`] = null;
+        if (r.stageId) {
+          updates[`registrationSystem/pendingFaceIndex/${adminUid}/${r.stageId}/${r.id}`] = null;
+        }
       }
       await update(ref(database), updates);
       toast({ title: `تم حذف ${corrupt.length} طلباً تالفاً.` });

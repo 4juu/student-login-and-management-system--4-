@@ -301,6 +301,50 @@ export function checkForTampering<T extends MatchCandidate & { name: string; fac
   return { tampered: false };
 }
 
+/** الشكل الأدنى لقيد في فهرس البصمات المعلقة pendingFaceIndex */
+export interface PendingFaceRecord {
+  requestId?: string;
+  studentId?: string;
+  name?: string;
+  stageId?: string;
+  status?: string;
+  createdAt?: string;
+  faceDescriptor?: unknown;
+}
+
+export interface PendingConflictResult {
+  conflict: boolean;
+  matchedWith?: string | undefined;
+}
+
+/**
+ * فحص بصمة جديدة ضد الطلبات المعلقة — يمنع رفع بصمة لطالب آخر قبل وصول الطلب للأدمن.
+ * تُتجاهل: طلبات نفس الطالب (إعادة المحاولة)، وطلبات المرحلة الأخرى، وما لم يعد pending.
+ */
+export function checkPendingConflict(
+  samples: Float32Array[],
+  pendings: Record<string, PendingFaceRecord | null | undefined> | null | undefined,
+  opts: { selfId: string; stageId: string },
+): PendingConflictResult {
+  if (!pendings || typeof pendings !== 'object') return { conflict: false };
+
+  const candidates: Array<{ id: string; name: string; faceDescriptor?: unknown }> = [];
+  for (const rec of Object.values(pendings)) {
+    if (!rec || typeof rec !== 'object') continue;
+    if (rec.status !== 'pending') continue;
+    if (rec.stageId !== opts.stageId) continue;
+    if (!rec.studentId || rec.studentId === opts.selfId) continue;
+    candidates.push({ id: rec.studentId, name: rec.name || rec.studentId, faceDescriptor: rec.faceDescriptor });
+  }
+  if (candidates.length === 0) return { conflict: false };
+
+  for (const sample of samples) {
+    const r = checkForTampering(sample, candidates, opts.selfId);
+    if (r.tampered) return { conflict: true, matchedWith: r.matchedWith };
+  }
+  return { conflict: false };
+}
+
 export function findSuspiciousPairs<T extends MatchCandidate & { name: string; faceDescriptor?: unknown }>(
   students: T[],
 ): Array<{ a: string; b: string; distance: number }> {

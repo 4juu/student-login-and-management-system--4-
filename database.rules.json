@@ -88,6 +88,23 @@
             ".validate": "!newData.exists() || auth != null || (newData.hasChildren(['status', 'createdAt', 'studentId']) && newData.child('status').val() === 'pending')"
           }
         }
+      },
+
+      // ══════════════════════════════════════════════════════
+      // 📇 فهرس البصمات المعلقة — يمنع رفع بصمة لطالب آخر قبل وصول الطلب للأدمن
+      //    قراءة مفتوحة لكن مقيّدة بمرحلة واحدة (الطالب بلا دخول يقرأ مرحلته فقط)
+      //    الكتابة: إنشاء الزائر مع تحقّق من الشكل، والحذف عند قرار الأدمن
+      // ══════════════════════════════════════════════════════
+      "pendingFaceIndex": {
+        "$adminUid": {
+          "$stageId": {
+            ".read": true,
+            "$requestId": {
+              ".write": "(!data.exists() && newData.exists()) || auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')",
+              ".validate": "!newData.exists() || newData.hasChildren(['requestId', 'studentId', 'name', 'stageId', 'faceDescriptor', 'createdAt'])"
+            }
+          }
+        }
       }
     },
 

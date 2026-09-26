@@ -20,12 +20,14 @@ import {
   descriptorDistance,
   findBestMatch,
   checkForTampering,
+  checkPendingConflict,
   updateGallery,
   getCoveragePercent,
   getMissingBins,
   getGalleryHealthSummary,
   pruneStaleClusters,
   type FaceGalleryDescriptor,
+  type PendingFaceRecord,
 } from '../descriptors';
 
 function makeVec(seed: number, dim = DESC_DIM): Float32Array {
@@ -455,5 +457,63 @@ describe('pruneStaleClusters', () => {
     }];
     const r = pruneStaleClusters(g);
     expect(r.clusters.length).toBe(1);
+  });
+});
+
+describe('checkPendingConflict', () => {
+  const stageId = 'stage-1';
+  const sample = makeVec(10);
+
+  const pendingOf = (over: Partial<PendingFaceRecord> = {}): Record<string, PendingFaceRecord> => ({
+    r1: {
+      requestId: 'r1',
+      studentId: 'other-student',
+      name: 'علي حسن',
+      stageId,
+      status: 'pending',
+      faceDescriptor: { version: 5, enrollment: [vecToArr(makeVec(10))], clusters: [] },
+      createdAt: new Date().toISOString(),
+      ...over,
+    },
+  });
+
+  it('no conflict when there are no pendings', () => {
+    expect(checkPendingConflict([sample], null, { selfId: 'me', stageId }).conflict).toBe(false);
+    expect(checkPendingConflict([sample], undefined, { selfId: 'me', stageId }).conflict).toBe(false);
+    expect(checkPendingConflict([sample], {}, { selfId: 'me', stageId }).conflict).toBe(false);
+  });
+
+  it('conflicts when a pending for another student matches', () => {
+    const r = checkPendingConflict([sample], pendingOf(), { selfId: 'me', stageId });
+    expect(r.conflict).toBe(true);
+    expect(r.matchedWith).toBe('علي حسن');
+  });
+
+  it('ignores own pending so retries stay possible', () => {
+    const r = checkPendingConflict([sample], pendingOf({ studentId: 'me' }), { selfId: 'me', stageId });
+    expect(r.conflict).toBe(false);
+  });
+
+  it('ignores pendings from another stage', () => {
+    const r = checkPendingConflict([sample], pendingOf({ stageId: 'stage-2' }), { selfId: 'me', stageId });
+    expect(r.conflict).toBe(false);
+  });
+
+  it('ignores requests that already got a decision', () => {
+    expect(checkPendingConflict([sample], pendingOf({ status: 'approved' }), { selfId: 'me', stageId }).conflict).toBe(false);
+    expect(checkPendingConflict([sample], pendingOf({ status: 'rejected' }), { selfId: 'me', stageId }).conflict).toBe(false);
+  });
+
+  it('no conflict for a different face', () => {
+    const r = checkPendingConflict([makeVec(99)], pendingOf(), { selfId: 'me', stageId });
+    expect(r.conflict).toBe(false);
+  });
+
+  it('skips malformed records (no studentId / empty descriptor)', () => {
+    const pendings: Record<string, PendingFaceRecord> = {
+      a: { status: 'pending', stageId },
+      b: { studentId: 'x', status: 'pending', stageId, faceDescriptor: null },
+    };
+    expect(checkPendingConflict([sample], pendings, { selfId: 'me', stageId }).conflict).toBe(false);
   });
 });

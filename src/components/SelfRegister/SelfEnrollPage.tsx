@@ -1,5 +1,5 @@
 import React, { useState, useEffect, lazy, Suspense, useCallback } from 'react';
-import { ref, set } from 'firebase/database';
+import { ref, update } from 'firebase/database';
 import { database, dbURL } from '../../firebase/config';
 import { AttendanceRecord, AttendanceSession, Student } from '../../types/student';
 import { RegistrationLink } from '../../types/registration';
@@ -9,7 +9,7 @@ import { VerifyNameStep } from './VerifyNameStep';
 import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear } from '../../firebase/dataService';
 import { decompressRecord } from '../../firebase/dataServiceCompressed';
-import { migrateToV5, parseAllSamples, checkForTampering, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
+import { migrateToV5, parseAllSamples, checkForTampering, checkPendingConflict, type PendingFaceRecord, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
 import { useFaceAI } from '../../hooks/useFaceAI';
 import { EngineOverlay } from '../face/EngineOverlay';
 import {
@@ -475,6 +475,26 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
           goTo('error');
           return;
         }
+
+        // ── ✅ فحص ضد الطلبات المعلقة — رفض فوري قبل وصول الطلب للأدمن
+        //    (الطلبات المعلقة لطلاب آخرين في نفس المرحلة فقط — إخفاق القراءة يعني المتابعة كخط دفاع الثاني)
+        const pendings = link.stageId
+          ? await dbFetch<Record<string, PendingFaceRecord>>(
+              `registrationSystem/pendingFaceIndex/${link.adminUid}/${link.stageId}`,
+            )
+          : null;
+        const conflict = checkPendingConflict(allNewSamples, pendings, {
+          selfId: expected.id,
+          stageId: link.stageId,
+        });
+        if (conflict.conflict) {
+          setErrorMsg(
+            `تم رفض التسجيل: هذه البصمة معلقة بالفعل باسم الطالب «${conflict.matchedWith}» بانتظار مراجعة الإدارة.`,
+          );
+          setRetryStep('capture-face');
+          goTo('error');
+          return;
+        }
       }
     } catch {
       console.warn('⚠️ فشل فحص تكرار البصمة، سيتم المتابعة للأدمن كخط دفاع ثانٍ:');
@@ -487,27 +507,42 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
       const qrVerified = !!qrResult?.verified;
       // رمز البطاقة إن لم يُطابق سجل الطالب يُعلَّق مطابقته بالاسم فقط — نُخطر الأدمن بالرمز المستخرج
       const qrCodeId = cardQrId || expected.qrCodeId || '';
-      await set(ref(database, `registrationSystem/pending/${link.adminUid}/${requestId}`), {
-        id: requestId,
-        adminUid: link.adminUid,
-        stageId: link.stageId,
-        studentId: expected.id,
-        studentCode: expected.code || '',
-        nameInSystem: expected.name,
-        nameFromCard: expected.name,
-        nationalId: '',
-        qrCodeUrl,
-        qrCodeId,
-        qrVerified,
-        nameMatched: true,
-        faceDescriptor: migrated,
-        linkToken: link.token,
-        linkType: link.type,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        hasExistingQr: !!expected.qrCodeId,
-        hasExistingFace: !!expected.faceDescriptor,
-      });
+      const now = new Date().toISOString();
+      // ✅ الطلب وفهرس البصمة المعلقة يُكتبان ذرّياً في عملية واحدة — ألّا يمر طلب بلا حماية أو بلا قيد
+      const updates: Record<string, unknown> = {
+        [`registrationSystem/pending/${link.adminUid}/${requestId}`]: {
+          id: requestId,
+          adminUid: link.adminUid,
+          stageId: link.stageId,
+          studentId: expected.id,
+          studentCode: expected.code || '',
+          nameInSystem: expected.name,
+          nameFromCard: expected.name,
+          nationalId: '',
+          qrCodeUrl,
+          qrCodeId,
+          qrVerified,
+          nameMatched: true,
+          faceDescriptor: migrated,
+          linkToken: link.token,
+          linkType: link.type,
+          status: 'pending',
+          createdAt: now,
+          hasExistingQr: !!expected.qrCodeId,
+          hasExistingFace: !!expected.faceDescriptor,
+        },
+      };
+      if (link.stageId) {
+        updates[`registrationSystem/pendingFaceIndex/${link.adminUid}/${link.stageId}/${requestId}`] = {
+          requestId,
+          studentId: expected.id,
+          name: expected.name,
+          stageId: link.stageId,
+          faceDescriptor: migrated,
+          createdAt: now,
+        };
+      }
+      await update(ref(database), updates);
       // لا نُعلّم الرابط «مستخدماً» هنا حتى يتمكّن الطالب من إعادة المحاولة عند الفشل.
       goTo('success');
     } catch (e: any) {
