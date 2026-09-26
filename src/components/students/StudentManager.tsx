@@ -12,7 +12,7 @@ import {
 import { StudentForm } from './StudentForm';
 import { StudentImportPanel } from './StudentImportPanel';
 import { BulkStudentImportModal } from './BulkStudentImportModal';
-import { DuplicateNamesModal } from './DuplicateNamesModal';
+import { DuplicateNamesPanel } from './DuplicateNamesPanel';
 import { FaceHealthPanel } from './FaceHealthPanel';
 import { SortFilterPanel } from './SortFilterPanel';
 import { BulkActionsBar } from './BulkActionsBar';
@@ -79,7 +79,6 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [showBulkImport, setShowBulkImport] = useState(false);
-  const [showDuplicateFinder, setShowDuplicateFinder] = useState(false);
 
   const [editingUniIdStudent, setEditingUniIdStudent] = useState<string | null>(null);
   const { confirm: confirmAction, ConfirmDialog: ConfirmDialogEl } = useConfirm();
@@ -686,7 +685,12 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
         onGroupFilterChange={setGroupFilter}
         onSortByName={onSortByName}
         onSortByGroup={onSortByGroup}
-        onOpenDuplicateFinder={() => setShowDuplicateFinder(true)}
+        confirm={confirmAction}
+      />
+
+      <DuplicateNamesPanel
+        students={students}
+        onDeleteSelected={onDeleteSelectedStudents}
         confirm={confirmAction}
       />
 
@@ -777,12 +781,6 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
         onImport={handleBulkImport}
         existingStudents={students.map(s => ({ name: s.name, code: s.code }))}
         selectedPrefix={selectedPrefix}
-      />
-
-      <DuplicateNamesModal
-        isOpen={showDuplicateFinder}
-        onClose={() => setShowDuplicateFinder(false)}
-        students={students}
       />
     </div>
   );

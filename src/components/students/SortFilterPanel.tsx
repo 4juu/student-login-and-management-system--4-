@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Student } from '../../types/student';
 import type { useConfirm } from '../../hooks/useConfirm';
-import { CaseSensitive, ChartColumn, RefreshCw, Users, CopyCheck } from 'lucide-react';
+import { CaseSensitive, ChartColumn, RefreshCw, Users } from 'lucide-react';
 
 type ConfirmFn = ReturnType<typeof useConfirm>['confirm'];
 
@@ -16,7 +16,6 @@ interface SortFilterPanelProps {
   onGroupFilterChange: (value: string) => void;
   onSortByName?: (() => void) | undefined;
   onSortByGroup?: (() => void) | undefined;
-  onOpenDuplicateFinder?: (() => void) | undefined;
   confirm: ConfirmFn;
 }
 
@@ -31,7 +30,6 @@ export const SortFilterPanel: React.FC<SortFilterPanelProps> = ({
   onGroupFilterChange,
   onSortByName,
   onSortByGroup,
-  onOpenDuplicateFinder,
   confirm,
 }) => {
   // عدّ المجموعات مرة واحدة بدل students.filter داخل كل خيار
@@ -105,17 +103,6 @@ export const SortFilterPanel: React.FC<SortFilterPanelProps> = ({
               </button>
             )}
           </div>
-
-          {onOpenDuplicateFinder && (
-            <button
-              type="button"
-              onClick={onOpenDuplicateFinder}
-              className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-medium rounded-lg transition duration-200 shadow-md flex items-center justify-center gap-2 whitespace-nowrap"
-              title="عرض الأسماء المكررة (تطابق 3 كلمات متتالية)"
-            >
-              <CopyCheck className="w-4 h-4" /> فحص التكرار
-            </button>
-          )}
 
           {uniqueGroups.length > 0 && (
             <select
