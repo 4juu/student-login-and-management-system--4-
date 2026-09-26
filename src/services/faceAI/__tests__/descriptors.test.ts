@@ -516,4 +516,12 @@ describe('checkPendingConflict', () => {
     };
     expect(checkPendingConflict([sample], pendings, { selfId: 'me', stageId }).conflict).toBe(false);
   });
+
+  it('checks records missing the status field (regression: index written without status)', () => {
+    const rec = pendingOf();
+    delete rec.r1?.status;
+    const r = checkPendingConflict([sample], rec, { selfId: 'me', stageId });
+    expect(r.conflict).toBe(true);
+    expect(r.matchedWith).toBe('علي حسن');
+  });
 });

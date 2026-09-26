@@ -331,7 +331,7 @@ export function checkPendingConflict(
   const candidates: Array<{ id: string; name: string; faceDescriptor?: unknown }> = [];
   for (const rec of Object.values(pendings)) {
     if (!rec || typeof rec !== 'object') continue;
-    if (rec.status !== 'pending') continue;
+    if (rec.status && rec.status !== 'pending') continue;
     if (rec.stageId !== opts.stageId) continue;
     if (!rec.studentId || rec.studentId === opts.selfId) continue;
     candidates.push({ id: rec.studentId, name: rec.name || rec.studentId, faceDescriptor: rec.faceDescriptor });

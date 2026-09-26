@@ -538,6 +538,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
           studentId: expected.id,
           name: expected.name,
           stageId: link.stageId,
+          status: 'pending',
           faceDescriptor: migrated,
           createdAt: now,
         };
