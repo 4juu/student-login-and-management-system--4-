@@ -954,9 +954,13 @@
 /* ============================================ */
 /* 🎯 Animations                                  */
 /* ============================================ */
+/* ملاحظة مهمة: كل إطار نهاية يستخدم transform: none (لا translateY(0))
+   وإلا بقيت قيمة transform فعّالة بعد انتهاء الأنيميشن (fill-mode: both)
+   فتصبح الحاوية containing block لعناصر position: fixed داخلها
+   فتنزاح النوافذ عن منتصف الشاشة. */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+  to { opacity: 1; transform: none; }
 }
 
 .animate-fadeIn {
@@ -978,7 +982,7 @@
 /* == Page Transitions (خروج ثم دخول — تتابع بلا قفزات) == */
 @keyframes pageEnter {
   from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  to { opacity: 1; transform: none; }
 }
 
 .animate-pageEnter {
@@ -990,14 +994,16 @@
   to { opacity: 0; transform: translateY(-8px); }
 }
 
+/* fill-mode: backwards فقط — لا نحتفظ بإطار النهاية (وهو transform)
+   حتى لا تصير الحاوية containing block لعناصر fixed بعد انتهاء الخروج */
 .animate-pageExit {
-  animation: pageExit 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation: pageExit 0.35s cubic-bezier(0.4, 0, 0.2, 1) backwards;
 }
 
 /* == تحسين انتقالات البطاقات == */
 @keyframes cardEnter {
   from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  to { opacity: 1; transform: none; }
 }
 
 .animate-cardEnter {

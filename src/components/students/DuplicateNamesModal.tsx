@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { CopyCheck, X, TriangleAlert, CircleCheck } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { findDuplicateNames, countDuplicateStudents } from '../../lib/duplicateNames';
@@ -34,7 +35,7 @@ export const DuplicateNamesModal: React.FC<DuplicateNamesModalProps> = ({ isOpen
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
       onClick={onClose}
@@ -127,6 +128,7 @@ export const DuplicateNamesModal: React.FC<DuplicateNamesModalProps> = ({ isOpen
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

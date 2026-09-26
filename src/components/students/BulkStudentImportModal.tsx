@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Users, X, CheckCircle, AlertCircle, Loader2, ChevronDown, Hash, Edit2 } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
@@ -47,7 +48,8 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setTimeout(() => textareaRef.current?.focus(), 100);
+      // preventScroll: يمنع قفز تمرير الصفحة إلى مربع النص عند تركيزه
+      setTimeout(() => textareaRef.current?.focus({ preventScroll: true }), 100);
     }
   }, [isOpen]);
 
@@ -145,7 +147,9 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
+  /* البوابة (portal) إلى body: تضمن توسيط النافذة على الشاشة حتى لو كان
+     أحد الأبواب يحتوي transform (contains) أثناء أنيميشن الدخول */
+  return createPortal(
     <div
       className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
       onClick={onClose}
@@ -359,6 +363,7 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
