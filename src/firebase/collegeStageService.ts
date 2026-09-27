@@ -22,10 +22,10 @@ export const saveColleges = async (
 
   saveLocal(LS.colleges(adminUid), colleges);
 
-  const year = await getActiveAcademicYear();
+  // تسجيل قبل أي await (flush يراه فوراً)
   const saveKey = `colleges_${adminUid}`;
-
   debouncedSave(saveKey, async () => {
+    const year = await getActiveAcademicYear();
     await set(ref(database, getCollegesPath(year, adminUid)), colleges.map(c => stripUndefined(c as any)));
   });
 };
@@ -63,10 +63,10 @@ export const saveStages = async (
 
   saveLocal(LS.stages(adminUid), stages);
 
-  const year = await getActiveAcademicYear();
+  // تسجيل قبل أي await (flush يراه فوراً)
   const saveKey = `stages_${adminUid}`;
-
   debouncedSave(saveKey, async () => {
+    const year = await getActiveAcademicYear();
     await set(ref(database, getStagesPath(year, adminUid)), stages.map(s => stripUndefined(s as any)));
   });
 };

@@ -26,10 +26,6 @@ export const saveStudents = async (
 
   saveLocal(LS.students(adminUid, stageId), students);
 
-  const year = await getActiveAcademicYear();
-  if (teacherId) void patchCachedStageData(adminUid, year, stageId, teacherId, { students });
-  const saveKey = `students_${adminUid}_${stageId}`;
-
   // فصل faceDescriptor إلى عقدة منفصلة — students تبقى خفيفة (بلا بصمات ضخمة)
   const descriptors: Record<string, unknown> = {};
   const stripped = students.map(s => {
@@ -40,19 +36,24 @@ export const saveStudents = async (
     return rest;
   });
 
-  const studentsPath = getStagePath(year, adminUid, stageId, 'students');
-  const descriptorsPath = getStagePath(year, adminUid, stageId, 'descriptors');
-
-  // نسخة احتياطية تُرفع تلقائياً إذا فشل الحفظ (قطع نت متقطع / Firebase مقطوع)
-  registerOutboxFallback(saveKey, saveKey, stripped, studentsPath);
-  registerOutboxFallback(`${saveKey}_desc`, `${saveKey}_desc`, descriptors, descriptorsPath);
-
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    void queueOutbox(saveKey, stripped, studentsPath);
-    void queueOutbox(`${saveKey}_desc`, descriptors, descriptorsPath);
-  }
-
+  // تسجيل قبل أي await (flush يراه فوراً — نفس ملاحظة السجلات)
+  const saveKey = `students_${adminUid}_${stageId}`;
   debouncedSave(saveKey, async () => {
+    const year = await getActiveAcademicYear();
+    const studentsPath = getStagePath(year, adminUid, stageId, 'students');
+    const descriptorsPath = getStagePath(year, adminUid, stageId, 'descriptors');
+
+    if (teacherId) await patchCachedStageData(adminUid, year, stageId, teacherId, { students });
+
+    // نسخة احتياطية تُرفع تلقائياً إذا فشل الحفظ (قطع نت متقطع / Firebase مقطوع)
+    registerOutboxFallback(saveKey, saveKey, stripped, studentsPath);
+    registerOutboxFallback(`${saveKey}_desc`, `${saveKey}_desc`, descriptors, descriptorsPath);
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      void queueOutbox(saveKey, stripped, studentsPath);
+      void queueOutbox(`${saveKey}_desc`, descriptors, descriptorsPath);
+    }
+
     // update() واحد للمسارين: students + descriptors (round-trip بدل اثنين)
     await update(ref(database), {
       [studentsPath]: stripped.map(s => stripUndefined(s as any)),

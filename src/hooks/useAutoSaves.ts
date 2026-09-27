@@ -88,10 +88,11 @@ export function useAutoSaves({
   useEffect(() => {
     if (!(currentUser?.role === 'admin' && dataLoaded)) return;
     const key = `colleges:${currentUser.uid}`;
-    debouncedPreSave(key, () => {
+    debouncedPreSave(key, async () => {
       const force = intentionalDeleteRef.current.colleges;
-      if (consumeChange(lastSavedRef.current, key, colleges, force)) {
-        saveColleges(currentUser.uid, colleges, force);
+      // الفارغ بلا حذف مقصود = echo لبيانات محمّلة — لا حفظ ولا تحذير
+      if (consumeChange(lastSavedRef.current, key, colleges, force) && (force || colleges.length > 0)) {
+        await saveColleges(currentUser.uid, colleges, force);
       }
       if (force) intentionalDeleteRef.current.colleges = false;
     });
@@ -100,10 +101,10 @@ export function useAutoSaves({
   useEffect(() => {
     if (!(currentUser?.role === 'admin' && dataLoaded)) return;
     const key = `stages:${currentUser.uid}`;
-    debouncedPreSave(key, () => {
+    debouncedPreSave(key, async () => {
       const force = intentionalDeleteRef.current.stages;
-      if (consumeChange(lastSavedRef.current, key, stages, force)) {
-        saveStages(currentUser.uid, stages, force);
+      if (consumeChange(lastSavedRef.current, key, stages, force) && (force || stages.length > 0)) {
+        await saveStages(currentUser.uid, stages, force);
       }
       if (force) intentionalDeleteRef.current.stages = false;
     });
@@ -114,10 +115,10 @@ export function useAutoSaves({
     const adminUid = getAdminUid();
     const teacherId = getTeacherId();
     const key = `students:${adminUid}:${selectedStageId}`;
-    debouncedPreSave(key, () => {
+    debouncedPreSave(key, async () => {
       const force = intentionalDeleteRef.current.students;
-      if (consumeChange(lastSavedRef.current, key, students, force)) {
-        saveStudents(adminUid, selectedStageId, students, force, teacherId);
+      if (consumeChange(lastSavedRef.current, key, students, force) && (force || students.length > 0)) {
+        await saveStudents(adminUid, selectedStageId, students, force, teacherId);
       }
       if (force) intentionalDeleteRef.current.students = false;
       if (currentUser.role === 'admin' && universityDataLoaded) {
@@ -134,10 +135,10 @@ export function useAutoSaves({
     const adminUid = getAdminUid();
     const teacherId = getTeacherId();
     const key = `records:${adminUid}:${selectedStageId}:${teacherId}`;
-    debouncedPreSave(key, () => {
+    debouncedPreSave(key, async () => {
       const force = intentionalDeleteRef.current.records;
-      if (consumeChange(lastSavedRef.current, key, attendanceRecords, force)) {
-        saveAttendanceRecords(adminUid, selectedStageId, teacherId, attendanceRecords, force);
+      if (consumeChange(lastSavedRef.current, key, attendanceRecords, force) && (force || attendanceRecords.length > 0)) {
+        await saveAttendanceRecords(adminUid, selectedStageId, teacherId, attendanceRecords, force);
       }
       if (force) intentionalDeleteRef.current.records = false;
       if (currentUser.role === 'admin' && universityDataLoaded) {
@@ -154,10 +155,10 @@ export function useAutoSaves({
     const adminUid = getAdminUid();
     const teacherId = getTeacherId();
     const key = `sessions:${adminUid}:${selectedStageId}:${teacherId}`;
-    debouncedPreSave(key, () => {
+    debouncedPreSave(key, async () => {
       const force = intentionalDeleteRef.current.sessions;
-      if (consumeChange(lastSavedRef.current, key, sessions, force)) {
-        saveSessions(adminUid, selectedStageId, teacherId, sessions, force);
+      if (consumeChange(lastSavedRef.current, key, sessions, force) && (force || sessions.length > 0)) {
+        await saveSessions(adminUid, selectedStageId, teacherId, sessions, force);
       }
       if (force) intentionalDeleteRef.current.sessions = false;
       if (currentUser.role === 'admin' && universityDataLoaded) {

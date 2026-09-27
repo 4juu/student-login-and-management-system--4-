@@ -18,6 +18,9 @@ export const getCurrentAcademicYear = (): string => {
 };
 
 let _cachedAcademicYear: string | null = null;
+// single-flight: نداءات متزامنة (سجلات + جلسات معاً) تشارك طلباً واحداً
+// بدل set مزدوج على الفهرس (كان يضاعف تحذير permission_denied لغير الأدمن)
+let _yearPromise: Promise<string> | null = null;
 
 /** فهرس السنوات الصغير — قراءة/كتابة رخيصة بدل سرد جذر academicYears الضخم (المحجوب بالقواعد أصلاً) */
 const YEARS_INDEX_PATH = 'system/metadata/academicYearsList';
@@ -34,25 +37,29 @@ const registerAcademicYear = async (year: string): Promise<void> => {
 
 export const getActiveAcademicYear = async (): Promise<string> => {
   if (_cachedAcademicYear) return _cachedAcademicYear;
+  if (!_yearPromise) {
+    _yearPromise = (async (): Promise<string> => {
+      try {
+        const snap = await get(ref(database, 'system/metadata/currentAcademicYear'));
+        if (snap.exists()) {
+          _cachedAcademicYear = snap.val();
+          void registerAcademicYear(_cachedAcademicYear!);
+          return _cachedAcademicYear!;
+        }
+      } catch {}
 
-  try {
-    const snap = await get(ref(database, 'system/metadata/currentAcademicYear'));
-    if (snap.exists()) {
-      _cachedAcademicYear = snap.val();
-      void registerAcademicYear(_cachedAcademicYear!);
-      return _cachedAcademicYear!;
-    }
-  } catch {}
+      // إذا ما موجودة، احفظ السنة الحالية
+      const current = getCurrentAcademicYear();
+      void registerAcademicYear(current);
+      try {
+        await set(ref(database, 'system/metadata/currentAcademicYear'), current);
+      } catch {}
 
-  // إذا ما موجودة، احفظ السنة الحالية
-  const current = getCurrentAcademicYear();
-  void registerAcademicYear(current);
-  try {
-    await set(ref(database, 'system/metadata/currentAcademicYear'), current);
-  } catch {}
-
-  _cachedAcademicYear = current;
-  return current;
+      _cachedAcademicYear = current;
+      return current;
+    })();
+  }
+  return _yearPromise;
 };
 
 export const setActiveAcademicYear = async (year: string): Promise<void> => {

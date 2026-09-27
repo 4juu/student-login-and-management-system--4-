@@ -7,11 +7,22 @@
  * - عند التفعيل: نمسح كل كاشات الإصدارات القديمة (يكسر SW عالق)
  * ============================================================ */
 
-const VERSION = 'v2026.09.24.1';
+const VERSION = 'v2026.09.28.1';
 const SHELL_CACHE = `att-shell-${VERSION}`;
 const ASSET_CACHE = `att-assets-${VERSION}`;
 const CACHE_PREFIXES = ['att-shell-', 'att-assets-'];
 const OUTBOX_SYNC_TAG = 'flush-outbox';
+
+// صفحة احتياطية عند انقطاع الاتصال بلا كاش — تمنع TypeError في respondWith
+const OFFLINE_HTML =
+  '<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8">' +
+  '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+  '<title>غير متصل</title><body style="font-family:system-ui;display:grid;place-items:center;height:100vh;margin:0;background:#0B1220;color:#e2e8f0">' +
+  '<div style="text-align:center"><h1 style="font-size:1.2rem">لا يوجد اتصال بالإنترنت</h1>' +
+  '<p style="opacity:.7">تحقق من الشبكة ثم أعد المحاولة</p></div></body></html>';
+
+const offlineFallback = () =>
+  new Response(OFFLINE_HTML, { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 
 /* ============================================================
  * Background Sync — تصفيية صندوق الأوفلاين عند عودة الاتصال
@@ -84,9 +95,10 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         })
-        .catch(() =>
-          caches.match('/index.html').then((r) => r || caches.match('/')),
-        ),
+        .catch(async () => {
+          const shell = (await caches.match('/index.html')) || (await caches.match('/'));
+          return shell || offlineFallback();
+        }),
     );
     return;
   }
@@ -96,13 +108,15 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.match(req).then((cached) => {
         if (cached) return cached;
-        return fetch(req).then((res) => {
-          if (res && res.ok) {
-            const copy = res.clone();
-            caches.open(ASSET_CACHE).then((c) => c.put(req, copy)).catch(() => {});
-          }
-          return res;
-        });
+        return fetch(req)
+          .then((res) => {
+            if (res && res.ok) {
+              const copy = res.clone();
+              caches.open(ASSET_CACHE).then((c) => c.put(req, copy)).catch(() => {});
+            }
+            return res;
+          })
+          .catch(() => Response.error());
       }),
     );
     return;
@@ -119,7 +133,7 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         })
-        .catch(() => cached);
+        .catch(() => cached || Response.error());
       return cached || fetchAndCache;
     }),
   );

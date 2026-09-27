@@ -89,16 +89,18 @@ export const saveAttendanceRecords = async (
 
   saveLocal(LS.records(adminUid, stageId, teacherId), records);
 
-  const year = await getActiveAcademicYear();
-  void patchCachedStageData(adminUid, year, stageId, teacherId, { records });
+  // التسجيل قبل أي await — flushAllPendingSaves يرى الطبقة الثانية فوراً
+  // (كانت السنة تُجلب أولاً ⇒ التصفيية تمرّ قبل التسجيل والسجل يعود)
   const saveKey = `records_${adminUid}_${stageId}_${teacherId}`;
-  registerOutboxFallback(saveKey, saveKey, records, getTeacherDataPath(year, adminUid, stageId, teacherId, 'recordsCompressed'));
-
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    void queueOutbox(saveKey, records, getTeacherDataPath(year, adminUid, stageId, teacherId, 'recordsCompressed'));
-  }
-
   debouncedSave(saveKey, async () => {
+    const year = await getActiveAcademicYear();
+    await patchCachedStageData(adminUid, year, stageId, teacherId, { records });
+    registerOutboxFallback(saveKey, saveKey, records, getTeacherDataPath(year, adminUid, stageId, teacherId, 'recordsCompressed'));
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      void queueOutbox(saveKey, records, getTeacherDataPath(year, adminUid, stageId, teacherId, 'recordsCompressed'));
+    }
+
     const { compressRecord } = await import('./dataServiceCompressed');
     const compressed = records.map(compressRecord);
     const recordsPath = `${getYearBasePath(year, adminUid)}/stageData/${stageId}/teacherRecords/${teacherId}/recordsCompressed`;
@@ -173,18 +175,20 @@ export const saveSessions = async (
 
   saveLocal(LS.sessions(adminUid, stageId, teacherId), sessions);
 
-  const year = await getActiveAcademicYear();
-  void patchCachedStageData(adminUid, year, stageId, teacherId, { sessions });
+  // تسجيل قبل أي await (نفس ملاحظة السجلات)
   const saveKey = `sessions_${adminUid}_${stageId}_${teacherId}`;
-  registerOutboxFallback(saveKey, saveKey, sessions, getTeacherDataPath(year, adminUid, stageId, teacherId, 'sessions'));
-
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    void queueOutbox(saveKey, sessions, getTeacherDataPath(year, adminUid, stageId, teacherId, 'sessions'));
-  }
-
   debouncedSave(saveKey, async () => {
+    const year = await getActiveAcademicYear();
+    const dataPath = getTeacherDataPath(year, adminUid, stageId, teacherId, 'sessions');
+    await patchCachedStageData(adminUid, year, stageId, teacherId, { sessions });
+    registerOutboxFallback(saveKey, saveKey, sessions, dataPath);
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      void queueOutbox(saveKey, sessions, dataPath);
+    }
+
     await set(
-      ref(database, getTeacherDataPath(year, adminUid, stageId, teacherId, 'sessions')),
+      ref(database, dataPath),
       sessions.map(s => stripUndefined(s as any))
     );
   });
@@ -223,18 +227,18 @@ export const saveActiveSession = async (
 ): Promise<void> => {
   saveLocal(LS.activeSession(adminUid, stageId, teacherId), sessionId);
   try {
-    const year = await getActiveAcademicYear();
     const saveKey = `activeSession_${adminUid}_${stageId}_${teacherId}`;
-    // نسخة احتياطية تُرفع عند عودة الاتصال (نفس نمط بقية الحفظ)
-    registerOutboxFallback(saveKey, saveKey, sessionId, getTeacherDataPath(year, adminUid, stageId, teacherId, 'activeSession'));
-
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      void queueOutbox(saveKey, sessionId, getTeacherDataPath(year, adminUid, stageId, teacherId, 'activeSession'));
-    }
-
-    // delay قصير (250ms) — الجلسة النشطة حساسة لزمن التبديل
+    // delay قصير (250ms) — تسجيل فوري قبل أي await ليستدعيه التصفيي أيضاً
     scheduleSave(saveKey, async () => {
+      const year = await getActiveAcademicYear();
       const path = getTeacherDataPath(year, adminUid, stageId, teacherId, 'activeSession');
+      // نسخة احتياطية تُرفع عند عودة الاتصال (نفس نمط بقية الحفظ)
+      registerOutboxFallback(saveKey, saveKey, sessionId, path);
+
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        void queueOutbox(saveKey, sessionId, path);
+      }
+
       if (sessionId) {
         await set(ref(database, path), sessionId);
       } else {

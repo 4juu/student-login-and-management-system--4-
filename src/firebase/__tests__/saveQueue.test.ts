@@ -72,6 +72,19 @@ describe('saveQueue — الطبقة الأولى (pre-save)', () => {
     expect(getPendingPreSavesCount()).toBe(0);
   });
 
+  it('flush ينتظر body غير المتزامن يسجّل الطبقة الثانية بعده (ثغرة التصفيية)', async () => {
+    const saveFn = vi.fn(async () => undefined);
+    debouncedPreSave('gap', async () => {
+      await Promise.resolve();
+      debouncedSave('gap-inner', saveFn);
+    });
+
+    await flushAllPendingSaves();
+
+    expect(saveFn).toHaveBeenCalledTimes(1);
+    expect(getPendingPreSavesCount()).toBe(0);
+  });
+
   it('cancelAllPendingSaves يلغي الطبقة الأولى', () => {
     const fn = vi.fn();
     debouncedPreSave('cancelled', fn);

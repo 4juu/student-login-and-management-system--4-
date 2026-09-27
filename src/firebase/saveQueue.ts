@@ -18,10 +18,26 @@ const outboxFallbacks = new Map<string, { key: string; data: unknown; path?: str
 // ============================================================
 const PRE_SAVE_DELAY = 500;
 const preSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const preSaveFunctions = new Map<string, () => void>();
+const preSaveFunctions = new Map<string, () => void | Promise<void>>();
+
+/** يشغّل body واحداً مع احتواء أي رفض (يُستدعى من المؤقّت ومن الـflush). */
+const invokePreSave = (f: () => void | Promise<void>): Promise<void> => {
+  try {
+    return Promise.resolve(f()).catch(e => {
+      console.warn('⚠️ فشل الحفظ المؤجّل:', e);
+    });
+  } catch (e) {
+    console.warn('⚠️ فشل الحفظ المؤجّل:', e);
+    return Promise.resolve();
+  }
+};
 
 /** يجدول حفظاً مؤجّلاً على مستوى الموديول — coalescing لكل مفتاح (آخر دالة تنتصر). */
-export const debouncedPreSave = (key: string, fn: () => void, delayMs: number = PRE_SAVE_DELAY): void => {
+export const debouncedPreSave = (
+  key: string,
+  fn: () => void | Promise<void>,
+  delayMs: number = PRE_SAVE_DELAY
+): void => {
   const existing = preSaveTimers.get(key);
   if (existing) clearTimeout(existing);
   preSaveFunctions.set(key, fn);
@@ -29,20 +45,26 @@ export const debouncedPreSave = (key: string, fn: () => void, delayMs: number = 
     preSaveTimers.delete(key);
     const f = preSaveFunctions.get(key);
     preSaveFunctions.delete(key);
-    if (f) f();
+    if (f) void invokePreSave(f);
   }, delayMs);
   preSaveTimers.set(key, timeout);
 };
 
-/** يشغّل كل ما هو مجدول في الطبقة الأولى فوراً (قد يسجّل محفوظات طبقة ثانية). */
-const runPendingPreSaves = (): void => {
+/**
+ * يشغّل كل ما هو مجدول في الطبقة الأولى فوراً **وينتظر اكتماله** —
+ * الحفظات غير المتزامنة تُسجّل طبقة ثانية قبل أن يكمل، ويغطيها الـflush بعدها.
+ * الجزء المتزامن (حتى أول await في saveX) يعمل فوراً أثناء الحلقة نفسها.
+ */
+const runPendingPreSaves = async (): Promise<void> => {
+  const running: Promise<void>[] = [];
   for (const [key, timeout] of Array.from(preSaveTimers.entries())) {
     clearTimeout(timeout);
     preSaveTimers.delete(key);
     const f = preSaveFunctions.get(key);
     preSaveFunctions.delete(key);
-    if (f) f();
+    if (f) running.push(invokePreSave(f));
   }
+  await Promise.allSettled(running);
 };
 
 export const getPendingPreSavesCount = (): number => preSaveTimers.size;
@@ -240,8 +262,8 @@ let flushFlight: Promise<void> | null = null;
 let flushRerun = false;
 
 const doFlushAllPendingSaves = async (): Promise<void> => {
-  // أولاً: الطبقة الأولى (قد تسجّل محفوظات طبقة ثانية تُمسح في الحلقة)
-  runPendingPreSaves();
+  // أولاً: الطبقة الأولى وانتظار اكتمالها (تُسجّل محفوظات طبقة ثانية تُمسح أدناه)
+  await runPendingPreSaves();
 
   const keys = Array.from(pendingSaves.keys());
   const hasRetry = retryQueues.size > 0 || outboxFallbacks.size > 0;
@@ -301,8 +323,9 @@ export const flushAllPendingSaves = async (): Promise<void> => {
 
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => {
-    // الطبقة الأولى أولاً: تشغيلها يسجّل محفوظات طبقة ثانية تُمسح أدناه فوراً
-    runPendingPreSaves();
+    // الطبقة الأولى أولاً — الجزء المتزامن (saveLocal + تسجيل الطبقة الثانية)
+    // يعمل فوراً داخل الاستدعاء، ثم تُصفّى الطبقة الثانية أدناه
+    void runPendingPreSaves();
     pendingSaves.forEach((timeout, key) => {
       clearTimeout(timeout);
       const fn = pendingSaveFunctions.get(key);
