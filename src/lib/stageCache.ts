@@ -71,3 +71,30 @@ export const setCachedStageData = async (
     cachedAt: Date.now(),
   });
 };
+
+/**
+ * يحدّث خانة واحدة (records/students/sessions) من كاش المرحلة إن وُجد —
+ * يمنع ظهور السجل المحذوف لحظة إعادة الدخول حتى تصل الشبكة.
+ * لا يُنشئ مدخلاً جديداً (غياب المدخل = سلوك اليوم: جلب الشبكة فقط).
+ */
+export const patchCachedStageData = async (
+  adminUid: string,
+  year: string,
+  stageId: string,
+  teacherId: string,
+  partial: Partial<Pick<StageCacheData, 'students' | 'records' | 'sessions' | 'activeSessionId'>>
+): Promise<void> => {
+  try {
+    const key = cacheKey(adminUid, year, stageId, teacherId);
+    const data = await dbGet<StageCacheData>(key);
+    if (
+      !data ||
+      !Array.isArray(data.students) ||
+      !Array.isArray(data.records) ||
+      !Array.isArray(data.sessions)
+    ) return;
+    await dbSet(key, { ...data, ...partial, cachedAt: Date.now() });
+  } catch {
+    // كاش تجميلي — الفشل = السلوك الحالي (عرض قديم ثم تصحيح الشبكة)
+  }
+};

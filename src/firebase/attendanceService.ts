@@ -8,6 +8,7 @@ import { getYearBasePath, getTeacherDataPath, getStudentAttendancePath, getStude
 import { LS, saveLocal, loadLocal, isDangerousEmpty, stripUndefined } from "./localCache";
 import { debouncedSave, scheduleSave, cancelPendingSavesWhere, registerOutboxFallback } from "./saveQueue";
 import { queueOutbox } from "../lib/offlineOutbox";
+import { patchCachedStageData } from "../lib/stageCache";
 import { loadStudents, loadDescriptorOverrides } from "./studentsService";
 
 // lastIndexed: recordId → studentId لكل مفتاح حفظ — لكتابة فارق فقط في فهرس studentAttendance
@@ -89,6 +90,7 @@ export const saveAttendanceRecords = async (
   saveLocal(LS.records(adminUid, stageId, teacherId), records);
 
   const year = await getActiveAcademicYear();
+  void patchCachedStageData(adminUid, year, stageId, teacherId, { records });
   const saveKey = `records_${adminUid}_${stageId}_${teacherId}`;
   registerOutboxFallback(saveKey, saveKey, records, getTeacherDataPath(year, adminUid, stageId, teacherId, 'recordsCompressed'));
 
@@ -172,6 +174,7 @@ export const saveSessions = async (
   saveLocal(LS.sessions(adminUid, stageId, teacherId), sessions);
 
   const year = await getActiveAcademicYear();
+  void patchCachedStageData(adminUid, year, stageId, teacherId, { sessions });
   const saveKey = `sessions_${adminUid}_${stageId}_${teacherId}`;
   registerOutboxFallback(saveKey, saveKey, sessions, getTeacherDataPath(year, adminUid, stageId, teacherId, 'sessions'));
 

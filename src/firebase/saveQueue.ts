@@ -10,7 +10,49 @@ const pendingSaveFunctions = new Map<string, () => Promise<void>>();
 // بيانات أوفلاين لوكيل التخزين الاحتياطي عند فشل كل المحاولات
 const outboxFallbacks = new Map<string, { key: string; data: unknown; path?: string | undefined }>();
 
+// ============================================================
+// طبقة ما قبل الحفظ (pre-save): debounce خارج React
+// كان مؤقّتاً داخل useEffect فيُلغى بأي تغيّر deps/تنقل ⇒ الحذف لا يُكتب
+// أبداً (كاش + RTDB يبقيان السجل القديم). الآن المؤقّت على مستوى الموديول
+// فيعبر التنقّل، ويُصفّى في flushAllPendingSaves + beforeunload.
+// ============================================================
+const PRE_SAVE_DELAY = 500;
+const preSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const preSaveFunctions = new Map<string, () => void>();
+
+/** يجدول حفظاً مؤجّلاً على مستوى الموديول — coalescing لكل مفتاح (آخر دالة تنتصر). */
+export const debouncedPreSave = (key: string, fn: () => void, delayMs: number = PRE_SAVE_DELAY): void => {
+  const existing = preSaveTimers.get(key);
+  if (existing) clearTimeout(existing);
+  preSaveFunctions.set(key, fn);
+  const timeout = setTimeout(() => {
+    preSaveTimers.delete(key);
+    const f = preSaveFunctions.get(key);
+    preSaveFunctions.delete(key);
+    if (f) f();
+  }, delayMs);
+  preSaveTimers.set(key, timeout);
+};
+
+/** يشغّل كل ما هو مجدول في الطبقة الأولى فوراً (قد يسجّل محفوظات طبقة ثانية). */
+const runPendingPreSaves = (): void => {
+  for (const [key, timeout] of Array.from(preSaveTimers.entries())) {
+    clearTimeout(timeout);
+    preSaveTimers.delete(key);
+    const f = preSaveFunctions.get(key);
+    preSaveFunctions.delete(key);
+    if (f) f();
+  }
+};
+
+export const getPendingPreSavesCount = (): number => preSaveTimers.size;
+
 export const cancelAllPendingSaves = (): void => {
+  for (const [key, timeout] of preSaveTimers) {
+    clearTimeout(timeout);
+    preSaveTimers.delete(key);
+    preSaveFunctions.delete(key);
+  }
   for (const [key, timeout] of pendingSaves) {
     clearTimeout(timeout);
     pendingSaves.delete(key);
@@ -85,7 +127,11 @@ export const getPendingSavesCount = (): number => retryQueues.size;
 export const getDebouncedSavesCount = (): number => pendingSaves.size;
 
 export const hasPendingWrites = async (): Promise<boolean> =>
-  pendingSaves.size > 0 || retryQueues.size > 0 || outboxFallbacks.size > 0 || (await hasOutboxEntries());
+  preSaveTimers.size > 0 ||
+  pendingSaves.size > 0 ||
+  retryQueues.size > 0 ||
+  outboxFallbacks.size > 0 ||
+  (await hasOutboxEntries());
 
 const SAVE_DELAY = 400;
 
@@ -194,6 +240,9 @@ let flushFlight: Promise<void> | null = null;
 let flushRerun = false;
 
 const doFlushAllPendingSaves = async (): Promise<void> => {
+  // أولاً: الطبقة الأولى (قد تسجّل محفوظات طبقة ثانية تُمسح في الحلقة)
+  runPendingPreSaves();
+
   const keys = Array.from(pendingSaves.keys());
   const hasRetry = retryQueues.size > 0 || outboxFallbacks.size > 0;
   if (keys.length === 0 && !hasRetry) return;
@@ -252,6 +301,8 @@ export const flushAllPendingSaves = async (): Promise<void> => {
 
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => {
+    // الطبقة الأولى أولاً: تشغيلها يسجّل محفوظات طبقة ثانية تُمسح أدناه فوراً
+    runPendingPreSaves();
     pendingSaves.forEach((timeout, key) => {
       clearTimeout(timeout);
       const fn = pendingSaveFunctions.get(key);

@@ -9,6 +9,7 @@ import {
   saveSessions,
   saveActiveSession,
 } from '../firebase/dataService';
+import { debouncedPreSave } from '../firebase/saveQueue';
 
 export interface IntentionalDeleteFlags {
   students: boolean;
@@ -39,6 +40,10 @@ interface UseAutoSavesParams {
  * قرار الحفظ بمقارنة مرجعية رخيصة O(1) — بديل JSON.stringify الكامل
  * (المصفوفات تُبنى immutably في التطبيق ولا يوجد مستمع يعيد نفس المحتوى بمرجع جديد)
  * البذرة: أول ملاحظة تُخزَّن فقط (تمنع echo write عند التحميل)
+ *
+ * الجدولة عبر saveQueue.debouncedPreSave (موديول) لا setTimeout داخل useEffect —
+ * كان cleanup يلغي المؤقّت عند أي تغيّر deps/تنقل ⇒ الحذف لا يُكتب أبداً
+ * ويعود السجل عند إعادة الدخول للمرحلة.
  */
 const consumeChange = (
   saved: Map<string, unknown>,
@@ -82,38 +87,37 @@ export function useAutoSaves({
 
   useEffect(() => {
     if (!(currentUser?.role === 'admin' && dataLoaded)) return;
-    const timeoutId = setTimeout(() => {
+    const key = `colleges:${currentUser.uid}`;
+    debouncedPreSave(key, () => {
       const force = intentionalDeleteRef.current.colleges;
-      const key = `colleges:${currentUser.uid}`;
       if (consumeChange(lastSavedRef.current, key, colleges, force)) {
         saveColleges(currentUser.uid, colleges, force);
       }
       if (force) intentionalDeleteRef.current.colleges = false;
-    }, 500);
-    return () => clearTimeout(timeoutId);
+    });
   }, [colleges, currentUser, dataLoaded, intentionalDeleteRef]);
 
   useEffect(() => {
     if (!(currentUser?.role === 'admin' && dataLoaded)) return;
-    const timeoutId = setTimeout(() => {
+    const key = `stages:${currentUser.uid}`;
+    debouncedPreSave(key, () => {
       const force = intentionalDeleteRef.current.stages;
-      const key = `stages:${currentUser.uid}`;
       if (consumeChange(lastSavedRef.current, key, stages, force)) {
         saveStages(currentUser.uid, stages, force);
       }
       if (force) intentionalDeleteRef.current.stages = false;
-    }, 500);
-    return () => clearTimeout(timeoutId);
+    });
   }, [stages, currentUser, dataLoaded, intentionalDeleteRef]);
 
   useEffect(() => {
     if (!(currentUser && dataLoaded && selectedStageId && (currentUser.role === 'admin' || currentUser.role === 'college_admin'))) return;
-    const timeoutId = setTimeout(() => {
+    const adminUid = getAdminUid();
+    const teacherId = getTeacherId();
+    const key = `students:${adminUid}:${selectedStageId}`;
+    debouncedPreSave(key, () => {
       const force = intentionalDeleteRef.current.students;
-      const adminUid = getAdminUid();
-      const key = `students:${adminUid}:${selectedStageId}`;
       if (consumeChange(lastSavedRef.current, key, students, force)) {
-        saveStudents(adminUid, selectedStageId, students, force);
+        saveStudents(adminUid, selectedStageId, students, force, teacherId);
       }
       if (force) intentionalDeleteRef.current.students = false;
       if (currentUser.role === 'admin' && universityDataLoaded) {
@@ -122,17 +126,16 @@ export function useAutoSaves({
           [selectedStageId]: { ...(prev[selectedStageId] || { records: [], sessions: [] }), students },
         }));
       }
-    }, 500);
-    return () => clearTimeout(timeoutId);
-  }, [students, currentUser, dataLoaded, selectedStageId, universityDataLoaded, intentionalDeleteRef, getAdminUid, setAllStagesData]);
+    });
+  }, [students, currentUser, dataLoaded, selectedStageId, universityDataLoaded, intentionalDeleteRef, getAdminUid, getTeacherId, setAllStagesData]);
 
   useEffect(() => {
     if (!(currentUser && dataLoaded && selectedStageId)) return;
-    const timeoutId = setTimeout(() => {
+    const adminUid = getAdminUid();
+    const teacherId = getTeacherId();
+    const key = `records:${adminUid}:${selectedStageId}:${teacherId}`;
+    debouncedPreSave(key, () => {
       const force = intentionalDeleteRef.current.records;
-      const adminUid = getAdminUid();
-      const teacherId = getTeacherId();
-      const key = `records:${adminUid}:${selectedStageId}:${teacherId}`;
       if (consumeChange(lastSavedRef.current, key, attendanceRecords, force)) {
         saveAttendanceRecords(adminUid, selectedStageId, teacherId, attendanceRecords, force);
       }
@@ -143,17 +146,16 @@ export function useAutoSaves({
           [selectedStageId]: { ...(prev[selectedStageId] || { students: [], sessions: [] }), records: attendanceRecords },
         }));
       }
-    }, 500);
-    return () => clearTimeout(timeoutId);
+    });
   }, [attendanceRecords, currentUser, dataLoaded, selectedStageId, universityDataLoaded, intentionalDeleteRef, getAdminUid, getTeacherId, setAllStagesData]);
 
   useEffect(() => {
     if (!(currentUser && dataLoaded && selectedStageId)) return;
-    const timeoutId = setTimeout(() => {
+    const adminUid = getAdminUid();
+    const teacherId = getTeacherId();
+    const key = `sessions:${adminUid}:${selectedStageId}:${teacherId}`;
+    debouncedPreSave(key, () => {
       const force = intentionalDeleteRef.current.sessions;
-      const adminUid = getAdminUid();
-      const teacherId = getTeacherId();
-      const key = `sessions:${adminUid}:${selectedStageId}:${teacherId}`;
       if (consumeChange(lastSavedRef.current, key, sessions, force)) {
         saveSessions(adminUid, selectedStageId, teacherId, sessions, force);
       }
@@ -164,8 +166,7 @@ export function useAutoSaves({
           [selectedStageId]: { ...(prev[selectedStageId] || { students: [], records: [] }), sessions },
         }));
       }
-    }, 500);
-    return () => clearTimeout(timeoutId);
+    });
   }, [sessions, currentUser, dataLoaded, selectedStageId, universityDataLoaded, intentionalDeleteRef, getAdminUid, getTeacherId, setAllStagesData]);
 
   // activeSession: بذرة عند أول ملاحظة لكل مرحلة/معلّم + حارس "لم يتغيّر" — يمنع echo write عند التحميل

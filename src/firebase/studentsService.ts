@@ -8,12 +8,14 @@ import { getStagePath } from "./paths";
 import { LS, saveLocal, loadLocal, isDangerousEmpty, stripUndefined } from "./localCache";
 import { debouncedSave, registerOutboxFallback } from "./saveQueue";
 import { queueOutbox } from "../lib/offlineOutbox";
+import { patchCachedStageData } from "../lib/stageCache";
 
 export const saveStudents = async (
   adminUid: string,
   stageId: string,
   students: Student[],
-  forceDelete: boolean = false
+  forceDelete: boolean = false,
+  teacherId?: string
 ): Promise<void> => {
   if (!forceDelete) {
     if (isDangerousEmpty(students)) {
@@ -25,6 +27,7 @@ export const saveStudents = async (
   saveLocal(LS.students(adminUid, stageId), students);
 
   const year = await getActiveAcademicYear();
+  if (teacherId) void patchCachedStageData(adminUid, year, stageId, teacherId, { students });
   const saveKey = `students_${adminUid}_${stageId}`;
 
   // فصل faceDescriptor إلى عقدة منفصلة — students تبقى خفيفة (بلا بصمات ضخمة)

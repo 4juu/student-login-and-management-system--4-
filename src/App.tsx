@@ -227,6 +227,8 @@ function App() {
   }, []);
 
   const handleSelectStage = useCallback(async (collegeId: string, stageId: string) => {
+    // تحصيل أي حذف/تعديل معلّق للمرحلة السابقة قبل جلبها — وإلا عاد السجل المحذوف من الكاش/الخادم
+    await flushAllPendingSaves();
     const runId = ++stageRunIdRef.current;
     setSelectedCollegeId(collegeId);
     setSelectedStageId(stageId);
