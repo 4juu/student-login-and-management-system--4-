@@ -28,7 +28,7 @@ const MAX_FACES_PER_FRAME = 10;
 const REEMBED_MIN_INTERVAL = 150;
 const REEMBED_MOVE_THRESHOLD = 0.08;
 const NO_MATCH_FRAMES = 12;
-const FOUND_FLASH_MS = 1000;
+const FOUND_FLASH_MS = 3000;
 
 /**
  * بوابة تقرير الحضور بالوجه — الكاميرا تنفتح مباشرة والتعرف على الطالب
@@ -540,8 +540,7 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
                 <polyline points="22 4 12 14.01 9 11.01" />
               </svg>
             </div>
-            <h2 className="text-xl font-extrabold text-emerald-300 mb-2">تم التعرف</h2>
-            <p className="text-base font-bold text-white mb-2">{matchedStudent.name}</p>
+            <h2 className="text-2xl font-extrabold text-white mb-2">أهلاً {matchedStudent.name}</h2>
             <p className="text-sm text-slate-400">جارٍ فتح تقرير الحضور والغياب...</p>
           </div>
         </div>

@@ -214,6 +214,17 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
     transitionTo('verify');
   }, [transitionTo]);
 
+  // زر «تم» في تقرير الحضور — العودة لبداية مسح الوجه مباشرة
+  const handleReportDone = useCallback(() => {
+    setAttendanceRecords([]);
+    setAttendanceSessions([]);
+    setSessionNameMap({});
+    setQrResult(null);
+    setErrorMsg('');
+    setRetryStep('scan-face');
+    transitionTo('scan-face');
+  }, [transitionTo]);
+
   const loadStageRecordsForStudent = async (
     lnk: RegistrationLink,
     studentId: string,
@@ -812,7 +823,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
               subjectName={subjectName}
               stats={getAttendanceStats()}
               sessionNameMap={sessionNameMap}
-              onRestart={restart}
+              onDone={handleReportDone}
             />
           )}
         </main>
@@ -837,8 +848,8 @@ const ReportStep: React.FC<{
   subjectName: string;
   stats: { present: number; absent: number; total: number; records: AttendanceRecord[] };
   sessionNameMap: Record<string, string>;
-  onRestart: () => void;
-}> = ({ expected, subjectName, stats, sessionNameMap, onRestart }) => (
+  onDone: () => void;
+}> = ({ expected, subjectName, stats, sessionNameMap, onDone }) => (
   <div className="sel-fade">
     <div className="sel-report-hero">
       <div className="flex items-center gap-3 mb-2">
@@ -919,8 +930,8 @@ const ReportStep: React.FC<{
         </div>
       )}
 
-      <button type="button" className="sel-btn sel-btn-primary mt-6" onClick={onRestart}>
-        <ScanFace className="w-5 h-5" /> إعادة تصوير الهوية
+      <button type="button" className="sel-btn sel-btn-primary mt-6" onClick={onDone}>
+        <CheckCircle className="w-5 h-5" /> تم
       </button>
     </div>
   </div>
