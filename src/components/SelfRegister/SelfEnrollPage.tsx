@@ -37,12 +37,17 @@ const LazySelfCapture = lazy(() =>
   import('../face/SelfCaptureStep').then(m => ({ default: m.SelfCaptureStep }))
 );
 
+const LazyFaceReportGate = lazy(() =>
+  import('../face/FaceReportGate').then(m => ({ default: m.FaceReportGate }))
+);
+
 type Step =
   | 'loading'
   | 'invalid-link'
   | 'verify'
   | 'confirm'
   | 'capture-face'
+  | 'scan-face'
   | 'submitting'
   | 'success'
   | 'report'
@@ -175,7 +180,7 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   const [retryStep, setRetryStep] = useState<Step>('verify');
   const [qrResult, setQrResult] = useState<QrScanResult | null>(null);
 
-  const needsEngine = step === 'capture-face';
+  const needsEngine = step === 'capture-face' || step === 'scan-face';
   const { ready: engineReady, progress, error: engineError, retry: engineRetry } = useFaceAI(needsEngine);
 
   const goTo = useCallback((s: Step) => setStep(prev => (prev === s ? prev : s)), []);
@@ -369,7 +374,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
               return;
             }
             setStageStudents(list);
-            goTo('verify');
+            goTo('scan-face');
           } finally { clearTimeout(st); }
           return;
         }
@@ -435,7 +440,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
     } catch (e) {
       console.error('❌ تعذر تحميل تقرير الحضور:', e);
       setErrorMsg('تعذر تحميل تقرير الحضور — حاول مرة أخرى');
-      setRetryStep('verify');
+      setRetryStep(link.type === 'attendance' ? 'scan-face' : 'verify');
       goTo('error');
     }
   };
@@ -630,6 +635,23 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
           allStudents={stageStudents}
           onCaptured={handleFaceCaptured}
           onCancel={() => goTo('confirm')}
+        />
+      </Suspense>
+    );
+  }
+
+  // ── شاشة مسح الوجه لعرض تقرير الحضور (رابط الحضور) ──
+  if (step === 'scan-face') {
+    return (
+      <Suspense fallback={
+        <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
+          <LoadingState size="lg" />
+        </div>
+      }>
+        <LazyFaceReportGate
+          students={stageStudents}
+          onMatched={handleVerified}
+          onCancel={onExit}
         />
       </Suspense>
     );
