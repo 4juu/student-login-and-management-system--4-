@@ -1,15 +1,20 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalBehavior } from '../../hooks/useModalBehavior';
 import { Student, AttendanceRecord, AttendanceSession } from '../../types/student';
 import { BookOpen, Check, ClipboardList, Copy, Ticket } from 'lucide-react';
 import { hasValidDescriptor, getCoveragePercent, normalizeClusters } from '../../services/faceAI/descriptors';
+import { loadPhoto } from '../../firebase/photoService';
+import { getActiveAcademicYear } from '../../firebase/dataService';
 
 interface StudentProfileModalProps {
   student: Student;
   records: AttendanceRecord[];
   sessions: AttendanceSession[];
   stageName?: string | undefined;
+  /** لتحميل صورة الطالب من عقدة photos/ (للأدمن فقط في v1) */
+  adminUid?: string | undefined;
+  stageId?: string | undefined;
   onClose: () => void;
 }
 
@@ -62,10 +67,30 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
   records,
   sessions,
   stageName,
+  adminUid,
+  stageId,
   onClose,
 }) => {
   const [page, setPage] = useState(1);
+  const [photo, setPhoto] = useState<string | null>(null);
   const panelRef = useModalBehavior({ open: true, onClose });
+
+  // تحميل صورة الطالب (إن وُجدت) — صامت عند الفشل
+  useEffect(() => {
+    let mounted = true;
+    setPhoto(null);
+    if (!adminUid || !stageId) return;
+    (async () => {
+      try {
+        const year = await getActiveAcademicYear();
+        const uri = await loadPhoto(year, adminUid, stageId, student.id);
+        if (mounted && uri) setPhoto(uri);
+      } catch {
+        /* صورة اختيارية */
+      }
+    })();
+    return () => { mounted = false; };
+  }, [adminUid, stageId, student.id]);
 
   const studentRecords = useMemo(
     () => records.filter(r => r.studentId === student.id),
@@ -160,9 +185,17 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
           </div>
 
           <div className="flex items-center gap-3 sm:gap-4">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white font-bold text-xl sm:text-2xl shadow-md">
-              {student.name.trim().charAt(0) || '؟'}
-            </div>
+            {photo ? (
+              <img
+                src={photo}
+                alt={`صورة ${student.name}`}
+                className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 rounded-2xl object-cover border border-slate-200 shadow-md"
+              />
+            ) : (
+              <div className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white font-bold text-xl sm:text-2xl shadow-md">
+                {student.name.trim().charAt(0) || '؟'}
+              </div>
+            )}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <p className="font-bold text-gray-900 text-base sm:text-lg truncate">{student.name}</p>

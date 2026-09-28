@@ -26,6 +26,13 @@ export const useAuthStore = create<AuthState>((set) => ({
 export const selectIsAdmin = (s: AuthState) => s.currentUser?.role === 'admin';
 export const selectIsMainAdmin = selectIsAdmin;
 export const selectIsCollegeAdmin = (s: AuthState) => s.currentUser?.role === 'college_admin';
+
+/** معرّف صاحب البيانات (uid للأدمن، adminId لباقي الأدوار) — نفس منطق getAdminUid في useAuth */
+export const selectDataAdminUid = (s: AuthState): string => {
+  const u = s.currentUser;
+  if (!u) return '';
+  return u.role === 'admin' ? u.uid : u.adminId || u.uid;
+};
 export const selectCanEditStudents = (s: AuthState) =>
   s.currentUser?.role === 'admin' || s.currentUser?.role === 'college_admin';
 export const selectCanSendAttendanceLink = (s: AuthState) =>

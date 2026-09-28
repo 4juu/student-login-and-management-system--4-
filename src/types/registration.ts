@@ -52,6 +52,9 @@ export interface PendingRegistration {
 
   hasExistingQr?: boolean | undefined;
   hasExistingFace?: boolean | undefined;
+
+  /** صورة الطالب (data URI مضغوط) — تُحفظ كمرجع إضافي بعد موافقة الإدارة */
+  photo?: string | undefined;
 }
 
 export interface IDExtractionResult {

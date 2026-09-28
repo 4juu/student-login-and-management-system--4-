@@ -674,12 +674,14 @@ function App() {
       {profileStudent && (
         <Suspense fallback={<ModalFallback />}>
           <StudentProfileModal
-            student={profileStudent}
-            records={attendanceRecords}
-            sessions={sessions}
-            stageName={selectedStage?.name}
-            onClose={() => setProfileStudent(null)}
-          />
+              student={profileStudent}
+              records={attendanceRecords}
+              sessions={sessions}
+              stageName={selectedStage?.name}
+              adminUid={getAdminUid() || undefined}
+              stageId={selectedStageId ?? undefined}
+              onClose={() => setProfileStudent(null)}
+            />
         </Suspense>
       )}
 

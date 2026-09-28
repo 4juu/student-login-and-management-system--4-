@@ -5,7 +5,7 @@ import {
   hasValidDescriptor,
   isGalleryDescriptor,
 } from '../../services/faceAI/descriptors';
-import { CircleCheck, ClipboardList, IdCard, Pencil, QrCode, RefreshCw, ScanFace, Smile, Trash2, Unlink } from 'lucide-react';
+import { Camera, CircleCheck, ClipboardList, IdCard, Pencil, QrCode, RefreshCw, ScanFace, Smile, Trash2, Unlink } from 'lucide-react';
 
 interface StudentTableProps {
   paginatedStudents: Student[];
@@ -21,6 +21,7 @@ interface StudentTableProps {
   toggleSelectStudent: (id: string) => void;
   toggleSelectAllInPage: () => void;
   openFaceEnroll: (presetIds?: string[] | undefined) => void;
+  onUploadPhoto?: ((student: Student) => void) | undefined;
   transferStudentId: string | null;
   setTransferStudentId: React.Dispatch<React.SetStateAction<string | null>>;
   transferGroupValue: string;
@@ -55,6 +56,7 @@ export const StudentTable: React.FC<StudentTableProps> = ({
   toggleSelectStudent,
   toggleSelectAllInPage,
   openFaceEnroll,
+  onUploadPhoto,
   transferStudentId,
   setTransferStudentId,
   transferGroupValue,
@@ -379,6 +381,15 @@ export const StudentTable: React.FC<StudentTableProps> = ({
 
                   <td className="px-4 py-4 whitespace-nowrap text-right">
                     <div className="flex items-center justify-end gap-3">
+                      {onUploadPhoto && (
+                        <button
+                          onClick={() => onUploadPhoto(student)}
+                          className="text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1"
+                          title="رفع صورة الطالب (تُراجَع وتُحفظ كمرجع بصمة)"
+                        >
+                          صورة <Camera className="w-4 h-4" />
+                        </button>
+                      )}
                       {onUpdateStudent && (
                         <button
                           onClick={() => openFaceEnroll([student.id])}

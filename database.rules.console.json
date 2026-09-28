@@ -85,7 +85,11 @@
           "$requestId": {
             ".write": "(!data.exists() && newData.exists()) || auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')",
             // ✅ إنشاء الزائر (طالب بلا دخول) يلزم شكل طلب معلّق فقط — يمنع التلوّث العشوائي
-            ".validate": "!newData.exists() || auth != null || (newData.hasChildren(['status', 'createdAt', 'studentId']) && newData.child('status').val() === 'pending')"
+            ".validate": "!newData.exists() || auth != null || (newData.hasChildren(['status', 'createdAt', 'studentId']) && newData.child('status').val() === 'pending')",
+            // 📷 صورة الطالب (data URI مضغوط) — اختيارية ومحدودة الحجم 120KB
+            "photo": {
+              ".validate": "!newData.exists() || (newData.isString() && newData.val().startsWith('data:image/') && newData.val().length <= 120000)"
+            }
           }
         }
       }
@@ -166,6 +170,15 @@
                 "descriptors": {
                   ".read": true,
                   ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)"
+                },
+
+                // 📷 صور الطلاب (data URI مضغوط ≤120KB) — القراءة لصاحب البيانات فقط (عرض الأدمن في v1)
+                "photos": {
+                  ".read": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
+                  ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
+                  "$studentId": {
+                    ".validate": "!newData.exists() || (newData.isString() && newData.val().startsWith('data:image/') && newData.val().length <= 120000)"
+                  }
                 }
               }
             },

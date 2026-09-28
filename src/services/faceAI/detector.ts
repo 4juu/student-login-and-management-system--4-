@@ -25,6 +25,9 @@ type ProgressCb = (p: DetectorProgress) => void;
 
 class FaceDetectionService {
   private detector: FaceDetector | null = null;
+  /** مثيل منفصل بوضع IMAGE لصور ثابتة (صورة الطالبة) — لا يمس مثيل VIDEO */
+  private imageDetector: FaceDetector | null = null;
+  private imageLoading: Promise<void> | null = null;
   private loading: Promise<void> | null = null;
   private listeners = new Set<ProgressCb>();
   private lastProgress: DetectorProgress = { stage: 'wasm', percent: 0, detail: 'تهيئة محرك الكشف...' };
@@ -126,11 +129,73 @@ class FaceDetectionService {
     }
   }
 
+  /** تهيئة مثيل IMAGE (صور ثابتة) — idempotent ولا يمس مثيل VIDEO */
+  ensureImageReady(): Promise<void> {
+    if (this.imageDetector) return Promise.resolve();
+    if (this.imageLoading) return this.imageLoading;
+
+    this.imageLoading = (async () => {
+      const fileset = await FilesetResolver.forVisionTasks(WASM_PATH);
+      try {
+        this.imageDetector = await FaceDetector.createFromOptions(fileset, {
+          baseOptions: { modelAssetPath: MODEL_PATH, delegate: 'GPU' },
+          runningMode: 'IMAGE',
+          minDetectionConfidence: 0.55,
+        });
+      } catch {
+        this.imageDetector = await FaceDetector.createFromOptions(fileset, {
+          baseOptions: { modelAssetPath: MODEL_PATH, delegate: 'CPU' },
+          runningMode: 'IMAGE',
+          minDetectionConfidence: 0.55,
+        });
+      }
+    })().catch(e => {
+      this.imageLoading = null;
+      console.error('[face-detector] فشل تهيئة مثيل الصور:', e);
+      throw new Error('تعذر تحميل كاشف الوجوه للصورة — أعد المحاولة');
+    });
+
+    return this.imageLoading;
+  }
+
+  /** كشف الوجوه في صورة ثابتة — يعيد مربعات بإحداثيات الصورة */
+  async detectImage(source: ImageBitmap): Promise<DetectedFace[]> {
+    await this.ensureImageReady();
+    const detector = this.imageDetector;
+    if (!detector || !source.width || !source.height) return [];
+    try {
+      const result = detector.detect(source);
+      const out: DetectedFace[] = [];
+      for (const det of result.detections ?? []) {
+        const bb = det.boundingBox;
+        const score = det.categories?.[0]?.score ?? 0;
+        if (!bb || score < 0.55) continue;
+        const x = Math.max(0, bb.originX);
+        const y = Math.max(0, bb.originY);
+        const width = Math.min(source.width - x, bb.width);
+        const height = Math.min(source.height - y, bb.height);
+        if (width < 16 || height < 16) continue;
+        const keypoints = det.keypoints?.map(kp => ({
+          x: kp.x * source.width,
+          y: kp.y * source.height,
+        }));
+        out.push({ box: { x, y, width, height }, score, keypoints });
+      }
+      out.sort((a, b) => b.box.width * b.score - a.box.width * b.score);
+      return out;
+    } catch (e) {
+      console.error('[face-detector] فشل الكشف في الصورة:', e);
+      return [];
+    }
+  }
+
   /** إعادة تهيئة كاملة من الصفر — تستدعى عند تعطل المحرك */
   reset() {
     this._ready = false;
     this.detector = null;
     this.loading = null;
+    this.imageDetector = null;
+    this.imageLoading = null;
     this.report({ stage: 'wasm', percent: 0, detail: 'تهيئة محرك الوجه...' });
   }
 }

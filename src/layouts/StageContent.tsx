@@ -4,7 +4,7 @@ import type { AbsenceSendLogEntry, GroupSendProgress } from '../types/telegram';
 import { useNavStore } from '../store/navStore';
 import { useUIStore } from '../store/useUIStore';
 import { useStageStore } from '../store/useStageStore';
-import { useAuthStore, selectCanEditStudents } from '../store/useAuthStore';
+import { useAuthStore, selectCanEditStudents, selectDataAdminUid } from '../store/useAuthStore';
 import { StageTabs } from './StageTabs';
 import { TabFallback, StageLoading } from './Fallbacks';
 import { LoadingState } from '../components/loading/LoadingState';
@@ -93,6 +93,8 @@ export const StageContent: FC<StageContentProps> = ({
   const activeSessionId = useStageStore((s) => s.activeSessionId);
   const currentUser = useAuthStore((s) => s.currentUser);
   const canEditStudents = useAuthStore(selectCanEditStudents);
+  const dataAdminUid = useAuthStore(selectDataAdminUid);
+  const selectedStageId = useStageStore((s) => s.selectedStageId);
 
   const activeSession = sessions.find(s => s.id === activeSessionId) || null;
   const teacherBio = currentUser?.bio || currentUser?.displayName || '';
@@ -156,6 +158,7 @@ export const StageContent: FC<StageContentProps> = ({
                 onDeleteStudent={onDeleteStudent} onDeleteSelectedStudents={onDeleteSelectedStudents}
                 onSortByName={onSortByName} onSortByGroup={onSortByGroup}
                 onOpenProfile={setProfileStudent}
+                adminUid={dataAdminUid} stageId={selectedStageId ?? undefined}
               />
             ) : (
               <StudentsViewer students={students} onOpenProfile={setProfileStudent} />

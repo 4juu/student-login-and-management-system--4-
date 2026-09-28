@@ -27,6 +27,10 @@ const LazyFaceEnroll = lazy(() =>
   import('../face/FaceEnrollModal').then(m => ({ default: m.FaceEnrollModal }))
 );
 
+const LazyPhotoUploadDialog = lazy(() =>
+  import('./PhotoUploadDialog').then(m => ({ default: m.PhotoUploadDialog }))
+);
+
 interface StudentManagerProps {
   students: Student[];
   onAddStudent: (student: Student) => void;
@@ -37,6 +41,9 @@ interface StudentManagerProps {
   onSortByName?: () => void;
   onSortByGroup?: () => void;
   onOpenProfile?: (student: Student) => void;
+  /** لرفع صورة الطالب مباشرة (عقدة photos/) — يُمرَّر من StageContent */
+  adminUid?: string | undefined;
+  stageId?: string | undefined;
 }
 
 const extractQrCodeId = (raw: string): string => {
@@ -66,6 +73,8 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
   onSortByName,
   onSortByGroup,
   onOpenProfile,
+  adminUid,
+  stageId,
 }) => {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -91,6 +100,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
   const [transferGroupValue, setTransferGroupValue] = useState('');
 
   const [showFaceRegister, setShowFaceRegister] = useState(false);
+  const [photoStudent, setPhotoStudent] = useState<Student | null>(null);
   useBodyScrollLock(showFaceRegister && !!onUpdateStudent);
   const [faceEnrollPreset, setFaceEnrollPreset] = useState<string[] | undefined>(undefined);
 
@@ -728,6 +738,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
         toggleSelectStudent={toggleSelectStudent}
         toggleSelectAllInPage={toggleSelectAllInPage}
         openFaceEnroll={openFaceEnroll}
+        onUploadPhoto={adminUid && stageId && onUpdateStudent ? setPhotoStudent : undefined}
         transferStudentId={transferStudentId}
         setTransferStudentId={setTransferStudentId}
         transferGroupValue={transferGroupValue}
@@ -769,6 +780,23 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
             onUpdateStudent={onUpdateStudent}
             initialSelectedIds={faceEnrollPreset}
             onClose={() => { setShowFaceRegister(false); setFaceEnrollPreset(undefined); }}
+          />
+        </Suspense>
+      )}
+
+      {photoStudent && adminUid && stageId && onUpdateStudent && (
+        <Suspense fallback={
+          <div className="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+            <LoadingState size="md" />
+          </div>
+        }>
+          <LazyPhotoUploadDialog
+            student={photoStudent}
+            students={students}
+            adminUid={adminUid}
+            stageId={stageId}
+            onUpdateStudent={onUpdateStudent}
+            onClose={() => setPhotoStudent(null)}
           />
         </Suspense>
       )}

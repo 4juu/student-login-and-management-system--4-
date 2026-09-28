@@ -26,6 +26,7 @@ import {
   Clock,
   BadgeCheck,
   RefreshCw,
+  Camera,
 } from 'lucide-react';
 import './selfRegister.css';
 import { TextScramble } from '../TextScramble';
@@ -35,6 +36,10 @@ import { normalizeDate } from '../../lib/date';
 
 const LazySelfCapture = lazy(() =>
   import('../face/SelfCaptureStep').then(m => ({ default: m.SelfCaptureStep }))
+);
+
+const LazyPhotoCapture = lazy(() =>
+  import('../face/PhotoCaptureStep').then(m => ({ default: m.PhotoCaptureStep }))
 );
 
 const LazyFaceReportGate = lazy(() =>
@@ -47,6 +52,7 @@ type Step =
   | 'verify'
   | 'confirm'
   | 'capture-face'
+  | 'capture-photo'
   | 'scan-face'
   | 'submitting'
   | 'success'
@@ -180,7 +186,16 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   const [retryStep, setRetryStep] = useState<Step>('verify');
   const [qrResult, setQrResult] = useState<QrScanResult | null>(null);
 
-  const needsEngine = step === 'capture-face' || step === 'scan-face';
+  // وضع «صورة فقط»: ?mode=photo — يتجاوز التحقق ويفتح التقاط الصورة مباشرة
+  const photoMode = React.useMemo(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('mode') === 'photo';
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const needsEngine = step === 'capture-face' || step === 'capture-photo' || step === 'scan-face';
   const { ready: engineReady, progress, error: engineError, retry: engineRetry } = useFaceAI(needsEngine);
 
   const goTo = useCallback((s: Step) => setStep(prev => (prev === s ? prev : s)), []);
@@ -393,7 +408,12 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
         // روابط التسجيل الفردية: هوية الطالب مضمّنة داخل الرابط نفسه
         if (linkData.studentName && linkData.studentId) {
           setExpected(buildStudentFromLink(linkData));
-          goTo('verify');
+          if (photoMode) {
+            setRetryStep('capture-photo');
+            goTo('capture-photo');
+          } else {
+            goTo('verify');
+          }
           return;
         }
 
@@ -408,7 +428,12 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
           const bound = list.find(s => s.id === linkData.studentId);
           if (bound) {
             setExpected(bound);
-            goTo('verify');
+            if (photoMode) {
+              setRetryStep('capture-photo');
+              goTo('capture-photo');
+            } else {
+              goTo('verify');
+            }
             return;
           }
           setErrorMsg('لم نجد بيانات الطالب المرتبط بهذا الرابط');
@@ -426,7 +451,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
     })();
 
     return () => { mounted = false; clearTimeout(globalTimeout); };
-  }, [token, goTo]);
+  }, [token, goTo, photoMode]);
 
   const handleVerified = async (student: Student, qr?: QrScanResult | null) => {
     if (!link) return;
@@ -456,14 +481,15 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
     }
   };
 
-  const handleFaceCaptured = async (descriptor: FaceGalleryDescriptor) => {
+  const handleFaceCaptured = async (descriptor: FaceGalleryDescriptor, photo?: string) => {
     if (!link || !expected) return;
+    const fromCapture = step === 'capture-photo' ? 'capture-photo' : 'capture-face';
     goTo('submitting');
 
     const migrated = migrateToV5(descriptor);
     if (!migrated) {
       setErrorMsg('تعذر حفظ البصمة: لم يتم التقاط وجه صالح. أعد المحاولة.');
-      setRetryStep('capture-face');
+      setRetryStep(fromCapture);
       goTo('error');
       return;
     }
@@ -487,7 +513,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
 
         if (tamperResult.tampered) {
           setErrorMsg(`عذراً، هذه البصمة مسجّلة بالفعل باسم الطالب: ${tamperResult.matchedWith}`);
-          setRetryStep('capture-face');
+          setRetryStep(fromCapture);
           goTo('error');
           return;
         }
@@ -507,7 +533,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
           setErrorMsg(
             `تم رفض التسجيل: هذه البصمة معلقة بالفعل باسم الطالب «${conflict.matchedWith}» بانتظار مراجعة الإدارة.`,
           );
-          setRetryStep('capture-face');
+          setRetryStep(fromCapture);
           goTo('error');
           return;
         }
@@ -546,6 +572,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
           createdAt: now,
           hasExistingQr: !!expected.qrCodeId,
           hasExistingFace: !!expected.faceDescriptor,
+          ...(photo ? { photo } : {}),
         },
       };
       if (link.stageId) {
@@ -564,7 +591,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
       goTo('success');
     } catch (e: any) {
       setErrorMsg(e.code === 'PERMISSION_DENIED' ? 'لا توجد صلاحية' : e.message || 'فشل الحفظ');
-      setRetryStep('capture-face');
+      setRetryStep(fromCapture);
       goTo('error');
     }
   };
@@ -642,6 +669,24 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
         </div>
       }>
         <LazySelfCapture
+          student={expected}
+          allStudents={stageStudents}
+          onCaptured={handleFaceCaptured}
+          onCancel={() => goTo('confirm')}
+        />
+      </Suspense>
+    );
+  }
+
+  // ── شاشة التقاط الصورة (صورة واحدة تُرفع لموافقة الإدارة) ──
+  if (step === 'capture-photo' && expected) {
+    return (
+      <Suspense fallback={
+        <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
+          <LoadingState size="lg" />
+        </div>
+      }>
+        <LazyPhotoCapture
           student={expected}
           allStudents={stageStudents}
           onCaptured={handleFaceCaptured}
@@ -783,8 +828,19 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
               </div>
 
               <div className="space-y-2">
-                <button type="button" className="sel-btn sel-btn-primary" onClick={() => goTo('capture-face')}>
+                <button
+                  type="button"
+                  className="sel-btn sel-btn-primary"
+                  onClick={() => { setRetryStep('capture-face'); goTo('capture-face'); }}
+                >
                   <ScanFace className="w-5 h-5" /> بدء التقاط البصمة
+                </button>
+                <button
+                  type="button"
+                  className="sel-btn sel-btn-ghost"
+                  onClick={() => { setRetryStep('capture-photo'); goTo('capture-photo'); }}
+                >
+                  <Camera className="w-4 h-4" /> تسجيل صورة بدل البصمة
                 </button>
                 <button type="button" className="sel-btn sel-btn-ghost" onClick={() => goTo('verify')}>
                   <RefreshCw className="w-4 h-4" /> إعادة التحقق من البطاقة

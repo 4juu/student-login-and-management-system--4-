@@ -10,9 +10,12 @@ import { LoadingState } from '../loading/LoadingState';
 import { MorphingSquare } from '../MorphingSquare';
 import {
   parseStoredDescriptor,
+  parseAllSamples,
   checkForTampering,
   migrateToV5,
 } from '../../services/faceAI/descriptors';
+import { enrollPhotoSample } from '../../services/faceAI/photoEnrollment';
+import { isValidPhotoDataUri } from '../../lib/image';
 import { Camera, Check, CircleCheck, CircleX, ClipboardList, Mail, QrCode, Save, Smile, Trash2, TriangleAlert } from 'lucide-react';
 import { useConfirm } from '../../hooks/useConfirm';
 import { useNavStore } from '../../store/navStore';
@@ -111,6 +114,10 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       // ── 2) Validate + migrate the face descriptor (if provided)
       // نوحّد أي صيغة بصمة إلى v5 نظيفة — نقبل البصمة الجديدة مهما كانت صيغتها المخزّنة
       let finalDescriptor = req.faceDescriptor;
+      const allStudents: Student[] = (Array.isArray(data) ? data : Object.values(data)).map(s => {
+        const d = descriptors?.[s.id];
+        return d !== undefined && d !== null ? { ...s, faceDescriptor: d } : s;
+      });
 
       if (req.faceDescriptor) {
         const migrated = migrateToV5(req.faceDescriptor);
@@ -124,16 +131,37 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
           toast({ variant: 'destructive', title: 'البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.' });
           return;
         }
-        const allStudents: Student[] = (Array.isArray(data) ? data : Object.values(data)).map(s => {
-          const d = descriptors?.[s.id];
-          return d !== undefined && d !== null ? { ...s, faceDescriptor: d } : s;
-        });
         const tamper = checkForTampering(query, allStudents, req.studentId);
         if (tamper.tampered) {
           toast({ variant: 'destructive', title: 'لا يمكن الموافقة: هذه البصمة مطابقة لبصمة الطالب', description: `${tamper.matchedWith}\n\nيرجى التحقق من صالة الطلب.` });
           return;
         }
         finalDescriptor = migrated;
+      }
+
+      // ── 2b) صورة الطالبة: تُدمج كمرجع إضافي في معرض الطالبة الموجود (لا تستبدله) ──
+      let descriptorToSave = finalDescriptor;
+      if (isValidPhotoDataUri(req.photo)) {
+        const existingGallery = migrateToV5(descriptors?.[req.studentId]);
+        const reqGallery = migrateToV5(req.faceDescriptor);
+        const photoQuery = reqGallery ? parseAllSamples(reqGallery)[0] ?? null : null;
+
+        if (photoQuery) {
+          const enrolled = enrollPhotoSample({
+            query: photoQuery,
+            quality: reqGallery?.quality ?? 0.8,
+            studentId: req.studentId,
+            students: allStudents,
+            existing: descriptors?.[req.studentId],
+          });
+          if (!enrolled.ok && enrolled.reason === 'tamper') {
+            toast({ variant: 'destructive', title: 'لا يمكن الموافقة: الصورة مطابقة لطالب آخر', description: enrolled.matchedWith });
+            return;
+          }
+          descriptorToSave = enrolled.ok ? enrolled.gallery : (existingGallery ?? finalDescriptor);
+        } else {
+          descriptorToSave = existingGallery ?? finalDescriptor;
+        }
       }
 
       // ── 3) Update ONLY this student using update() — avoids rewriting whole array
@@ -143,11 +171,13 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         qrCodeId: req.qrCodeId,
         faceRegisteredAt: new Date().toISOString(),
       });
-      if (finalDescriptor !== undefined) {
-        await set(ref(database, `${descriptorsPath}/${req.studentId}`), finalDescriptor);
+      if (descriptorToSave !== undefined) {
+        await set(ref(database, `${descriptorsPath}/${req.studentId}`), descriptorToSave);
       }
 
       // ── 4) Update pending request status + إزالة قيد فهرس البصمة المعلقة
+      //    + حفظ صورة الطالبة في العقدة المنفصلة photos/ (ذرّياً مع حالة الطلب)
+      const photosPath = `academicYears/${year}/userData/${storageUid}/stageData/${req.stageId}/photos/${req.studentId}`;
       await update(ref(database), {
         [`registrationSystem/pending/${adminUid}/${req.id}`]: {
           status: 'approved',
@@ -157,6 +187,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         ...(req.stageId
           ? { [`registrationSystem/pendingFaceIndex/${adminUid}/${req.stageId}/${req.id}`]: null }
           : {}),
+        ...(isValidPhotoDataUri(req.photo) && req.stageId ? { [photosPath]: req.photo } : {}),
       });
 
       // ── 5) تعليم الرابط المخصص لطالب واحد «مستخدماً» بعد الموافقة فقط
@@ -409,13 +440,31 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                     </div>
                   </div>
 
+                  {isValidPhotoDataUri(req.photo) && (
+                    <div className="mb-3 flex items-center gap-3 bg-slate-800 border border-emerald-500/30 rounded-lg p-2">
+                      <img
+                        src={req.photo}
+                        alt={`صورة ${req.nameInSystem}`}
+                        className="w-16 h-16 object-cover rounded-lg border border-slate-600 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs text-emerald-300 font-bold flex items-center gap-1">
+                          <Camera className="w-3.5 h-3.5" /> صورة الطالبة
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          تُحفظ كمرجع بصمة إضافي عند الموافقة
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex gap-2 flex-wrap mb-3">
                     <span className={`text-[10px] border rounded-full px-2 py-1 flex items-center gap-1 ${
                       req.qrVerified
                         ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
                         : 'bg-slate-800 border-slate-600'
                     }`}>
-                      <QrCode className="w-3 h-3" /> {req.qrVerified ? 'QR متحقق' : 'QR غير متحقق'}
+                      <QrCode className="w-3 h-3" /> {req.qrVerified ? 'QR موثّق' : 'QR غير موثّق'}
                     </span>
                     <span className={`text-[10px] border rounded-full px-2 py-1 flex items-center gap-1 ${
                       req.nameMatched
