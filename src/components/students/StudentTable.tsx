@@ -15,6 +15,7 @@ interface StudentTableProps {
   safeCurrentPage: number;
   pageSize: number;
   uniqueGroups: string[];
+  fpIds?: Map<string, string> | undefined;
   onUpdateStudent?: ((id: string, updates: Partial<Student>) => void) | undefined;
   onOpenProfile?: ((student: Student) => void) | undefined;
   onDeleteStudent: (id: string) => void;
@@ -49,6 +50,7 @@ export const StudentTable: React.FC<StudentTableProps> = ({
   safeCurrentPage,
   pageSize,
   uniqueGroups,
+  fpIds,
   onUpdateStudent,
   onOpenProfile,
   onDeleteStudent,
@@ -139,7 +141,18 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                   <td className="px-4 py-4 whitespace-nowrap">
                     <span className="text-lg font-bold text-blue-600">{student.code}</span>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-right">{student.name}</td>
+                  <td className="px-4 py-4 whitespace-nowrap text-right">
+                    <div>{student.name}</div>
+                    {hasFace && fpIds?.get(student.id) && (
+                      <div
+                        className="text-[10px] font-mono text-slate-500 tracking-wider mt-0.5"
+                        dir="ltr"
+                        title="رقم البصمة الفريد"
+                      >
+                        FP-{fpIds.get(student.id)}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-4 whitespace-nowrap text-right">
                     {transferStudentId === student.id ? (
                       <div className="flex items-center gap-1">

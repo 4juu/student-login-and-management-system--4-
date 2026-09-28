@@ -18,9 +18,12 @@ import {
   updateGallery,
   MATCH_LOOSE,
   MIN_RECOG_CONFIDENCE,
+  MIN_FRAME_QUALITY,
   CONFIRM_FRAMES,
 } from '../../services/faceAI/descriptors';
-import { buildGallery, findBestMatchIndexed } from '../../services/faceAI/gallery';
+import { buildGalleryIndex, findBestMatchIndexed, type GalleryIndex } from '../../services/faceAI/gallery';
+
+const EMPTY_INDEX: GalleryIndex = buildGalleryIndex([]);
 import { estimatePose, poseToBin } from '../../services/faceAI/pose';
 import { getTestLink, validateTestLink, formatRemainingMs, getServerNow } from '../../services/tokenService';
 import { loadStageStudentsWithOverrides } from '../SelfRegister/SelfEnrollPage';
@@ -81,7 +84,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
   const [poseHintIdx, setPoseHintIdx] = useState(0);
 
   const studentsRef = useRef<Student[]>([]);
-  const galleryRef = useRef<ReturnType<typeof buildGallery>>([]);
+  const galleryRef = useRef<GalleryIndex>(EMPTY_INDEX);
   const trackerRef = useRef(new FaceTracker());
   const faceSeenRef = useRef(0);
 
@@ -116,7 +119,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
         if (cancelled) return;
         studentsRef.current = s;
         const approved = s.filter(st => hasValidDescriptor(st.faceDescriptor));
-        galleryRef.current = buildGallery(approved);
+        galleryRef.current = buildGalleryIndex(approved);
         setPhase('ready');
       } catch {
         if (!cancelled) setPhase('invalid');
@@ -346,8 +349,11 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
               const raw = new Float32Array(res.descriptor);
               const smoothed = trackerRef.current.addEmbedding(trackId, raw, nowTs);
 
-              const match = findBestMatchIndexed(smoothed, galleryRef.current, MATCH_LOOSE, res.quality.composite);
-              trackerRef.current.setCache(trackId, match?.item.id ?? null, match?.confidence ?? 0);
+              const match = findBestMatchIndexed(smoothed, galleryRef.current.items, MATCH_LOOSE, res.quality.composite, {
+                profile: galleryRef.current.profile,
+                dangerKeys: galleryRef.current.dangerKeys,
+              });
+              trackerRef.current.setCache(trackId, match?.item.id ?? null, match?.confidence ?? 0, res.quality.composite);
 
               const vbw = res.box.width / scale, vbh = res.box.height / scale;
               const vbx = res.box.x / scale, vby = res.box.y / scale;
@@ -375,7 +381,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
                 continue;
               }
 
-              if (!match || match.confidence < MIN_RECOG_CONFIDENCE) {
+              if (!match || match.confidence < MIN_RECOG_CONFIDENCE || res.quality.composite < MIN_FRAME_QUALITY) {
                 const smallFace = res.box.width < MIN_FACE_PX * 1.7;
                 liveBoxes.push({ box: boxInVideo, label: smallFace ? 'اقترب قليلاً' : 'غير معروف', color: '#fbbf24' });
                 continue;
@@ -386,7 +392,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
 
               anyMatched = true;
 
-              const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id);
+              const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id, match.distance);
 
               if (confirmCount < CONFIRM_FRAMES) {
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
@@ -428,8 +434,9 @@ setEnhanceCountdown(20);
             const boxInVideo: Box = { x: t.box.x, y: t.box.y, width: t.box.width, height: t.box.height };
             const student = studentsRef.current.find(s => s.id === cache.cachedMatchId);
 
-            if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE) {
-              const confirmCount = trackerRef.current.bumpConfirm(t.trackId, student.id);
+            if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE && cache.cachedQuality >= MIN_FRAME_QUALITY) {
+              const cacheDistance = 1 - cache.cachedConfidence / 100;
+              const confirmCount = trackerRef.current.bumpConfirm(t.trackId, student.id, cacheDistance);
 
               if (confirmCount >= CONFIRM_FRAMES) {
                 setMatchedStudent(student);
@@ -516,7 +523,7 @@ setEnhanceCountdown(20);
           if (idx >= 0) {
             students[idx] = { ...students[idx]!, faceDescriptor: savedDescriptorRef.current };
             studentsRef.current = students;
-            galleryRef.current = buildGallery(students.filter(s => hasValidDescriptor(s.faceDescriptor)));
+            galleryRef.current = buildGalleryIndex(students.filter(s => hasValidDescriptor(s.faceDescriptor)));
           }
           // حفظ في Firebase عبر descriptorOverrides (لا يتطلب تسجيل دخول)
           await updateStudentDescriptorOverride(

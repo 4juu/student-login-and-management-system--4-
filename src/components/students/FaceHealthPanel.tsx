@@ -1,5 +1,6 @@
 import React from 'react';
-import { Lightbulb, ScanFace, Smile, TriangleAlert, Zap } from 'lucide-react';
+import { Lightbulb, ScanFace, ShieldCheck, Smile, TriangleAlert, Zap } from 'lucide-react';
+import type { CalibrationReport, MatchProfile } from '../../services/faceAI/gallery';
 
 interface FaceHealth {
   v5Count: number;
@@ -16,6 +17,12 @@ interface FaceHealthPanelProps {
   canEnroll: boolean;
   onReEnrollNoFace: () => void;
   onOpenEnroll: () => void;
+  /** تقرير معايرة المطابقة — يُحسب في الإدارة ويُعرض في اللوحة */
+  report?: CalibrationReport | null;
+  /** الحدود الفعلية القابلة للمعايرة */
+  profile?: MatchProfile | null;
+  /** فتح تسجيل مجدداً لزوج طالبين متعارضين */
+  onReEnrollPair?: ((a: string, b: string) => void) | undefined;
 }
 
 export const FaceHealthPanel: React.FC<FaceHealthPanelProps> = ({
@@ -26,6 +33,9 @@ export const FaceHealthPanel: React.FC<FaceHealthPanelProps> = ({
   canEnroll,
   onReEnrollNoFace,
   onOpenEnroll,
+  report,
+  profile,
+  onReEnrollPair,
 }) => {
   if (variant === 'banner') {
     if (!(studentsCount > 0 && studentsWithoutFace > 0)) return null;
@@ -68,6 +78,62 @@ export const FaceHealthPanel: React.FC<FaceHealthPanelProps> = ({
           <div className="text-xs text-slate-400">بدون بصمة</div>
         </div>
       </div>
+
+      {/* ── معايرة المطابقة + الأزواج الخطرة ── */}
+      {report && profile && report.students >= 2 && (
+        <div className="mb-3 bg-white/5 border border-white/10 rounded-lg p-3">
+          <p className="text-xs font-bold text-purple-200 mb-2 flex items-center gap-1.5">
+            <ShieldCheck className="w-4 h-4" /> معايرة المطابقة (دقة المنع من الخلط)
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-center mb-2">
+            <div className="bg-black/20 rounded-lg p-2">
+              <div className="text-lg font-bold text-indigo-300 font-mono" dir="ltr">{profile.d1Cap.toFixed(2)}</div>
+              <div className="text-[10px] text-slate-400">أقصى مسافة مطابقة</div>
+            </div>
+            <div className="bg-black/20 rounded-lg p-2">
+              <div className="text-lg font-bold text-indigo-300 font-mono" dir="ltr">{profile.margin.toFixed(2)}</div>
+              <div className="text-[10px] text-slate-400">الهامش بين طالبين</div>
+            </div>
+            <div className="bg-black/20 rounded-lg p-2">
+              <div className={`text-lg font-bold ${report.separation ? 'text-emerald-300' : 'text-red-300'}`}>
+                {report.separation ? '✓ مفصل' : '✗ ضعيف'}
+              </div>
+              <div className="text-[10px] text-slate-400">فصل الطلاب ({report.intraMax.toFixed(2)} ← {report.interMin.toFixed(2)})</div>
+            </div>
+            <div className="bg-black/20 rounded-lg p-2">
+              <div className="text-lg font-bold text-amber-300 font-mono" dir="ltr">{(report.estFalseAccept * 100).toFixed(2)}%</div>
+              <div className="text-[10px] text-slate-400">خطر قبول خاطئ (تقديري)</div>
+            </div>
+          </div>
+
+          {report.dangerPairs.length > 0 && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-2.5">
+              <p className="text-xs font-bold text-red-300 mb-1.5 flex items-center gap-1.5">
+                <TriangleAlert className="w-4 h-4 shrink-0" />
+                {report.dangerPairs.length} زوج طالبين متعارضين — بصمتاهما متشابكتان وقد يختلط حضورهما
+              </p>
+              <div className="space-y-1.5">
+                {report.dangerPairs.slice(0, 8).map(p => (
+                  <div key={`${p.a}-${p.b}`} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-slate-300 truncate">
+                      {p.aName || p.a} ↔ {p.bName || p.b}
+                      <span className="text-red-400 font-mono mr-1.5" dir="ltr">d={p.distance.toFixed(2)}</span>
+                    </span>
+                    {onReEnrollPair && (
+                      <button
+                        onClick={() => onReEnrollPair(p.a, p.b)}
+                        className="shrink-0 px-2 py-0.5 bg-red-500 hover:bg-red-400 text-white rounded font-bold transition"
+                      >
+                        إعادة تسجيل الاثنين
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {studentsWithoutFace > 0 && (
         <div className="mb-3 bg-gradient-to-r from-amber-500/10 to-yellow-500/10 border border-amber-500/30 rounded-lg p-3 flex items-start gap-2">
