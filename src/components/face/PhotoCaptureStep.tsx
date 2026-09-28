@@ -166,7 +166,10 @@ export const PhotoCaptureStep: React.FC<PhotoCaptureStepProps> = ({
       if (!faces[0]) { setFeedback('لا أرى وجهاً'); return; }
 
       const bmp = await grabVideoFrame(v, 640);
-      if (!bmp) return;
+      if (!bmp) {
+        setFeedback('تعذر قراءة إطار الكاميرا — أعد المحاولة');
+        return;
+      }
       const scale = bmp.width / v.videoWidth;
       const res = await faceEmbedder.embed(bmp, {
         x: faces[0].box.x * scale,
@@ -216,7 +219,10 @@ export const PhotoCaptureStep: React.FC<PhotoCaptureStepProps> = ({
       try { navigator.vibrate?.(40); } catch {}
     } catch (e) {
       console.warn('[photo-capture] خطأ في التقاط الصورة:', e);
-      if (mountedRef.current) setFeedback('تعذر معالجة الصورة — أعد المحاولة');
+      if (mountedRef.current) {
+        const detail = e instanceof Error ? e.message : String(e ?? '');
+        setFeedback(detail ? `${detail} — أعد المحاولة` : 'تعذر معالجة الصورة — أعد المحاولة');
+      }
     } finally {
       busyRef.current = false;
       if (mountedRef.current) setSaving(false);
