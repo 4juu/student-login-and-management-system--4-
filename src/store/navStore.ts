@@ -16,6 +16,7 @@ interface NavState {
   activeTab: Tab;
   showSendLink: boolean;
   showSendCodeLink: boolean;
+  showSendPhotoLink: boolean;
   showTestLink: boolean;
   showAttendanceLink: boolean;
   showPendingRegistrations: boolean;
@@ -25,6 +26,7 @@ interface NavState {
   setActiveTab: (tab: Tab) => void;
   setShowSendLink: (open: boolean) => void;
   setShowSendCodeLink: (open: boolean) => void;
+  setShowSendPhotoLink: (open: boolean) => void;
   setShowTestLink: (open: boolean) => void;
   setShowAttendanceLink: (open: boolean) => void;
   setShowPendingRegistrations: (open: boolean) => void;
@@ -37,6 +39,7 @@ export const useNavStore = create<NavState>((set, get) => ({
   activeTab: 'stage-selector',
   showSendLink: false,
   showSendCodeLink: false,
+  showSendPhotoLink: false,
   showTestLink: false,
   showAttendanceLink: false,
   showPendingRegistrations: false,
@@ -52,6 +55,7 @@ export const useNavStore = create<NavState>((set, get) => ({
   },
   setShowSendLink: (showSendLink) => set({ showSendLink }),
   setShowSendCodeLink: (showSendCodeLink) => set({ showSendCodeLink }),
+  setShowSendPhotoLink: (showSendPhotoLink) => set({ showSendPhotoLink }),
   setShowTestLink: (showTestLink) => set({ showTestLink }),
   setShowAttendanceLink: (showAttendanceLink) => set({ showAttendanceLink }),
   setShowPendingRegistrations: (showPendingRegistrations) => set({ showPendingRegistrations }),
@@ -62,6 +66,7 @@ export const useNavStore = create<NavState>((set, get) => ({
       activeTab: 'stage-selector',
       showSendLink: false,
       showSendCodeLink: false,
+      showSendPhotoLink: false,
       showTestLink: false,
       showAttendanceLink: false,
       showPendingRegistrations: false,

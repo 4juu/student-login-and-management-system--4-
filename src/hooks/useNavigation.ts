@@ -13,6 +13,8 @@ function useNavigation(currentUser: User | null) {
   const setShowSendLink = useNavStore((s) => s.setShowSendLink);
   const showSendCodeLink = useNavStore((s) => s.showSendCodeLink);
   const setShowSendCodeLink = useNavStore((s) => s.setShowSendCodeLink);
+  const showSendPhotoLink = useNavStore((s) => s.showSendPhotoLink);
+  const setShowSendPhotoLink = useNavStore((s) => s.setShowSendPhotoLink);
   const showTestLink = useNavStore((s) => s.showTestLink);
   const setShowTestLink = useNavStore((s) => s.setShowTestLink);
   const showAttendanceLink = useNavStore((s) => s.showAttendanceLink);
@@ -60,6 +62,8 @@ function useNavigation(currentUser: User | null) {
     setShowSendLink,
     showSendCodeLink,
     setShowSendCodeLink,
+    showSendPhotoLink,
+    setShowSendPhotoLink,
     showTestLink,
     setShowTestLink,
     showAttendanceLink,

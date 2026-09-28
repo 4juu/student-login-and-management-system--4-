@@ -1,26 +1,15 @@
 {
   "rules": {
-    // ══════════════════════════════════════════════════════════
-    // 👥 المستخدمون
-    // ══════════════════════════════════════════════════════════
     "users": {
-      // ✅ فهرس لاستعلامات الدور/المالك (getAllTeachers, فلترة الأدمن)
       ".indexOn": ["role", "adminId", "collegeId"],
-      // ✅ سرد كل المستخدمين: أدمن/أدمن الكلية فقط — التدريسي يقرأ ملفه عبر $uid
       ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')",
       "$uid": {
         ".read": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')",
         ".write": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin' || (root.child('users').child(auth.uid).child('role').val() == 'college_admin' && root.child('users').child($uid).child('role').val() == 'teacher'))",
-        // 🔒 منع تصعيد الصلاحيات الذاتي: الدور لا يتغير إلا:
-        //    (1) بقاءه كما هو، أو (2) أي دور جديد = 'teacher' (بلا ترقية)، أو
-        //    (3) كتابة الأدمن، أو (4) بريد الأدمن الرئيسي (موثوق من توكن Firebase)
         ".validate": "!newData.exists() || (data.exists() && data.child('role').val() == newData.child('role').val()) || newData.child('role').val() == 'teacher' || root.child('users').child(auth.uid).child('role').val() == 'admin' || auth.token.email == 'mujtabahaitham@gmail.com'"
       }
     },
 
-    // ══════════════════════════════════════════════════════════
-    // 🏛️ أدمنية الكليات
-    // ══════════════════════════════════════════════════════════
     "collegeAdmins": {
       ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'",
       "$uid": {
@@ -28,9 +17,6 @@
       }
     },
 
-    // ══════════════════════════════════════════════════════════
-    // 🔐 حسابات التدريسيين
-    // ══════════════════════════════════════════════════════════
     "teacherAccounts": {
       "$uid": {
         ".read": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')",
@@ -38,66 +24,55 @@
       }
     },
 
-    // ══════════════════════════════════════════════════════════
-    // ⚙️ إعدادات النظام
-    // ══════════════════════════════════════════════════════════
     "system": {
       ".read": true,
       ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'"
     },
 
-    // ══════════════════════════════════════════════════════════
-    // 🗑️ الحسابات المحذوفة
-    // ══════════════════════════════════════════════════════════
     "deletedAccounts": {
       ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'",
       ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'"
     },
 
-    // ══════════════════════════════════════════════════════════
-    // 🔗 نظام التسجيل الذاتي — الروابط
-    // ══════════════════════════════════════════════════════════
     "registrationSystem": {
       "links": {
-        // ✅ سرد كل الروابط للمستخدمين المسجّلين فقط (يمنع تعداد tokens بلا دخول)
-        //    الطالب بلا تسجيل دخول يقرأ توكنه المحدد فقط عبر $token
         ".read": "auth != null",
         "$token": {
           ".read": true,
-          // ✅ فهرس لاستعلام روابط أدمن معيّن (getAdminLinks/cleanExpiredLinks)
           ".indexOn": ["adminUid"],
-          // ✅ الأدمن/أدمن الكلية ينشئون أي رابط، والتدريسي العادي ينشئ روابط الحضور فقط
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin' || (root.child('users').child(auth.uid).child('role').val() == 'teacher' && newData.child('type').val() == 'attendance'))",
-          // ✅ يسمح للطالب بتعليم الرابط كمستخدم بعد إتمام التسجيل الذاتي
-          // (الكتابة على قيمة "used" فقط بقيمة true — لا يمكن حذفها أو تغييرها للطالب)
           "used": {
             ".write": "newData.val() === true || auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')"
           }
         }
       },
 
-      // ══════════════════════════════════════════════════════
-      // 📥 نظام التسجيل الذاتي — الطلبات المعلقة
-      // ══════════════════════════════════════════════════════
       "pending": {
         "$adminUid": {
           ".read": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin')",
           "$requestId": {
             ".write": "(!data.exists() && newData.exists()) || auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')",
-            // ✅ إنشاء الزائر (طالب بلا دخول) يلزم شكل طلب معلّق فقط — يمنع التلوّث العشوائي
             ".validate": "!newData.exists() || auth != null || (newData.hasChildren(['status', 'createdAt', 'studentId']) && newData.child('status').val() === 'pending')",
-            // 📷 صورة الطالب (data URI مضغوط) — اختيارية ومحدودة الحجم 120KB
             "photo": {
               ".validate": "!newData.exists() || (newData.isString() && newData.val().startsWith('data:image/') && newData.val().length <= 120000)"
+            }
+          }
+        }
+      },
+
+      "pendingFaceIndex": {
+        "$adminUid": {
+          "$stageId": {
+            ".read": true,
+            "$requestId": {
+              ".write": "(!data.exists() && newData.exists()) || auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')",
+              ".validate": "!newData.exists() || newData.hasChildren(['requestId', 'studentId', 'name', 'stageId', 'faceDescriptor', 'createdAt'])"
             }
           }
         }
       }
     },
 
-    // ══════════════════════════════════════════════════════════
-    // 🏛️ الكليات والمراحل
-    // ══════════════════════════════════════════════════════════
     "colleges": {
       ".read": true,
       ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')"
@@ -108,17 +83,11 @@
       ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin')"
     },
 
-    // ══════════════════════════════════════════════════════════
-    // 📚 البيانات الأكاديمية
-    // ══════════════════════════════════════════════════════════
     "academicYears": {
       "$year": {
 
         "userData": {
           "$adminUid": {
-            // 🔒 القراءة للمستخدمين المسجّلين فقط — يمنع سرقة telegramConfig (توكن بوت تيليغرام)
-            //    عبر الروابط العامة. صفحات الطالب تقرأ أبناءها المحدّدين (students, descriptors...)
-            //    التي تحتفظ بـ .read: true الخاص بها في القواعد أدناه.
             ".read": "auth != null",
             ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
 
@@ -136,9 +105,6 @@
               "$stageId": {
                 "students": {
                   ".read": true,
-                  // ✅ الأدمن/أدمن الكلية يكتبون قائمة الطلاب بحرية
-                  // ✅ العموم (الطلاب بلا تسجيل دخول) لا يكتبون إلا حقل qrCodeId لطالب موجود
-                  //    (تعليم QR الهوية أثناء التسجيل الذاتي فقط — لا إنشاء ولا حذف ولا تعديل)
                   ".write": "(auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'college_admin'))",
                   "$index": {
                     ".validate": "newData.hasChild('code')",
@@ -148,8 +114,6 @@
                   }
                 },
 
-                // ✅ تحسينات البصمة — الكتابة بلا دخول لاختبار الوجه فقط، وبشكل مُتحقَّق منه
-                //    (لا حذف بلا دخول — الحذف للأدمن بعد الدمج فقط)
                 "descriptorOverrides": {
                   ".read": true,
                   ".write": "auth != null || newData.exists()",
@@ -166,13 +130,11 @@
                   }
                 },
 
-                // ✅ عقدة faceDescriptor المنفصلة (بصمات خارج مصفوفة students)
                 "descriptors": {
                   ".read": true,
                   ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)"
                 },
 
-                // 📷 صور الطلاب (data URI مضغوط ≤120KB) — القراءة لصاحب البيانات فقط (عرض الأدمن في v1)
                 "photos": {
                   ".read": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
                   ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
@@ -183,8 +145,6 @@
               }
             },
 
-            // ✅ فهرس حضور لكل طالب — خارج stageData حتى لا يُسحب مع طلب الأدمن الضخم
-            //    قراءة مفتوحة (ل صفحة الطالب)، كتابة للأدمن/المدرّس فقط
             "studentAttendance": {
               ".read": true,
               ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
@@ -198,11 +158,6 @@
       }
     },
 
-    // ══════════════════════════════════════════════════════════
-    // 📬 الإشعارات — تظهر للتدريسيين والأدمن فقط
-    // ══════════════════════════════════════════════════════════
-    // ✅ الأدمن الرئيسي يرسل ويحذف الإشعارات (تبقى حتى حذفها)
-    // ✅ التدريسيون يقرؤونها ويعلّمون المقروء لنفسهم فقط
     "notifications": {
       "messages": {
         ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'teacher' || root.child('users').child(auth.uid).child('role').val() == 'admin')",
@@ -217,9 +172,6 @@
       }
     },
 
-    // ══════════════════════════════════════════════════════════
-    // ❌ رفض أي مسارات غير معرفة
-    // ══════════════════════════════════════════════════════════
     "$other": {
       ".read": false,
       ".write": false

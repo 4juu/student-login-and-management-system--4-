@@ -9,6 +9,7 @@ interface AdminTabBarProps {
   onTabChange: (tab: Tab) => void;
   onOpenSendLink: () => void;
   onOpenCodeLink: () => void;
+  onOpenPhotoLink: () => void;
   onOpenTestLink: () => void;
   onOpenPending: () => void;
 }
@@ -21,6 +22,7 @@ export const AdminTabBar: FC<AdminTabBarProps> = ({
   onTabChange,
   onOpenSendLink,
   onOpenCodeLink,
+  onOpenPhotoLink,
   onOpenTestLink,
   onOpenPending,
 }) => (
@@ -93,6 +95,9 @@ export const AdminTabBar: FC<AdminTabBarProps> = ({
         <>
           <button type="button" onClick={onOpenSendLink} className="btn-base btn-primary shrink-0">
             إرسال رابط تسجيل بصمة
+          </button>
+          <button type="button" onClick={onOpenPhotoLink} className="btn-base btn-secondary shrink-0">
+            رابط تسجيل بالصورة
           </button>
           <button type="button" onClick={onOpenCodeLink} className="btn-base btn-secondary shrink-0">
             رابط بصمة كود

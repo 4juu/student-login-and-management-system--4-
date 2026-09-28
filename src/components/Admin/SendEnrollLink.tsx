@@ -6,7 +6,7 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { Student, Stage, College } from '../../types/student';
 import { createBulkRegistrationLinks } from '../../services/tokenService';
 import {
-  Check, Clock, Copy, FileSpreadsheet, Landmark, Library, Link2,
+  Check, Camera, Clock, Copy, FileSpreadsheet, Landmark, Library, Link2,
   Rocket, Smartphone, Users, ScanFace, UserCheck,
 } from 'lucide-react';
 import { LoadingState } from '../loading/LoadingState';
@@ -21,6 +21,8 @@ interface SendEnrollLinkProps {
   onClose: () => void;
   /** 'id' (افتراضي): رفع صورة الهوية · 'name': رابط بصمة كود — الطالب يكتب اسمه */
   mode?: 'id' | 'name' | undefined;
+  /** فتح النافذة مع تفعيل «رابط صورة» مسبقاً (زر الواجهة الرئيسية المخصص) */
+  initialPhotoOnly?: boolean | undefined;
 }
 
 interface StudentLinkRow {
@@ -131,11 +133,12 @@ const buildShareText = (
 };
 
 export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
-  adminUid, colleges, stages, loadStudents, onClose, mode = 'id',
+  adminUid, colleges, stages, loadStudents, onClose, mode = 'id', initialPhotoOnly = false,
 }) => {
   const isNameMode = mode === 'name';
   const [selectedCollegeId, setSelectedCollegeId] = useState('');
   const [selectedStageId, setSelectedStageId] = useState('');
+  const [photoOnly, setPhotoOnly] = useState(!!initialPhotoOnly);
 
   const [students, setStudents] = useState<Student[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
@@ -219,7 +222,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
         expiryDays,
         isNameMode ? 'namecheck' : 'single',
       );
-      const byId = new Map(results.map(r => [r.studentId, r.url]));
+      const byId = new Map(results.map(r => [r.studentId, photoOnly ? `${r.url}&mode=photo` : r.url]));
       const rows: StudentLinkRow[] = chosen
         .filter(s => byId.has(s.id))
         .map(s => ({ student: s, url: byId.get(s.id)!, copied: false }));
@@ -400,6 +403,29 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
               <span className="bg-violet-600 text-white px-3 py-1 rounded-full text-xs">{expiryDays} يوم</span>
             </label>
             <input type="range" min="1" max="90" value={expiryDays} onChange={e => setExpiryDays(Number(e.target.value))} className="w-full accent-violet-500 h-2" />
+          </div>
+
+          <div
+            className={`flex items-start gap-3 rounded-xl p-3 border transition ${
+              photoOnly ? 'bg-amber-500/10 border-amber-400/40' : 'bg-white/5 border-white/10 hover:bg-white/[0.07]'
+            }`}
+          >
+            <input
+              id="enroll-photo-only"
+              type="checkbox"
+              aria-label="رابط تسجيل بالصورة"
+              checked={photoOnly}
+              onChange={e => setPhotoOnly(e.target.checked)}
+              className="w-4 h-4 mt-0.5 accent-amber-500 shrink-0"
+            />
+            <label htmlFor="enroll-photo-only" className="min-w-0 cursor-pointer">
+              <span className="flex items-center gap-1.5 text-sm font-bold text-slate-200">
+                <Camera className="w-4 h-4 text-amber-400" /> رابط تسجيل «صورة» بدل 10 زوايا
+              </span>
+              <span className="block text-[11px] text-slate-400 mt-0.5">
+                الطالب يلتقط صورة واحدة فقط — تُراجَع من الإدارة قبل حفظها كمرجع بصمة
+              </span>
+            </label>
           </div>
 
           {selectedStageId && (
