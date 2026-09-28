@@ -88,18 +88,18 @@ describe('useAutoSaves — الجدولة عبر موديول (لا setTimeout �
     vi.useRealTimers();
   });
 
-  it('الحذف يُحفظ رغم تغيّر deps قبل 500ms (كان المؤقّت يُلغى ويعود السجل)', async () => {
+  it('الحذف يُصفّى فوراً داخل الأثر رغم تغيّر deps (كان المؤقّت يُلغى ويعود السجل)', async () => {
     const { rerender } = renderRecords({ recs: [r1, r2], stageId: 's1' });
 
     // حذف سجل — handleDeleteRecord يضبط القوة ثم يغيّر الحالة
     flags.records = true;
     rerender({ recs: [r2], stageId: 's1' });
 
-    // خروج فوري قبل انتهاء 500ms (handleBackToStages: تفريغ + إلغاء التحديد)
-    rerender({ recs: [], stageId: null });
+    // النقصان (حذف) ⇒ flushIfDeleted صفّى الطابور داخل الأثر نفسه — لم يبقَ شيء للمؤقّت
+    expect(getPendingPreSavesCount()).toBe(0);
 
-    // الحفظ المجدول بقي — لم يُلغَ مع تغيّر deps
-    expect(getPendingPreSavesCount()).toBeGreaterThan(0);
+    // خروج فوري (handleBackToStages: تفريغ + إلغاء التحديد) لا يُبطل ما بدأ
+    rerender({ recs: [], stageId: null });
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
@@ -108,6 +108,22 @@ describe('useAutoSaves — الجدولة عبر موديول (لا setTimeout �
     expect(saveAttendanceRecords).toHaveBeenCalledTimes(1);
     expect(saveAttendanceRecords).toHaveBeenCalledWith('admin1', 's1', 't1', [r2], true);
     expect(flags.records).toBe(false);
+  });
+
+  it('الحذف لا ينتظر 500ms — يُستدعى الحفظ مباشرة بعد التصفية', async () => {
+    const { rerender } = renderRecords({ recs: [r1, r2], stageId: 's1' });
+
+    flags.records = true;
+    rerender({ recs: [r2], stageId: 's1' });
+
+    // بلا advanceTimers (صفر مللي ثانية) — التصفية الفورية تكفي لبدء السلسلة
+    expect(getPendingPreSavesCount()).toBe(0);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(saveAttendanceRecords).toHaveBeenCalledWith('admin1', 's1', 't1', [r2], true);
+    expect(getPendingPreSavesCount()).toBe(0);
   });
 
   it('البذرة تمنع echo write عند التحميل ثم يُحفظ التغيير اللاحق', async () => {

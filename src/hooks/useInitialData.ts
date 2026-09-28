@@ -6,7 +6,7 @@ import {
   loadStages,
   loadTelegramConfig,
 } from '../firebase/dataService';
-import { getActiveAcademicYear } from '../firebase/academicYear';
+import { getActiveAcademicYear, setYearWriteAllowed } from '../firebase/academicYear';
 import { Student, AttendanceRecord, AttendanceSession, College, Stage } from '../types/student';
 import { User } from '../types/user';
 import { TelegramConfig } from '../types/telegram';
@@ -56,6 +56,9 @@ export default function useInitialData({ currentUser }: UseInitialDataParams): U
 
   const loadInitialData = useCallback(async (user: User) => {
     try {
+      // كتابة metadata (فهرس السنوات/السنة الحالية) للأدمن فقط حسب القواعد —
+      // نمنع أي محاولة كتابة لغير الأدمن (كتم تحذير permission_denied)
+      setYearWriteAllowed(user.role === 'admin');
       const adminUid = user.role === 'admin' ? user.uid : (user.adminId || user.uid);
       const [collegesData, stagesData] = await Promise.all([
         loadColleges(adminUid),

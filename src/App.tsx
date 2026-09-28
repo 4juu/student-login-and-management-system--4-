@@ -69,7 +69,7 @@ const StudentProfileModal = lazy(() =>
   import('./components/StudentProfile/StudentProfileModal').then(m => ({ default: m.StudentProfileModal }))
 );
 
-import { loadStageData, loadStudents as loadStudentsForStage, flushAllPendingSaves, applyOutbox } from './firebase/dataService';
+import { loadStageData, loadStudents as loadStudentsForStage, flushAllPendingSaves, applyOutbox, getActiveAcademicYear } from './firebase/dataService';
 import { getCachedStageData, setCachedStageData } from './lib/stageCache';
 import { TelegramConfig } from './types/telegram';
 import { useDataActions } from './hooks/useDataActions';
@@ -241,9 +241,13 @@ function App() {
 
     const adminUid = getAdminUid();
     const teacherId = getTeacherId();
+    // مفاتيح الكاش = سنة البيانات النشطة (نفس getActiveAcademicYear في saveX/patch)
+    // — بمفتاح حسب السنة التقويمية يختلف مفتاح patch عن مفتاح القراءة فيختفي أثر
+    // الحذف من الكاش ويعود السجل المحذوف عند إعادة الدخول ثم يُعاد حفظه
+    const activeYear = await getActiveAcademicYear();
 
     // الكاش والشبكة بالتوازي: الكاش يعرض المحتوى فوراً والشبكة تحدّث عند وصولها
-    const cachePromise = getCachedStageData(adminUid, currentAcademicYear, stageId, teacherId)
+    const cachePromise = getCachedStageData(adminUid, activeYear, stageId, teacherId)
       .then(cached => {
         if (!cached || stageRunIdRef.current !== runId) return;
         if (!userModifiedStudentsRef.current) setStudents(cached.students);
@@ -264,7 +268,7 @@ function App() {
         setSessions(data.sessions);
         setActiveSessionId(data.activeSessionId);
         setDataLoaded(true);
-        void setCachedStageData(adminUid, currentAcademicYear, stageId, teacherId, data);
+        void setCachedStageData(adminUid, activeYear, stageId, teacherId, data);
       })
       .catch(e => {
         console.error('Error loading stage:', e);
@@ -279,7 +283,7 @@ function App() {
         setDataLoaded(true);
       }
     }
-  }, [currentUser, currentAcademicYear, getAdminUid, getTeacherId, setActiveTab]);
+  }, [currentUser, getAdminUid, getTeacherId, setActiveTab]);
 
   const handleBackToStages = () => {
     flushAllPendingSaves();

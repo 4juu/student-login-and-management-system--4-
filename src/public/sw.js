@@ -7,7 +7,7 @@
  * - عند التفعيل: نمسح كل كاشات الإصدارات القديمة (يكسر SW عالق)
  * ============================================================ */
 
-const VERSION = 'v2026.09.28.1';
+const VERSION = 'v2026.09.28.2';
 const SHELL_CACHE = `att-shell-${VERSION}`;
 const ASSET_CACHE = `att-assets-${VERSION}`;
 const CACHE_PREFIXES = ['att-shell-', 'att-assets-'];
@@ -116,7 +116,7 @@ self.addEventListener('fetch', (event) => {
             }
             return res;
           })
-          .catch(() => Response.error());
+          .catch(() => new Response('', { status: 503, statusText: 'Offline' }));
       }),
     );
     return;
@@ -133,7 +133,7 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         })
-        .catch(() => cached || Response.error());
+        .catch(() => cached || new Response('', { status: 503, statusText: 'Offline' }));
       return cached || fetchAndCache;
     }),
   );

@@ -21,14 +21,28 @@ let _cachedAcademicYear: string | null = null;
 // single-flight: نداءات متزامنة (سجلات + جلسات معاً) تشارك طلباً واحداً
 // بدل set مزدوج على الفهرس (كان يضاعف تحذير permission_denied لغير الأدمن)
 let _yearPromise: Promise<string> | null = null;
+// كتابة الفهرس/السنة = أدمن فقط حسب قواعد database.rules —
+// نضبطه عند دخول المستخدم حتى لا يحاول غير الأدمن إطلاقاً (يمنع تحذير permission_denied في الكونسول)
+let _writeAllowed = false;
+export const setYearWriteAllowed = (allowed: boolean): void => {
+  _writeAllowed = allowed;
+};
 
 /** فهرس السنوات الصغير — قراءة/كتابة رخيصة بدل سرد جذر academicYears الضخم (المحجوب بالقواعد أصلاً) */
 const YEARS_INDEX_PATH = 'system/metadata/academicYearsList';
 
 /**
- * تسجيل سنة في الفهرس الصغير (أفضل جهد — الفشل صامت لأن الكتابة للأدمن فقط)
+ * تسجيل سنة في الفهرس الصغير (للادمن فقط — غير الأدمن يتجاوز بلا محاولة كتابة)
  */
 const registerAcademicYear = async (year: string): Promise<void> => {
+  if (!year || !_writeAllowed) return;
+  try {
+    await set(ref(database, `${YEARS_INDEX_PATH}/${year}`), true);
+  } catch {}
+};
+
+/** نسخة الإجراءات الإدارية الصريحة — تتجاوز حارس الدور (المستدعي أدمن بتعريفه) */
+const registerAcademicYearForced = async (year: string): Promise<void> => {
   if (!year) return;
   try {
     await set(ref(database, `${YEARS_INDEX_PATH}/${year}`), true);
@@ -48,12 +62,14 @@ export const getActiveAcademicYear = async (): Promise<string> => {
         }
       } catch {}
 
-      // إذا ما موجودة، احفظ السنة الحالية
+      // إذا ما موجودة، احفظ السنة الحالية (للادمن فقط — غير الأدمن يكتفي بالقيمة محلياً)
       const current = getCurrentAcademicYear();
       void registerAcademicYear(current);
-      try {
-        await set(ref(database, 'system/metadata/currentAcademicYear'), current);
-      } catch {}
+      if (_writeAllowed) {
+        try {
+          await set(ref(database, 'system/metadata/currentAcademicYear'), current);
+        } catch {}
+      }
 
       _cachedAcademicYear = current;
       return current;
@@ -64,8 +80,9 @@ export const getActiveAcademicYear = async (): Promise<string> => {
 
 export const setActiveAcademicYear = async (year: string): Promise<void> => {
   _cachedAcademicYear = year;
+  // إجراء إداري صريح من شاشة الإعدادات (أدمن فقط) — يُكتب مباشرة
   await set(ref(database, 'system/metadata/currentAcademicYear'), year);
-  await registerAcademicYear(year);
+  await registerAcademicYearForced(year);
 };
 
 const SYSTEM_TITLE_DEFAULT = 'نظام إدارة الحضور الجامعي';

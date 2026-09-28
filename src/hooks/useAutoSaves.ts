@@ -9,7 +9,7 @@ import {
   saveSessions,
   saveActiveSession,
 } from '../firebase/dataService';
-import { debouncedPreSave } from '../firebase/saveQueue';
+import { debouncedPreSave, flushAllPendingSaves } from '../firebase/saveQueue';
 
 export interface IntentionalDeleteFlags {
   students: boolean;
@@ -84,6 +84,20 @@ export function useAutoSaves({
   // آخر قيمة حُفظت/فُرِّغت لكل مفتاح (يشمل stageId) — مقارنة مرجعية بدل hash نصّي
   const lastSavedRef = useRef<Map<string, unknown>>(new Map());
   const lastActiveSessionRef = useRef<Map<string, string | null>>(new Map());
+  // عدّاد آخر ملاحظة لكل قائمة — يرصد النقصان (حذف) لتصفيته فوراً بلا انتظار المؤقّت
+  const lastCountRef = useRef<Record<string, number | null>>({});
+
+  /**
+   * الحذف حدث لا يُتحمَّل تأخيره: أي نقصان في العدد يُصفّي الطوابير فوراً
+   * (الإضافة/التعليم تبقى على التأجيل 500ms لتجميع الدفعات).
+   */
+  const flushIfDeleted = (kind: string, count: number): void => {
+    const prev = lastCountRef.current[kind];
+    lastCountRef.current[kind] = count;
+    if (prev !== null && prev !== undefined && count < prev) {
+      void flushAllPendingSaves();
+    }
+  };
 
   useEffect(() => {
     if (!(currentUser?.role === 'admin' && dataLoaded)) return;
@@ -96,6 +110,7 @@ export function useAutoSaves({
       }
       if (force) intentionalDeleteRef.current.colleges = false;
     });
+    flushIfDeleted('colleges', colleges.length);
   }, [colleges, currentUser, dataLoaded, intentionalDeleteRef]);
 
   useEffect(() => {
@@ -108,6 +123,7 @@ export function useAutoSaves({
       }
       if (force) intentionalDeleteRef.current.stages = false;
     });
+    flushIfDeleted('stages', stages.length);
   }, [stages, currentUser, dataLoaded, intentionalDeleteRef]);
 
   useEffect(() => {
@@ -128,6 +144,7 @@ export function useAutoSaves({
         }));
       }
     });
+    flushIfDeleted('students', students.length);
   }, [students, currentUser, dataLoaded, selectedStageId, universityDataLoaded, intentionalDeleteRef, getAdminUid, getTeacherId, setAllStagesData]);
 
   useEffect(() => {
@@ -148,6 +165,7 @@ export function useAutoSaves({
         }));
       }
     });
+    flushIfDeleted('records', attendanceRecords.length);
   }, [attendanceRecords, currentUser, dataLoaded, selectedStageId, universityDataLoaded, intentionalDeleteRef, getAdminUid, getTeacherId, setAllStagesData]);
 
   useEffect(() => {
@@ -168,6 +186,7 @@ export function useAutoSaves({
         }));
       }
     });
+    flushIfDeleted('sessions', sessions.length);
   }, [sessions, currentUser, dataLoaded, selectedStageId, universityDataLoaded, intentionalDeleteRef, getAdminUid, getTeacherId, setAllStagesData]);
 
   // activeSession: بذرة عند أول ملاحظة لكل مرحلة/معلّم + حارس "لم يتغيّر" — يمنع echo write عند التحميل
