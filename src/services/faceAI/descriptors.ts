@@ -31,6 +31,17 @@ export const RECOG_D2_CAP = 0.32;
 export const RECOG_VOTE_CAP = 0.35;
 /** عدد الإثباتات المطلوبة (يُخفَّض لعدد ما هو متاح للمارٍ قليل العيّنات) */
 export const RECOG_VOTES = 3;
+/**
+ * أدنى نسبة من عيّنات الطالب يجب أن تصوّت.
+ * كسر تحيّز «صاحب أكثر عيّنات»: 3 تصويتات من 28 عيّنة (10.7٪) لم تعد تكفي.
+ */
+export const RECOG_VOTE_RATIO = 0.34;
+/**
+ * عدد الأقرب المُتوسَّط في مسافة القرار.
+ * `min` يجعل احتمال القبول الخاطئ يتضاعف أُسّياً بعدد عيّنات الطالب
+ * (٣ عيّنات ≈ ٢.٨٪ خطأ مقابل ٢٨ عيّنة ≈ ٧٨.٥٪) — وهذا سبب خلط الأسماء.
+ */
+export const RECOG_MATCH_K = 3;
 /** مارٍ بعيّنة واحدة فقط (بلا إحصاء) — يتطلب ثقة استثنائية */
 export const RECOG_SOLO_CAP = 0.18;
 /** أقصى تشتت بين مسافات الإثبات — يمنع الاستقرار على قرار متذبذب */
@@ -121,7 +132,9 @@ export function parseOneSample(arr: unknown): Float32Array | null {
   }
   norm = Math.sqrt(norm);
   if (norm <= 0) return null;
-  if (Math.abs(norm - 1) > 0.05) {
+  // تطبيع إلزامي: cosine صار حقيقياً، لكن الطول غير المتطابق بين
+  // عيّنات من مصادر مختلفة يظل يُفسد المقارنة داخل نافذة التسريب.
+  if (Math.abs(norm - 1) > 1e-3) {
     for (let i = 0; i < DESC_DIM; i++) f[i] = (f[i] ?? 0) / norm;
   }
   return f;
@@ -229,10 +242,32 @@ export function l2Normalize(d: Float32Array): Float32Array {
   return out;
 }
 
+/**
+ * تشابه الجيب التمام (cosine) الحقيقي.
+ *
+ * ملاحظة أمنية: كان هذا dot product عادياً بافتراض أن كل المتجهات
+ * مطبَّعة مسبقاً. لكن `parseOneSample` كان يطبّع **شرطياً** (فقط إذا
+ * انحرف النورم أكثر من 0.05) والتخزين يُقرّب إلى 5 منازل عشرية، فكانت
+ * المتجهات «شبه وحدة» بمسافة خطأ صغيرة تتسرّب في كل العتبات.
+ * القسمة على ‖a‖·‖b‖ تُلغي هذا التبعية تماماً وتُصلح أي انزياح.
+ */
 export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   let dot = 0;
-  for (let i = 0; i < a.length; i++) dot += (a[i] ?? 0) * (b[i] ?? 0);
-  return dot;
+  let na = 0;
+  let nb = 0;
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) {
+    const x = a[i] ?? 0;
+    const y = b[i] ?? 0;
+    dot += x * y;
+    na += x * x;
+    nb += y * y;
+  }
+  const denom = Math.sqrt(na) * Math.sqrt(nb);
+  if (!(denom > 0)) return 0;
+  const sim = dot / denom;
+  // حماية من خطأ الفاصلة العائمة خارج [-1, 1]
+  return sim > 1 ? 1 : sim < -1 ? -1 : sim;
 }
 
 export function descriptorDistance(a: Float32Array, b: Float32Array): number {

@@ -16,6 +16,8 @@ import {
   RECOG_D2_CAP,
   RECOG_VOTE_CAP,
   RECOG_VOTES,
+  RECOG_VOTE_RATIO,
+  RECOG_MATCH_K,
   RECOG_SOLO_CAP,
 } from './descriptors';
 
@@ -47,6 +49,17 @@ export interface MatchProfile {
   soloCap: number;
   /** الهامش الأدنى بين أفضل طالبين */
   margin: number;
+  /**
+   * أدنى نسبة من عيّنات الطالب يجب أن تصوّت (votes/sampleCount).
+   * يمنع الطالب كثيرة العيّنات من «شراء» القبول cheaply —
+   * 3 من 28 لم يعد يكفي.
+   */
+  voteRatio: number;
+  /**
+   * عدد الأقرب المُتوسَّط في حساب مسافة القرار.
+   * 0 = متوسط أقرب 3 (افتراضي). الرقم 1 = أقرب عيّنة (سلوك قديم، محذوف).
+   */
+  k: number;
 }
 
 export const DEFAULT_MATCH_PROFILE: MatchProfile = {
@@ -56,7 +69,26 @@ export const DEFAULT_MATCH_PROFILE: MatchProfile = {
   votes: RECOG_VOTES,
   soloCap: RECOG_SOLO_CAP,
   margin: MIN_MARGIN,
+  voteRatio: RECOG_VOTE_RATIO,
+  k: RECOG_MATCH_K,
 };
+
+/**
+ * مسافة القرار العادلة لطالب: متوسط أقرب `k` عيّنات.
+ *
+ * لماذا لا `min`؟ لأن `min` يجعل احتمال القبول الخاطئ يتضاعف أُسّياً بعدد
+ * عيّنات الطالب (٣ عيّنات ≈ ٢.٨٪ خطأ، ٢٨ عيّنة ≈ ٧٨.٥٪ عند تشابه ١٠٪).
+ * أي طالب يحضر أكثر «يشتري» قبولاً أسهل — وهو سبب خلط الأسماء مباشرة.
+ * متوسط أقرب 3 يجعل القرار لا يتأثر بعدد عيّنات الطالب.
+ */
+export function decisionDistance(sortedDists: number[], k: number = RECOG_MATCH_K): number {
+  const n = sortedDists.length;
+  if (n === 0) return Infinity;
+  const kk = Math.max(1, Math.min(k, n));
+  let sum = 0;
+  for (let i = 0; i < kk; i++) sum += sortedDists[i] ?? 0;
+  return sum / kk;
+}
 
 export interface DangerPair {
   a: string;
@@ -118,6 +150,32 @@ function exactMinDistance(a: GalleryItem, b: GalleryItem): number {
   return min;
 }
 
+/**
+ * أسوأ «مسافة قرار ذاتية» لطالب: عيّنته بوصفها استعلاماً مطابقاً لنفسه.
+ * تُقاس بنفس إحصاء المطابقة الفعلي (متوسط أقرب 3) حتى تُشتق حدود
+ * المعايرة من السلوك الحقيقي لا من مقدار مختلف.
+ */
+export function selfDecisionDistances(item: GalleryItem, k: number = RECOG_MATCH_K): number[] {
+  const out: number[] = [];
+  for (const probe of item.allSamples) {
+    const sorted = item.allSamples
+      .map((s) => descriptorDistance(probe, s))
+      .sort((a, b) => a - b);
+    // نستبعد مسافة الصفر (العيّنة إلى نفسها) بإسقاطها عند التكرار
+    const distinct = sorted.filter((d, i) => !(i === 0 && d < 1e-6));
+    out.push(decisionDistance(distinct, k));
+  }
+  return out.sort((a, b) => a - b);
+}
+
+/** المئين ٩٠ من مسافات القرار الذاتية — تقدير محافظ لتشتّت الطالب */
+export function intraDecisionMax(item: GalleryItem, k: number = RECOG_MATCH_K): number {
+  const ds = selfDecisionDistances(item, k);
+  if (ds.length === 0) return 0;
+  const idx = Math.min(ds.length - 1, Math.floor(ds.length * 0.9));
+  return ds[idx] ?? 0;
+}
+
 // ══════════════════════════════════════════════════════════════
 // 2) المعايرة — اشتقاق الحدود من بيانات الطلاب الفعلية
 //    قاعدة أمان: المعايرة تُشدّد فقط ولا تُخفّف الافتراضيات أبداً
@@ -127,9 +185,10 @@ export function calibrateGallery(gallery: GalleryItem[]): {
   profile: MatchProfile;
   report: CalibrationReport;
 } {
-  // ── التشتت الداخلي: أسوأ حالة لطالب شرعي ──
+  const k = RECOG_MATCH_K;
+  // ── التشتت الداخلي: أسوأ حالة لطالب شرعي، بنفس إحصاء القرار ──
   let intraMax = 0;
-  for (const it of gallery) intraMax = Math.max(intraMax, centroidSpread(it) * 2);
+  for (const it of gallery) intraMax = Math.max(intraMax, intraDecisionMax(it, k));
 
   // ── أقرب مركزين بين طالبين ──
   let interMin = Infinity;
@@ -200,7 +259,7 @@ export function calibrateGallery(gallery: GalleryItem[]): {
 
   const pairCount = Math.max(1, (gallery.length * (gallery.length - 1)) / 2);
   let riskyReject = 0;
-  for (const it of gallery) if (centroidSpread(it) * 2 > profile.d1Cap) riskyReject++;
+  for (const it of gallery) if (intraDecisionMax(it, k) > profile.d1Cap) riskyReject++;
 
   return {
     profile,
@@ -316,6 +375,10 @@ export interface IndexedMatch {
   margin: number;
   /** عدد عيّنات الطالب تحت حد التصويت — الإثباتات المستقلة */
   votes: number;
+  /** نسبة عيّنات الطالب التي صوّتت */
+  voteRatio: number;
+  /** مسافة أقرب عيّنة مفردة (للتشخيص — ليست مسافة القرار) */
+  nearest: number;
 }
 
 export interface MatchOptions {
@@ -323,13 +386,75 @@ export interface MatchOptions {
   dangerKeys?: ReadonlySet<string>;
 }
 
+/** نتيجة التشخيص لطلب مُرفوض — تُغذّي سجل near-miss */
+export interface MatchRejection {
+  /** معرّف أقرب طالب (سبب الرفض غالباً) */
+  nearestId: string | undefined;
+  nearestName: string | undefined;
+  /** مسافة القرار العادلة (متوسط أقرب 3) لأقرب طالب */
+  nearestDistance: number;
+  /** مسافة أقرب عيّنة مفردة */
+  nearestSample: number;
+  /** الهامش عن أفضل طالب */
+  margin: number;
+  /** سبب الرفض */
+  reason: RejectionReason;
+  /** عدد الطلاب المرشحين */
+  candidates: number;
+}
+
+export type RejectionReason =
+  | 'no-gallery'
+  | 'all-too-far'
+  | 'weak-second-proof'
+  | 'insufficient-votes'
+  | 'insufficient-vote-ratio'
+  | 'tight-margin'
+  | 'danger-pair'
+  | 'low-quality-frame';
+
+function reject(
+  reason: RejectionReason,
+  detail: {
+    nearestId?: string | undefined;
+    nearestName?: string | undefined;
+    nearestDistance?: number;
+    nearestSample?: number;
+    margin?: number;
+    candidates?: number;
+  } = {},
+): null {
+  lastRejection = {
+    nearestId: detail.nearestId,
+    nearestName: detail.nearestName,
+    nearestDistance: detail.nearestDistance ?? Infinity,
+    nearestSample: detail.nearestSample ?? Infinity,
+    margin: detail.margin ?? 0,
+    reason,
+    candidates: detail.candidates ?? 0,
+  };
+  return null;
+}
+
+/** تشخيص آخر طلب مُرفض — لقياس الأخطاء لا لقرار القبول */
+let lastRejection: MatchRejection | null = null;
+export function getLastRejection(): MatchRejection | null {
+  return lastRejection;
+}
+export function clearLastRejection(): void {
+  lastRejection = null;
+}
+
 /**
- * مطابقة مُحسّنة ضد كل العينات — قرار صارم:
- *  ١) أول عيّنة ضمن d1Cap (مع تشديد عند جودة منخفضة — لا تخفيف أبداً)
- *  ٢) إثبات ثانٍ: عيّنة ثانية ضمن d2Cap
- *  ٣) تصويت: ≥3 عيّنات تحت voteCap (أو كل ما هو متاح للمارٍ قليل العيّنات)
- *  ٤) هامش ≥ margin بين أفضل طالبين — والأزواج الخطرة تُرفض حتى لو كفى الهامش
- *  ٥) مارٍ بعيّنة واحدة فقط (v4 قديم) — soloCap صارم جداً
+ * مطابقة مُحسّنة ضد كل العينات — قرار صارم وعادل:
+ *  ١) مسافة القرار = متوسط أقرب 3 عيّنات (لا أقرب عيّنة) — لا تحيّز بعدد العينات
+ *  ٢) أول عيّنة ضمن d1Cap (مع تشديد عند جودة منخفضة — لا تخفيف أبداً)
+ *  ٣) إثبات ثانٍ: عيّنة ثانية ضمن d2Cap
+ *  ٤) تصويت: ≥3 عيّنات تحت voteCap **ونسبة** من إجمالي عيّنات الطالب
+ *  ٥) هامش ≥ margin بين أفضل طالبين — والأزواج الخطرة تُرفض حتى لو كفى الهامش
+ *  ٦) مارٍ بعيّنة واحدة فقط (v4 قديم) — soloCap صارم جداً
+ *
+ * لا تسجيل حضور أبداً على «عيّنة واحدة قريبة من 15 أخرى بعيدة».
  */
 export function findBestMatchIndexed(
   query: Float32Array,
@@ -339,27 +464,44 @@ export function findBestMatchIndexed(
   options?: MatchOptions,
 ): IndexedMatch | null {
   const profile = options?.profile ?? DEFAULT_MATCH_PROFILE;
+  const k = profile.k > 0 ? profile.k : RECOG_MATCH_K;
 
-  // ── المرحلة 1: أقل مسافة لكل طالب (مع كسر مبكر) ──
-  const perItem: Array<{ item: GalleryItem; distance: number; sampleCount: number }> = [];
+  // ── المرحلة 1: مسافة القرار العادلة لكل طالب (متوسط أقرب k) ──
+  // نحتاج أقرب 3 على الأقل، لذا نجمع أصغر k مسافات لكل طالب ثم نرتّب.
+  const perItem: Array<{
+    item: GalleryItem;
+    distance: number;
+    nearest: number;
+    sampleCount: number;
+  }> = [];
   for (const entry of gallery) {
     if (entry.allSamples.length === 0) continue;
 
-    let bestForItem = Infinity;
+    const best: number[] = [];
     for (const ref of entry.allSamples) {
       const distance = descriptorDistance(query, ref);
-      if (distance < bestForItem) bestForItem = distance;
-      if (bestForItem < 0.15) break;
+      if (best.length < k) {
+        best.push(distance);
+        best.sort((a, b) => a - b);
+      } else if (distance < (best[k - 1] ?? Infinity)) {
+        best[k - 1] = distance;
+        best.sort((a, b) => a - b);
+      }
     }
-    perItem.push({ item: entry, distance: bestForItem, sampleCount: entry.allSamples.length });
+    perItem.push({
+      item: entry,
+      distance: decisionDistance(best, k),
+      nearest: best[0] ?? Infinity,
+      sampleCount: entry.allSamples.length,
+    });
   }
 
-  if (perItem.length === 0) return null;
+  if (perItem.length === 0) return reject('no-gallery');
 
   perItem.sort((a, b) => a.distance - b.distance);
   const first = perItem[0];
   const second = perItem[1];
-  if (!first) return null;
+  if (!first) return reject('no-gallery');
   const margin = second ? second.distance - first.distance : 1;
 
   // جودة الإطار: تشديد فقط — لا تخفيف أبداً
@@ -369,35 +511,55 @@ export function findBestMatchIndexed(
     else if (queryQuality < 0.55) d1Cap -= 0.02;
   }
 
-  // ── ١) الحد الأقصى للمسافة الأولى ──
-  if (first.distance > d1Cap) return null;
-  if (first.distance > baseThreshold) return null;
+  const detail = {
+    nearestId: first.item.id,
+    nearestName: first.item.name,
+    nearestDistance: first.distance,
+    nearestSample: first.nearest,
+    margin,
+    candidates: perItem.length,
+  };
+
+  // ── ١) الحد الأقصى لمسافة القرار ──
+  if (first.distance > baseThreshold) return reject('all-too-far', detail);
+  if (first.distance > d1Cap) {
+    return reject(
+      queryQuality !== undefined && queryQuality < 0.55 ? 'low-quality-frame' : 'all-too-far',
+      detail,
+    );
+  }
 
   // ── ٢-٣) الإثبات المزدوج والتصويت على كل عيّنات الطالب ──
   const dists: number[] = [];
   for (const ref of first.item.allSamples) dists.push(descriptorDistance(query, ref));
   dists.sort((a, b) => a - b);
   const votes = dists.filter(d => d <= profile.voteCap).length;
+  const voteRatio = first.sampleCount > 0 ? votes / first.sampleCount : 0;
 
   if (first.sampleCount <= 1) {
-    if (first.distance > profile.soloCap) return null;
+    if (first.distance > profile.soloCap) return reject('weak-second-proof', detail);
   } else {
     const d2 = dists[1] ?? Infinity;
-    if (d2 > profile.d2Cap) return null;
-    if (votes < Math.min(profile.votes, first.sampleCount)) return null;
+    if (d2 > profile.d2Cap) return reject('weak-second-proof', detail);
+    if (votes < Math.min(profile.votes, first.sampleCount)) {
+      return reject('insufficient-votes', detail);
+    }
+    // نسبة التصويت: تمنع الطالب كثيرة العيّنات من قبول رخيص
+    if (voteRatio < profile.voteRatio) return reject('insufficient-vote-ratio', detail);
   }
 
   // ── ٤) الهامش + حسم الأزواج الخطرة ──
   if (second) {
-    if (margin < profile.margin) return null;
+    if (margin < profile.margin) return reject('tight-margin', detail);
     if (
       second.distance <= profile.voteCap &&
       options?.dangerKeys?.has(pairKey(first.item.id, second.item.id))
     ) {
-      return null;
+      return reject('danger-pair', detail);
     }
   }
 
+  clearLastRejection();
   return {
     item: first.item,
     distance: first.distance,
@@ -405,5 +567,7 @@ export function findBestMatchIndexed(
     sampleCount: first.sampleCount,
     margin: Math.round(margin * 100) / 100,
     votes,
+    voteRatio: Math.round(voteRatio * 100) / 100,
+    nearest: Math.round(first.nearest * 1000) / 1000,
   };
 }

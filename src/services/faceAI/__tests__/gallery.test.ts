@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   buildGallery,
   buildGalleryIndex,
+  decisionDistance,
   DEFAULT_MATCH_PROFILE,
   findBestMatchIndexed,
+  getLastRejection,
   pairKey,
   type GalleryItem,
 } from '../gallery';
@@ -61,7 +63,9 @@ describe('findBestMatchIndexed — مطابقة صارمة بإثبات مزدو
     expect(match!.item.id).toBe('A');
     expect(match!.votes).toBe(3);
     expect(match!.distance).toBeLessThan(0.1);
-    expect(match!.confidence).toBeGreaterThanOrEqual(95);
+    // الثقة من مسافة القرار (متوسط أقرب 3 = 0.06) لا من أقرب عيّنة (0.05)
+    expect(match!.confidence).toBeGreaterThanOrEqual(93);
+    expect(match!.nearest).toBeCloseTo(0.05, 3);
   });
 
   it('يرفض المارٍ بعيّنة واحدة فوق soloCap ويقبل تحتها', () => {
@@ -112,7 +116,8 @@ describe('findBestMatchIndexed — مطابقة صارمة بإثبات مزدو
   });
 
   it('الجودة المنخفضة تشدد ولا تُخفّف أبداً', () => {
-    const gallery = [makeItem('A', [0.24, 0.25, 0.26])];
+    // مسافة القرار 0.24 (متوسط 0.23/0.24/0.25)
+    const gallery = [makeItem('A', [0.23, 0.24, 0.25])];
 
     // جودة عالية — الحد الافتراضي 0.25 يقبل 0.24
     expect(findBestMatchIndexed(QUERY, gallery, 0.42, 0.6)).not.toBeNull();
@@ -136,6 +141,59 @@ describe('findBestMatchIndexed — مطابقة صارمة بإثبات مزدو
     // طالبان متشابكان تماماً — الهامش 0 → يُرفضان معاً
     const gallery = [makeItem('A', [0.10, 0.11]), makeItem('B', [0.10, 0.11])];
     expect(findBestMatchIndexed(QUERY, gallery, 0.42, 0.7)).toBeNull();
+  });
+});
+
+describe('م1 — الإحصاء العادل: لا تحيّز بعدد العيّنات', () => {
+  it('طالب بـ10 عيّنات سيّئة لا يتفوّق على طالب بـ3 عيّنات جيدة', () => {
+    // X: 10 عيّنات، عيّنة واحدة قريبة والباقي بعيد → متوسط الأقرب 3 سيئ
+    const X = makeItem('X', [0.10, 0.30, 0.31, 0.32, 0.33, 0.34, 0.36, 0.40, 0.45, 0.50]);
+    // Y: 3 عيّنات كلها قريبة
+    const Y = makeItem('Y', [0.12, 0.13, 0.14]);
+    const match = findBestMatchIndexed(QUERY, [X, Y], 0.42, 0.7);
+    // Y يفوز بالمسافة الحقيقية لا X بأفضل عيّنة
+    expect(match?.item.id).toBe('Y');
+  });
+
+  it('مسافة القرار = متوسط أقرب 3 لا أقرب عيّنة', () => {
+    expect(decisionDistance([0.1, 0.2, 0.3, 0.8, 0.9])).toBeCloseTo(0.2, 5);
+    // k أكبر من n ⇒ متوسط الكل
+    expect(decisionDistance([0.1, 0.2])).toBeCloseTo(0.15, 5);
+  });
+
+  it('يرفض 3 تصويتات من 15 عيّنة (نسبة ضعيفة) — لا شراء القبول بعدد العينات', () => {
+    // 3 عيّنات قريبة، 12 بعيدة جداً ⇒ نسبة 20% < 34%
+    const far = Array.from({ length: 12 }, () => 0.95);
+    const it = makeItem('A', [0.10, 0.30, 0.34, ...far]);
+    const match = findBestMatchIndexed(QUERY, [it], 0.42, 0.7);
+    expect(match).toBeNull();
+    expect(getLastRejection()?.reason).toBe('insufficient-vote-ratio');
+  });
+
+  it('يقبل عندما تكون نسبة التصويت كافية رغم كثرة العينات', () => {
+    // 10 قريبة، 3 بعيدة ⇒ 77% > 34%
+    const near = Array.from({ length: 10 }, (_, i) => 0.05 + i * 0.005);
+    const it = makeItem('A', [...near, 0.95, 0.96, 0.97]);
+    const match = findBestMatchIndexed(QUERY, [it], 0.42, 0.7);
+    expect(match).not.toBeNull();
+    expect(match!.voteRatio).toBeGreaterThanOrEqual(0.34);
+  });
+});
+
+describe('م6 — تشخيص الرفض (near-miss)', () => {
+  it('يسجّل سبب الرفض وأقرب طالب عند الفشل', () => {
+    const gallery = [makeItem('A', [0.05, 0.06, 0.07], 'طالب أ'), makeItem('B', [0.14], 'طالب ب')];
+    expect(findBestMatchIndexed(QUERY, gallery, 0.42, 0.7)).toBeNull();
+    const rej = getLastRejection();
+    expect(rej?.reason).toBe('tight-margin');
+    expect(rej?.nearestId).toBe('A');
+    expect(rej?.candidates).toBe(2);
+  });
+
+  it('يمسح التشخيص عند قبول ناجح', () => {
+    const gallery = [makeItem('A', [0.05, 0.06, 0.07]), makeItem('B', [0.40])];
+    expect(findBestMatchIndexed(QUERY, gallery, 0.42, 0.7)).not.toBeNull();
+    expect(getLastRejection()).toBeNull();
   });
 });
 

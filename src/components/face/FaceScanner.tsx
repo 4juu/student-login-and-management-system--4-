@@ -24,6 +24,7 @@ import {
   MIN_FRAME_QUALITY,
 } from '../../services/faceAI/descriptors';
 import { buildGalleryIndex, findBestMatchIndexed } from '../../services/faceAI/gallery';
+import { recordRejection } from '../../services/faceAI/nearMiss';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { estimatePose, poseToBin } from '../../services/faceAI/pose';
 
@@ -431,6 +432,20 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
           let anyUnknown = false;
           let markedAny = false;
 
+          // 🔒 قفل الفريم — صناديق الوجوه المؤكدة في هذا الإطار.
+          // يمنع تسجيل عدّة طلاب من الوجه الواحد أو من صناديق كشف متداخلة.
+          const markedBoxesThisFrame: Box[] = [];
+          const overlapRatio = (a: Box, b: Box): number => {
+            const ix = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
+            const iy = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+            const inter = ix * iy;
+            const minArea = Math.min(a.width * a.height, b.width * b.height) || 1;
+            return inter / minArea;
+          };
+          const claimFrameBox = (box: Box) => { markedBoxesThisFrame.push(box); };
+          const isSuppressedByMark = (box: Box): boolean =>
+            markedBoxesThisFrame.some(m => overlapRatio(m, box) > 0.35);
+
           // حساب الوجوه اللي تحتاج حساب embedding
           if (needEmbed.length > 0) {
             const currentMaxWidth = faceEmbedder.recommendedMaxWidth;
@@ -447,53 +462,66 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                 keypoints: t.box.keypoints?.map(kp => ({ x: kp.x * scale, y: kp.y * scale })),
               })),
             );
-            if (!runningRef.current || !mountedRef.current) return;
+              if (!runningRef.current || !mountedRef.current) return;
 
-            for (let i = 0; i < results.length; i++) {
-              const res = results[i];
-              const embTrack = needEmbed[i];
-              if (!res || !embTrack) continue;
-              const trackId = embTrack.trackId;
-              const raw = new Float32Array(res.descriptor);
-              const smoothed = trackerRef.current.addEmbedding(trackId, raw, nowTs);
+              for (let i = 0; i < results.length; i++) {
+                const res = results[i];
+                const embTrack = needEmbed[i];
+                if (!res || !embTrack) continue;
+                const trackId = embTrack.trackId;
+                const raw = new Float32Array(res.descriptor);
+                const smoothed = trackerRef.current.addEmbedding(trackId, raw, nowTs);
 
-              const match = findBestMatchIndexed(smoothed, galleryRef.current.items, MATCH_LOOSE, res.quality.composite, {
-                profile: galleryRef.current.profile,
-                dangerKeys: galleryRef.current.dangerKeys,
-              });
-              trackerRef.current.setCache(trackId, match?.item.id ?? null, match?.confidence ?? 0, res.quality.composite);
+                const vbw0 = res.box.width / scale, vbh0 = res.box.height / scale;
+                const vbx0 = res.box.x / scale, vby0 = res.box.y / scale;
+                const box0: Box = { x: vbx0, y: vby0, width: vbw0, height: vbh0 };
 
-              const vbw = res.box.width / scale, vbh = res.box.height / scale;
-              const vbx = res.box.x / scale, vby = res.box.y / scale;
-              const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
+                // 🔒 قفل الفريم: بعد تأكيد طالب واحد، أي مسار متقاطع معه
+                //    يُتخطى — يمنع تسجيل عدّة طلاب من نفس الوجه الواحد
+                if (isSuppressedByMark(box0)) {
+                  liveBoxes.push({ box: box0, label: 'مؤكد', color: '#22c55e' });
+                  continue;
+                }
 
-              if (!match || match.confidence < MIN_RECOG_CONFIDENCE || res.quality.composite < MIN_FRAME_QUALITY) {
-                anyUnknown = true;
-                const smallFace = res.box.width < MIN_FACE_PX * 1.7;
-                liveBoxes.push({ box: boxInVideo, label: smallFace ? 'اقترب قليلاً' : 'غير معروف', color: '#fbbf24' });
-                continue;
-              }
+                const match = findBestMatchIndexed(smoothed, galleryRef.current.items, MATCH_LOOSE, res.quality.composite, {
+                  profile: galleryRef.current.profile,
+                  dangerKeys: galleryRef.current.dangerKeys,
+                });
+                trackerRef.current.setCache(trackId, match?.item.id ?? null, match?.confidence ?? 0, res.quality.composite);
 
-              const student = rosterMapRef.current.get(match.item.id);
-              if (!student) continue;
+                const vbw = res.box.width / scale, vbh = res.box.height / scale;
+                const vbx = res.box.x / scale, vby = res.box.y / scale;
+                const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
 
-              // طالب سُجّل حضوراً في هذه الجلسة — حتى لو تحرك مكانه، يختفي إطاره فوراً
-              if (doneStudentsRef.current.has(student.id)) {
-                trackerRef.current.removeTrack(trackId);
-                suppressZone(boxInVideo);
-                continue;
-              }
+                if (!match || match.confidence < MIN_RECOG_CONFIDENCE || res.quality.composite < MIN_FRAME_QUALITY) {
+                  recordRejection(res.quality.composite < MIN_FRAME_QUALITY ? 'low-quality-frame' : undefined);
+                  anyUnknown = true;
+                  const smallFace = res.box.width < MIN_FACE_PX * 1.7;
+                  liveBoxes.push({ box: boxInVideo, label: smallFace ? 'اقترب قليلاً' : 'غير معروف', color: '#fbbf24' });
+                  continue;
+                }
 
-              const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id, match.distance);
+                const student = rosterMapRef.current.get(match.item.id);
+                if (!student) continue;
 
-              if (confirmCount < CONFIRM_FRAMES) {
-                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
-                continue;
-              }
+                // طالب سُجّل حضوراً في هذه الجلسة — حتى لو تحرك مكانه، يختفي إطاره فوراً
+                if (doneStudentsRef.current.has(student.id)) {
+                  trackerRef.current.removeTrack(trackId);
+                  suppressZone(boxInVideo);
+                  continue;
+                }
 
-              // ✅ تأكيد كامل — نُسجّل الحضور عبر الدالة المشتركة
-              markedAny = true;
-              finalizeTrack(student, match.confidence, boxInVideo, trackId);
+                const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id, match.distance);
+
+                if (confirmCount < CONFIRM_FRAMES) {
+                  liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
+                  continue;
+                }
+
+                // ✅ تأكيد كامل — نُسجّل الحضور عبر الدالة المشتركة
+                markedAny = true;
+                finalizeTrack(student, match.confidence, boxInVideo, trackId);
+                claimFrameBox(boxInVideo);
 
               // ✅ Pose Grid: تحسين البصمة تدريجياً عبر شبكة الزوايا (فقط عند التضمين الجديد)
               try {
@@ -562,9 +590,15 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               const confirmCount = trackerRef.current.bumpConfirm(t.trackId, student.id, cacheDistance);
 
               if (confirmCount >= CONFIRM_FRAMES) {
+                // 🔒 قفل الفريم: لا ثاني طالب من نفس الوجه
+                if (isSuppressedByMark(boxInVideo)) {
+                  liveBoxes.push({ box: boxInVideo, label: 'مؤكد', color: '#22c55e' });
+                  continue;
+                }
                 // ✅ تأكيد كامل — نُسجّل الحضور فوراً (نفس الثانية)
                 markedAny = true;
                 finalizeTrack(student, cache.cachedConfidence, boxInVideo, t.trackId);
+                claimFrameBox(boxInVideo);
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التسجيل', color: '#34d399' });
               } else {
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });

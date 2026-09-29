@@ -10,6 +10,7 @@ import {
   migrateToV5,
 } from '../../services/faceAI/descriptors';
 import { buildGalleryIndex, type GalleryIndex } from '../../services/faceAI/gallery';
+import { measureAccuracy } from '../../services/faceAI/accuracy';
 import { computeFpIds } from '../../lib/fpId';
 import { StudentForm } from './StudentForm';
 import { StudentImportPanel } from './StudentImportPanel';
@@ -625,6 +626,20 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
   // أرقام البصمات الفريدة لكل الطلاب — تُمرَّر للجدول
   const fpIds = useMemo(() => computeFpIds(students), [students]);
 
+  // 📊 دقة المطابقة المقيسة فعلياً (leave-one-out) — يُحسب مرة واحدة عند تغيّر الطلاب
+  const faceAccuracy = useMemo(() => {
+    const withFace = students.filter(s => hasValidDescriptor(s.faceDescriptor));
+    if (withFace.length < 2) return null;
+    try {
+      return measureAccuracy(withFace, {
+        profile: faceIndex?.profile,
+        dangerKeys: faceIndex?.dangerKeys,
+      });
+    } catch {
+      return null;
+    }
+  }, [students, faceIndex]);
+
   const pageIds = paginatedStudents.map(s => s.id);
   const allInPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id));
   const isFiltered = !!searchQuery || groupFilter !== 'all';
@@ -690,6 +705,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
         onOpenEnroll={() => openFaceEnroll()}
         report={faceIndex?.report ?? null}
         profile={faceIndex?.profile ?? null}
+        accuracy={faceAccuracy}
         onReEnrollPair={(a, b) => openFaceEnroll([a, b])}
       />
 
