@@ -20,6 +20,8 @@ import {
   MIN_RECOG_CONFIDENCE,
   MIN_FRAME_QUALITY,
   CONFIRM_FRAMES,
+  AUTO_LEARN_MAX_DISTANCE,
+  AUTO_LEARN_MIN_MARGIN,
 } from '../../services/faceAI/descriptors';
 import { buildGalleryIndex, findBestMatchIndexed, type GalleryIndex } from '../../services/faceAI/gallery';
 
@@ -367,7 +369,11 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
                     Math.abs(d.box.y - embTrack.box.y) < 1
                   );
                   const pose = estimatePose(origDet?.keypoints);
-                  if (pose && savedDescriptorRef.current && isGalleryDescriptor(savedDescriptorRef.current)) {
+                  // 🚫 نفس حارس الإنتاج: لا تعلّم إلا عند ثقة قصوى — يمنع سمّ المعرض
+                  const confident =
+                    match.distance <= AUTO_LEARN_MAX_DISTANCE &&
+                    match.margin >= AUTO_LEARN_MIN_MARGIN;
+                  if (confident && pose && savedDescriptorRef.current && isGalleryDescriptor(savedDescriptorRef.current)) {
                     const bin = poseToBin(pose);
                     const result = updateGallery(savedDescriptorRef.current, smoothed, res.quality.composite, bin, true);
                     if (result.action === 'merged' || result.action === 'created') {

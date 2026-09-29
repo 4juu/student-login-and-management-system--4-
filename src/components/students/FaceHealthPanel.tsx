@@ -1,5 +1,6 @@
 import React from 'react';
 import { Lightbulb, ScanFace, ShieldCheck, Smile, TriangleAlert, Zap } from 'lucide-react';
+import type { AccuracyReport } from '../../services/faceAI/accuracy';
 import type { CalibrationReport, MatchProfile } from '../../services/faceAI/gallery';
 
 interface FaceHealth {
@@ -21,6 +22,8 @@ interface FaceHealthPanelProps {
   report?: CalibrationReport | null;
   /** الحدود الفعلية القابلة للمعايرة */
   profile?: MatchProfile | null;
+  /** تقرير دقة مقيسة فعلياً (leave-one-out) */
+  accuracy?: AccuracyReport | null;
   /** فتح تسجيل مجدداً لزوج طالبين متعارضين */
   onReEnrollPair?: ((a: string, b: string) => void) | undefined;
 }
@@ -35,6 +38,7 @@ export const FaceHealthPanel: React.FC<FaceHealthPanelProps> = ({
   onOpenEnroll,
   report,
   profile,
+  accuracy,
   onReEnrollPair,
 }) => {
   if (variant === 'banner') {
@@ -106,6 +110,48 @@ export const FaceHealthPanel: React.FC<FaceHealthPanelProps> = ({
             </div>
           </div>
 
+          {/* 📊 دقة مطابقة مقيسة فعلياً (leave-one-out) — الرقم لا الحدس */}
+          {accuracy && accuracy.probes > 0 && (
+            <div className="bg-black/20 rounded-lg p-3 mt-2">
+              <p className="text-xs font-bold text-purple-200 mb-2 flex items-center gap-1.5">
+                <Zap className="w-4 h-4 shrink-0" />
+                دقة المطابقة المقيسة ({accuracy.probes} عيّنة اختبار)
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-black/30 rounded-lg p-2 text-center">
+                  <div className="text-base font-bold text-emerald-300 font-mono" dir="ltr">{(accuracy.tar * 100).toFixed(1)}%</div>
+                  <div className="text-[10px] text-slate-400">قبول صحيح</div>
+                </div>
+                <div className="bg-black/30 rounded-lg p-2 text-center">
+                  <div className="text-base font-bold text-amber-300 font-mono" dir="ltr">{(accuracy.far * 100).toFixed(1)}%</div>
+                  <div className="text-[10px] text-slate-400">قبول خاطئ</div>
+                </div>
+                <div className="bg-black/30 rounded-lg p-2 text-center">
+                  <div className="text-base font-bold text-sky-300 font-mono" dir="ltr">{(accuracy.frr * 100).toFixed(1)}%</div>
+                  <div className="text-[10px] text-slate-400">رفض صحيح</div>
+                </div>
+              </div>
+              <p className={`text-[11px] font-bold mt-2 ${accuracy.meetsTarget ? 'text-emerald-300' : 'text-amber-300'}`}>
+                {accuracy.meetsTarget
+                  ? '✓ يحقق الهدف: قبول خاطئ ضمن 1%'
+                  : `⚠ لم يحقق هدف 99٪ بعد — أسوأ الطلاب: ${accuracy.worstStudents.length > 0 ? accuracy.worstStudents.map(w => w.name).join('، ') : 'لا يوجد'}`}
+              </p>
+              {accuracy.worstStudents.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {accuracy.worstStudents.map(w => (
+                    <div key={w.id} className="flex items-center justify-between text-[11px] text-slate-300">
+                      <span className="truncate">{w.name}</span>
+                      <span className="text-amber-300 font-mono shrink-0" dir="ltr">
+                        رفض {(w.rejectRate * 100).toFixed(0)}% · d={w.avgDistance.toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">{accuracy.caveat}</p>
+            </div>
+          )}
+
           {report.dangerPairs.length > 0 && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-2.5">
               <p className="text-xs font-bold text-red-300 mb-1.5 flex items-center gap-1.5">
@@ -151,7 +197,7 @@ export const FaceHealthPanel: React.FC<FaceHealthPanelProps> = ({
       )}
 
       <p className="text-xs text-purple-300 mb-3 bg-white/5 p-2 rounded flex items-start gap-1">
-        <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" /> <strong>كيف يعمل؟</strong> اختر الطلاب واضغط زر الإضافة — الكاميرا تلتقط 3 عينات لكل طالب تلقائياً خلال ثوانٍ، ثم يُسجّل حضورهم بمجرد المرور أمام الكاميرا.
+        <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" /> <strong>كيف يعمل؟</strong> اختر الطلاب واضغط زر الإضافة — يلتقط الطالب 10 عينات يدوياً بزوايا وإضاءات مختلفة (يقترح عليك النظام كل زاوية)، ثم يُسجّل حضوره بمجرد المرور أمام الكاميرا. تنوّع العينات مهم: العينات المتشابهة تُضعف التعرّف.
       </p>
 
       <button

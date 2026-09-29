@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useModalBehavior } from '../../hooks/useModalBehavior';
 import { Student, AttendanceRecord, AttendanceSession } from '../../types/student';
 import { BookOpen, Check, ClipboardList, Copy, Ticket } from 'lucide-react';
-import { hasValidDescriptor, getCoveragePercent, normalizeClusters } from '../../services/faceAI/descriptors';
+import { hasValidDescriptor, getCoveragePercent, normalizeClusters, type PoseCluster } from '../../services/faceAI/descriptors';
 import { computeFpId } from '../../lib/fpId';
 
 interface StudentProfileModalProps {
@@ -320,7 +320,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
             const clusters = normalizeClusters((student.faceDescriptor as any)?.clusters);
             const enrollmentCount = Array.isArray((student.faceDescriptor as any)?.enrollment)
               ? (student.faceDescriptor as any).enrollment.length : 0;
-            const totalSamples = enrollmentCount + clusters.reduce((sum: number, c: any) => sum + (c.count || 0), 0);
+            const totalSamples = enrollmentCount + clusters.reduce((sum: number, c: PoseCluster) => sum + (c.mergeCount || 0), 0);
             const fpId = computeFpId(student.faceDescriptor);
             const stage = coverage >= 80 ? { label: 'متطورة', dot: 'bg-emerald-500', barBg: 'bg-emerald-100', bar: 'bg-emerald-500', box: 'bg-emerald-50 text-emerald-700 border-emerald-100' }
               : coverage >= 50 ? { label: 'متوسطة', dot: 'bg-amber-500', barBg: 'bg-amber-100', bar: 'bg-amber-400', box: 'bg-amber-50 text-amber-700 border-amber-100' }

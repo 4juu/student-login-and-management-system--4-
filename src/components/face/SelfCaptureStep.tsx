@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { Student } from '../../types/student';
 import { useFaceAI } from '../../hooks/useFaceAI';
 import { EngineOverlay } from './EngineOverlay';
@@ -44,6 +45,35 @@ const CAPTURE_PHASES: { key: CapturePhase; emoji: string; instruction: string }[
   { key: 'light', emoji: '💡', instruction: 'تأكد من وضوح الإضاءة على وجهك' },
 ];
 
+/**
+ * قياس تنوّع عينات التسجيل في فضاء الـdescriptor.
+ * ١ = عينات متباعدة تماماً، ٠ = عينات متطابقة (نفس الوضع ١٠ مرات).
+ * البصمة الأحادية النقطة هي سبب رئيسي للخلط لاحقاً.
+ */
+function sampleDiversity(samples: Float32Array[]): number {
+  if (samples.length < 2) return 0;
+  const dists: number[] = [];
+  for (let i = 0; i < samples.length; i++) {
+    for (let j = i + 1; j < samples.length; j++) {
+      const a = samples[i]!;
+      const b = samples[j]!;
+      let dot = 0, na = 0, nb = 0;
+      const n = Math.min(a.length, b.length);
+      for (let k = 0; k < n; k++) {
+        const x = a[k] ?? 0, y = b[k] ?? 0;
+        dot += x * y; na += x * x; nb += y * y;
+      }
+      const denom = Math.sqrt(na) * Math.sqrt(nb);
+      dists.push(denom > 0 ? 1 - dot / denom : 1);
+    }
+  }
+  if (dists.length === 0) return 0;
+  dists.sort((x, y) => x - y);
+  const median = dists[Math.floor(dists.length / 2)] ?? 0;
+  // 0.10 = عيّنات شبه متطابقة، 0.35 = تنوّع جيّد
+  return Math.max(0, Math.min(1, median / 0.35));
+}
+
 export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allStudents, onCaptured, onCancel }) => {
   const { ready: engineReady, progress, error, retry } = useFaceAI();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -52,6 +82,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
   const busyRef = useRef(false);
   const mountedRef = useRef(true);
   const samplesDataRef = useRef<Float32Array[]>([]);
+  const samplesQualityRef = useRef<number[]>([]);
 
   const [cameraReady, setCameraReady] = useState(false);
   const [camError, setCamError] = useState(false);
@@ -59,6 +90,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
   const [feedback, setFeedback] = useState('وجّه وجهك داخل الدائرة');
   const [flash, setFlash] = useState<'ok' | 'fail' | null>(null);
   const [fatal, setFatal] = useState<string | null>(null);
+  const [diversityWarning, setDiversityWarning] = useState<string | null>(null);
   const [faceInBoundary, setFaceInBoundary] = useState(false);
   const [capturePhase, setCapturePhase] = useState<CapturePhase>('front');
 
@@ -237,6 +269,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
       }
 
       samplesDataRef.current.push(new Float32Array(res.descriptor));
+      samplesQualityRef.current.push(res.quality.composite ?? 0);
       const sampleCount = samplesDataRef.current.length;
       setSamples(sampleCount);
       try { navigator.vibrate?.(30); } catch {}
@@ -264,8 +297,24 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
           return;
         }
 
+        // 📉 تنبيه تنوّع (لا يمنع الحفظ): عينات متطابقة ⇒ بصمة أحادية النقطة
+        // تُضعف المطابقة لاحقاً. نحذّر فقط احتراماً لاختيار المستخدم.
+        const diversity = sampleDiversity(samplesDataRef.current);
+        if (diversity < 0.5) {
+          setDiversityWarning(
+            `عيناتك متشابهة جداً (${Math.round(diversity * 100)}٪ تنوّع). البصمة ستتعرّف على وضعك واحد فقط — الأفضل إعادة التسجيل مع تنويع الزاوية والإضاءة.`
+          );
+        } else {
+          setDiversityWarning(null);
+        }
+
         // حفظ البصمة بصيغة v5 مباشرة — مع bootstrap clusters من التسجيل
-        const quality = Math.round(((res.quality.composite + 0.8) / 2) * 100) / 100;
+        // 🛡️ الجودة من متوسط كل العينات (كانت من العيّنة الأخيرة فقط،
+        //    فتُهمَل جودة 9 من 10 عينات — بصمة ضعيفة تبدو قوية)
+        const qList = samplesQualityRef.current;
+        const quality = qList.length > 0
+          ? Math.round((qList.reduce((s, q) => s + q, 0) / qList.length + 0.05) * 100) / 100
+          : 0.8;
         const clusters = bootstrapClusters(samplesDataRef.current, quality);
         const galleryDescriptor: FaceGalleryDescriptor = {
           version: DESC_VERSION_GALLERY,
@@ -395,6 +444,14 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
             feedback.includes('✓') ? 'text-emerald-400' :
             feedback.startsWith('لا') || feedback.startsWith('اقترب') || feedback.startsWith('ابتد') || feedback.includes('ضعيفة') ? 'text-amber-400' : 'text-slate-300'
           }`}>{feedback}</p>
+
+          {/* 📉 تنبيه تنوّع العينات — تحذير فقط، لا يمنع الحفظ */}
+          {diversityWarning && (
+            <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+              <p className="text-[11px] leading-relaxed text-amber-200">{diversityWarning}</p>
+            </div>
+          )}
 
           {/* دليل الزوايا الثلاث */}
           {samples < SAMPLES_NEEDED && (
