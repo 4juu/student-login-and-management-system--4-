@@ -9,6 +9,8 @@ import {
   pruneStaleClusters,
   migrateToV5,
 } from '../../services/faceAI/descriptors';
+import { buildGalleryIndex, type GalleryIndex } from '../../services/faceAI/gallery';
+import { computeFpIds } from '../../lib/fpId';
 import { StudentForm } from './StudentForm';
 import { StudentImportPanel } from './StudentImportPanel';
 import { BulkStudentImportModal } from './BulkStudentImportModal';
@@ -609,6 +611,20 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
     };
   }, [students]);
 
+  // فهرس المعرض المُعايَر + الأزواج الخطرة — يُبنى مرة واحدة عند تغيّر الطلاب
+  const faceIndex: GalleryIndex | null = useMemo(() => {
+    const withFace = students.filter(s => hasValidDescriptor(s.faceDescriptor));
+    if (withFace.length < 2) return null;
+    try {
+      return buildGalleryIndex(withFace);
+    } catch {
+      return null;
+    }
+  }, [students]);
+
+  // أرقام البصمات الفريدة لكل الطلاب — تُمرَّر للجدول
+  const fpIds = useMemo(() => computeFpIds(students), [students]);
+
   const pageIds = paginatedStudents.map(s => s.id);
   const allInPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id));
   const isFiltered = !!searchQuery || groupFilter !== 'all';
@@ -672,6 +688,9 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
         canEnroll={!!onUpdateStudent}
         onReEnrollNoFace={reEnrollNoFace}
         onOpenEnroll={() => openFaceEnroll()}
+        report={faceIndex?.report ?? null}
+        profile={faceIndex?.profile ?? null}
+        onReEnrollPair={(a, b) => openFaceEnroll([a, b])}
       />
 
       <SortFilterPanel
@@ -722,6 +741,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
         safeCurrentPage={safeCurrentPage}
         pageSize={pageSize}
         uniqueGroups={uniqueGroups}
+        fpIds={fpIds}
         onUpdateStudent={onUpdateStudent}
         onOpenProfile={onOpenProfile}
         onDeleteStudent={onDeleteStudent}

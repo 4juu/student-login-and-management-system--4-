@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Student } from '../../types/student';
 import { Check, CheckCircle2, Clock, Lock, PartyPopper, Smile } from 'lucide-react';
+import { computeFpId } from '../../lib/fpId';
 import './selfRegister.css';
 
 interface RegistrationSuccessProps {
@@ -24,6 +25,7 @@ export const RegistrationSuccess: React.FC<RegistrationSuccessProps> = ({
   onExit,
 }) => {
   const [showConfetti, setShowConfetti] = useState(true);
+  const fpId = computeFpId(student.faceDescriptor);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowConfetti(false), 3500);
@@ -70,6 +72,13 @@ export const RegistrationSuccess: React.FC<RegistrationSuccessProps> = ({
               <p className="font-bold text-[#FBBF24] mb-1 flex items-center gap-2">
                 <Clock className="w-5 h-5" /> بانتظار موافقة مسجل الكلية
               </p>
+            </div>
+          )}
+
+          {fpId && (
+            <div className="rounded-2xl border border-[#2E3A5C] bg-[#141A2E] p-3 mb-5 flex items-center justify-between gap-3">
+              <span className="text-xs font-bold text-[#94A3B8]">رقم البصمة الفريد</span>
+              <span className="font-mono text-sm font-bold text-[#818CF8] tracking-widest" dir="ltr">FP-{fpId}</span>
             </div>
           )}
 

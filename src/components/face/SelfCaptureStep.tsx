@@ -31,17 +31,17 @@ const SAMPLES_NEEDED = 10;
 const MIN_REL_SIZE = 0.14;
 
 type CapturePhase = 'front' | 'right' | 'left' | 'up' | 'down' | 'front_close' | 'front_far' | 'smile' | 'natural' | 'light';
-const CAPTURE_PHASES: { key: CapturePhase; instruction: string }[] = [
-  { key: 'front', instruction: 'أمام' },
-  { key: 'right', instruction: 'يمين' },
-  { key: 'left', instruction: 'يسار' },
-  { key: 'up', instruction: 'أعلى' },
-  { key: 'down', instruction: 'أسفل' },
-  { key: 'front_close', instruction: 'اقترب' },
-  { key: 'front_far', instruction: 'ابتعد' },
-  { key: 'smile', instruction: 'ابتسم' },
-  { key: 'natural', instruction: 'طبيعي' },
-  { key: 'light', instruction: 'إضاءة' },
+const CAPTURE_PHASES: { key: CapturePhase; emoji: string; instruction: string }[] = [
+  { key: 'front', emoji: '🙂', instruction: 'انظر للأمام مباشرة' },
+  { key: 'right', emoji: '↩️', instruction: 'أمال رأسك لليمين قليلاً' },
+  { key: 'left', emoji: '↪️', instruction: 'أمال رأسك لليسار قليلاً' },
+  { key: 'up', emoji: '⬆️', instruction: 'أمال رأسك للأعلى قليلاً' },
+  { key: 'down', emoji: '⬇️', instruction: 'أمال رأسك للأسفل قليلاً' },
+  { key: 'front_close', emoji: '👇', instruction: 'اقترب من الكاميرا قليلاً' },
+  { key: 'front_far', emoji: '🔙', instruction: 'ابتعد عن الكاميرا قليلاً' },
+  { key: 'smile', emoji: '😊', instruction: 'ابتسم قليلاً' },
+  { key: 'natural', emoji: '😌', instruction: 'حافظ على وضعيتك الطبيعية' },
+  { key: 'light', emoji: '💡', instruction: 'تأكد من وضوح الإضاءة على وجهك' },
 ];
 
 export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allStudents, onCaptured, onCancel }) => {
@@ -229,6 +229,13 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
         return;
       }
 
+      // 🚫 فحص كل عيّنة فردياً قبل تخزينها — عيّنة تطابق طالباً آخر تُرفض فوراً
+      const sampleTamper = checkForTampering(l2Normalize(new Float32Array(res.descriptor)), othersRef.current, student.id);
+      if (sampleTamper.tampered) {
+        setFeedback(`هذه العيّنة تطابق طالباً آخر (${sampleTamper.matchedWith}) — غيّر الزاوية`);
+        return;
+      }
+
       samplesDataRef.current.push(new Float32Array(res.descriptor));
       const sampleCount = samplesDataRef.current.length;
       setSamples(sampleCount);
@@ -334,7 +341,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
 
           {/* توجيه الزاوية — أعلى الكاميرا وبخط كبير */}
           <div className="mb-4 rounded-2xl bg-gradient-to-l from-indigo-500/15 to-violet-500/15 border border-indigo-400/30 p-4 text-center">
-            <div className="text-4xl mb-1 leading-none">{CAPTURE_PHASES[samples]?.instruction ?? 'أمام'}</div>
+            <div className="text-4xl mb-1 leading-none">{CAPTURE_PHASES[samples]?.emoji ?? '🙂'}</div>
             <p className="text-xl font-extrabold text-white leading-snug">{CAPTURE_PHASES[samples]?.instruction ?? 'وجّه وجهك للأمام'}</p>
             <p className="text-[11px] text-indigo-200/80 mt-1.5">زر «التقاط» مفعل دائماً — التقط فور ظهور وجهك</p>
           </div>

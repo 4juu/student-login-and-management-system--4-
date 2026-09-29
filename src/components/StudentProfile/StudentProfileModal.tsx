@@ -4,6 +4,7 @@ import { useModalBehavior } from '../../hooks/useModalBehavior';
 import { Student, AttendanceRecord, AttendanceSession } from '../../types/student';
 import { BookOpen, Check, ClipboardList, Copy, Ticket } from 'lucide-react';
 import { hasValidDescriptor, getCoveragePercent, normalizeClusters } from '../../services/faceAI/descriptors';
+import { computeFpId } from '../../lib/fpId';
 
 interface StudentProfileModalProps {
   student: Student;
@@ -320,6 +321,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
             const enrollmentCount = Array.isArray((student.faceDescriptor as any)?.enrollment)
               ? (student.faceDescriptor as any).enrollment.length : 0;
             const totalSamples = enrollmentCount + clusters.reduce((sum: number, c: any) => sum + (c.count || 0), 0);
+            const fpId = computeFpId(student.faceDescriptor);
             const stage = coverage >= 80 ? { label: 'متطورة', dot: 'bg-emerald-500', barBg: 'bg-emerald-100', bar: 'bg-emerald-500', box: 'bg-emerald-50 text-emerald-700 border-emerald-100' }
               : coverage >= 50 ? { label: 'متوسطة', dot: 'bg-amber-500', barBg: 'bg-amber-100', bar: 'bg-amber-400', box: 'bg-amber-50 text-amber-700 border-amber-100' }
               : { label: 'مبتدئة', dot: 'bg-slate-400', barBg: 'bg-slate-100', bar: 'bg-slate-300', box: 'bg-slate-50 text-slate-700 border-slate-200' };
@@ -330,6 +332,14 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                   <span className={`w-2 h-2 rounded-full ${stage.dot}`} />
                   تحسين بصمة الوجه
                 </p>
+
+                {/* رقم البصمة الفريد */}
+                {fpId && (
+                  <div className="mb-3 flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-indigo-50 border border-indigo-100">
+                    <span className="text-xs text-gray-500 font-medium">رقم البصمة الفريد</span>
+                    <span className="font-mono text-xs font-bold text-indigo-700 tracking-widest" dir="ltr">FP-{fpId}</span>
+                  </div>
+                )}
 
                 {/* شريط التغطية */}
                 <div className="mb-3">

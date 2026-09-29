@@ -19,8 +19,11 @@ import {
   MATCH_LOOSE,
   MIN_RECOG_CONFIDENCE,
   CONFIRM_FRAMES,
+  AUTO_LEARN_MAX_DISTANCE,
+  AUTO_LEARN_MIN_MARGIN,
+  MIN_FRAME_QUALITY,
 } from '../../services/faceAI/descriptors';
-import { buildGallery, findBestMatchIndexed } from '../../services/faceAI/gallery';
+import { buildGalleryIndex, findBestMatchIndexed } from '../../services/faceAI/gallery';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { estimatePose, poseToBin } from '../../services/faceAI/pose';
 
@@ -53,8 +56,6 @@ const ZOOM_STEP = 0.25;
 const MAX_FACES_PER_FRAME = 10;
 const REEMBED_MIN_INTERVAL = 150;
 const REEMBED_MOVE_THRESHOLD = 0.08;
-// حارس الجودة المرن: يرفض فقط الفريمات الضبابية/المظلمة جداً دون المس بالمسح الطبيعي
-const MIN_FRAME_QUALITY = 0.40;
 // مدة كبت منطقة وجه مسجَّل حضوره حتى لا يعاد اكتشافه/رسمه فور انتهائه
 const SUPPRESS_ZONE_TTL = 6_000;
 // نسبة تداخل جديدة ليُعتبَر الوجه ضمن منطقة مكبوتة (يتم تجاهله)
@@ -100,7 +101,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   const rosterMap = useMemo(() => new Map(roster.map(s => [s.id, s])), [roster]);
   const rosterMapRef = useRef(rosterMap);
   rosterMapRef.current = rosterMap;
-  const galleryIndex = useMemo(() => buildGallery(roster), [roster]);
+  const galleryIndex = useMemo(() => buildGalleryIndex(roster), [roster]);
   const galleryRef = useRef(galleryIndex);
   galleryRef.current = galleryIndex;
   const presentRef = useRef(alreadyPresentIds);
@@ -456,8 +457,11 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               const raw = new Float32Array(res.descriptor);
               const smoothed = trackerRef.current.addEmbedding(trackId, raw, nowTs);
 
-              const match = findBestMatchIndexed(smoothed, galleryRef.current, MATCH_LOOSE, res.quality.composite);
-              trackerRef.current.setCache(trackId, match?.item.id ?? null, match?.confidence ?? 0);
+              const match = findBestMatchIndexed(smoothed, galleryRef.current.items, MATCH_LOOSE, res.quality.composite, {
+                profile: galleryRef.current.profile,
+                dangerKeys: galleryRef.current.dangerKeys,
+              });
+              trackerRef.current.setCache(trackId, match?.item.id ?? null, match?.confidence ?? 0, res.quality.composite);
 
               const vbw = res.box.width / scale, vbh = res.box.height / scale;
               const vbx = res.box.x / scale, vby = res.box.y / scale;
@@ -480,7 +484,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                 continue;
               }
 
-              const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id);
+              const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id, match.distance);
 
               if (confirmCount < CONFIRM_FRAMES) {
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
@@ -502,6 +506,12 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                 if (pose) {
                   const bin = poseToBin(pose);
                   if (!isGalleryDescriptor(student.faceDescriptor)) continue;
+
+                  // 🚫 التغذية الراجعة شرطها ثقة قصوى فقط — يوقف السمّ (تضخّم الخطأ في المعرض)
+                  const confident =
+                    match.distance <= AUTO_LEARN_MAX_DISTANCE &&
+                    match.margin >= AUTO_LEARN_MIN_MARGIN;
+                  if (!confident) continue;
 
                   const result = updateGallery(student.faceDescriptor, smoothed, res.quality.composite, bin);
 
@@ -531,7 +541,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
             const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
             const student = rosterMapRef.current.get(cache.cachedMatchId ?? '');
 
-            if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE) {
+            if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE && cache.cachedQuality >= MIN_FRAME_QUALITY) {
               if (doneStudentsRef.current.has(student.id)) {
                 trackerRef.current.removeTrack(t.trackId);
                 suppressZone(boxInVideo);
@@ -548,7 +558,8 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               }
 
               // ⚡ الإطار الثاني المجاني: bumpConfirm على الكاش → تأكيد فوري بدون انتظار re-embed
-              const confirmCount = trackerRef.current.bumpConfirm(t.trackId, student.id);
+              const cacheDistance = 1 - cache.cachedConfidence / 100;
+              const confirmCount = trackerRef.current.bumpConfirm(t.trackId, student.id, cacheDistance);
 
               if (confirmCount >= CONFIRM_FRAMES) {
                 // ✅ تأكيد كامل — نُسجّل الحضور فوراً (نفس الثانية)

@@ -14,9 +14,30 @@ export const DESC_VERSION_GALLERY = 5;
 
 export const MATCH_STRICT = 0.32;
 export const MATCH_LOOSE = 0.42;
-export const MIN_MARGIN = 0.06;
+// الهامش بين أفضل طالبين — كان 0.06 وكان يسمح بتعادل خطر بين وجهين
+export const MIN_MARGIN = 0.10;
 export const TAMPER_THRESHOLD = 0.30;
-export const CONFIRM_FRAMES = 3;
+// التأكيد على 5 فريمات متتالية (كان 3) + ثبات المسافة عبر tracker — استقرار زمني أقوى
+export const CONFIRM_FRAMES = 5;
+
+// ══════════════════════════════════════════════════════════════
+// حواجز المطابقة الصارمة — إثبات مزدوج + تصويت (لا تطابق بعيّنة واحدة)
+// ══════════════════════════════════════════════════════════════
+/** أقصى مسافة لأول عيّنة (≈ ثقة 75%) — الحد الفعلي القابل للمعايرة */
+export const RECOG_D1_CAP = 0.25;
+/** العيّنة الثانية لازم تثبت ضمن هذا الحد — إثبات مستقل ثانٍ */
+export const RECOG_D2_CAP = 0.32;
+/** حد التصويت: عيّنات الطالب تحت هذا الحد تُعدّ إثباتات */
+export const RECOG_VOTE_CAP = 0.35;
+/** عدد الإثباتات المطلوبة (يُخفَّض لعدد ما هو متاح للمارٍ قليل العيّنات) */
+export const RECOG_VOTES = 3;
+/** مارٍ بعيّنة واحدة فقط (بلا إحصاء) — يتطلب ثقة استثنائية */
+export const RECOG_SOLO_CAP = 0.18;
+/** أقصى تشتت بين مسافات الإثبات — يمنع الاستقرار على قرار متذبذب */
+export const RECOG_SPREAD_MAX = 0.10;
+/** التغذية الراجعة أثناء الحضور: يُدمَج في المعرض فقط عند ثقة قصوى — يوقف تضخّم الخطأ */
+export const AUTO_LEARN_MAX_DISTANCE = 0.18;
+export const AUTO_LEARN_MIN_MARGIN = 0.12;
 
 // 🗄️ Cache for parsed samples (key: JSON string of descriptor, value: Float32Array[])
 const parsedSamplesCache = new Map<string, Float32Array[]>();
@@ -54,6 +75,9 @@ export function parseAllSamples(input: unknown): Float32Array[] {
 
 /** أدنى نسبة ثقة مقبولة للتعرف أثناء الحضور — حارس الدقة الرئيسي */
 export const MIN_RECOG_CONFIDENCE = 75;
+
+/** حارس جودة الفريم المعمم — يرفض الضبابي/المظلم جداً في كل مسارات المطابقة */
+export const MIN_FRAME_QUALITY = 0.40;
 
 export interface MatchCandidate {
   id: string;

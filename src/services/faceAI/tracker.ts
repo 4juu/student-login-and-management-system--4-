@@ -4,6 +4,8 @@
 // لكل وجه على حدة حتى لو كان في عدة وجوه بنفس اللحظة
 // ─────────────────────────────────────────────────────────────
 
+import { RECOG_SPREAD_MAX } from './descriptors';
+
 export interface TrackBox {
   x: number; y: number; width: number; height: number;
   keypoints?: { x: number; y: number }[] | undefined;
@@ -19,7 +21,11 @@ interface Track {
   lastEmbedBox: TrackBox | null;
   cachedMatchId: string | null;
   cachedConfidence: number;
+  /** جودة الفريم الذي أُنتِجت عنه المطابقة المخزّنة — بوابة جودة لمسار الكاش */
+  cachedQuality: number;
   confirmCount: number;
+  /** مسافات إثباتات التأكيد — تشتّتها الكبير يجمّد التأكيد (قرار متذبذب) */
+  confirmDistances: number[];
   // ── #6: Velocity prediction ──
   velocityX: number;
   velocityY: number;
@@ -129,7 +135,9 @@ export class FaceTracker {
         lastEmbedBox: null,
         cachedMatchId: null,
         cachedConfidence: 0,
+        cachedQuality: 0,
         confirmCount: 0,
+        confirmDistances: [],
         velocityX: 0,
         velocityY: 0,
         lastBoxTime: now,
@@ -177,16 +185,31 @@ export class FaceTracker {
     return this.tracks.find(t => t.id === trackId);
   }
 
-  setCache(trackId: number, matchId: string | null, confidence: number) {
+  setCache(trackId: number, matchId: string | null, confidence: number, quality?: number) {
     const t = this.tracks.find(tr => tr.id === trackId);
-    if (t) { t.cachedMatchId = matchId; t.cachedConfidence = confidence; }
+    if (t) {
+      t.cachedMatchId = matchId;
+      t.cachedConfidence = confidence;
+      if (quality !== undefined) t.cachedQuality = quality;
+    }
   }
 
-  /** عداد تأكيد المطابقة لنفس الطالب عبر فريمات متتالية */
-  bumpConfirm(trackId: number, matchId: string): number {
+  /**
+   * عداد تأكيد المطابقة لنفس الطالب عبر فريمات متتالية.
+   * الاستقرار الزمني: إذا تشتّتت مسافات الإثباتات كثيراً (> RECOG_SPREAD_MAX)
+   * يُجمَّد العدّاد — قرار متذبذب لا يُعتمد.
+   */
+  bumpConfirm(trackId: number, matchId: string, distance?: number): number {
     const t = this.tracks.find(tr => tr.id === trackId);
     if (!t) return 0;
     if (t.cachedMatchId === matchId) {
+      if (distance !== undefined) {
+        t.confirmDistances.push(distance);
+        if (t.confirmDistances.length > 8) t.confirmDistances.shift();
+        const min = Math.min(...t.confirmDistances);
+        const max = Math.max(...t.confirmDistances);
+        if (max - min > RECOG_SPREAD_MAX) return t.confirmCount;
+      }
       // #1.4: لو الوجه ساكن تماماً → تأكيد أبطأ (احتمال صورة)
       if (this.isStatic(trackId)) {
         t.confirmCount = Math.max(0, t.confirmCount - 1);
@@ -198,10 +221,12 @@ export class FaceTracker {
       t.matchChanges++;
       if (t.matchChanges > 3) {
         t.confirmCount = 0;
+        t.confirmDistances = [];
         return 0;
       }
       t.cachedMatchId = matchId;
       t.confirmCount = 1;
+      t.confirmDistances = distance !== undefined ? [distance] : [];
     }
     return t.confirmCount;
   }

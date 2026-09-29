@@ -9,9 +9,12 @@ import {
   hasValidDescriptor,
   MATCH_LOOSE,
   MIN_RECOG_CONFIDENCE,
+  MIN_FRAME_QUALITY,
   CONFIRM_FRAMES,
 } from '../../services/faceAI/descriptors';
-import { buildGallery, findBestMatchIndexed } from '../../services/faceAI/gallery';
+import { buildGalleryIndex, findBestMatchIndexed, type GalleryIndex } from '../../services/faceAI/gallery';
+
+const EMPTY_INDEX: GalleryIndex = buildGalleryIndex([]);
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { MorphingSquare } from '../MorphingSquare';
 
@@ -49,7 +52,7 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
   const lastSeenRef = useRef(0);
   const faceSeenRef = useRef(0);
   const trackerRef = useRef(new FaceTracker());
-  const galleryRef = useRef<ReturnType<typeof buildGallery>>([]);
+  const galleryRef = useRef<GalleryIndex>(EMPTY_INDEX);
   const studentsRef = useRef<Student[]>(students);
   const foundRef = useRef(false);
   const onMatchedRef = useRef(onMatched);
@@ -70,7 +73,7 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
 
   useEffect(() => {
     studentsRef.current = students;
-    galleryRef.current = buildGallery(registered);
+    galleryRef.current = buildGalleryIndex(registered);
   }, [students, registered]);
 
   useEffect(() => { onMatchedRef.current = onMatched; }, [onMatched]);
@@ -278,14 +281,17 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
               if (!res || !embTrack) continue;
               const raw = new Float32Array(res.descriptor);
               const smoothed = trackerRef.current.addEmbedding(embTrack.trackId, raw, nowTs);
-              const match = findBestMatchIndexed(smoothed, galleryRef.current, MATCH_LOOSE, res.quality.composite);
-              trackerRef.current.setCache(embTrack.trackId, match?.item.id ?? null, match?.confidence ?? 0);
+              const match = findBestMatchIndexed(smoothed, galleryRef.current.items, MATCH_LOOSE, res.quality.composite, {
+                profile: galleryRef.current.profile,
+                dangerKeys: galleryRef.current.dangerKeys,
+              });
+              trackerRef.current.setCache(embTrack.trackId, match?.item.id ?? null, match?.confidence ?? 0, res.quality.composite);
 
               const vbw = res.box.width / scale, vbh = res.box.height / scale;
               const vbx = res.box.x / scale, vby = res.box.y / scale;
               const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
 
-              if (!match || match.confidence < MIN_RECOG_CONFIDENCE) {
+              if (!match || match.confidence < MIN_RECOG_CONFIDENCE || res.quality.composite < MIN_FRAME_QUALITY) {
                 const smallFace = res.box.width < MIN_FACE_PX * 1.7;
                 liveBoxes.push({ box: boxInVideo, label: smallFace ? 'اقترب قليلاً' : 'غير معروف', color: '#fbbf24' });
                 continue;
@@ -295,7 +301,7 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
               if (!student) continue;
               sawConfident = true;
 
-              const confirmCount = trackerRef.current.bumpConfirm(embTrack.trackId, student.id);
+              const confirmCount = trackerRef.current.bumpConfirm(embTrack.trackId, student.id, match.distance);
               if (confirmCount < CONFIRM_FRAMES) {
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
                 continue;
@@ -320,9 +326,10 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
             }
 
             const student = studentsRef.current.find(s => s.id === cache.cachedMatchId);
-            if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE) {
+            if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE && cache.cachedQuality >= MIN_FRAME_QUALITY) {
               sawConfident = true;
-              const confirmCount = trackerRef.current.bumpConfirm(t.trackId, student.id);
+              const cacheDistance = 1 - cache.cachedConfidence / 100;
+              const confirmCount = trackerRef.current.bumpConfirm(t.trackId, student.id, cacheDistance);
               if (confirmCount >= CONFIRM_FRAMES) {
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
                 drawBoxes(liveBoxes);
