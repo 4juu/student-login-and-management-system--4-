@@ -536,65 +536,19 @@ export function getCoveragePercent(fd: unknown): number {
 }
 
 // ── Bootstrap Clusters من عينات التسجيل ──
-// يأخذ 10 عينات تسجيل ويُنشئ حتى 5 عناقيد — كل طالب يبدأ بـ5 عناقيد من اليوم الأول
-
-const BOOTSTRAP_MAX_CLUSTERS = 5;
-const BOOTSTRAP_MERGE_DISTANCE = 0.30;
+// كل عينة تسجيل تبقى مستقلة — بدون دمج أو تجميع
 
 export function bootstrapClusters(
   enrollmentSamples: Float32Array[],
   quality: number,
 ): PoseCluster[] {
-  if (enrollmentSamples.length === 0) return [];
-
-  // كل عينة = عنقيد مؤقت نبدأ به
-  type TempCluster = { vec: Float32Array; count: number; sum: Float32Array };
-  const temps: TempCluster[] = [];
-
-  for (const sample of enrollmentSamples) {
-    // أقرب عنقيد موجود؟
-    let bestIdx = -1;
-    let bestDist = Infinity;
-    for (let i = 0; i < temps.length; i++) {
-      const temp = temps[i];
-      if (!temp) continue;
-      const avg = new Float32Array(sample.length);
-      for (let j = 0; j < sample.length; j++) avg[j] = (temp.sum[j] ?? 0) / temp.count;
-      const d = descriptorDistance(sample, avg);
-      if (d < bestDist) { bestDist = d; bestIdx = i; }
-    }
-
-    if (bestIdx >= 0 && bestDist < BOOTSTRAP_MERGE_DISTANCE && temps.length <= BOOTSTRAP_MAX_CLUSTERS) {
-      // دمج — أضف للعنقيد الموجود
-      const target = temps[bestIdx];
-      if (target) {
-        for (let j = 0; j < sample.length; j++) target.sum[j] = (target.sum[j] ?? 0) + (sample[j] ?? 0);
-        target.count++;
-      }
-    } else if (temps.length < BOOTSTRAP_MAX_CLUSTERS) {
-      // عنقيد جديد
-      const sum = new Float32Array(sample.length);
-      for (let j = 0; j < sample.length; j++) sum[j] = sample[j] ?? 0;
-      temps.push({ vec: sample, count: 1, sum });
-    }
-  }
-
-  // حوّل إلى PoseCluster[] مع bin افتراضي
-  return temps.map((t, i) => {
-    const avg = new Float32Array(t.vec.length);
-    for (let j = 0; j < t.vec.length; j++) avg[j] = (t.sum[j] ?? 0) / t.count;
-    let norm = 0;
-    for (let j = 0; j < avg.length; j++) norm += (avg[j] ?? 0) * (avg[j] ?? 0);
-    norm = Math.sqrt(norm) || 1;
-    for (let j = 0; j < avg.length; j++) avg[j] = (avg[j] ?? 0) / norm;
-    return {
-      bin: `e${i}`,
-      vector: Array.from(avg).map(v => Math.round(v * 1e5) / 1e5),
-      mergeCount: t.count,
-      quality,
-      updatedAt: Date.now(),
-    };
-  });
+  return enrollmentSamples.map((sample, i) => ({
+    bin: `e${i}`,
+    vector: Array.from(l2Normalize(sample)).map(v => Math.round(v * 1e5) / 1e5),
+    mergeCount: 1,
+    quality,
+    updatedAt: Date.now(),
+  }));
 }
 
 // ── تنظيف العناقيد القديمة (Cluster Decay) ──

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
-import { ref, update, set, get } from 'firebase/database';
+import { ref, update, get } from 'firebase/database';
 import { database } from '../../firebase/config';
 import { Student } from '../../types/student';
 import { PendingRegistration } from '../../types/registration';
@@ -136,28 +136,24 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         finalDescriptor = migrated;
       }
 
-      // ── 3) Update ONLY this student using update() — avoids rewriting whole array
-      // faceDescriptor يُكتب في العقدة المنفصلة descriptors/ (بلا مساس بمصفوفة students)
-      const studentRef = ref(database, `${basePath}/${studentKey}`);
-      await update(studentRef, {
-        qrCodeId: req.qrCodeId,
-        faceRegisteredAt: new Date().toISOString(),
-      });
-      if (finalDescriptor !== undefined) {
-        await set(ref(database, `${descriptorsPath}/${req.studentId}`), finalDescriptor);
-      }
-
-      // ── 4) Update pending request status + إزالة قيد فهرس البصمة المعلقة
-      await update(ref(database), {
+      // ── 3) تحديث ذرّي واحد: الطالب + البصمة + حالة الطلب ──
+      const now = new Date().toISOString();
+      const updates: Record<string, unknown> = {
+        [`${basePath}/${studentKey}/qrCodeId`]: req.qrCodeId,
+        [`${basePath}/${studentKey}/faceRegisteredAt`]: now,
         [`registrationSystem/pending/${adminUid}/${req.id}`]: {
           status: 'approved',
-          reviewedAt: new Date().toISOString(),
+          reviewedAt: now,
           reviewedBy: adminUid,
         },
         ...(req.stageId
           ? { [`registrationSystem/pendingFaceIndex/${adminUid}/${req.stageId}/${req.id}`]: null }
           : {}),
-      });
+      };
+      if (finalDescriptor !== undefined) {
+        updates[`${descriptorsPath}/${req.studentId}`] = finalDescriptor;
+      }
+      await update(ref(database), updates);
 
       // ── 5) تعليم الرابط المخصص لطالب واحد «مستخدماً» بعد الموافقة فقط
       if (req.linkType === 'single' && req.linkToken) {

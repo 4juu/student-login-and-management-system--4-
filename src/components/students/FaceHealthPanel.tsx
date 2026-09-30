@@ -197,7 +197,7 @@ export const FaceHealthPanel: React.FC<FaceHealthPanelProps> = ({
       )}
 
       <p className="text-xs text-purple-300 mb-3 bg-white/5 p-2 rounded flex items-start gap-1">
-        <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" /> <strong>كيف يعمل؟</strong> اختر الطلاب واضغط زر الإضافة — يلتقط الطالب 10 عينات يدوياً بزوايا وإضاءات مختلفة (يقترح عليك النظام كل زاوية)، ثم يُسجّل حضوره بمجرد المرور أمام الكاميرا. تنوّع العينات مهم: العينات المتشابهة تُضعف التعرّف.
+        <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" /> <strong>كيف يعمل؟</strong> اختر الطلاب واضغط زر الإضافة — يلتقط الطالب 7 عينات يدوياً بزوايا وإضاءات مختلفة (يقترح عليك النظام كل زاوية)، ثم يُسجّل حضوره بمجرد المرور أمام الكاميرا. تنوّع العينات مهم: العينات المتشابهة تُضعف التعرّف.
       </p>
 
       <button
