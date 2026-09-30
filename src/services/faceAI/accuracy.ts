@@ -62,7 +62,7 @@ export interface AccuracyOptions {
   target?: number | undefined;
 }
 export const ACCURACY_CAVEAT =
-  'عيّنات التسجيل هي نفسها عيّنات بناء المعرض — المقياس Train-on-test ومتفائل. يقيس اتّساق المطابقة لا دقتها الميدانية. للقياس الحقيقي راجع سجل الأخطاء القريبة بعد الاستخدام.';
+  'يقيس عيّنات التسجيل الحقيقية بمنهج leave-one-out (كل عيّنة تُستبعد من معرضها قبل اختبارها). العناقيد مشتقة من هذه العيّنات فتبقى الأرقام تقديرية — القياس الميداني النهائي عبر سجل الأخطاء القريبة بعد الاستخدام.';
 
 /** يطابق قيد buildGallery تماماً (exactOptionalPropertyTypes) */
 type StudentLike = { id: string; name?: string; faceDescriptor?: unknown };
@@ -98,7 +98,12 @@ export function measureAccuracy(
 
   for (const targetItem of gallery) {
     const withoutSelf = buildGallery(students.filter(s => s.id !== targetItem.id));
-    const selfSamples: Float32Array[] = targetItem.allSamples;
+    // نختبر عيّنات التسجيل الحقيقية فقط — العناقيد مشتقة منها (متوسطات) فلا
+    // تُحسب probes مستقلة؛ هذا أصدق قياس للزوايا التي التقطها الطالب فعلاً.
+    const selfSamples: Float32Array[] =
+      targetItem.enrollment && targetItem.enrollment.length > 0
+        ? targetItem.enrollment
+        : targetItem.allSamples;
     let rejects = 0;
     let distSum = 0;
     let twinDist = Infinity;

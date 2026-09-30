@@ -8,6 +8,7 @@ import {
   rankByNameInput,
   tripleNameMatch,
   matchesExpectedName,
+  matchesExpectedNameStrict,
   MATCH_THRESHOLD,
 } from '../cardMatch';
 
@@ -296,5 +297,48 @@ describe('tripleNameMatch — regression: split BEFORE normalizeArabic', () => {
     const results = tripleNameMatch(ocr, roster);
     expect(results[0]!.student.name).toBe('نور الهدى مؤيد سالم جاسم');
     expect(results[0]!.matchedParts).toBe(5);
+  });
+});
+
+describe('matchesExpectedNameStrict — تطابق اسم 100٪ روابط بصمة كود', () => {
+  const name = 'نور الهدى مؤيد سالم';
+
+  it('يقبل التطابق الحرفي التام ويعطي 100٪', () => {
+    const r = matchesExpectedNameStrict('نور الهدى مؤيد سالم', name);
+    expect(r).toEqual({ matched: true, score: 100 });
+  });
+
+  it('يرفض نقص حرف واحد (سال مقابل سالم)', () => {
+    expect(matchesExpectedNameStrict('نور الهدى مؤيد سال', name).matched).toBe(false);
+    expect(matchesExpectedNameStrict('نور الهدى مؤيد', name).matched).toBe(false);
+  });
+
+  it('يرفض زيادة كلمة', () => {
+    expect(matchesExpectedNameStrict('نور الهدى مؤيد سالم علي', name).matched).toBe(false);
+  });
+
+  it('يقبل البدائل المسموحة فقط: ا/أ · و/ؤ · ه/ة', () => {
+    // أ ↔ ا
+    expect(matchesExpectedNameStrict('أحمد علي', 'احمد علي').matched).toBe(true);
+    // ؤ ↔ و
+    expect(matchesExpectedNameStrict('نور الهدى مويد سالم', name).matched).toBe(true);
+    // ة ↔ ه
+    expect(matchesExpectedNameStrict('فاطمة علي', 'فاطمه علي').matched).toBe(true);
+  });
+
+  it('يتجاهل المسافات الزائدة والتشكيل', () => {
+    expect(matchesExpectedNameStrict('  نور الهدى مؤيد سالم  ', name).matched).toBe(true);
+    expect(matchesExpectedNameStrict('نورالهدىمؤيدسالم', 'نورالهدى مؤيد سالم').matched).toBe(true);
+  });
+
+  it('يرفض الفارغ والنواقص', () => {
+    expect(matchesExpectedNameStrict('', name)).toEqual({ matched: false, score: 0 });
+    expect(matchesExpectedNameStrict('   ', name)).toEqual({ matched: false, score: 0 });
+    expect(matchesExpectedNameStrict(name, null)).toEqual({ matched: false, score: 0 });
+    expect(matchesExpectedNameStrict(name, undefined)).toEqual({ matched: false, score: 0 });
+  });
+
+  it('يرفض اسم طالب آخر تماماً', () => {
+    expect(matchesExpectedNameStrict('مجتبى هيثم محمد محسن', name).matched).toBe(false);
   });
 });

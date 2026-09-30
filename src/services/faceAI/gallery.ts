@@ -480,8 +480,10 @@ export function findBestMatchIndexed(
     sampleCount: number;
   }> = [];
   for (const entry of gallery) {
-    // القرار مرسى على عيّنات التسجيل الأصلية — العناقيد لا تُقرّر وحدها
-    const anchor = entry.enrollment && entry.enrollment.length > 0 ? entry.enrollment : entry.allSamples;
+    // القرار على كل العيّنات (تسجيل + عناقيد) — العناقيد آمنة لأن قيد المرساة
+    // (updateGallery) يمنع دخول أي عيّنة بعيدة عن مرساة التسجيل، فلا يمكنها
+    // أن تقلب هوية الطالب. تقييد القرار بالتسجيل فقط كسر التعرّف على الزوايا المتعلَّمة.
+    const anchor = entry.allSamples;
     if (anchor.length === 0) continue;
 
     const best: number[] = [];

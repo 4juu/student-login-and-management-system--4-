@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, BadgeCheck, Check, RefreshCw, UserCheck } from 'lucide-react';
 import type { Student } from '../../types/student';
-import { matchesExpectedName } from '../../services/cardMatch';
+import { matchesExpectedNameStrict } from '../../services/cardMatch';
 
 interface VerifyNameStepProps {
   expected: Student | null | undefined;
@@ -57,13 +57,14 @@ export const VerifyNameStep: React.FC<VerifyNameStepProps> = ({ expected, onVeri
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const r = matchesExpectedName(typed, expected.name);
+    // تطابق صارم 100٪ — كل حرف يجب أن يطابق اسم النظام (عدا البدائل: ا/أ · و/ؤ · ه/ة)
+    const r = matchesExpectedNameStrict(typed, expected.name);
     if (r.matched) {
       setError('');
       setScore(r.score);
       setScreen('result');
     } else {
-      setError('الاسم غير مطابق — تأكد من كتابة اسمك كما هو مسجّل ثم أعد المحاولة.');
+      setError('اكتب اسمك كامل كما هو موجود بالنظام وفي رسالة الروابط بدون نقص اي حرف');
     }
   };
 
@@ -126,7 +127,7 @@ export const VerifyNameStep: React.FC<VerifyNameStepProps> = ({ expected, onVeri
         </div>
 
         <p className="sel-muted mb-5">
-          اكتب اسمك كما هو مسجّل في الجامعة — يُطابق الاسم مع سجل هذا الرابط قبل تسجيل البصمة.
+          اكتب اسمك <strong className="text-amber-300">كاملاً حرفاً بحرف</strong> كما هو موجود بالنظام وفي رسالة الرابط — لا يُقبل أي نقص أو زيادة (عدا البدائل: ا/أ · و/ؤ · ه/ة).
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-3">

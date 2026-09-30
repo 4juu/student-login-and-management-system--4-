@@ -53,7 +53,7 @@ describe('م7 — مُقايِس الدقة (leave-one-out)', () => {
     expect(report.probes).toBe(10);
     // التداخل يجب أن ينكشف: إما قبول خاطئ أو رفض بسبب توأم
     expect(report.far + report.frr).toBeGreaterThan(0);
-    expect(report.caveat).toContain('Train-on-test');
+    expect(report.caveat).toContain('leave-one-out');
   });
 
   it('leave-one-out حقيقي: العيّنة مستبعدة من معرض الهدف', () => {

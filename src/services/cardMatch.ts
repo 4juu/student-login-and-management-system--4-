@@ -239,3 +239,30 @@ export function matchesExpectedName(
   if (!hasFamilyWord(expectedName, typed)) return { matched: false, score };
   return { matched: true, score };
 }
+
+/**
+ * تطبيع صارم للعربية — التحقق من اسم بصمة الكود حرفاً بحرف.
+ * يوحّد فقط البدائل المقبولة: أ إ آ → ا · ؤ → و · ة → ه
+ * ويزيل التشكيل والمسافات — كل حرف آخر يجب أن يتطابق تماماً.
+ */
+export function normalizeStrictArabic(text: string): string {
+  return normalizeArabic(text.replace(/ؤ/g, 'و'));
+}
+
+/**
+ * تطابق اسم صارم 100٪ — روابط «بصمة كود».
+ * لا يفتح الرابط إلا إذا تطابق الاسم حرفاً بحرف (بعد تطبيع البدائل فقط).
+ * «نور الهدى مؤيد سال» ≠ «نور الهدى مؤيد سالم» — النقص بحرف واحد يُرفض.
+ */
+export function matchesExpectedNameStrict(
+  typed: string,
+  expectedName: string | null | undefined,
+): { matched: boolean; score: number } {
+  if (!typed || !typed.trim() || !expectedName || !expectedName.trim()) {
+    return { matched: false, score: 0 };
+  }
+  const a = normalizeStrictArabic(typed.trim());
+  const b = normalizeStrictArabic(expectedName.trim());
+  if (!a || !b) return { matched: false, score: 0 };
+  return a === b ? { matched: true, score: 100 } : { matched: false, score: 0 };
+}

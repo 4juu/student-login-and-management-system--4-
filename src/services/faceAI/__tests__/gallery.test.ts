@@ -61,7 +61,7 @@ describe('findBestMatchIndexed — مطابقة صارمة بإثبات مزدو
     const match = findBestMatchIndexed(QUERY, gallery, 0.42, 0.7);
     expect(match).not.toBeNull();
     expect(match!.item.id).toBe('A');
-    expect(match!.votes).toBe(3);
+    expect(match!.votes).toBe(5); // 0.05/0.06/0.07 + 0.36/0.37 ضمن voteCap الجديد 0.38
     expect(match!.distance).toBeLessThan(0.1);
     // الثقة من مسافة القرار (متوسط أقرب 3 = 0.06) لا من أقرب عيّنة (0.05)
     expect(match!.confidence).toBeGreaterThanOrEqual(93);
@@ -161,9 +161,9 @@ describe('م1 — الإحصاء العادل: لا تحيّز بعدد العي
     expect(decisionDistance([0.1, 0.2])).toBeCloseTo(0.15, 5);
   });
 
-  it('يرفض 3 تصويتات من 15 عيّنة (نسبة ضعيفة) — لا شراء القبول بعدد العينات', () => {
-    // 3 عيّنات قريبة، 12 بعيدة جداً ⇒ نسبة 20% < 34%
-    const far = Array.from({ length: 12 }, () => 0.95);
+  it('يرفض 3 تصويتات من 16 عيّنة (نسبة ضعيفة) — لا شراء القبول بعدد العينات', () => {
+    // 3 عيّنات قريبة، 13 بعيدة جداً ⇒ نسبة 18.75% < 20%
+    const far = Array.from({ length: 13 }, () => 0.95);
     const it = makeItem('A', [0.10, 0.30, 0.34, ...far]);
     const match = findBestMatchIndexed(QUERY, [it], 0.42, 0.7);
     expect(match).toBeNull();
