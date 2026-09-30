@@ -15,7 +15,15 @@
 // التصويت النسبّي، لكنه لا يثبت نسبة 99٪ في العالم الحقيقي — لذلك
 // يبقى سجل near-miss المرافق ضرورياً للقياس الميداني.
 // ─────────────────────────────────────────────────────────────
-import { buildGallery, decisionDistance, findBestMatchIndexed, type MatchOptions, type MatchProfile } from './gallery';
+import {
+  buildGallery,
+  decisionDistance,
+  excludeSampleFromItem,
+  findBestMatchIndexed,
+  getLastRejection,
+  type MatchOptions,
+  type MatchProfile,
+} from './gallery';
 import { descriptorDistance, RECOG_MATCH_K } from './descriptors';
 
 export interface AccuracyReport {
@@ -32,7 +40,15 @@ export interface AccuracyReport {
   /** هل يحقق الهدف (افتراضي 99٪) */
   meetsTarget: boolean;
   /** أسوأ الطلاب — يحتاجون إعادة تسجيل */
-  worstStudents: Array<{ id: string; name: string; rejectRate: number; avgDistance: number }>;
+  worstStudents: Array<{
+    id: string;
+    name: string;
+    rejectRate: number;
+    /** متوسط مسافة القرار الذاتية (تشتّت الطالب مع نفسه) */
+    avgDistance: number;
+    /** مسافة أقرب توأم عند الرفض بسبب التداخل — التشخيص الحقيقي */
+    twinDistance?: number | undefined;
+  }>;
   /** توزيع أسباب الرفض */
   reasons: Record<string, number>;
   /** تحذير منهجي */
@@ -73,19 +89,19 @@ export function measureAccuracy(
   const opts: MatchOptions = {};
   if (options?.profile) opts.profile = options.profile;
   if (options?.dangerKeys) opts.dangerKeys = options.dangerKeys;
-  const fullGallery = gallery;
 
   let correct = 0;
   let falseAccept = 0;
   let selfReject = 0;
   let probes = 0;
-  const perStudent: Array<{ id: string; name: string; rejects: number; total: number; distSum: number }> = [];
+  const perStudent: Array<{ id: string; name: string; rejects: number; total: number; distSum: number; twinDist: number }> = [];
 
   for (const targetItem of gallery) {
     const withoutSelf = buildGallery(students.filter(s => s.id !== targetItem.id));
     const selfSamples: Float32Array[] = targetItem.allSamples;
     let rejects = 0;
     let distSum = 0;
+    let twinDist = Infinity;
 
     for (const probe of selfSamples) {
       probes += 1;
@@ -94,7 +110,7 @@ export function measureAccuracy(
         RECOG_MATCH_K,
       );
 
-      // ① لا يغلق أي طالب آخر من معرض بلا هو — هذا قياس FAR النظيف
+      // ① FAR نظيف: لا يقبل أي طالب آخر من معرض بلا هو
       if (withoutSelf.length > 0) {
         const impostor = findBestMatchIndexed(probe, withoutSelf, 0.42, 0.7, opts);
         if (impostor) {
@@ -104,14 +120,24 @@ export function measureAccuracy(
         }
       }
 
-      // ② في المعرض الكامل يجب أن يفوز هو
-      const genuine = findBestMatchIndexed(probe, fullGallery, 0.42, 0.7, opts);
+      // ② LOO حقيقي: العيّنة مستبعدة من معرض الهدف — لا تفاؤل train-on-test
+      const targetWithout = excludeSampleFromItem(targetItem, probe);
+      const looGallery = targetWithout.allSamples.length > 0
+        ? [...withoutSelf, targetWithout]
+        : withoutSelf;
+      const genuine = findBestMatchIndexed(probe, looGallery, 0.42, 0.7, opts);
       if (genuine && genuine.item.id === targetItem.id) {
         correct += 1;
       } else {
         rejects += 1;
         selfReject += 1;
-        bump(genuine ? 'wrong-identity' : 'rejected');
+        const reason = getLastRejection()?.reason ?? 'rejected';
+        if (reason === 'tight-margin' || reason === 'danger-pair') {
+          bump('twin-reject');
+          twinDist = Math.min(twinDist, genuine?.distance ?? Infinity);
+        } else {
+          bump('far-reject');
+        }
       }
     }
 
@@ -121,6 +147,7 @@ export function measureAccuracy(
       rejects,
       total: selfSamples.length,
       distSum: selfSamples.length > 0 ? distSum / selfSamples.length : 0,
+      twinDist,
     });
   }
 
@@ -135,6 +162,7 @@ export function measureAccuracy(
       name: s.name,
       rejectRate: s.total > 0 ? round3(s.rejects / s.total) : 0,
       avgDistance: round3(s.distSum),
+      twinDistance: Number.isFinite(s.twinDist) ? round3(s.twinDist) : undefined,
     }))
     .filter(s => s.rejectRate > 0)
     .sort((a, b) => b.rejectRate - a.rejectRate)

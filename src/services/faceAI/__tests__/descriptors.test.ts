@@ -11,7 +11,7 @@ import {
   parseOneSample,
   isGalleryDescriptor,
   hasValidDescriptor,
-  migrateToV5,
+  migrateToV6,
   parseAllSamples,
   parseStoredDescriptor,
   parseGallerySamples,
@@ -26,6 +26,13 @@ import {
   getMissingBins,
   getGalleryHealthSummary,
   pruneStaleClusters,
+  bootstrapClusters,
+  minDistanceToOthers,
+  isFarFromAllOthers,
+  computeCentroid,
+  isAlignedDescriptor,
+  ENROLL_SEPARATION_MIN,
+  AUTO_LEARN_SEPARATION_MIN,
   type FaceGalleryDescriptor,
   type PendingFaceRecord,
 } from '../descriptors';
@@ -66,10 +73,18 @@ function makeGallery(seeds: number[] = [1]): FaceGalleryDescriptor {
   };
 }
 
+function makeGalleryFromVecs(vecs: Float32Array[]): FaceGalleryDescriptor {
+  return {
+    version: DESC_VERSION_GALLERY,
+    enrollment: vecs.map(v => Array.from(v)),
+    clusters: [],
+  };
+}
+
 describe('constants', () => {
   it('has expected values', () => {
     expect(DESC_DIM).toBe(512);
-    expect(DESC_VERSION_GALLERY).toBe(5);
+    expect(DESC_VERSION_GALLERY).toBe(6);
     expect(MAX_CLUSTERS).toBe(18);
     expect(MAX_MERGES_PER_CLUSTER).toBe(12);
     expect(MATCH_STRICT).toBeLessThan(MATCH_LOOSE);
@@ -150,29 +165,33 @@ describe('hasValidDescriptor', () => {
   });
 });
 
-describe('migrateToV5', () => {
-  it('passes through valid v5 descriptor (normalized)', () => {
-    const result = migrateToV5(makeGallery([1]));
+describe('migrateToV6', () => {
+  it('passes through valid v6 descriptor (normalized)', () => {
+    const result = migrateToV6(makeGallery([1]));
     expect(result).not.toBeNull();
-    expect(result!.version).toBe(5);
+    expect(result!.version).toBe(6);
     expect(result!.enrollment.length).toBe(1);
   });
 
   it('returns null for legacy flat array format', () => {
-    expect(migrateToV5(new Array(DESC_DIM).fill(0.1))).toBeNull();
+    expect(migrateToV6(new Array(DESC_DIM).fill(0.1))).toBeNull();
   });
 
   it('returns null for legacy {descriptor} format', () => {
-    expect(migrateToV5({ descriptor: [1, 2, 3] })).toBeNull();
+    expect(migrateToV6({ descriptor: [1, 2, 3] })).toBeNull();
   });
 
   it('returns null for null/undefined', () => {
-    expect(migrateToV5(null)).toBeNull();
-    expect(migrateToV5(undefined)).toBeNull();
+    expect(migrateToV6(null)).toBeNull();
+    expect(migrateToV6(undefined)).toBeNull();
   });
 
   it('returns null when no valid enrollment samples', () => {
-    expect(migrateToV5({ version: 5, enrollment: [], clusters: [] })).toBeNull();
+    expect(migrateToV6({ version: 6, enrollment: [], clusters: [] })).toBeNull();
+  });
+
+  it('returns null for v5 (unaligned) — cannot migrate to aligned v6', () => {
+    expect(migrateToV6({ version: 5, enrollment: [Array.from(makeVec(1))], clusters: [] })).toBeNull();
   });
 });
 
@@ -418,7 +437,7 @@ describe('getGalleryHealthSummary', () => {
       {},
     ]);
     expect(summary.total).toBe(3);
-    expect(summary.v5Count).toBe(1);
+    expect(summary.v6Count).toBe(1);
     expect(summary.noFaceCount).toBe(2);
     expect(summary.matureCount).toBe(0); // 0 clusters → 0% coverage
   });
@@ -523,5 +542,79 @@ describe('checkPendingConflict', () => {
     const r = checkPendingConflict([sample], rec, { selfId: 'me', stageId });
     expect(r.conflict).toBe(true);
     expect(r.matchedWith).toBe('علي حسن');
+  });
+});
+
+describe('فصل البصمات — منع التداخل', () => {
+  it('isAlignedDescriptor: v6 فقط مُحاذاة، v5 ليست كذلك', () => {
+    expect(isAlignedDescriptor(makeGallery([1]))).toBe(true);
+    expect(isAlignedDescriptor({ version: 5, enrollment: [Array.from(makeVec(1))], clusters: [] })).toBe(false);
+  });
+
+  it('minDistanceToOthers: يكشف أقرب طالب ومسافته', () => {
+    const base = makeVec(1);
+    const a = makeGalleryFromVecs([base]);
+    const b = makeGalleryFromVecs([perturb(base, 0.02)]); // قريبة جداً من a
+    const c = makeGalleryFromVecs([makeVec(120)]);          // بعيدة
+    const r = minDistanceToOthers(a, [
+      { id: 'b', name: 'ب', faceDescriptor: b },
+      { id: 'c', name: 'ج', faceDescriptor: c },
+    ], 'a');
+    expect(r.closestId).toBe('b');
+    expect(r.minDistance).toBeLessThan(ENROLL_SEPARATION_MIN);
+  });
+
+  it('minDistanceToOthers: Infinity عندما لا يوجد طلاب آخرون', () => {
+    const r = minDistanceToOthers(makeGallery([1]), [], 'a');
+    expect(r.minDistance).toBe(Infinity);
+  });
+
+  it('isFarFromAllOthers: يرفض عيّنة قريبة من طالب آخر', () => {
+    const base = makeVec(1);
+    const b = makeGalleryFromVecs([base]);
+    const sample = perturb(base, 0.02); // قريبة من b
+    const r = isFarFromAllOthers(sample, [{ id: 'b', name: 'ب', faceDescriptor: b }], 'a', AUTO_LEARN_SEPARATION_MIN);
+    expect(r.ok).toBe(false);
+    expect(r.closestId).toBe('b');
+  });
+
+  it('isFarFromAllOthers: يقبل عيّنة بعيدة عن الجميع', () => {
+    const b = makeGalleryFromVecs([makeVec(120)]);
+    const sample = makeVec(1);
+    const r = isFarFromAllOthers(sample, [{ id: 'b', name: 'ب', faceDescriptor: b }], 'a', AUTO_LEARN_SEPARATION_MIN);
+    expect(r.ok).toBe(true);
+  });
+
+  it('bootstrapClusters: يستخدم الخانات الحقيقية لا e0..e4', () => {
+    const samples = [makeVec(1), makeVec(1.01), makeVec(60)];
+    const bins = ['0_0', '0_0', '30_0'];
+    const clusters = bootstrapClusters(samples, bins, 0.8);
+    const binSet = new Set(clusters.map(c => c.bin));
+    expect(binSet.has('0_0')).toBe(true);
+    expect(binSet.has('30_0')).toBe(true);
+    expect([...binSet].some(b => b.startsWith('e'))).toBe(false);
+  });
+
+  it('قيد المرساة: updateGallery يرفض عيّنة بعيدة عن مرساة التسجيل', () => {
+    const g = makeGallery([1, 1.01, 1.02]); // مرساة قريبة من makeVec(1)
+    const far = makeVec(120); // بعيدة جداً عن المرساة
+    const r = updateGallery(g, far, 0.9, '0_0');
+    expect(r.action).toBe('rejected');
+  });
+
+  it('قيد المرساة: updateGallery يقبل عيّنة قريبة من المرساة', () => {
+    const base = makeVec(1);
+    const g = makeGalleryFromVecs([base, perturb(base, 0.01), perturb(base, 0.02)]);
+    const near = perturb(base, 0.03); // قريبة من المرساة
+    const r = updateGallery(g, near, 0.9, '0_0');
+    expect(r.action === 'merged' || r.action === 'created').toBe(true);
+  });
+
+  it('computeCentroid: يعيد متجهاً مطبّعاً', () => {
+    const c = computeCentroid(makeGallery([1, 2]));
+    expect(c).not.toBeNull();
+    let norm = 0;
+    for (let i = 0; i < c!.length; i++) norm += c![i]! * c![i]!;
+    expect(Math.sqrt(norm)).toBeCloseTo(1, 5);
   });
 });

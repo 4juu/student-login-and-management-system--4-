@@ -44,16 +44,27 @@ describe('م7 — مُقايِس الدقة (leave-one-out)', () => {
     expect(report.purity).toBe(1);
   });
 
-  it('طالبان متقاربان: يقيس التلاشي بدل تجاهله', () => {
+  it('طالبان متقاربان جداً: يكشف التداخل (قبول خاطئ أو رفض توأم) لا يتجاهله', () => {
     const students = [
-      makeStudent('a', 'طالب أ', [-10, -5, 0, 5, 10]),
-      makeStudent('b', 'طالب ب', [0, 5, 10, 15, 20]),
+      makeStudent('a', 'طالب أ', [-2, -1, 0, 1, 2]),
+      makeStudent('b', 'طالب ب', [-1, 0, 1, 2, 3]),
     ];
     const report = measureAccuracy(students);
     expect(report.probes).toBe(10);
-    // إما خطأ قبول أو رفض — المهم أن الرقم انكشف لا أن اختفي
-    expect(report.far + report.frr).toBeGreaterThanOrEqual(0);
+    // التداخل يجب أن ينكشف: إما قبول خاطئ أو رفض بسبب توأم
+    expect(report.far + report.frr).toBeGreaterThan(0);
     expect(report.caveat).toContain('Train-on-test');
+  });
+
+  it('leave-one-out حقيقي: العيّنة مستبعدة من معرض الهدف', () => {
+    // طالب واحد بعينتين متباعدتين — بدون LOO ستُقبل العيّنة الثانية تفائلاً،
+    // وبـ LOO تُستبعد فيصبح المعرض من عيّنة واحدة فقط
+    const students = [makeStudent('a', 'طالب أ', [0, 40])];
+    const report = measureAccuracy(students);
+    expect(report.students).toBe(1);
+    expect(report.probes).toBe(2);
+    // العيّنة الثانية (40°) بعيدة عن الأولى (0°) — مع LOO تُرفض لأنها بعيدة عن المعرض
+    expect(report.frr).toBeGreaterThan(0);
   });
 
   it('طالب واحد فقط: يُقاس فقط ولا ينسب خطأ لنفسه', () => {

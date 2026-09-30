@@ -35,7 +35,29 @@ export interface NearMissSummary {
 }
 
 const MAX_ENTRIES = 200;
-const entries: NearMiss[] = [];
+const STORAGE_KEY = 'face-near-miss-log-v1';
+
+function loadPersisted(): NearMiss[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as NearMiss[]).slice(-MAX_ENTRIES) : [];
+  } catch {
+    return [];
+  }
+}
+
+function persist(entries: NearMiss[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries.slice(-MAX_ENTRIES)));
+  } catch {
+    /* التخزين غير متاح — نتجاهل */
+  }
+}
+
+// دائم: يُحمَّل من localStorage عند البدء — يبقى بعد إعادة التحميل (قياس ميداني)
+const entries: NearMiss[] = loadPersisted();
 const perStudent = new Map<string, { misses: number; distSum: number; minMargin: number }>();
 
 function keyOf(id: string | undefined): string {
@@ -68,6 +90,7 @@ export function recordRejection(forcedReason?: RejectionReason): NearMiss | null
   };
   entries.push(entry);
   if (entries.length > MAX_ENTRIES) entries.shift();
+  persist(entries);
   return entry;
 }
 
@@ -105,4 +128,9 @@ export function getNearMissSummary(): NearMissSummary {
 export function clearNearMissLog(): void {
   entries.length = 0;
   perStudent.clear();
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* تجاهل */
+  }
 }

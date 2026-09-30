@@ -8,8 +8,9 @@
 // ─────────────────────────────────────────────────────────────
 import {
   descriptorDistance,
+  l2Normalize,
   MIN_MARGIN,
-  isGalleryDescriptor,
+  isAlignedDescriptor,
   normalizeClusters,
   parseOneSample,
   RECOG_D1_CAP,
@@ -25,6 +26,8 @@ export interface GalleryItem {
   id: string;
   name?: string | undefined;
   allSamples: Float32Array[];
+  /** مرساة التسجيل الأصلية (غير قابلة للتغيير) — القرار يُرسم عليها */
+  enrollment?: Float32Array[] | undefined;
   centroid: Float32Array | null;
   primary: Float32Array | null;
 }
@@ -296,7 +299,8 @@ export function buildGallery<T extends { id: string; name?: string; faceDescript
   const gallery: GalleryItem[] = [];
   for (const item of items) {
     const fd = item.faceDescriptor;
-    if (!isGalleryDescriptor(fd)) continue;
+    // فقط v6 (مُحاذاة) تُطابَق — v5 تُستبعد وتُعرض «قديمة — أعد التسجيل»
+    if (!isAlignedDescriptor(fd)) continue;
 
     // ── #3: Weighted centroid — weight clusters by quality ──
     const enrollmentSamples: Float32Array[] = [];
@@ -356,6 +360,7 @@ export function buildGallery<T extends { id: string; name?: string; faceDescript
       id: item.id,
       name: item.name,
       allSamples,
+      enrollment: enrollmentSamples,
       centroid: norm > 0 ? avg : null,
       primary: allSamples[bestIdx] ?? null,
     });
@@ -475,10 +480,12 @@ export function findBestMatchIndexed(
     sampleCount: number;
   }> = [];
   for (const entry of gallery) {
-    if (entry.allSamples.length === 0) continue;
+    // القرار مرسى على عيّنات التسجيل الأصلية — العناقيد لا تُقرّر وحدها
+    const anchor = entry.enrollment && entry.enrollment.length > 0 ? entry.enrollment : entry.allSamples;
+    if (anchor.length === 0) continue;
 
     const best: number[] = [];
-    for (const ref of entry.allSamples) {
+    for (const ref of anchor) {
       const distance = descriptorDistance(query, ref);
       if (best.length < k) {
         best.push(distance);
@@ -570,4 +577,28 @@ export function findBestMatchIndexed(
     voteRatio: Math.round(voteRatio * 100) / 100,
     nearest: Math.round(first.nearest * 1000) / 1000,
   };
+}
+
+/**
+ * نسخة من عنصر المعرض بدون عيّنة محددة — لقياس leave-one-out حقيقي
+ * (العيّنة المختبَرة لا تكون ضمن معرض الهدف، فلا تكون النتيجة متفائلة).
+ */
+export function excludeSampleFromItem(item: GalleryItem, sample: Float32Array): GalleryItem {
+  const allSamples = item.allSamples.filter(s => s !== sample);
+  const enrollment = item.enrollment ? item.enrollment.filter(s => s !== sample) : [];
+  if (allSamples.length === 0) {
+    return { ...item, allSamples: [], enrollment: [], centroid: null, primary: null };
+  }
+  const dim = allSamples[0]!.length;
+  const avg = new Float32Array(dim);
+  for (const s of allSamples) for (let i = 0; i < dim; i++) avg[i] = (avg[i] ?? 0) + (s[i] ?? 0);
+  for (let i = 0; i < dim; i++) avg[i] = (avg[i] ?? 0) / allSamples.length;
+  const centroid = l2Normalize(avg);
+  let bestDist = Infinity;
+  let bestIdx = 0;
+  for (let i = 0; i < allSamples.length; i++) {
+    const d = descriptorDistance(centroid, allSamples[i]!);
+    if (d < bestDist) { bestDist = d; bestIdx = i; }
+  }
+  return { ...item, allSamples, enrollment, centroid, primary: allSamples[bestIdx] ?? null };
 }

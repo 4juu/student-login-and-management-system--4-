@@ -15,10 +15,13 @@ import {
   hasValidDescriptor,
   l2Normalize,
   bootstrapClusters,
+  minDistanceToOthers,
   DESC_DIM,
   DESC_VERSION_GALLERY,
+  ENROLL_SEPARATION_MIN,
   type FaceGalleryDescriptor,
 } from '../../services/faceAI/descriptors';
+import { estimatePose, poseToBin } from '../../services/faceAI/pose';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface SelfCaptureStepProps {
@@ -83,6 +86,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
   const mountedRef = useRef(true);
   const samplesDataRef = useRef<Float32Array[]>([]);
   const samplesQualityRef = useRef<number[]>([]);
+  const samplesBinsRef = useRef<string[]>([]);
 
   const [cameraReady, setCameraReady] = useState(false);
   const [camError, setCamError] = useState(false);
@@ -91,6 +95,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
   const [flash, setFlash] = useState<'ok' | 'fail' | null>(null);
   const [fatal, setFatal] = useState<string | null>(null);
   const [diversityWarning, setDiversityWarning] = useState<string | null>(null);
+  const [separationWarning, setSeparationWarning] = useState<string | null>(null);
   const [faceInBoundary, setFaceInBoundary] = useState(false);
   const [capturePhase, setCapturePhase] = useState<CapturePhase>('front');
 
@@ -238,6 +243,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
         y: faces[0].box.y * scale,
         width: faces[0].box.width * scale,
         height: faces[0].box.height * scale,
+        keypoints: faces[0].keypoints?.map(kp => ({ x: kp.x * scale, y: kp.y * scale })),
       });
       if (!mountedRef.current) return;
 
@@ -270,6 +276,8 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
 
       samplesDataRef.current.push(new Float32Array(res.descriptor));
       samplesQualityRef.current.push(res.quality.composite ?? 0);
+      const pose = estimatePose(faces[0].keypoints);
+      samplesBinsRef.current.push(pose ? poseToBin(pose) : '0_0');
       const sampleCount = samplesDataRef.current.length;
       setSamples(sampleCount);
       try { navigator.vibrate?.(30); } catch {}
@@ -315,16 +323,29 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
         const quality = qList.length > 0
           ? Math.round((qList.reduce((s, q) => s + q, 0) / qList.length + 0.05) * 100) / 100
           : 0.8;
-        const clusters = bootstrapClusters(samplesDataRef.current, quality);
+        const clusters = bootstrapClusters(samplesDataRef.current, samplesBinsRef.current, quality);
         const galleryDescriptor: FaceGalleryDescriptor = {
           version: DESC_VERSION_GALLERY,
           enrollment: samplesDataRef.current.map(s =>
             Array.from(l2Normalize(s)).map(v => Math.round(v * 1e5) / 1e5)
           ),
+          enrollmentBins: samplesBinsRef.current.slice(),
           clusters,
           samples: SAMPLES_NEEDED,
           quality,
         };
+
+        // فحص الفصل الاستباقي: هل هذه البصمة قريبة جداً من طالب آخر؟
+        // لا نمنع الحفظ (احتراً لاختيار المستخدم) لكن نُحذّر بوضوح — الأدمن يراجع عند الموافقة.
+        const sep = minDistanceToOthers(galleryDescriptor, othersRef.current, student.id);
+        if (Number.isFinite(sep.minDistance) && sep.minDistance < ENROLL_SEPARATION_MIN) {
+          setSeparationWarning(
+            `⚠ بصمتك قريبة جداً من طالب آخر (${sep.closestName ?? 'غير معروف'} — مسافة ${sep.minDistance.toFixed(2)}). ` +
+            `قد يختلط حضوركما. الأفضل إعادة التسجيل بإضاءة أو زاوية مختلفة.`,
+          );
+        } else {
+          setSeparationWarning(null);
+        }
 
         // تحقق نهائي من سلامة البصمة قبل الإرسال — لا نرسل بصمة فارغة/تالفة
         if (!hasValidDescriptor(galleryDescriptor)) {
@@ -444,6 +465,14 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
             feedback.includes('✓') ? 'text-emerald-400' :
             feedback.startsWith('لا') || feedback.startsWith('اقترب') || feedback.startsWith('ابتد') || feedback.includes('ضعيفة') ? 'text-amber-400' : 'text-slate-300'
           }`}>{feedback}</p>
+
+          {/* ⚠ تحذير التداخل — بصمة قريبة من طالب آخر */}
+          {separationWarning && (
+            <div className="mb-3 flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2.5">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
+              <p className="text-[11px] leading-relaxed text-red-200">{separationWarning}</p>
+            </div>
+          )}
 
           {/* 📉 تنبيه تنوّع العينات — تحذير فقط، لا يمنع الحفظ */}
           {diversityWarning && (

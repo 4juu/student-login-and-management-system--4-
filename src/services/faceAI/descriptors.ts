@@ -10,7 +10,19 @@ import { YAW_STEPS, PITCH_STEPS } from './pose';
 // ══════════════════════════════════════════════════════════════
 
 export const DESC_DIM = 512;
-export const DESC_VERSION_GALLERY = 5;
+// v6 = بصمة مُحاذاة (alignment بالعينين). v5 = legacy غير مُحاذاة.
+// المحاذاة تغيّر فضاء الـembedding ⇒ v5 لا تُطابَق مع v6 وتُستبعد من التعرّف
+// (تُعرض «قديمة — أعد التسجيل») حتى يعيد الطالب التسجيل على v6.
+export const DESC_VERSION_GALLERY = 6;
+export const LEGACY_DESC_VERSIONS = [5];
+const SUPPORTED_DESC_VERSIONS = [DESC_VERSION_GALLERY, ...LEGACY_DESC_VERSIONS];
+
+/** أقل مسافة قرار بين طالبين مختلفين — دونها تُمنع البصمة الجديدة (تداخل) */
+export const ENROLL_SEPARATION_MIN = 0.30;
+/** أقصى مسافة لعيّنة تعلّم عن مرساة التسجيل — قيد يمنع جرّ الهوية نحو طالب آخر */
+export const AUTO_LEARN_TETHER_MAX = 0.25;
+/** أقل مسافة فصل مطلق عن الطلاب الآخرين قبل أي تعلّم — يمنع دمج وجه طالب آخر */
+export const AUTO_LEARN_SEPARATION_MIN = 0.30;
 
 export const MATCH_STRICT = 0.32;
 export const MATCH_LOOSE = 0.42;
@@ -111,6 +123,8 @@ export interface PoseCluster {
 export interface FaceGalleryDescriptor {
   version: typeof DESC_VERSION_GALLERY;
   enrollment: number[][];
+  /** خانة الزاوية لكل عيّنة تسجيل (موازية لـ enrollment) — تمنع العناقيد الوهمية e0..e4 */
+  enrollmentBins?: string[] | undefined;
   clusters: PoseCluster[];
   samples?: number | undefined;
   quality?: number | undefined;
@@ -147,13 +161,19 @@ export function parseOneSample(arr: unknown): Float32Array | null {
 export function isGalleryDescriptor(fd: unknown): fd is FaceGalleryDescriptor {
   if (!fd || typeof fd !== 'object') return false;
   const o = fd as Record<string, unknown>;
-  return o.version === DESC_VERSION_GALLERY
+  return SUPPORTED_DESC_VERSIONS.includes(o.version as number)
     && Array.isArray(o.enrollment)
     // Firebase يحذف تلقائياً أي clusters: [] فاضية عند الحفظ — غيابها يعني "لا عناقيد بعد" وليس بصمة تالفة
     && (o.clusters === undefined
         || o.clusters === null
         || Array.isArray(o.clusters)
         || typeof o.clusters === 'object');
+}
+
+/** هل البصمة مُحاذاة (v6)؟ — فقط v6 تُطابَق في التعرّف */
+export function isAlignedDescriptor(fd: unknown): fd is FaceGalleryDescriptor {
+  if (!fd || typeof fd !== 'object') return false;
+  return (fd as Record<string, unknown>).version === DESC_VERSION_GALLERY;
 }
 
 /** Firebase يحوّل المصفوفات الفارغة [] إلى كائنات {} — نعوّض تلقائياً */
@@ -172,16 +192,17 @@ export function hasValidDescriptor(fd: unknown): boolean {
 }
 
 /**
- * مدقق صارم v5 فقط - اي تنسيق قديم (مصفوفة مسطحة، مصفوفة عينات، enrollment ككائن،
+ * مدقق صارم v6 فقط — أي تنسيق قديم (مصفوفة مسطحة، مصفوفة عينات، enrollment ككائن،
  * او {descriptor/vector/embedding}) يرفض نهائيا ويعيد null.
- * العناقيد الحالية (clusters) تحفظ كما هي حتى لا يفقد الطالب تعلمه التدريجي.
+ * v5 (غير مُحاذاة) لا تُترحَل إلى v6: المحاذاة تحتاج الصورة الأصلية غير المتاحة،
+ * فمطابقة v5 مع استعلام v6 ستفشل — يُعاد الطالب للتسجيل على v6 بدل ترحيل مضلل.
  */
-export function migrateToV5(input: unknown): FaceGalleryDescriptor | null {
+export function migrateToV6(input: unknown): FaceGalleryDescriptor | null {
   if (!input || typeof input !== 'object') return null;
 
-  // 1) صيغة v5 الحالية
   if (isGalleryDescriptor(input)) {
     const fd = input as FaceGalleryDescriptor;
+    if (fd.version !== DESC_VERSION_GALLERY) return null;
     const samples = fd.enrollment
       .map(s => parseOneSample(s))
       .filter((s): s is Float32Array => s !== null);
@@ -189,12 +210,14 @@ export function migrateToV5(input: unknown): FaceGalleryDescriptor | null {
     return {
       version: DESC_VERSION_GALLERY,
       enrollment: samples.map(s => Array.from(l2Normalize(s)).map(v => Math.round(v * 1e5) / 1e5)),
+      enrollmentBins: Array.isArray(fd.enrollmentBins)
+        ? fd.enrollmentBins.slice(0, samples.length)
+        : undefined,
       clusters: normalizeClusters(fd.clusters),
       samples: samples.length,
       quality: typeof fd.quality === 'number' ? fd.quality : undefined,
     };
   }
-
 
   return null;
 }
@@ -232,6 +255,78 @@ export function parseGallerySamples(fd: unknown): Float32Array[] {
 // ══════════════════════════════════════════════════════════════
 // 6) الدوال المساعدة
 // ══════════════════════════════════════════════════════════════
+
+/** مركز بصمة (متوسط كل العينات، مطبّع L2) — مرساة الهوية */
+export function computeCentroid(fd: unknown): Float32Array | null {
+  const samples = parseGallerySamples(fd);
+  if (samples.length === 0) return null;
+  const dim = samples[0]!.length;
+  const avg = new Float32Array(dim);
+  for (const s of samples) for (let i = 0; i < dim; i++) avg[i] = (avg[i] ?? 0) + (s[i] ?? 0);
+  for (let i = 0; i < dim; i++) avg[i] = (avg[i] ?? 0) / samples.length;
+  return l2Normalize(avg);
+}
+
+/**
+ * أقرب مسافة قرار (متوسط أقرب k) من بصمة جديدة إلى كل الطلاب الموجودين.
+ * تُستخدم عند التسجيل/الموافقة لمنع بصمة متداخلة من دخول النظام.
+ */
+export function minDistanceToOthers(
+  descriptor: unknown,
+  others: Array<{ id: string; name?: string; faceDescriptor?: unknown }>,
+  selfId: string,
+): { minDistance: number; closestId?: string | undefined; closestName?: string | undefined } {
+  const selfSamples = parseGallerySamples(descriptor);
+  if (selfSamples.length === 0) return { minDistance: Infinity };
+
+  let minDistance = Infinity;
+  let closestId: string | undefined;
+  let closestName: string | undefined;
+
+  for (const other of others) {
+    if (other.id === selfId) continue;
+    const otherSamples = parseGallerySamples(other.faceDescriptor);
+    if (otherSamples.length === 0) continue;
+
+    const dists: number[] = [];
+    for (const s of selfSamples) {
+      for (const o of otherSamples) dists.push(descriptorDistance(s, o));
+    }
+    dists.sort((a, b) => a - b);
+    const k = Math.min(RECOG_MATCH_K, dists.length);
+    let sum = 0;
+    for (let i = 0; i < k; i++) sum += dists[i] ?? 0;
+    const d = k > 0 ? sum / k : Infinity;
+    if (d < minDistance) {
+      minDistance = d;
+      closestId = other.id;
+      closestName = other.name;
+    }
+  }
+  return { minDistance, closestId, closestName };
+}
+
+/**
+ * فحص الفصل المطلق السريع: هل العيّنة بعيدة عن مراكز كل الطلاب الآخرين؟
+ * يُستدعى قبل أي تعلّم تلقائي لضمان عدم دمج وجه طالب آخر (سبب تسميم محمد/مجتبى).
+ */
+export function isFarFromAllOthers(
+  sample: Float32Array,
+  others: Array<{ id: string; name?: string; faceDescriptor?: unknown }>,
+  selfId: string,
+  minDist: number,
+): { ok: boolean; closestId?: string | undefined; closestName?: string | undefined; closestDist?: number | undefined } {
+  for (const other of others) {
+    if (other.id === selfId) continue;
+    const centroid = computeCentroid(other.faceDescriptor);
+    if (!centroid) continue;
+    const d = descriptorDistance(sample, centroid);
+    if (d < minDist) {
+      return { ok: false, closestId: other.id, closestName: other.name, closestDist: d };
+    }
+  }
+  return { ok: true };
+}
 
 export function l2Normalize(d: Float32Array): Float32Array {
   let n = 0;
@@ -451,6 +546,15 @@ export function updateGallery(
     return { gallery: current, action: 'rejected' };
   }
 
+  // قيد المرساة: العيّنة الجديدة يجب أن تبقى قريبة من مرساة التسجيل.
+  // يمنع رياضياً جرّ الهوية نحو طالب آخر (سبب تسميم محمد/مجتبى).
+  if (current.enrollment.length > 0) {
+    const anchor = computeCentroid(current);
+    if (anchor && descriptorDistance(newSample, anchor) > AUTO_LEARN_TETHER_MAX) {
+      return { gallery: current, action: 'rejected' };
+    }
+  }
+
   const sameBinIdx = normalizeClusters(current.clusters).findIndex(c => c.bin === bin);
 
   let nearestDistance = Infinity;
@@ -536,65 +640,49 @@ export function getCoveragePercent(fd: unknown): number {
 }
 
 // ── Bootstrap Clusters من عينات التسجيل ──
-// يأخذ 10 عينات تسجيل ويُنشئ حتى 5 عناقيد — كل طالب يبدأ بـ5 عناقيد من اليوم الأول
-
-const BOOTSTRAP_MAX_CLUSTERS = 5;
-const BOOTSTRAP_MERGE_DISTANCE = 0.30;
+// يجمّع العينات حسب خانة الزاوية الحقيقية (poseToBin) — كل طالب يبدأ بعناقيد
+// حقيقية تغطي زوايا تسجيله، بدل العناقيد الوهمية e0..e4 التي لا معنى لها.
 
 export function bootstrapClusters(
   enrollmentSamples: Float32Array[],
+  bins: string[],
   quality: number,
 ): PoseCluster[] {
   if (enrollmentSamples.length === 0) return [];
 
-  // كل عينة = عنقيد مؤقت نبدأ به
-  type TempCluster = { vec: Float32Array; count: number; sum: Float32Array };
-  const temps: TempCluster[] = [];
-
-  for (const sample of enrollmentSamples) {
-    // أقرب عنقيد موجود؟
-    let bestIdx = -1;
-    let bestDist = Infinity;
-    for (let i = 0; i < temps.length; i++) {
-      const temp = temps[i];
-      if (!temp) continue;
-      const avg = new Float32Array(sample.length);
-      for (let j = 0; j < sample.length; j++) avg[j] = (temp.sum[j] ?? 0) / temp.count;
-      const d = descriptorDistance(sample, avg);
-      if (d < bestDist) { bestDist = d; bestIdx = i; }
+  const byBin = new Map<string, { sum: Float32Array; count: number }>();
+  for (let i = 0; i < enrollmentSamples.length; i++) {
+    const sample = enrollmentSamples[i];
+    if (!sample) continue;
+    const bin = bins[i] ?? '0_0';
+    let entry = byBin.get(bin);
+    if (!entry) {
+      entry = { sum: new Float32Array(sample.length), count: 0 };
+      byBin.set(bin, entry);
     }
-
-    if (bestIdx >= 0 && bestDist < BOOTSTRAP_MERGE_DISTANCE && temps.length <= BOOTSTRAP_MAX_CLUSTERS) {
-      // دمج — أضف للعنقيد الموجود
-      const target = temps[bestIdx];
-      if (target) {
-        for (let j = 0; j < sample.length; j++) target.sum[j] = (target.sum[j] ?? 0) + (sample[j] ?? 0);
-        target.count++;
-      }
-    } else if (temps.length < BOOTSTRAP_MAX_CLUSTERS) {
-      // عنقيد جديد
-      const sum = new Float32Array(sample.length);
-      for (let j = 0; j < sample.length; j++) sum[j] = sample[j] ?? 0;
-      temps.push({ vec: sample, count: 1, sum });
+    for (let j = 0; j < sample.length; j++) {
+      entry.sum[j] = (entry.sum[j] ?? 0) + (sample[j] ?? 0);
     }
+    entry.count++;
   }
 
-  // حوّل إلى PoseCluster[] مع bin افتراضي
-  return temps.map((t, i) => {
-    const avg = new Float32Array(t.vec.length);
-    for (let j = 0; j < t.vec.length; j++) avg[j] = (t.sum[j] ?? 0) / t.count;
+  const clusters: PoseCluster[] = [];
+  for (const [bin, e] of byBin) {
+    const avg = new Float32Array(e.sum.length);
+    for (let j = 0; j < e.sum.length; j++) avg[j] = (e.sum[j] ?? 0) / e.count;
     let norm = 0;
     for (let j = 0; j < avg.length; j++) norm += (avg[j] ?? 0) * (avg[j] ?? 0);
     norm = Math.sqrt(norm) || 1;
     for (let j = 0; j < avg.length; j++) avg[j] = (avg[j] ?? 0) / norm;
-    return {
-      bin: `e${i}`,
+    clusters.push({
+      bin,
       vector: Array.from(avg).map(v => Math.round(v * 1e5) / 1e5),
-      mergeCount: t.count,
+      mergeCount: e.count,
       quality,
       updatedAt: Date.now(),
-    };
-  });
+    });
+  }
+  return clusters;
 }
 
 // ── تنظيف العناقيد القديمة (Cluster Decay) ──
@@ -627,11 +715,17 @@ export function getMissingBins(gallery: FaceGalleryDescriptor): string[] {
 // ── ملخص صحة النظام ──
 
 export function getGalleryHealthSummary(students: Array<{ faceDescriptor?: unknown }>) {
-  let v5Count = 0, matureCount = 0, noFaceCount = 0;
+  let v6Count = 0, legacyCount = 0, matureCount = 0, noFaceCount = 0;
   for (const s of students) {
-    if (!hasValidDescriptor(s.faceDescriptor)) { noFaceCount++; continue; }
-    v5Count++;
-    if (getCoveragePercent(s.faceDescriptor) >= 80) matureCount++;
+    const fd = s.faceDescriptor;
+    if (!hasValidDescriptor(fd)) { noFaceCount++; continue; }
+    if (isAlignedDescriptor(fd)) {
+      v6Count++;
+      if (getCoveragePercent(fd) >= 80) matureCount++;
+    } else {
+      // v5 (غير مُحاذاة) — بصمة قديمة تحتاج إعادة تسجيل
+      legacyCount++;
+    }
   }
-  return { v5Count, matureCount, noFaceCount, total: students.length };
+  return { v6Count, legacyCount, matureCount, noFaceCount, total: students.length };
 }

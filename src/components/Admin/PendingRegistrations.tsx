@@ -11,7 +11,9 @@ import { MorphingSquare } from '../MorphingSquare';
 import {
   parseStoredDescriptor,
   checkForTampering,
-  migrateToV5,
+  migrateToV6,
+  minDistanceToOthers,
+  ENROLL_SEPARATION_MIN,
 } from '../../services/faceAI/descriptors';
 import { Camera, Check, CircleCheck, CircleX, ClipboardList, Mail, QrCode, Save, Smile, Trash2, TriangleAlert } from 'lucide-react';
 import { useConfirm } from '../../hooks/useConfirm';
@@ -109,13 +111,13 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       }
 
       // ── 2) Validate + migrate the face descriptor (if provided)
-      // نوحّد أي صيغة بصمة إلى v5 نظيفة — نقبل البصمة الجديدة مهما كانت صيغتها المخزّنة
+      // نوحّد أي صيغة بصمة إلى v6 نظيفة — v5 (غير مُحاذاة) تُرفض وتُطلب إعادة التسجيل
       let finalDescriptor = req.faceDescriptor;
 
       if (req.faceDescriptor) {
-        const migrated = migrateToV5(req.faceDescriptor);
+        const migrated = migrateToV6(req.faceDescriptor);
         if (!migrated) {
-          toast({ variant: 'destructive', title: 'البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.' });
+          toast({ variant: 'destructive', title: 'البصمة المرفقة فارغة أو بصمة قديمة (v5). اطلب من الطالب إعادة التسجيل.' });
           return;
         }
 
@@ -132,6 +134,16 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         if (tamper.tampered) {
           toast({ variant: 'destructive', title: 'لا يمكن الموافقة: هذه البصمة مطابقة لبصمة الطالب', description: `${tamper.matchedWith}\n\nيرجى التحقق من صالة الطلب.` });
           return;
+        }
+
+        // ── تقرير الفصل: هل هذه البصمة قريبة جداً من طالب آخر؟ (منع التداخل استباقياً)
+        const sep = minDistanceToOthers(migrated, allStudents, req.studentId);
+        if (Number.isFinite(sep.minDistance) && sep.minDistance < ENROLL_SEPARATION_MIN) {
+          toast({
+            variant: 'destructive',
+            title: 'بصمة متداخلة — يُنصح بالرفض',
+            description: `قريبة من «${sep.closestName ?? 'طالب آخر'}» بمسافة ${sep.minDistance.toFixed(2)} (الحد الآمن ${ENROLL_SEPARATION_MIN}). قد يختلط حضورهما. اطلب من الطالب إعادة التسجيل بإضاءة/زاوية مختلفة.`,
+          });
         }
         finalDescriptor = migrated;
       }
@@ -214,7 +226,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
 
   // حذف كل الطلبات التي بصمتها تالفة/فارغة (أُنشئت قبل تفعيل التحقق الصارم) — لا يمكن الموافقة عليها أبداً
   const handlePurgeCorrupt = async () => {
-    const corrupt = requests.filter(r => r.faceDescriptor && migrateToV5(r.faceDescriptor) === null);
+    const corrupt = requests.filter(r => r.faceDescriptor && migrateToV6(r.faceDescriptor) === null);
     if (corrupt.length === 0) {
       toast({ title: 'لا توجد طلبات تالفة — كل البصمات سليمة ✅' });
       return;
@@ -425,14 +437,14 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                       <ClipboardList className="w-3 h-3" /> {req.nameMatched ? 'الاسم متطابق' : 'الاسم غير متطابق'}
                     </span>
                     <span className={`text-[10px] border rounded-full px-2 py-1 flex items-center gap-1 ${
-                      migrateToV5(req.faceDescriptor) !== null
+                      migrateToV6(req.faceDescriptor) !== null
                         ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
                         : req.faceDescriptor
                         ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
                         : 'bg-slate-800 border-slate-600'
                     }`}>
                       <Smile className="w-3 h-3" /> {
-                        migrateToV5(req.faceDescriptor) !== null ? 'بصمة وجه مسجلة'
+                        migrateToV6(req.faceDescriptor) !== null ? 'بصمة وجه مسجلة'
                           : req.faceDescriptor ? 'بصمة قديمة — تحتاج إعادة تسجيل'
                           : 'بدون بصمة'
                       }

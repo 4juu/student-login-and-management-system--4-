@@ -66,10 +66,39 @@ function cropFace(g: OffscreenCanvasRenderingContext2D, bmp: ImageBitmap, box: B
 }
 
 // ── #2: Face alignment using eye keypoints ──
-// Disabled for backward compatibility — existing enrollments were done without alignment.
-// Will re-enable when all students re-enroll with aligned crops.
+// تحويل تشابهي (similarity transform) بالعينين: تدوير حتى تصبح العينان
+// أفقيتان، تحجيم حتى تثبت المسافة بينهما، ثم قصّ إلى 112×112 بمواضع عينين
+// قياسية. هذا يتطبيع الميلان/الدوران/المسافة قبل الاستخراج ⇒ المسافة بين
+// الطالبين المختلفين تتسع وداخل الطالب الواحد تضيق (أكبر رافعة لمنع التداخل).
+// ترتيب النقاط: [عين_يمين(0)، عين_يسار(1)، ...] — إن غابت النقاط نعود للقصّ العادي.
+const ALIGN_EYE_DIST_RATIO = 0.30;
+const ALIGN_EYE_Y_RATIO = 0.42;
+
 function alignFace(g: OffscreenCanvasRenderingContext2D, bmp: ImageBitmap, box: Box): void {
-  cropFace(g, bmp, box);
+  const rightEye = box.keypoints?.[0];
+  const leftEye = box.keypoints?.[1];
+  if (!rightEye || !leftEye) {
+    cropFace(g, bmp, box);
+    return;
+  }
+  const eyeMidX = (rightEye.x + leftEye.x) / 2;
+  const eyeMidY = (rightEye.y + leftEye.y) / 2;
+  const dx = leftEye.x - rightEye.x;
+  const dy = leftEye.y - rightEye.y;
+  const eyeDist = Math.hypot(dx, dy) || 1;
+  const angle = Math.atan2(dy, dx);
+  const scale = (EMB_INPUT * ALIGN_EYE_DIST_RATIO) / eyeDist;
+  const targetEyeX = EMB_INPUT * 0.5;
+  const targetEyeY = EMB_INPUT * ALIGN_EYE_Y_RATIO;
+
+  g.clearRect(0, 0, EMB_INPUT, EMB_INPUT);
+  g.save();
+  g.translate(targetEyeX, targetEyeY);
+  g.rotate(-angle);
+  g.scale(scale, scale);
+  g.translate(-eyeMidX, -eyeMidY);
+  g.drawImage(bmp, 0, 0);
+  g.restore();
 }
 
 /** حوّل بكسلات RGBA إلى Float32 RGB مسطّح — يستخدم البخزن المعاد استخدامه (#5) */

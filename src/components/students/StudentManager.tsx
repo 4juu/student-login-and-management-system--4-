@@ -6,8 +6,8 @@ import {
   hasValidDescriptor,
   getGalleryHealthSummary,
   isGalleryDescriptor,
+  isAlignedDescriptor,
   pruneStaleClusters,
-  migrateToV5,
 } from '../../services/faceAI/descriptors';
 import { buildGalleryIndex, type GalleryIndex } from '../../services/faceAI/gallery';
 import { measureAccuracy } from '../../services/faceAI/accuracy';
@@ -578,24 +578,22 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
     setCurrentPage(1);
   }, [searchQuery, groupFilter, pageSize]);
 
-  // تنظيف تلقائي: تقليم العناقيد القديمة + حذف اي بصمة غير متوافقة مع صيغة v5 الصارمة
+  // تنظيف تلقائي: تقليم العناقيد القديمة لـ v6 فقط.
+  // v5 (غير مُحاذاة) لا تُحذف — تُعرض «قديمة — أعد التسجيل» وتُستبعد من المطابقة.
   React.useEffect(() => {
     if (!onUpdateStudent) return;
     try {
       students.forEach(s => {
         const fd = s.faceDescriptor;
         if (!fd) return;
-        if (isGalleryDescriptor(fd)) {
-          // بصمة غير قابلة للتحليل اطلاقا (فارغة/تالفة) → حذف نهائي
-          if (migrateToV5(fd) === null) {
-            onUpdateStudent(s.id, { faceDescriptor: null });
-            return;
-          }
+        if (!isGalleryDescriptor(fd)) {
+          // تنسيق قديم غير معروف → حذف
+          onUpdateStudent(s.id, { faceDescriptor: null });
+          return;
+        }
+        if (isAlignedDescriptor(fd)) {
           const pruned = pruneStaleClusters(fd);
           if (pruned !== fd) onUpdateStudent(s.id, { faceDescriptor: pruned });
-        } else {
-          // اي تنسيق قديم (مصفوفة مسطحة، {descriptor}...) → حذف
-          onUpdateStudent(s.id, { faceDescriptor: null });
         }
       });
     } catch (e) {

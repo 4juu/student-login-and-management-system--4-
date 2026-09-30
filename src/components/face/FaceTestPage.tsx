@@ -15,6 +15,7 @@ import { FaceTracker, type TrackBox } from '../../services/faceAI/tracker';
 import {
   hasValidDescriptor,
   isGalleryDescriptor,
+  isFarFromAllOthers,
   updateGallery,
   MATCH_LOOSE,
   MIN_RECOG_CONFIDENCE,
@@ -22,6 +23,7 @@ import {
   CONFIRM_FRAMES,
   AUTO_LEARN_MAX_DISTANCE,
   AUTO_LEARN_MIN_MARGIN,
+  AUTO_LEARN_SEPARATION_MIN,
 } from '../../services/faceAI/descriptors';
 import { buildGalleryIndex, findBestMatchIndexed, type GalleryIndex } from '../../services/faceAI/gallery';
 
@@ -355,7 +357,6 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
                 profile: galleryRef.current.profile,
                 dangerKeys: galleryRef.current.dangerKeys,
               });
-              trackerRef.current.setCache(trackId, match?.item.id ?? null, match?.confidence ?? 0, res.quality.composite);
 
               const vbw = res.box.width / scale, vbh = res.box.height / scale;
               const vbx = res.box.x / scale, vby = res.box.y / scale;
@@ -369,10 +370,17 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
                     Math.abs(d.box.y - embTrack.box.y) < 1
                   );
                   const pose = estimatePose(origDet?.keypoints);
-                  // 🚫 نفس حارس الإنتاج: لا تعلّم إلا عند ثقة قصوى — يمنع سمّ المعرض
+                  // 🚫 لا تعلّم إلا عند ثقة قصوى + فصل مطلق عن كل الطلاب — يمنع سمّ المعرض
+                  const farFromOthers = isFarFromAllOthers(
+                    smoothed,
+                    studentsRef.current,
+                    matchedStudent.id,
+                    AUTO_LEARN_SEPARATION_MIN,
+                  );
                   const confident =
                     match.distance <= AUTO_LEARN_MAX_DISTANCE &&
-                    match.margin >= AUTO_LEARN_MIN_MARGIN;
+                    match.margin >= AUTO_LEARN_MIN_MARGIN &&
+                    farFromOthers.ok;
                   if (confident && pose && savedDescriptorRef.current && isGalleryDescriptor(savedDescriptorRef.current)) {
                     const bin = poseToBin(pose);
                     const result = updateGallery(savedDescriptorRef.current, smoothed, res.quality.composite, bin, true);
@@ -388,17 +396,23 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
               }
 
               if (!match || match.confidence < MIN_RECOG_CONFIDENCE || res.quality.composite < MIN_FRAME_QUALITY) {
+                trackerRef.current.setCache(trackId, null, 0, res.quality.composite);
                 const smallFace = res.box.width < MIN_FACE_PX * 1.7;
                 liveBoxes.push({ box: boxInVideo, label: smallFace ? 'اقترب قليلاً' : 'غير معروف', color: '#fbbf24' });
                 continue;
               }
 
               const student = studentsRef.current.find(s => s.id === match.item.id);
-              if (!student) continue;
+              if (!student) {
+                trackerRef.current.setCache(trackId, null, 0, res.quality.composite);
+                continue;
+              }
 
               anyMatched = true;
 
+              // bumpConfirm قبل setCache — يقارن بالمطابقة السابقة فتفعّل matchChanges صح
               const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id, match.distance);
+              trackerRef.current.setCache(trackId, student.id, match.confidence, res.quality.composite);
 
               if (confirmCount < CONFIRM_FRAMES) {
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
@@ -520,8 +534,9 @@ setEnhanceCountdown(20);
       if (loopTimerRef.current) { clearTimeout(loopTimerRef.current); loopTimerRef.current = 0; }
       if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
 
-      // حفظ البصمة في descriptorOverrides — يُحفظ دائماً عند وجود طالب مطابق
-      if (matchedStudent && savedDescriptorRef.current && linkDataRef.current) {
+      // حفظ البصمة فقط عند تعلّم حقيقي (≥1 عنقود) — لا استبدال بلا داعي للبصمة المعتمدة
+      const didLearn = enhancedCountRef.current > 0;
+      if (didLearn && matchedStudent && savedDescriptorRef.current && linkDataRef.current) {
         try {
           // تحديث الكاش المحلي
           const students = studentsRef.current;
@@ -543,8 +558,11 @@ setEnhanceCountdown(20);
           console.error('[face-test] ❌ فشل حفظ البصمة:', e);
           if (mountedRef.current) setSaveStatus({ ok: false, msg: `فشل الحفظ: ${e instanceof Error ? e.message : String(e)}` });
         }
+      } else if (!didLearn) {
+        // لم يُتعلم شيء جديد — لا نكتب (لا داعي لاستبدال البصمة المعتمدة بنفسها)
+        if (mountedRef.current) setSaveStatus({ ok: true, msg: 'تم التعرف عليك ✓ — بصمتك محفوظة ولا تحتاج تحديثاً' });
       } else {
-        console.warn('[face-test] تم تخطي الحفظ — عنقود غير مكتمل:', { matchedStudent: !!matchedStudent, descriptor: !!savedDescriptorRef.current, linkData: !!linkDataRef.current });
+        console.warn('[face-test] تم تخطي الحفظ — بيانات ناقصة:', { matchedStudent: !!matchedStudent, descriptor: !!savedDescriptorRef.current, linkData: !!linkDataRef.current });
         if (mountedRef.current) setSaveStatus({ ok: false, msg: 'لم يُحفظ — البيانات غير مكتملة' });
       }
 

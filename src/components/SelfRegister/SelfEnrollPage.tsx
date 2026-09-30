@@ -9,7 +9,7 @@ import { VerifyNameStep } from './VerifyNameStep';
 import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear } from '../../firebase/dataService';
 import { decompressRecord } from '../../firebase/dataServiceCompressed';
-import { migrateToV5, parseAllSamples, checkForTampering, checkPendingConflict, type PendingFaceRecord, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
+import { migrateToV6, parseAllSamples, checkForTampering, checkPendingConflict, type PendingFaceRecord, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
 import { useFaceAI } from '../../hooks/useFaceAI';
 import { EngineOverlay } from '../face/EngineOverlay';
 import {
@@ -460,7 +460,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
     if (!link || !expected) return;
     goTo('submitting');
 
-    const migrated = migrateToV5(descriptor);
+    const migrated = migrateToV6(descriptor);
     if (!migrated) {
       setErrorMsg('تعذر حفظ البصمة: لم يتم التقاط وجه صالح. أعد المحاولة.');
       setRetryStep('capture-face');

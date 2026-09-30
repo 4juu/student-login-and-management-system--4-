@@ -15,12 +15,14 @@ import { FaceTracker, type TrackBox } from '../../services/faceAI/tracker';
 import {
   hasValidDescriptor,
   isGalleryDescriptor,
+  isFarFromAllOthers,
   updateGallery,
   MATCH_LOOSE,
   MIN_RECOG_CONFIDENCE,
   CONFIRM_FRAMES,
   AUTO_LEARN_MAX_DISTANCE,
   AUTO_LEARN_MIN_MARGIN,
+  AUTO_LEARN_SEPARATION_MIN,
   MIN_FRAME_QUALITY,
 } from '../../services/faceAI/descriptors';
 import { buildGalleryIndex, findBestMatchIndexed } from '../../services/faceAI/gallery';
@@ -487,7 +489,6 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                   profile: galleryRef.current.profile,
                   dangerKeys: galleryRef.current.dangerKeys,
                 });
-                trackerRef.current.setCache(trackId, match?.item.id ?? null, match?.confidence ?? 0, res.quality.composite);
 
                 const vbw = res.box.width / scale, vbh = res.box.height / scale;
                 const vbx = res.box.x / scale, vby = res.box.y / scale;
@@ -495,6 +496,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
 
                 if (!match || match.confidence < MIN_RECOG_CONFIDENCE || res.quality.composite < MIN_FRAME_QUALITY) {
                   recordRejection(res.quality.composite < MIN_FRAME_QUALITY ? 'low-quality-frame' : undefined);
+                  trackerRef.current.setCache(trackId, null, 0, res.quality.composite);
                   anyUnknown = true;
                   const smallFace = res.box.width < MIN_FACE_PX * 1.7;
                   liveBoxes.push({ box: boxInVideo, label: smallFace ? 'اقترب قليلاً' : 'غير معروف', color: '#fbbf24' });
@@ -502,7 +504,10 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                 }
 
                 const student = rosterMapRef.current.get(match.item.id);
-                if (!student) continue;
+                if (!student) {
+                  trackerRef.current.setCache(trackId, null, 0, res.quality.composite);
+                  continue;
+                }
 
                 // طالب سُجّل حضوراً في هذه الجلسة — حتى لو تحرك مكانه، يختفي إطاره فوراً
                 if (doneStudentsRef.current.has(student.id)) {
@@ -511,7 +516,9 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                   continue;
                 }
 
+                // bumpConfirm قبل setCache — يقارن بالمطابقة السابقة فتفعّل matchChanges صح
                 const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id, match.distance);
+                trackerRef.current.setCache(trackId, student.id, match.confidence, res.quality.composite);
 
                 if (confirmCount < CONFIRM_FRAMES) {
                   liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
@@ -535,10 +542,17 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                   const bin = poseToBin(pose);
                   if (!isGalleryDescriptor(student.faceDescriptor)) continue;
 
-                  // 🚫 التغذية الراجعة شرطها ثقة قصوى فقط — يوقف السمّ (تضخّم الخطأ في المعرض)
+                  // 🚫 التغذية الراجعة شرطها ثقة قصوى + فصل مطلق عن كل الطلاب — يوقف السمّ
+                  const farFromOthers = isFarFromAllOthers(
+                    smoothed,
+                    rosterRef.current,
+                    student.id,
+                    AUTO_LEARN_SEPARATION_MIN,
+                  );
                   const confident =
                     match.distance <= AUTO_LEARN_MAX_DISTANCE &&
-                    match.margin >= AUTO_LEARN_MIN_MARGIN;
+                    match.margin >= AUTO_LEARN_MIN_MARGIN &&
+                    farFromOthers.ok;
                   if (!confident) continue;
 
                   const result = updateGallery(student.faceDescriptor, smoothed, res.quality.composite, bin);
