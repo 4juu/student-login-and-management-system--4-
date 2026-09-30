@@ -563,7 +563,12 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
       // لا نُعلّم الرابط «مستخدماً» هنا حتى يتمكّن الطالب من إعادة المحاولة عند الفشل.
       goTo('success');
     } catch (e: any) {
-      setErrorMsg(e.code === 'PERMISSION_DENIED' ? 'لا توجد صلاحية' : e.message || 'فشل الحفظ');
+      const msg = e?.code === 'PERMISSION_DENIED'
+        ? 'لا توجد صلاحية'
+        : e?.code === 'offline' || e?.message?.includes('offline') || e?.message?.includes('503')
+          ? 'لا يوجد اتصال بالإنترنت — تحقق من الشبكة وأعد المحاولة'
+          : e?.message || 'فشل الحفظ';
+      setErrorMsg(msg);
       setRetryStep('capture-face');
       goTo('error');
     }
