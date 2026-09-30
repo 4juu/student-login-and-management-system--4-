@@ -152,6 +152,9 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       };
       if (finalDescriptor !== undefined) {
         updates[`${descriptorsPath}/${req.studentId}`] = finalDescriptor;
+        if (req.studentNameEn) {
+          updates[`${basePath}/${studentKey}/nameEn`] = req.studentNameEn;
+        }
       }
       await update(ref(database), updates);
 

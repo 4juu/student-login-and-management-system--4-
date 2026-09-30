@@ -264,6 +264,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
           clusters,
           samples: SAMPLES_NEEDED,
           quality,
+          studentNameEn: student.nameEn,
         };
 
         if (!hasValidDescriptor(galleryDescriptor)) {

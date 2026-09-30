@@ -540,6 +540,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
           qrVerified,
           nameMatched: true,
           faceDescriptor: migrated,
+          studentNameEn: expected.nameEn || '',
           linkToken: link.token,
           linkType: link.type,
           status: 'pending',

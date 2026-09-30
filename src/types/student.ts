@@ -1,6 +1,7 @@
 export interface Student {
   id: string;
   name: string;
+  nameEn?: string | undefined;
   code: string;
   group?: string | undefined;
   universityId?: string | undefined;

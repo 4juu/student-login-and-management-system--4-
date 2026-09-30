@@ -39,6 +39,7 @@ export interface PendingRegistration {
   nameMatched: boolean;
 
   faceDescriptor: any;
+  studentNameEn?: string | undefined;
 
   linkToken?: string | undefined;
   linkType?: RegistrationLinkType | undefined;

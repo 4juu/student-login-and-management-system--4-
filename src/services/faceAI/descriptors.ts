@@ -114,6 +114,7 @@ export interface FaceGalleryDescriptor {
   clusters: PoseCluster[];
   samples?: number | undefined;
   quality?: number | undefined;
+  studentNameEn?: string | undefined;
 }
 
 // ══════════════════════════════════════════════════════════════
