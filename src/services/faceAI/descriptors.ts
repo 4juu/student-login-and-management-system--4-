@@ -115,6 +115,7 @@ export interface FaceGalleryDescriptor {
   samples?: number | undefined;
   quality?: number | undefined;
   studentNameEn?: string | undefined;
+  enrollmentAngles?: string[] | undefined;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -192,7 +193,14 @@ export function migrateToV5(input: unknown): FaceGalleryDescriptor | null {
       enrollment: samples.map(s => Array.from(l2Normalize(s)).map(v => Math.round(v * 1e5) / 1e5)),
       clusters: normalizeClusters(fd.clusters),
       samples: samples.length,
-      quality: typeof fd.quality === 'number' ? fd.quality : undefined,
+      ...(typeof fd.quality === 'number' ? { quality: fd.quality } : {}),
+      ...(typeof fd.studentNameEn === 'string' && fd.studentNameEn.trim()
+        ? { studentNameEn: fd.studentNameEn.trim() }
+        : {}),
+      ...(Array.isArray(fd.enrollmentAngles) && fd.enrollmentAngles.length === samples.length
+        && fd.enrollmentAngles.every(angle => typeof angle === 'string')
+        ? { enrollmentAngles: [...fd.enrollmentAngles] }
+        : {}),
     };
   }
 

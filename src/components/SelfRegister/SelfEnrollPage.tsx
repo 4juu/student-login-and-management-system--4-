@@ -467,6 +467,12 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
       goTo('error');
       return;
     }
+    if (migrated.enrollment.length !== 7 || migrated.enrollmentAngles?.length !== 7) {
+      setErrorMsg('لم تكتمل البصمات السبع. أعد التسجيل من الزوايا المطلوبة.');
+      setRetryStep('capture-face');
+      goTo('error');
+      return;
+    }
 
     // فحص التكرار قبل الإرسال للأدمن
     try {
@@ -540,7 +546,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
           qrVerified,
           nameMatched: true,
           faceDescriptor: migrated,
-          studentNameEn: expected.nameEn || '',
+          studentNameEn: migrated.studentNameEn || expected.nameEn || '',
           linkToken: link.token,
           linkType: link.type,
           status: 'pending',

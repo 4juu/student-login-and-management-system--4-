@@ -158,6 +158,21 @@ describe('migrateToV5', () => {
     expect(result!.enrollment.length).toBe(1);
   });
 
+  it('preserves all seven separate samples and English name through request/approval migration', () => {
+    const seven = makeGallery([1, 2, 3, 4, 5, 6, 7]);
+    seven.studentNameEn = 'Noor Al-Huda Salim';
+    seven.enrollmentAngles = ['front', 'right', 'left', 'up', 'down', 'close', 'far'];
+
+    const migrated = migrateToV5(seven);
+
+    expect(migrated?.version).toBe(DESC_VERSION_GALLERY);
+    expect(migrated?.enrollment).toHaveLength(7);
+    expect(migrated?.enrollment.every(sample => sample.length === DESC_DIM)).toBe(true);
+    expect(new Set(migrated?.enrollment.map(sample => JSON.stringify(sample))).size).toBe(7);
+    expect(migrated?.studentNameEn).toBe('Noor Al-Huda Salim');
+    expect(migrated?.enrollmentAngles).toEqual(seven.enrollmentAngles);
+  });
+
   it('returns null for legacy flat array format', () => {
     expect(migrateToV5(new Array(DESC_DIM).fill(0.1))).toBeNull();
   });

@@ -14,7 +14,6 @@ import {
   checkForTampering,
   hasValidDescriptor,
   l2Normalize,
-  bootstrapClusters,
   DESC_DIM,
   DESC_VERSION_GALLERY,
   type FaceGalleryDescriptor,
@@ -255,16 +254,17 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
         const quality = qList.length > 0
           ? Math.round((qList.reduce((s, q) => s + q, 0) / qList.length + 0.05) * 100) / 100
           : 0.8;
-        const clusters = bootstrapClusters(samplesDataRef.current, quality);
         const galleryDescriptor: FaceGalleryDescriptor = {
           version: DESC_VERSION_GALLERY,
           enrollment: samplesDataRef.current.map(s =>
             Array.from(l2Normalize(s)).map(v => Math.round(v * 1e5) / 1e5)
           ),
-          clusters,
+          // البصمات السبع تحفظ كعينات مستقلة داخل enrollment؛ لا نكررها بعناقيد مشتقة.
+          clusters: [],
           samples: SAMPLES_NEEDED,
           quality,
           studentNameEn: student.nameEn,
+          enrollmentAngles: CAPTURE_PHASES.map(phase => phase.key),
         };
 
         if (!hasValidDescriptor(galleryDescriptor)) {

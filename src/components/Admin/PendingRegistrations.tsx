@@ -112,10 +112,29 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       // نوحّد أي صيغة بصمة إلى v5 نظيفة — نقبل البصمة الجديدة مهما كانت صيغتها المخزّنة
       let finalDescriptor = req.faceDescriptor;
 
+      // طلب تسجيل الوجه لا يُعتمد بصمت إذا وصلت بيانات الطلب من عميل قديم/ناقص بلا بصمة.
+      if (!req.faceDescriptor && req.linkType !== 'attendance' && req.linkType !== 'test') {
+        toast({
+          variant: 'destructive',
+          title: 'لا يمكن اعتماد الطلب: بصمات الوجه السبع غير موجودة',
+          description: 'اطلب من الطالب إعادة التسجيل ثم أعد الموافقة.',
+        });
+        return;
+      }
+
       if (req.faceDescriptor) {
         const migrated = migrateToV5(req.faceDescriptor);
         if (!migrated) {
           toast({ variant: 'destructive', title: 'البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.' });
+          return;
+        }
+        const hasSevenAngleManifest = Array.isArray((req.faceDescriptor as { enrollmentAngles?: unknown }).enrollmentAngles);
+        if (hasSevenAngleManifest && (migrated.enrollment.length !== 7 || migrated.enrollmentAngles?.length !== 7)) {
+          toast({
+            variant: 'destructive',
+            title: 'تعذر حفظ البصمات السبع بشكل كامل',
+            description: 'أعد طلب التسجيل ببصمات الزوايا السبع ثم وافق عليه.',
+          });
           return;
         }
 
@@ -139,7 +158,6 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       // ── 3) تحديث ذرّي واحد: الطالب + البصمة + حالة الطلب ──
       const now = new Date().toISOString();
       const updates: Record<string, unknown> = {
-        [`${basePath}/${studentKey}/qrCodeId`]: req.qrCodeId,
         [`${basePath}/${studentKey}/faceRegisteredAt`]: now,
         [`registrationSystem/pending/${adminUid}/${req.id}`]: {
           status: 'approved',
@@ -150,10 +168,17 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
           ? { [`registrationSystem/pendingFaceIndex/${adminUid}/${req.stageId}/${req.id}`]: null }
           : {}),
       };
+      if (typeof req.qrCodeId === 'string') {
+        updates[`${basePath}/${studentKey}/qrCodeId`] = req.qrCodeId;
+      }
       if (finalDescriptor !== undefined) {
+        if (!migrateToV5(finalDescriptor)) {
+          throw new Error('البصمة غير صالحة؛ لم يتم اعتماد الطلب.');
+        }
         updates[`${descriptorsPath}/${req.studentId}`] = finalDescriptor;
-        if (req.studentNameEn) {
-          updates[`${basePath}/${studentKey}/nameEn`] = req.studentNameEn;
+        const studentNameEn = req.studentNameEn || finalDescriptor.studentNameEn;
+        if (studentNameEn) {
+          updates[`${basePath}/${studentKey}/nameEn`] = studentNameEn;
         }
       }
       await update(ref(database), updates);

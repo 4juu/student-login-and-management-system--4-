@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getDatabase, goOnline } from "firebase/database";
+import { forceLongPolling, getDatabase, goOffline, goOnline } from "firebase/database";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDP_kzHoZnMvi0mE4uDF5-zgRTM1QLZHdE",
@@ -19,6 +19,9 @@ const firebaseConfig = {
 export const dbURL = firebaseConfig.databaseURL!.replace(/\/+$/, '');
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+// بعض الشبكات تسمح بالإنترنت العام لكنها تحجب WebSocket؛ استخدم نقل HTTP
+// المدعوم عبر هذه الشبكات كي لا تبقى عمليات الكتابة معلقة أو تفشل Offline.
+forceLongPolling();
 export const database = getDatabase(app);
 
 // ============================================================
@@ -34,6 +37,26 @@ export const secondaryAuth = getAuth(secondaryApp);
 // المعلقة ويسبب عدم اكتمال المزامنة بعد رجوع الاتصال.
 // نكتفي بتفعيل goOnline() عند رجوع الاتصال ونترك SDK يعيد الاتصال تلقائياً.
 if (typeof window !== 'undefined') {
+  // المتصفح يعلّق WebSocket عندما يحفظ الصفحة في BFCache. أوقف Firebase
+  // عند pagehide وأعد تشغيله عند استعادة الصفحة كي لا تبقى قاعدة البيانات Offline.
+  window.addEventListener('pagehide', (event) => {
+    if (!event.persisted) return;
+    try {
+      goOffline(database);
+    } catch (e) {
+      console.warn('فشل إيقاف Firebase قبل BFCache:', e);
+    }
+  });
+
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted) return;
+    try {
+      goOnline(database);
+    } catch (e) {
+      console.warn('فشل إعادة اتصال Firebase بعد BFCache:', e);
+    }
+  });
+
   window.addEventListener('online', () => {
     try {
       goOnline(database);
