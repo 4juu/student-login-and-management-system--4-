@@ -19,6 +19,8 @@ interface Track {
   lastEmbedBox: TrackBox | null;
   cachedMatchId: string | null;
   cachedConfidence: number;
+  cachedDistance: number;
+  cachedMargin: number;
   confirmCount: number;
   // ── #6: Velocity prediction ──
   velocityX: number;
@@ -129,6 +131,8 @@ export class FaceTracker {
         lastEmbedBox: null,
         cachedMatchId: null,
         cachedConfidence: 0,
+        cachedDistance: 1,
+        cachedMargin: 1,
         confirmCount: 0,
         velocityX: 0,
         velocityY: 0,
@@ -143,12 +147,17 @@ export class FaceTracker {
     return results;
   }
 
-  /** هل يستحق هذا المسار إعادة حساب embedding الآن؟ */
-  shouldReembed(trackId: number, nowMs: number, minIntervalMs: number, moveThreshold: number): boolean {
+  /**
+   * هل يستحق هذا المسار إعادة حساب embedding الآن؟
+   * المسار غير المعروف يُعاد حسابه بوتيرة أسرع (`unknownIntervalMs`) حتى لا يبقى
+   * عالقاً على استعلام فاشل من وضعية سابقة فيظهر «غير معروف» واقفاً.
+   */
+  shouldReembed(trackId: number, nowMs: number, minIntervalMs: number, moveThreshold: number, unknownIntervalMs?: number): boolean {
     const t = this.tracks.find(tr => tr.id === trackId);
     if (!t) return true;
     if (!t.lastEmbedBox) return true;
-    if (nowMs - t.lastEmbedTime > minIntervalMs) return true;
+    const interval = t.cachedMatchId ? minIntervalMs : (unknownIntervalMs ?? minIntervalMs);
+    if (nowMs - t.lastEmbedTime > interval) return true;
     return boxDelta(t.box, t.lastEmbedBox) > moveThreshold;
   }
 
@@ -177,9 +186,25 @@ export class FaceTracker {
     return this.tracks.find(t => t.id === trackId);
   }
 
-  setCache(trackId: number, matchId: string | null, confidence: number) {
+  /**
+   * إيمبدنجات المسار الأخيرة + النسخة المنعّمة — تُمرَّر كمصفوفة استعلامات
+   * لمطابقة «أفضل إطار»: المتوسط وحده يقع بين زاويتين مختلفتين فيُبعِّد المسافة
+   * ويظهر «غير معروف» حتى يتحرّك الوجه ويجد إطاراً مطابقاً.
+   */
+  getQueries(trackId: number, smoothed: Float32Array): Float32Array[] {
     const t = this.tracks.find(tr => tr.id === trackId);
-    if (t) { t.cachedMatchId = matchId; t.cachedConfidence = confidence; }
+    if (!t || t.embeddingBuffer.length === 0) return [smoothed];
+    return [...t.embeddingBuffer, smoothed];
+  }
+
+  setCache(trackId: number, matchId: string | null, confidence: number, distance = 1, margin = 1) {
+    const t = this.tracks.find(tr => tr.id === trackId);
+    if (t) {
+      t.cachedMatchId = matchId;
+      t.cachedConfidence = confidence;
+      t.cachedDistance = distance;
+      t.cachedMargin = margin;
+    }
   }
 
   /** عداد تأكيد المطابقة لنفس الطالب عبر فريمات متتالية */
@@ -187,12 +212,9 @@ export class FaceTracker {
     const t = this.tracks.find(tr => tr.id === trackId);
     if (!t) return 0;
     if (t.cachedMatchId === matchId) {
-      // #1.4: لو الوجه ساكن تماماً → تأكيد أبطأ (احتمال صورة)
-      if (this.isStatic(trackId)) {
-        t.confirmCount = Math.max(0, t.confirmCount - 1);
-      } else {
-        t.confirmCount++;
-      }
+      // #1.4 (ملغى): كان يخصم العدّاد لو الوجه ساكن → يبقى «جارٍ تحقق» إلى ما لا نهاية
+      // حتى يتعرّف فقط عند حركة الوجه. الأثر حُذف؛ التأكيد يبني على المطابقة + الهامش.
+      t.confirmCount++;
     } else {
       // #1.5: لو المطابقة تغيّرت لأكثر من 3 مرات → مسار غير موثوق
       t.matchChanges++;
@@ -216,8 +238,8 @@ export class FaceTracker {
     return this.tracks.some(t => t.id === trackId);
   }
 
-  // #1.4: هل الوجه ساكن تماماً (احتمال صورة/شاشة)؟
-  // يتحقق من تباين موضعمركز الوجه آخر 8 فريمات
+  // #1.4: هل الوجه ساكن تماماً (احتمال صورة/شاشة)؟ — للتشخيص فقط:
+  // لم يعد يُستدعى من bumpConfirm حتى لا يعطّل التعرّف على الوجه الساكن.
   isStatic(trackId: number): boolean {
     const t = this.tracks.find(tr => tr.id === trackId);
     if (!t || t.positionHistory.length < 5) return false;

@@ -2,7 +2,10 @@
 // فهرس المعرض المُعرَّف مسبقاً — يُبنى مرة واحدة عند تغيّر الطلاب
 // يقارن استعلام الفريم بأي عينة من عينات الطالب السبع فوراً (بلا تحسين)
 // ─────────────────────────────────────────────────────────────
-import { descriptorDistance, MIN_MARGIN, isGalleryDescriptor, parseOneSample } from './descriptors';
+import {
+  descriptorDistance, MIN_MARGIN, STRONG_MATCH_MARGIN, MAX_MATCH_DISTANCE,
+  CONFIRM_MODERATE, isGalleryDescriptor, parseOneSample,
+} from './descriptors';
 import { ENROLLMENT_SAMPLE_COUNT } from './angles';
 
 interface GalleryItem {
@@ -64,23 +67,32 @@ export function buildGallery<T extends { id: string; faceDescriptor?: unknown }>
   return gallery;
 }
 
-/** مطابقة مُحسّنة ضد كل العينات — نفس منطق findBestMatch مع ميزة الفهرس المُعرَّف مسبقاً */
+/**
+ * مطابقة مُحسّنة — تقبل استعلاماً واحداً أو **مصفوفة استعلامات** (آخر إيمبدنجات المسار).
+ * تُقارن كل استعلام بكل عيّنة وتأخذ أدنى مسافة ⇒ «أي زاوية من الزوايا الأخيرة تكفي»
+ * بدل متوسطها الذي يقع بين الزاويتين ويُبعِّد المسافة.
+ */
 export function findBestMatchIndexed(
-  query: Float32Array,
+  query: Float32Array | Float32Array[],
   gallery: GalleryItem[],
   baseThreshold: number,
   queryQuality?: number,
 ): { item: GalleryItem; distance: number; confidence: number; sampleCount: number; margin: number } | null {
+  const queries = Array.isArray(query) ? query.filter(q => q && q.length > 0) : [query];
+  if (queries.length === 0) return null;
+
   const perItem: Array<{ item: GalleryItem; distance: number; sampleCount: number; threshold: number }> = [];
 
   for (const entry of gallery) {
     if (entry.allSamples.length === 0) break;
 
     let bestForItem = Infinity;
-    for (const ref of entry.allSamples) {
-      const distance = descriptorDistance(query, ref);
-      if (distance < bestForItem) bestForItem = distance;
-      if (bestForItem < 0.15) break;
+    outer: for (const q of queries) {
+      for (const ref of entry.allSamples) {
+        const distance = descriptorDistance(q, ref);
+        if (distance < bestForItem) bestForItem = distance;
+        if (bestForItem < 0.15) break outer;
+      }
     }
 
     let sampleBonus = 0;
@@ -99,7 +111,7 @@ export function findBestMatchIndexed(
       item: entry,
       distance: bestForItem,
       sampleCount: entry.allSamples.length,
-      threshold: baseThreshold + sampleBonus + qualityBonus,
+      threshold: Math.min(baseThreshold + sampleBonus + qualityBonus, MAX_MATCH_DISTANCE),
     });
   }
 
@@ -112,7 +124,9 @@ export function findBestMatchIndexed(
   const margin = second ? second.distance - first.distance : 1;
 
   if (first.distance > first.threshold) return null;
-  if (second && margin < MIN_MARGIN) return null;
+  // هامش متكيّف: قوة المطابقة تحدّد صرامة الفصل عن المرشّح الثاني (منع الخلط بين طالبين)
+  const requiredMargin = first.distance <= CONFIRM_MODERATE ? STRONG_MATCH_MARGIN : MIN_MARGIN;
+  if (second && margin < requiredMargin) return null;
 
   return {
     item: first.item,

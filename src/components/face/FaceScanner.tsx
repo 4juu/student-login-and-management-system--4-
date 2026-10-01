@@ -16,7 +16,7 @@ import {
   hasValidDescriptor,
   MATCH_LOOSE,
   MIN_RECOG_CONFIDENCE,
-  CONFIRM_FRAMES,
+  requiredConfirmFrames,
 } from '../../services/faceAI/descriptors';
 import { buildGallery, findBestMatchIndexed } from '../../services/faceAI/gallery';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
@@ -48,9 +48,10 @@ const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
 const MAX_FACES_PER_FRAME = 10;
 const REEMBED_MIN_INTERVAL = 150;
+const REEMBED_UNKNOWN_INTERVAL = 100;
 const REEMBED_MOVE_THRESHOLD = 0.08;
-// حارس الجودة المرن: يرفض فقط الفريمات الضبابية/المظلمة جداً دون المس بالمسح الطبيعي
-const MIN_FRAME_QUALITY = 0.45;
+// حارس الجودة المرن: يرفض فقط الفريمات غير الموثوقة جداً (الحدّ نفس حدّ عقوبة الجودة -0.02)
+const MIN_FRAME_QUALITY = 0.40;
 // مدة كبت منطقة وجه مسجَّل حضوره حتى لا يعاد اكتشافه/رسمه فور انتهائه
 const SUPPRESS_ZONE_TTL = 6_000;
 // نسبة تداخل جديدة ليُعتبَر الوجه ضمن منطقة مكبوتة (يتم تجاهله)
@@ -417,7 +418,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
 
           // ✅ حدّد فقط الوجوه اللي فعلاً تستحق إعادة حساب embedding
           const needEmbed = tracked.filter(t =>
-            trackerRef.current.shouldReembed(t.trackId, nowTs, REEMBED_MIN_INTERVAL, REEMBED_MOVE_THRESHOLD)
+            trackerRef.current.shouldReembed(t.trackId, nowTs, REEMBED_MIN_INTERVAL, REEMBED_MOVE_THRESHOLD, REEMBED_UNKNOWN_INTERVAL)
           );
 
           let anyUnknown = false;
@@ -449,8 +450,14 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               const raw = new Float32Array(res.descriptor);
               const smoothed = trackerRef.current.addEmbedding(trackId, raw, nowTs);
 
-              const match = findBestMatchIndexed(smoothed, galleryRef.current, MATCH_LOOSE, res.quality.composite);
-              trackerRef.current.setCache(trackId, match?.item.id ?? null, match?.confidence ?? 0);
+              const match = findBestMatchIndexed(
+                trackerRef.current.getQueries(trackId, smoothed),
+                galleryRef.current, MATCH_LOOSE, res.quality.composite,
+              );
+              trackerRef.current.setCache(
+                trackId, match?.item.id ?? null, match?.confidence ?? 0,
+                match?.distance ?? 1, match?.margin ?? 1,
+              );
 
               const vbw = res.box.width / scale, vbh = res.box.height / scale;
               const vbx = res.box.x / scale, vby = res.box.y / scale;
@@ -474,8 +481,9 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               }
 
               const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id);
+              const requiredFrames = requiredConfirmFrames(match.distance, match.margin);
 
-              if (confirmCount < CONFIRM_FRAMES) {
+              if (confirmCount < requiredFrames) {
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
                 continue;
               }
@@ -521,8 +529,9 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
 
               // ⚡ الإطار الثاني المجاني: bumpConfirm على الكاش → تأكيد فوري بدون انتظار re-embed
               const confirmCount = trackerRef.current.bumpConfirm(t.trackId, student.id);
+              const requiredFrames = requiredConfirmFrames(cache.cachedDistance, cache.cachedMargin);
 
-              if (confirmCount >= CONFIRM_FRAMES) {
+              if (confirmCount >= requiredFrames) {
                 // ✅ تأكيد كامل — نُسجّل الحضور فوراً (نفس الثانية)
                 markedAny = true;
                 finalizeTrack(student, cache.cachedConfidence, boxInVideo, t.trackId);

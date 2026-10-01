@@ -16,7 +16,7 @@ import {
   hasValidDescriptor,
   MATCH_LOOSE,
   MIN_RECOG_CONFIDENCE,
-  CONFIRM_FRAMES,
+  requiredConfirmFrames,
 } from '../../services/faceAI/descriptors';
 import { buildGallery, findBestMatchIndexed } from '../../services/faceAI/gallery';
 import { getTestLink, validateTestLink, formatRemainingMs, getServerNow } from '../../services/tokenService';
@@ -33,6 +33,7 @@ type TestPhase = 'loading' | 'invalid' | 'loadError' | 'ready' | 'scanning' | 's
 const MIN_FACE_PX = 22;
 const MAX_FACES_PER_FRAME = 10;
 const REEMBED_MIN_INTERVAL = 150;
+const REEMBED_UNKNOWN_INTERVAL = 100;
 const REEMBED_MOVE_THRESHOLD = 0.08;
 
 export const FaceTestPage: React.FC<FaceTestPageProps> = ({
@@ -288,7 +289,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
           const tracked = trackerRef.current.update(boxes);
 
           const needEmbed = tracked.filter(t =>
-            trackerRef.current.shouldReembed(t.trackId, nowTs, REEMBED_MIN_INTERVAL, REEMBED_MOVE_THRESHOLD)
+            trackerRef.current.shouldReembed(t.trackId, nowTs, REEMBED_MIN_INTERVAL, REEMBED_MOVE_THRESHOLD, REEMBED_UNKNOWN_INTERVAL)
           );
 
             if (needEmbed.length > 0) {
@@ -319,8 +320,14 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               const raw = new Float32Array(res.descriptor);
               const smoothed = trackerRef.current.addEmbedding(trackId, raw, nowTs);
 
-              const match = findBestMatchIndexed(smoothed, galleryRef.current, MATCH_LOOSE, res.quality.composite);
-              trackerRef.current.setCache(trackId, match?.item.id ?? null, match?.confidence ?? 0);
+              const match = findBestMatchIndexed(
+                trackerRef.current.getQueries(trackId, smoothed),
+                galleryRef.current, MATCH_LOOSE, res.quality.composite,
+              );
+              trackerRef.current.setCache(
+                trackId, match?.item.id ?? null, match?.confidence ?? 0,
+                match?.distance ?? 1, match?.margin ?? 1,
+              );
 
               const vbw = res.box.width / scale, vbh = res.box.height / scale;
               const vbx = res.box.x / scale, vby = res.box.y / scale;
@@ -338,8 +345,9 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               anyMatched = true;
 
               const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id);
+              const requiredFrames = requiredConfirmFrames(match.distance, match.margin);
 
-              if (confirmCount < CONFIRM_FRAMES) {
+              if (confirmCount < requiredFrames) {
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
                 continue;
               }
@@ -376,8 +384,9 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
 
             if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE) {
               const confirmCount = trackerRef.current.bumpConfirm(t.trackId, student.id);
+              const requiredFrames = requiredConfirmFrames(cache.cachedDistance, cache.cachedMargin);
 
-              if (confirmCount >= CONFIRM_FRAMES) {
+              if (confirmCount >= requiredFrames) {
                 setMatchedStudent(student);
                 trackerRef.current.removeTrack(t.trackId);
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });

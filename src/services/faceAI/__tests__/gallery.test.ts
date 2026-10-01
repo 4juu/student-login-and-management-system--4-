@@ -43,7 +43,7 @@ function blend(a: Float32Array, b: Float32Array, beta: number): Float32Array {
 }
 
 /** 7 زوايا مختلفة لمتطابق واحد */
-function sevenAngles(seed: number): number[] {
+function sevenAngles(seed: number): number[][] {
   return Array.from({ length: 7 }, (_, i) => arr(makeVec(seed + i)));
 }
 
@@ -141,5 +141,52 @@ describe('findBestMatchIndexed', () => {
 
     expect(findBestMatchIndexed(q, one, MATCH_LOOSE, 0.50)).toBeNull();
     expect(findBestMatchIndexed(q, seven, MATCH_LOOSE, 0.50)).not.toBeNull();
+  });
+
+  it('matches best-of-queries: a good frame rescues a bad one (بلا خلط زوايا)', () => {
+    const gallery = buildGallery([student('s1', [60, 61, 62, 63, 64, 65, 66])]);
+    const good = makeVec(66);
+    const bad = makeVec(999); // وضعية لا تطابق أي عيّنة
+
+    expect(findBestMatchIndexed(bad, gallery, MATCH_LOOSE)).toBeNull();
+    const match = findBestMatchIndexed([bad, good], gallery, MATCH_LOOSE);
+    expect(match).not.toBeNull();
+    expect(match!.item.id).toBe('s1');
+  });
+
+  it('caps the threshold at MAX_MATCH_DISTANCE regardless of bonuses', () => {
+    // 7 عينات + جودة عالية ⇒ عتبة محسوبة 0.48 لكنها مسقوفة بـ0.44
+    const base = makeVec(70);
+    const u = orthogonalTo(base, 999);
+    const gallery = buildGallery([student('s1', [70, 300, 301, 302, 303, 304, 305])]);
+
+    const overCap = blend(base, u, 1.5185);   // d ≈ 0.45
+    const underCap = blend(base, u, 1.4052);  // d ≈ 0.42
+    expect(descriptorDistance(overCap, base)).toBeCloseTo(0.45, 2);
+    expect(descriptorDistance(underCap, base)).toBeCloseTo(0.42, 2);
+
+    expect(findBestMatchIndexed(overCap, gallery, MATCH_LOOSE, 0.90)).toBeNull();
+    expect(findBestMatchIndexed(underCap, gallery, MATCH_LOOSE, 0.90)).not.toBeNull();
+  });
+
+  it('adaptive margin: thin margin allowed only for a strong match (ضد الخلط)', () => {
+    const x = makeVec(80);
+    const u = orthogonalTo(x, 81);
+
+    // مطابقة قوية (d1=0) وهامش 0.10 → تُقبل (كانت تُرفض بـMIN_MARGIN 0.12)
+    const strongGallery = buildGallery([
+      { id: 'a', faceDescriptor: { version: 5, enrollment: [arr(x)] } },
+      { id: 'b', faceDescriptor: { version: 5, enrollment: [arr(blend(x, u, 0.4844))] } }, // d=0.10
+    ]);
+    expect(findBestMatchIndexed(x, strongGallery, MATCH_LOOSE)).not.toBeNull();
+
+    // مطابقة ضعيفة (d1=0.34) وهامش 0.10 → تُرفض حمايةً من خلط طالبين
+    const a2 = blend(x, u, 1.1383); // d=0.34
+    const b2 = blend(x, u, 1.4795); // d=0.44
+    const weakGallery = buildGallery([
+      { id: 'a', faceDescriptor: { version: 5, enrollment: [arr(a2)] } },
+      { id: 'b', faceDescriptor: { version: 5, enrollment: [arr(b2)] } },
+    ]);
+    expect(findBestMatchIndexed(x, weakGallery, MATCH_LOOSE)).toBeNull();
   });
 });

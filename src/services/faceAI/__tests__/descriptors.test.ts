@@ -7,6 +7,10 @@ import {
   MIN_MARGIN,
   MIN_RECOG_CONFIDENCE,
   CONFIRM_FRAMES,
+  MAX_MATCH_DISTANCE,
+  STRONG_MATCH_MARGIN,
+  requiredConfirmFrames,
+  distanceFromConfidence,
   parseOneSample,
   isGalleryDescriptor,
   hasValidDescriptor,
@@ -59,9 +63,52 @@ describe('constants', () => {
     expect(MATCH_STRICT).toBeLessThan(MATCH_LOOSE);
     expect(MIN_MARGIN).toBeGreaterThan(0);
     expect(CONFIRM_FRAMES).toBeGreaterThanOrEqual(5);
-    expect(MIN_RECOG_CONFIDENCE).toBeGreaterThanOrEqual(80);
     expect(ENROLLMENT_SAMPLE_COUNT).toBe(7);
     expect(ENROLLMENT_ANGLES).toHaveLength(7);
+    // سقف المسافة أقل من (MATCH_LOOSE + مكافأة العينات + مكافأة الجودة) = 0.48
+    expect(MAX_MATCH_DISTANCE).toBeLessThan(0.45);
+    expect(MAX_MATCH_DISTANCE).toBeGreaterThan(MATCH_LOOSE);
+    // المطابقة القوية تكتفي بهامش أنحف من الهامش العادي
+    expect(STRONG_MATCH_MARGIN).toBeGreaterThan(0);
+    expect(STRONG_MATCH_MARGIN).toBeLessThan(MIN_MARGIN);
+  });
+
+  it('distanceFromConfidence round-trips the stored confidence', () => {
+    expect(distanceFromConfidence(100)).toBeCloseTo(0, 5);
+    expect(distanceFromConfidence(MIN_RECOG_CONFIDENCE)).toBeCloseTo(MATCH_LOOSE, 5);
+    expect(distanceFromConfidence(0)).toBeCloseTo(1, 5);
+  });
+
+  it('MIN_RECOG_CONFIDENCE is derived from MATCH_LOOSE (gates stay aligned)', () => {
+    //_regression: كانت 80 ثابتة ⇒ مسافة 0.20 فقط وتُرفض مطابقات صحيحة 0.20–0.40
+    expect(MIN_RECOG_CONFIDENCE).toBe(Math.round((1 - MATCH_LOOSE) * 100));
+    expect(MIN_RECOG_CONFIDENCE).toBe(60);
+    expect(1 - MIN_RECOG_CONFIDENCE / 100).toBeCloseTo(MATCH_LOOSE, 5);
+  });
+});
+
+describe('requiredConfirmFrames (تأكيد تكيّفي)', () => {
+  it('needs only 3 frames for a strong, unambiguous match', () => {
+    expect(requiredConfirmFrames(0.15, 0.30)).toBe(3);
+  });
+
+  it('needs 5 frames for a moderate match', () => {
+    expect(requiredConfirmFrames(0.25, 0.30)).toBe(5);
+  });
+
+  it('needs the full 6 frames for a loose match', () => {
+    expect(requiredConfirmFrames(0.40, 0.30)).toBe(6);
+  });
+
+  it('demands the maximum 8 frames when candidates are close (anti-mixing)', () => {
+    expect(requiredConfirmFrames(0.12, 0.10)).toBe(8);
+    expect(requiredConfirmFrames(0.40, 0.14)).toBe(8);
+    expect(requiredConfirmFrames(0.12, 0.15)).toBe(3); // الهامش عند الحدّ مقبول
+  });
+
+  it('is never slower than the old fixed 6 for clear matches', () => {
+    expect(requiredConfirmFrames(0.10, 0.50)).toBeLessThanOrEqual(CONFIRM_FRAMES);
+    expect(requiredConfirmFrames(0.30, 0.50)).toBeLessThanOrEqual(CONFIRM_FRAMES);
   });
 });
 

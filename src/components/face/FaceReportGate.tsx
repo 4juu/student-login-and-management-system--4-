@@ -9,7 +9,7 @@ import {
   hasValidDescriptor,
   MATCH_LOOSE,
   MIN_RECOG_CONFIDENCE,
-  CONFIRM_FRAMES,
+  requiredConfirmFrames,
 } from '../../services/faceAI/descriptors';
 import { buildGallery, findBestMatchIndexed } from '../../services/faceAI/gallery';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
@@ -26,6 +26,7 @@ type GatePhase = 'scanning' | 'found';
 const MIN_FACE_PX = 22;
 const MAX_FACES_PER_FRAME = 10;
 const REEMBED_MIN_INTERVAL = 150;
+const REEMBED_UNKNOWN_INTERVAL = 100;
 const REEMBED_MOVE_THRESHOLD = 0.08;
 const NO_MATCH_FRAMES = 12;
 const FOUND_FLASH_MS = 3000;
@@ -250,7 +251,7 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
           const boxes: TrackBox[] = bigEnough.map(d => ({ ...d.box, keypoints: d.keypoints }));
           const tracked = trackerRef.current.update(boxes);
           const needEmbed = tracked.filter(t =>
-            trackerRef.current.shouldReembed(t.trackId, nowTs, REEMBED_MIN_INTERVAL, REEMBED_MOVE_THRESHOLD)
+            trackerRef.current.shouldReembed(t.trackId, nowTs, REEMBED_MIN_INTERVAL, REEMBED_MOVE_THRESHOLD, REEMBED_UNKNOWN_INTERVAL)
           );
 
           let sawConfident = false;
@@ -278,8 +279,14 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
               if (!res || !embTrack) continue;
               const raw = new Float32Array(res.descriptor);
               const smoothed = trackerRef.current.addEmbedding(embTrack.trackId, raw, nowTs);
-              const match = findBestMatchIndexed(smoothed, galleryRef.current, MATCH_LOOSE, res.quality.composite);
-              trackerRef.current.setCache(embTrack.trackId, match?.item.id ?? null, match?.confidence ?? 0);
+              const match = findBestMatchIndexed(
+                trackerRef.current.getQueries(embTrack.trackId, smoothed),
+                galleryRef.current, MATCH_LOOSE, res.quality.composite,
+              );
+              trackerRef.current.setCache(
+                embTrack.trackId, match?.item.id ?? null, match?.confidence ?? 0,
+                match?.distance ?? 1, match?.margin ?? 1,
+              );
 
               const vbw = res.box.width / scale, vbh = res.box.height / scale;
               const vbx = res.box.x / scale, vby = res.box.y / scale;
@@ -296,7 +303,8 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
               sawConfident = true;
 
               const confirmCount = trackerRef.current.bumpConfirm(embTrack.trackId, student.id);
-              if (confirmCount < CONFIRM_FRAMES) {
+              const requiredFrames = requiredConfirmFrames(match.distance, match.margin);
+              if (confirmCount < requiredFrames) {
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
                 continue;
               }
@@ -323,7 +331,8 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
             if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE) {
               sawConfident = true;
               const confirmCount = trackerRef.current.bumpConfirm(t.trackId, student.id);
-              if (confirmCount >= CONFIRM_FRAMES) {
+              const requiredFrames = requiredConfirmFrames(cache.cachedDistance, cache.cachedMargin);
+              if (confirmCount >= requiredFrames) {
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
                 drawBoxes(liveBoxes);
                 handleMatched(student);

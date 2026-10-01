@@ -17,8 +17,26 @@ export const DESC_VERSION_GALLERY = 5;
 export const MATCH_STRICT = 0.30;
 export const MATCH_LOOSE = 0.40;
 export const MIN_MARGIN = 0.12;
+/** مطابقة قوية جداً (distance ≤ 0.25) → نسمح بهامش أنحف قليلاً بين المرشّحين */
+export const STRONG_MATCH_MARGIN = 0.09;
+/** سقف مطلق للمسافة مهما كانت المكافآت — يمنع رفع العتبة إلى 0.48 */
+export const MAX_MATCH_DISTANCE = 0.44;
 export const TAMPER_THRESHOLD = 0.30;
 export const CONFIRM_FRAMES = 6;
+
+// ── التأكيد التكيّفي: يقين عالٍ → فريمات أقل (أسرع)، شكوك → فريمات أكثر (أدق) ──
+export const CONFIRM_STRONG = 0.18;      // مسافة ≤ 0.18 → 3 فريمات
+export const CONFIRM_MODERATE = 0.28;    // مسافة ≤ 0.28 → 5 فريمات
+export const CONFIRM_AMBIGUOUS_MARGIN = 0.15; // هامش ضيّق بين أولي المرشّحين → 8 فريمات
+export const CONFIRM_FRAMES_MAX = 8;
+
+/** عدد فريمات التأكيد المطلوبة لمسافة وهامش معيّنين */
+export function requiredConfirmFrames(distance: number, margin: number): number {
+  if (margin < CONFIRM_AMBIGUOUS_MARGIN) return CONFIRM_FRAMES_MAX;
+  if (distance <= CONFIRM_STRONG) return 3;
+  if (distance <= CONFIRM_MODERATE) return 5;
+  return CONFIRM_FRAMES;
+}
 
 // 🗄️ Cache for parsed samples (key: JSON string of descriptor, value: Float32Array[])
 const parsedSamplesCache = new Map<string, Float32Array[]>();
@@ -54,8 +72,17 @@ export function parseAllSamples(input: unknown): Float32Array[] {
   return result;
 }
 
-/** أدنى نسبة ثقة مقبولة للتعرف أثناء الحضور — حارس الدقة الرئيسي */
-export const MIN_RECOG_CONFIDENCE = 80;
+/**
+ * أدنى نسبة ثقة مقبولة للتعرف — **مشتقّة من MATCH_LOOSE** حتى تتطابق البوابتان:
+ * الثقة = (1 − distance)×100 ⇒ هذا الشرط يعني بالضبط distance ≤ MATCH_LOOSE.
+ * (سابقاً كانت 80 ثابتة = مسافة 0.20 فقط، فترفض مطابقات صحيحة 0.20–0.40 وتظهر «غير معروف».)
+ */
+export const MIN_RECOG_CONFIDENCE = Math.round((1 - MATCH_LOOSE) * 100);
+
+/** استرجاع المسافة من نسبة الثقة المخزّنة في الكاش */
+export function distanceFromConfidence(confidence: number): number {
+  return Math.max(0, Math.min(1, 1 - confidence / 100));
+}
 
 export interface MatchCandidate {
   id: string;
@@ -267,8 +294,12 @@ export function findBestMatch<T extends MatchCandidate & { faceDescriptor?: unkn
   if (!first) return null;
   const margin = second ? second.distance - first.distance : 1;
 
-  if (first.distance > first.threshold) return null;
-  if (second && margin < MIN_MARGIN) return null;
+  // سقف مطلق: المكافآت (عينات/جودة) لا تتجاوز MAX_MATCH_DISTANCE مهما كانت
+  const threshold = Math.min(first.threshold, MAX_MATCH_DISTANCE);
+  if (first.distance > threshold) return null;
+  // هامش متكيّف: مطابقة قوية تكتفي بهامش أنحف، ومطابقة ضعيفة تُطلب له هامش أوسع
+  const requiredMargin = first.distance <= CONFIRM_MODERATE ? STRONG_MATCH_MARGIN : MIN_MARGIN;
+  if (second && margin < requiredMargin) return null;
 
   return {
     item: first.item,
