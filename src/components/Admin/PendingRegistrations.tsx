@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { ref, update, set, get } from 'firebase/database';
 import { database } from '../../firebase/config';
@@ -13,7 +13,7 @@ import {
   checkForTampering,
   migrateToV5,
 } from '../../services/faceAI/descriptors';
-import { Camera, Check, CircleCheck, CircleX, ClipboardList, Mail, QrCode, Save, Smile, Trash2, TriangleAlert } from 'lucide-react';
+import { Camera, Check, CheckCheck, CircleCheck, CircleX, ClipboardList, Mail, QrCode, Save, Smile, Trash2, TriangleAlert } from 'lucide-react';
 import { useConfirm } from '../../hooks/useConfirm';
 import { useNavStore } from '../../store/navStore';
 import { toast } from '@/hooks/use-toast';
@@ -26,6 +26,51 @@ interface PendingRegistrationsProps {
 
 type FilterStatus = 'all' | 'pending' | 'approved' | 'rejected';
 
+/** حالة نافذة الحفظ المسدودة — لا تختفي إلا بعد استقرار الكتابات في قاعدة البيانات */
+interface SavingState {
+  title: string;
+  detail: string;
+  current?: number;
+  total?: number;
+  attempt?: number;
+}
+
+/** فشل دائم (فشل تحقق منطقي/بصمة تالفة) — لا جدوى من إعادة المحاولة */
+class PermanentError extends Error {}
+
+/** مهلة لكل محاولة — بدونها تكتب Firebase تعلّق للأبد عند انقطاع الاتصال (وتنحبس نافذة الحفظ) */
+const ATTEMPT_TIMEOUT_MS = 20000;
+
+const withTimeout = (work: Promise<void>): Promise<void> =>
+  new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error('انتهت مهلة الاتصال بقاعدة البيانات (20 ثانية) — تحقق من الإنترنت')),
+      ATTEMPT_TIMEOUT_MS,
+    );
+    work.then(
+      () => { clearTimeout(timer); resolve(); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+
+/** إعادة محاولة تلقائية للعمليات القابلة للفشل (شبكة/قاعدة) — الفشل الدائم يُرمي فوراً */
+const withRetry = async (
+  fn: () => Promise<void>,
+  attempts = 3,
+  onAttempt?: (next: number) => void,
+): Promise<void> => {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      await withTimeout(fn());
+      return;
+    } catch (e) {
+      if (e instanceof PermanentError || attempt === attempts) throw e;
+      onAttempt?.(attempt + 1);
+      await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+    }
+  }
+};
+
 export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
   adminUid,
   dataAdminUid,
@@ -34,13 +79,38 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
   // استماع واحد فقط في useNavigation — النافذة تقرأ من المتجر (لا اشتراك مكرر على نفس المسار)
   const [requests] = [useNavStore((s) => s.pendingRequests)];
   const [filter, setFilter] = useState<FilterStatus>('pending');
-  const [processing, setProcessing] = useState<string | null>(null);
+  const [processing, setProcessing] = useState<ReadonlySet<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [rejectReason, setRejectReason] = useState('');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [purging, setPurging] = useState(false);
   const { confirm: confirmAction, ConfirmDialog: ConfirmDialogEl } = useConfirm();
   const loading = false;
+  const [saving, setSaving] = useState<SavingState | null>(null);
+  // حارس متزامن: يمنع بدء عملية موافقة ثانية قبل انتهاء الحالية حتى لو وقع النقر في نفس اللحظة
+  const busyRef = useRef(false);
+
+  /** حالة كل طلب مستقلة — لا يضيع مؤشر «جاري...» لطلب كان يُكتب بعدما يبدأ طلب آخر */
+  const startProcessing = (id: string) => setProcessing(prev => { const next = new Set(prev); next.add(id); return next; });
+  const stopProcessing = (id: string) => setProcessing(prev => { const next = new Set(prev); next.delete(id); return next; });
+  const clearProcessing = () => setProcessing(new Set());
+
+  // أثناء الحفظ: تحذير المتصفح قبل إغلاق التبويب/إعادة تحميل الصفحة
+  useEffect(() => {
+    if (!saving) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [saving]);
+
+  /** إغلاق النافذة فقط بعد اكتمال الحفظ */
+  const safeClose = () => {
+    if (saving) return;
+    onClose();
+  };
 
   useBodyScrollLock(true);
 
@@ -61,122 +131,189 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
     });
   }, [requests, filter, searchQuery]);
 
+  /** كتابة الموافقة والبصمة كاملة — العمليات كلها idempotent فيُعاد تشغيلها بأمان عند إعادة المحاولة */
+  const approveRequest = async (
+    req: PendingRegistration,
+    onProgress?: (msg: string) => void,
+  ): Promise<void> => {
+    const year = await getActiveAcademicYear();
+    const storageUid = dataAdminUid || adminUid;
+    if (!req.studentId) {
+      throw new PermanentError('بيانات الطالب ناقصة (studentId)');
+    }
+
+    const basePath = `academicYears/${year}/userData/${storageUid}/stageData/${req.stageId}/students`;
+    const descriptorsPath = `academicYears/${year}/userData/${storageUid}/stageData/${req.stageId}/descriptors`;
+
+    onProgress?.('قراءة بيانات الطالب...');
+    // ── 1) Find the student's key first (array index or object key)
+    const [snap, descSnap] = await Promise.all([
+      get(ref(database, basePath)),
+      get(ref(database, descriptorsPath)),
+    ]);
+    if (!snap.exists()) {
+      throw new PermanentError('لم نجد بيانات الطلاب');
+    }
+
+    const data = snap.val();
+    const descriptors = descSnap.exists() ? (descSnap.val() as Record<string, unknown>) : null;
+    let studentKey: string | number | null = null;
+    let studentData: Student | null = null;
+
+    if (Array.isArray(data)) {
+      const idx = data.findIndex(s => s && s.id === req.studentId);
+      if (idx !== -1) {
+        studentKey = idx;
+        studentData = data[idx];
+      }
+    } else if (data && typeof data === 'object') {
+      for (const [key, val] of Object.entries(data)) {
+        if (val && typeof val === 'object' && (val as Student).id === req.studentId) {
+          studentKey = key;
+          studentData = val as Student;
+          break;
+        }
+      }
+    }
+
+    if (studentKey === null || !studentData) {
+      throw new PermanentError(`لم نجد الطالب بالمعرف: ${req.studentId}`);
+    }
+
+    // ── 2) Validate + migrate the face descriptor (if provided)
+    // نوحّد أي صيغة بصمة إلى v5 نظيفة — نقبل البصمة الجديدة مهما كانت صيغتها المخزّنة
+    let finalDescriptor = req.faceDescriptor;
+
+    if (req.faceDescriptor) {
+      const migrated = migrateToV5(req.faceDescriptor);
+      if (!migrated) {
+        throw new PermanentError('البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.');
+      }
+
+      const query = parseStoredDescriptor(migrated);
+      if (!query) {
+        throw new PermanentError('البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.');
+      }
+      const allStudents: Student[] = (Array.isArray(data) ? data : Object.values(data)).map(s => {
+        const d = descriptors?.[s.id];
+        return d !== undefined && d !== null ? { ...s, faceDescriptor: d } : s;
+      });
+      const tamper = checkForTampering(query, allStudents, req.studentId);
+      if (tamper.tampered) {
+        throw new PermanentError(`لا يمكن الموافقة: هذه البصمة مطابقة لبصمة الطالب\n${tamper.matchedWith}\n\nيرجى التحقق من صالة الطلب.`);
+      }
+      finalDescriptor = migrated;
+    }
+
+    // ── 3) Update ONLY this student using update() — avoids rewriting whole array
+    // faceDescriptor يُكتب في العقدة المنفصلة descriptors/ (بلا مساس بمصفوفة students)
+    onProgress?.('حفظ بصمة الوجه...');
+    const studentRef = ref(database, `${basePath}/${studentKey}`);
+    await update(studentRef, {
+      qrCodeId: req.qrCodeId,
+      faceRegisteredAt: new Date().toISOString(),
+    });
+    if (finalDescriptor !== undefined) {
+      await set(ref(database, `${descriptorsPath}/${req.studentId}`), finalDescriptor);
+    }
+
+    // ── 4) Update pending request status + إزالة قيد فهرس البصمة المعلقة
+    onProgress?.('تحديث حالة الطلب...');
+    await update(ref(database), {
+      [`registrationSystem/pending/${adminUid}/${req.id}`]: {
+        status: 'approved',
+        reviewedAt: new Date().toISOString(),
+        reviewedBy: adminUid,
+      },
+      ...(req.stageId
+        ? { [`registrationSystem/pendingFaceIndex/${adminUid}/${req.stageId}/${req.id}`]: null }
+        : {}),
+    });
+
+    // ── 5) تعليم الرابط المخصص لطالب واحد «مستخدماً» بعد الموافقة فقط
+    if (req.linkType === 'single' && req.linkToken) {
+      await markLinkAsUsed(req.linkToken, req.studentId).catch(() => {});
+    }
+  };
+
   const handleApprove = async (req: PendingRegistration) => {
-    setProcessing(req.id);
+    if (busyRef.current) return;
+    busyRef.current = true;
+    startProcessing(req.id);
+    setSaving({ title: 'جاري حفظ بصمة الطالب', detail: `${req.nameInSystem} — لا تغلق النافذة قبل اكتمال الحفظ` });
 
     try {
-      const year = await getActiveAcademicYear();
-      const storageUid = dataAdminUid || adminUid;
-      if (!req.studentId) {
-        throw new Error('بيانات الطالب ناقصة (studentId)');
-      }
-
-      const basePath = `academicYears/${year}/userData/${storageUid}/stageData/${req.stageId}/students`;
-      const descriptorsPath = `academicYears/${year}/userData/${storageUid}/stageData/${req.stageId}/descriptors`;
-
-      // ── 1) Find the student's key first (array index or object key)
-      const [snap, descSnap] = await Promise.all([
-        get(ref(database, basePath)),
-        get(ref(database, descriptorsPath)),
-      ]);
-      if (!snap.exists()) {
-        throw new Error('لم نجد بيانات الطلاب');
-      }
-
-      const data = snap.val();
-      const descriptors = descSnap.exists() ? (descSnap.val() as Record<string, unknown>) : null;
-      let studentKey: string | number | null = null;
-      let studentData: Student | null = null;
-
-      if (Array.isArray(data)) {
-        const idx = data.findIndex(s => s && s.id === req.studentId);
-        if (idx !== -1) {
-          studentKey = idx;
-          studentData = data[idx];
-        }
-      } else if (data && typeof data === 'object') {
-        for (const [key, val] of Object.entries(data)) {
-          if (val && typeof val === 'object' && (val as Student).id === req.studentId) {
-            studentKey = key;
-            studentData = val as Student;
-            break;
-          }
-        }
-      }
-
-      if (studentKey === null || !studentData) {
-        throw new Error(`لم نجد الطالب بالمعرف: ${req.studentId}`);
-      }
-
-      // ── 2) Validate + migrate the face descriptor (if provided)
-      // نوحّد أي صيغة بصمة إلى v5 نظيفة — نقبل البصمة الجديدة مهما كانت صيغتها المخزّنة
-      let finalDescriptor = req.faceDescriptor;
-
-      if (req.faceDescriptor) {
-        const migrated = migrateToV5(req.faceDescriptor);
-        if (!migrated) {
-          toast({ variant: 'destructive', title: 'البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.' });
-          return;
-        }
-
-        const query = parseStoredDescriptor(migrated);
-        if (!query) {
-          toast({ variant: 'destructive', title: 'البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.' });
-          return;
-        }
-        const allStudents: Student[] = (Array.isArray(data) ? data : Object.values(data)).map(s => {
-          const d = descriptors?.[s.id];
-          return d !== undefined && d !== null ? { ...s, faceDescriptor: d } : s;
-        });
-        const tamper = checkForTampering(query, allStudents, req.studentId);
-        if (tamper.tampered) {
-          toast({ variant: 'destructive', title: 'لا يمكن الموافقة: هذه البصمة مطابقة لبصمة الطالب', description: `${tamper.matchedWith}\n\nيرجى التحقق من صالة الطلب.` });
-          return;
-        }
-        finalDescriptor = migrated;
-      }
-
-      // ── 3) Update ONLY this student using update() — avoids rewriting whole array
-      // faceDescriptor يُكتب في العقدة المنفصلة descriptors/ (بلا مساس بمصفوفة students)
-      const studentRef = ref(database, `${basePath}/${studentKey}`);
-      await update(studentRef, {
-        qrCodeId: req.qrCodeId,
-        faceRegisteredAt: new Date().toISOString(),
-      });
-      if (finalDescriptor !== undefined) {
-        await set(ref(database, `${descriptorsPath}/${req.studentId}`), finalDescriptor);
-      }
-
-      // ── 4) Update pending request status + إزالة قيد فهرس البصمة المعلقة
-      await update(ref(database), {
-        [`registrationSystem/pending/${adminUid}/${req.id}`]: {
-          status: 'approved',
-          reviewedAt: new Date().toISOString(),
-          reviewedBy: adminUid,
-        },
-        ...(req.stageId
-          ? { [`registrationSystem/pendingFaceIndex/${adminUid}/${req.stageId}/${req.id}`]: null }
-          : {}),
-      });
-
-      // ── 5) تعليم الرابط المخصص لطالب واحد «مستخدماً» بعد الموافقة فقط
-      if (req.linkType === 'single' && req.linkToken) {
-        await markLinkAsUsed(req.linkToken, req.studentId).catch(() => {});
-      }
-
-    } catch (e: any) {
+      await withRetry(
+        () => approveRequest(req, msg => setSaving(prev => (prev ? { ...prev, detail: `${req.nameInSystem} — ${msg}` } : prev))),
+        3,
+        next => setSaving(prev => (prev ? { ...prev, detail: `تعذّر الوصول لقاعدة البيانات — إعادة المحاولة (${next} من 3)`, attempt: next } : prev)),
+      );
+      toast({ title: 'تم حفظ البصمة بنجاح ✅', description: `${req.nameInSystem} — سُجلت الموافقة والبصمة في قاعدة البيانات.` });
+    } catch (e) {
       console.error('❌ خطأ في الموافقة:', e);
-      toast({ variant: 'destructive', title: 'فشلت العملية', description: e.message || 'خطأ غير معروف' });
+      toast({ variant: 'destructive', title: 'فشلت عملية الحفظ بعد إعادة المحاولة', description: e instanceof Error ? e.message : 'خطأ غير معروف' });
     } finally {
-      setProcessing(null);
+      setSaving(null);
+      stopProcessing(req.id);
+      busyRef.current = false;
+    }
+  };
+
+  /** الموافقة على كل الطلبات «قيد المراجعة» دفعة واحدة مع شريط تقدّم وإعادة محاولة تلقائية */
+  const handleApproveAll = async () => {
+    if (busyRef.current) return;
+    const pendingList = requests.filter(r => r.status === 'pending');
+    if (pendingList.length === 0) return;
+
+    const ok = await confirmAction({
+      title: 'الموافقة على كل البصمات',
+      message: `سيتم حفظ بصمات ${pendingList.length} طالباً دفعة واحدة، ولا تُغلق النافذة حتى تكتمل العملية. متابعة؟`,
+      confirmLabel: 'موافقة الكل',
+    });
+    if (!ok) return;
+
+    busyRef.current = true;
+    const total = pendingList.length;
+    const failures: { name: string; msg: string }[] = [];
+    setSaving({ title: 'جاري حفظ كل البصمات', detail: 'البدء...', current: 0, total });
+
+    try {
+      for (const [i, req] of pendingList.entries()) {
+        startProcessing(req.id);
+        setSaving({ title: 'جاري حفظ كل البصمات', detail: `${req.nameInSystem}`, current: i + 1, total });
+        try {
+          await withRetry(
+            () => approveRequest(req, msg => setSaving(prev => (prev ? { ...prev, detail: `${req.nameInSystem} — ${msg}` } : prev))),
+            3,
+            next => setSaving(prev => (prev ? { ...prev, detail: `${req.nameInSystem} — إعادة المحاولة (${next} من 3)` } : prev)),
+          );
+        } catch (e) {
+          failures.push({ name: req.nameInSystem, msg: e instanceof Error ? e.message : 'خطأ غير معروف' });
+        }
+      }
+    } finally {
+      clearProcessing();
+      setSaving(null);
+      busyRef.current = false;
+    }
+
+    const saved = total - failures.length;
+    if (failures.length === 0) {
+      toast({ title: `تم حفظ ${saved} بصمة ✅`, description: 'كل الطلبات المعلقة محفوظة في قاعدة البيانات.' });
+    } else {
+      toast({
+        variant: 'destructive',
+        title: `تم حفظ ${saved} — وفشل ${failures.length} بعد إعادة المحاولة`,
+        description: failures.slice(0, 5).map(f => `${f.name}: ${f.msg}`).join('\n') + (failures.length > 5 ? `\n+${failures.length - 5} طلبات أخرى` : ''),
+      });
     }
   };
 
   const handleReject = async (req: PendingRegistration, reason: string) => {
-    setProcessing(req.id);
+    startProcessing(req.id);
 
     try {
-      await update(ref(database), {
+      await withTimeout(update(ref(database), {
         [`registrationSystem/pending/${adminUid}/${req.id}`]: {
           status: 'rejected',
           rejectionReason: reason || 'بدون سبب محدد',
@@ -186,7 +323,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         ...(req.stageId
           ? { [`registrationSystem/pendingFaceIndex/${adminUid}/${req.stageId}/${req.id}`]: null }
           : {}),
-      });
+      }));
 
       setRejectingId(null);
       setRejectReason('');
@@ -194,7 +331,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       console.error(e);
       toast({ variant: 'destructive', title: 'فشلت العملية' });
     } finally {
-      setProcessing(null);
+      stopProcessing(req.id);
     }
   };
 
@@ -253,8 +390,56 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
   }), [requests]);
 
   return (
-<div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4 animate-fadeIn" dir="rtl">
+    <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4 animate-fadeIn" dir="rtl">
 {ConfirmDialogEl}
+
+      {/* نافذة حفظ مسدودة — لا زر إغلاق ولا خلفية تنضغط، تختفي فقط بعد استقرار الكتابات */}
+      {saving && (
+        <div
+          className="fixed inset-0 z-[10001] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
+          role="alertdialog"
+          aria-modal="true"
+          aria-live="assertive"
+        >
+          <div className="bg-slate-900 border border-white/15 rounded-2xl shadow-2xl w-full max-w-sm p-7 text-center">
+            <MorphingSquare size="lg" />
+            <h3 className="text-lg font-extrabold text-white mt-4">{saving.title}</h3>
+            <p className="text-sm text-slate-300 mt-2 leading-relaxed break-words">{saving.detail}</p>
+
+            {typeof saving.attempt === 'number' && (
+              <p className="text-xs font-bold text-amber-300 mt-3">
+                <TriangleAlert className="w-3.5 h-3.5 inline ml-1" />
+                محاولة {saving.attempt} من 3 — سيتم إعادة المحاولة تلقائياً
+              </p>
+            )}
+
+            {typeof saving.total === 'number' && saving.total > 0 ? (
+              <div className="mt-5">
+                <div
+                  className="h-2.5 w-full rounded-full bg-white/10 overflow-hidden"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={saving.total}
+                  aria-valuenow={saving.current ?? 0}
+                >
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                    style={{ width: `${Math.min(100, Math.round(((saving.current ?? 0) / saving.total) * 100))}%` }}
+                  />
+                </div>
+                <p className="text-xs text-slate-400 mt-2 font-bold">
+                  {saving.current} / {saving.total} طالب
+                </p>
+              </div>
+            ) : (
+              <p className="text-[11px] text-slate-500 mt-5">
+                لن تُغلق هذه النافذة قبل اكتمال الحفظ في قاعدة البيانات
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
 <div className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[95vh] flex flex-col animate-modalUp">
 
         <div className="p-5 border-b border-white/10 flex items-center justify-between">
@@ -270,6 +455,17 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
             <p className="text-sm text-slate-400">مراجعة طلبات الطلاب الذاتية</p>
           </div>
           <div className="flex items-center gap-2">
+            {stats.pending > 0 && (
+              <button
+                onClick={handleApproveAll}
+                disabled={!!saving || purging}
+                title="الموافقة على كل الطلبات قيد المراجعة وحفظ بصماتها دفعة واحدة"
+                className="flex items-center gap-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 px-3 py-2 rounded-lg font-bold text-sm transition disabled:opacity-50"
+              >
+                <CheckCheck className="w-4 h-4" />
+                موافقة الكل
+              </button>
+            )}
             <button
               onClick={handlePurgeCorrupt}
               disabled={purging}
@@ -280,8 +476,10 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
               حذف التالفة
             </button>
             <button
-              onClick={onClose}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold"
+              onClick={safeClose}
+              disabled={!!saving}
+              title={saving ? 'جاري الحفظ — لا يمكن الإغلاق الآن' : 'إغلاق'}
+              className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-bold transition"
             >
               ✕ إغلاق
             </button>
@@ -353,7 +551,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
             </div>
           ) : (
             filteredRequests.map(req => {
-              const isProcessing = processing === req.id;
+              const isProcessing = processing.has(req.id);
               const isPending = req.status === 'pending';
               const isApproved = req.status === 'approved';
               const isRejected = req.status === 'rejected';
