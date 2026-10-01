@@ -88,7 +88,6 @@ export interface GalleryIndex {
   dangerKeys: ReadonlySet<string>;
 }
 
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
 /** مفتاح زوج غير مرتّب — للاستعلام السريع عن الأزواج الخطرة */
@@ -153,11 +152,11 @@ export function calibrateGallery(gallery: GalleryItem[]): {
   report: CalibrationReport;
 } {
   const k = RECOG_MATCH_K;
-  // ── التشتت الداخلي: أسوأ حالة لطالب شرعي، بنفس إحصاء القرار ──
+  // التشتت الداخلي لطالب له 7 زوايا ليس مقياساً للانفصال بين الطلاب،
+  // لذلك لا نُستخدم لتشديد العتبات. نستخدم الافتراضات الآمنة مباشرة.
   let intraMax = 0;
   for (const it of gallery) intraMax = Math.max(intraMax, intraDecisionMax(it, k));
 
-  // ── أقرب مركزين بين طالبين ──
   let interMin = Infinity;
   for (let i = 0; i < gallery.length; i++) {
     const a = gallery[i];
@@ -172,22 +171,9 @@ export function calibrateGallery(gallery: GalleryItem[]): {
   if (!Number.isFinite(interMin)) interMin = 1;
 
   const gap = interMin - intraMax;
-  let profile: MatchProfile;
-  if (gap >= 0.08) {
-    // بيانات نظيفة — وسط الفصل الآمن (لا يتجاوز الافتراضي أبداً)
-    const midpoint = intraMax + gap / 2;
-    profile = {
-      ...DEFAULT_MATCH_PROFILE,
-      d1Cap: clamp(Math.min(DEFAULT_MATCH_PROFILE.d1Cap, midpoint), 0.14, DEFAULT_MATCH_PROFILE.d1Cap),
-      margin: clamp(Math.max(DEFAULT_MATCH_PROFILE.margin, Math.min(gap / 2, 0.14)), DEFAULT_MATCH_PROFILE.margin, 0.14),
-    };
-  } else {
-    // فشل/ضعف الفصل بين الطلاب — أشد صرامة ممكنة
-    profile = { ...DEFAULT_MATCH_PROFILE, d1Cap: 0.15, margin: 0.14 };
-  }
-  profile = {
-    ...profile,
-    soloCap: Math.min(DEFAULT_MATCH_PROFILE.soloCap, profile.d1Cap - 0.05),
+  const profile: MatchProfile = {
+    ...DEFAULT_MATCH_PROFILE,
+    soloCap: Math.min(DEFAULT_MATCH_PROFILE.soloCap, DEFAULT_MATCH_PROFILE.d1Cap - 0.05),
   };
 
   // ── الأزواج الخطرة: مسافة عينات حقيقية (مع ترشيح مبدئي بالمركزين) ──

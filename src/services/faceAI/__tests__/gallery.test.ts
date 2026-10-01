@@ -197,8 +197,7 @@ describe('calibrateGallery / buildGalleryIndex — معايرة تشدد فقط'
     expect(index.profile.soloCap).toBeLessThanOrEqual(DEFAULT_MATCH_PROFILE.soloCap);
   });
 
-  it('بيانات متشابكة: فشل الفصل → أشد صرامة', () => {
-    // A عند 0° ±15، B عند 12° ±15 — تداخل شبه كامل
+  it('بيانات متشابكة: تبقى العتبات الافتراضية ولا تُشدد', () => {
     const students = [
       makeStudent('a', 'طالب أ', [-15, -7, 0, 7, 15]),
       makeStudent('b', 'طالب ب', [-3, 5, 12, 19, 27]),
@@ -206,9 +205,8 @@ describe('calibrateGallery / buildGalleryIndex — معايرة تشدد فقط'
     const index = buildGalleryIndex(students);
 
     expect(index.report.separation).toBe(false);
-    expect(index.profile.d1Cap).toBeLessThanOrEqual(0.15);
-    expect(index.profile.d1Cap).toBeLessThanOrEqual(DEFAULT_MATCH_PROFILE.d1Cap);
-    expect(index.profile.margin).toBeGreaterThanOrEqual(DEFAULT_MATCH_PROFILE.margin);
+    expect(index.profile.d1Cap).toBe(DEFAULT_MATCH_PROFILE.d1Cap);
+    expect(index.profile.margin).toBe(DEFAULT_MATCH_PROFILE.margin);
     expect(index.report.dangerPairs.length).toBeGreaterThan(0);
     expect(index.dangerKeys.size).toBe(index.report.dangerPairs.length);
   });
