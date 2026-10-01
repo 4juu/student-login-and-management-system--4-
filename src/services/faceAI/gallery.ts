@@ -11,6 +11,7 @@ import {
   MIN_MARGIN,
   isGalleryDescriptor,
   parseOneSample,
+  ENROLLMENT_SAMPLE_COUNT,
   RECOG_D1_CAP,
   RECOG_MATCH_K,
   RECOG_SOLO_CAP,
@@ -265,7 +266,7 @@ export function buildGallery<T extends { id: string; name?: string; faceDescript
     // عينات التسجيل السبع فقط. بيانات العناقيد القديمة في Firebase تُتجاهل.
     const enrollmentSamples: Float32Array[] = [];
 
-    for (const s of fd.enrollment) {
+    for (const s of fd.enrollment.slice(0, ENROLLMENT_SAMPLE_COUNT)) {
       const p = parseOneSample(s);
       if (p) enrollmentSamples.push(p);
     }

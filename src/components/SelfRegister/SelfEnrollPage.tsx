@@ -9,7 +9,7 @@ import { VerifyNameStep } from './VerifyNameStep';
 import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear } from '../../firebase/dataService';
 import { decompressRecord } from '../../firebase/dataServiceCompressed';
-import { migrateToV5, parseAllSamples, checkForTampering, checkPendingConflict, type PendingFaceRecord, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
+import { ENROLLMENT_SAMPLE_COUNT, migrateToV5, parseAllSamples, checkForTampering, checkPendingConflict, type PendingFaceRecord, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
 import { useFaceAI } from '../../hooks/useFaceAI';
 import { EngineOverlay } from '../face/EngineOverlay';
 import {
@@ -449,7 +449,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
       goTo('error');
       return;
     }
-    if (migrated.enrollment.length !== 7 || migrated.enrollmentAngles?.length !== 7) {
+    if (migrated.enrollment.length !== ENROLLMENT_SAMPLE_COUNT || migrated.enrollmentAngles?.length !== ENROLLMENT_SAMPLE_COUNT) {
       setErrorMsg('لم تكتمل البصمات السبع. أعد التسجيل من الزوايا المطلوبة.');
       setRetryStep('capture-face');
       goTo('error');

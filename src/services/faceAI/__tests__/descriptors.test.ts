@@ -164,6 +164,16 @@ describe('migrateToV5', () => {
     expect(migrateToV5(legacy)?.clusters).toBeUndefined();
   });
 
+  it('normalizes legacy enrollment collections to no more than seven samples', () => {
+    const oldTenSampleDescriptor = makeGallery([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+
+    const migrated = migrateToV5(oldTenSampleDescriptor);
+
+    expect(migrated?.enrollment).toHaveLength(7);
+    expect(migrated?.samples).toBe(7);
+    expect(parseGallerySamples(oldTenSampleDescriptor)).toHaveLength(7);
+  });
+
   it('returns null for legacy flat array format', () => {
     expect(migrateToV5(new Array(DESC_DIM).fill(0.1))).toBeNull();
   });

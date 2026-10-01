@@ -16,6 +16,7 @@ import {
   l2Normalize,
   DESC_DIM,
   DESC_VERSION_GALLERY,
+  ENROLLMENT_SAMPLE_COUNT,
   type FaceGalleryDescriptor,
 } from '../../services/faceAI/descriptors';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
@@ -27,7 +28,7 @@ interface SelfCaptureStepProps {
   onCancel: () => void;
 }
 
-const SAMPLES_NEEDED = 7;
+const SAMPLES_NEEDED = ENROLLMENT_SAMPLE_COUNT;
 const MIN_REL_SIZE = 0.14;
 
 type CapturePhase = 'front' | 'right' | 'left' | 'up' | 'down' | 'close' | 'far';

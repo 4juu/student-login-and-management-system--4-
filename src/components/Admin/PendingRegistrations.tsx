@@ -9,6 +9,7 @@ import { markLinkAsUsed } from '../../services/tokenService';
 import { LoadingState } from '../loading/LoadingState';
 import { MorphingSquare } from '../MorphingSquare';
 import {
+  ENROLLMENT_SAMPLE_COUNT,
   parseStoredDescriptor,
   checkForTampering,
   migrateToV5,
@@ -129,7 +130,10 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
           return;
         }
         const hasSevenAngleManifest = Array.isArray((req.faceDescriptor as { enrollmentAngles?: unknown }).enrollmentAngles);
-        if (hasSevenAngleManifest && (migrated.enrollment.length !== 7 || migrated.enrollmentAngles?.length !== 7)) {
+        if (hasSevenAngleManifest && (
+          migrated.enrollment.length !== ENROLLMENT_SAMPLE_COUNT ||
+          migrated.enrollmentAngles?.length !== ENROLLMENT_SAMPLE_COUNT
+        )) {
           toast({
             variant: 'destructive',
             title: 'تعذر حفظ البصمات السبع بشكل كامل',

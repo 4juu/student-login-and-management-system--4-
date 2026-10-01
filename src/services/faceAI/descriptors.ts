@@ -10,6 +10,7 @@
 
 export const DESC_DIM = 512;
 export const DESC_VERSION_GALLERY = 5;
+export const ENROLLMENT_SAMPLE_COUNT = 7;
 
 export const MATCH_STRICT = 0.32;
 export const MATCH_LOOSE = 0.42;
@@ -151,7 +152,8 @@ export function migrateToV5(input: unknown): FaceGalleryDescriptor | null {
     const fd = input as FaceGalleryDescriptor;
     const samples = fd.enrollment
       .map(s => parseOneSample(s))
-      .filter((s): s is Float32Array => s !== null);
+      .filter((s): s is Float32Array => s !== null)
+      .slice(0, ENROLLMENT_SAMPLE_COUNT);
     if (samples.length === 0) return null;
     return {
       version: DESC_VERSION_GALLERY,
@@ -191,7 +193,7 @@ export function parseGallerySamples(fd: unknown): Float32Array[] {
   if (!isGalleryDescriptor(fd)) return [];
 
   const result: Float32Array[] = [];
-  for (const s of fd.enrollment) {
+  for (const s of fd.enrollment.slice(0, ENROLLMENT_SAMPLE_COUNT)) {
     const p = parseOneSample(s);
     if (p) result.push(p);
   }
