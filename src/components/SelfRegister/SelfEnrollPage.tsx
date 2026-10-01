@@ -9,7 +9,7 @@ import { VerifyNameStep } from './VerifyNameStep';
 import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear } from '../../firebase/dataService';
 import { decompressRecord } from '../../firebase/dataServiceCompressed';
-import { migrateToV6, parseAllSamples, checkForTampering, checkPendingConflict, type PendingFaceRecord, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
+import { ENROLLMENT_SAMPLE_COUNT, migrateToV5, parseAllSamples, checkForTampering, checkPendingConflict, type PendingFaceRecord, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
 import { useFaceAI } from '../../hooks/useFaceAI';
 import { EngineOverlay } from '../face/EngineOverlay';
 import {
@@ -86,31 +86,13 @@ export const loadStageStudentsPublic = async (
   });
 };
 
-// ── تحميل الطلاب مع دمج التحسينات المحفوظة (descriptorOverrides) ──
-export const loadStageStudentsWithOverrides = async (
+// يقرأ البصمات المعتمدة فقط؛ لا يحمّل أي بصمات تعلم/تحسين قديمة.
+export const loadStageStudentsForRecognition = async (
   adminUid: string,
   stageId: string,
 ): Promise<Student[]> => {
   const year = await getActiveAcademicYear();
-  const students = await loadStageStudentsCached(adminUid, year, stageId);
-  if (students.length === 0) return students;
-
-  try {
-    const overridesPath = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}/descriptorOverrides`;
-    const overridesData = await dbFetch<Record<string, { faceDescriptor: any; updatedAt: number }>>(overridesPath);
-    if (!overridesData) return students;
-
-    const result = students.map(s => {
-      const ov = overridesData[s.id];
-      if (ov?.faceDescriptor && ov.updatedAt > 0) {
-        return { ...s, faceDescriptor: ov.faceDescriptor };
-      }
-      return s;
-    });
-    return result;
-  } catch {
-    return students;
-  }
+  return loadStageStudentsCached(adminUid, year, stageId);
 };
 
 const STAGE_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 ساعات
@@ -460,9 +442,15 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
     if (!link || !expected) return;
     goTo('submitting');
 
-    const migrated = migrateToV6(descriptor);
+    const migrated = migrateToV5(descriptor);
     if (!migrated) {
       setErrorMsg('تعذر حفظ البصمة: لم يتم التقاط وجه صالح. أعد المحاولة.');
+      setRetryStep('capture-face');
+      goTo('error');
+      return;
+    }
+    if (migrated.enrollment.length !== ENROLLMENT_SAMPLE_COUNT || migrated.enrollmentAngles?.length !== ENROLLMENT_SAMPLE_COUNT) {
+      setErrorMsg('لم تكتمل البصمات السبع. أعد التسجيل من الزوايا المطلوبة.');
       setRetryStep('capture-face');
       goTo('error');
       return;
@@ -540,6 +528,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
           qrVerified,
           nameMatched: true,
           faceDescriptor: migrated,
+          studentNameEn: migrated.studentNameEn || expected.nameEn || '',
           linkToken: link.token,
           linkType: link.type,
           status: 'pending',
@@ -563,7 +552,12 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
       // لا نُعلّم الرابط «مستخدماً» هنا حتى يتمكّن الطالب من إعادة المحاولة عند الفشل.
       goTo('success');
     } catch (e: any) {
-      setErrorMsg(e.code === 'PERMISSION_DENIED' ? 'لا توجد صلاحية' : e.message || 'فشل الحفظ');
+      const msg = e?.code === 'PERMISSION_DENIED'
+        ? 'لا توجد صلاحية'
+        : e?.code === 'offline' || e?.message?.includes('offline') || e?.message?.includes('503')
+          ? 'لا يوجد اتصال بالإنترنت — تحقق من الشبكة وأعد المحاولة'
+          : e?.message || 'فشل الحفظ';
+      setErrorMsg(msg);
       setRetryStep('capture-face');
       goTo('error');
     }
@@ -777,7 +771,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
                 </p>
                 <ul className="space-y-2 text-sm text-[#B7C6E2]">
                   <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-[#34D399]" /> وجّه وجهك داخل الدائرة</li>
-                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-[#34D399]" /> التقط صورتك من 10 زوايا مختلفة</li>
+                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-[#34D399]" /> التقط صورتك من 7 زوايا مختلفة</li>
                   <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-[#34D399]" /> سيُحفظ الطلب ويُعرض على الأدمن للموافقة</li>
                 </ul>
               </div>

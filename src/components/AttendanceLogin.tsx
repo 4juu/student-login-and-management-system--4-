@@ -344,7 +344,6 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
             students={students}
             activeSession={activeSession || null}
             onMarkAttendance={handleQRMarkAttendance}
-            onUpdateStudent={onUpdateStudent ?? (() => {})}
             alreadyPresentIds={alreadyPresentIds}
             onClose={() => setShowFaceAttendance(false)}
           />

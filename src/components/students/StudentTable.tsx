@@ -1,9 +1,7 @@
 import React from 'react';
 import { Student } from '../../types/student';
 import {
-  getCoveragePercent,
   hasValidDescriptor,
-  isGalleryDescriptor,
 } from '../../services/faceAI/descriptors';
 import { CircleCheck, ClipboardList, IdCard, Pencil, QrCode, RefreshCw, ScanFace, Smile, Trash2, Unlink } from 'lucide-react';
 
@@ -369,11 +367,6 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                             <CircleCheck className="w-3.5 h-3.5" />
                             صالحة
                           </span>
-                          {isGalleryDescriptor(student.faceDescriptor) && (
-                            <span className="text-[10px] text-slate-400" title={`تغطية الزوايا: ${getCoveragePercent(student.faceDescriptor)}%`}>
-                              تغطية: {getCoveragePercent(student.faceDescriptor)}%
-                            </span>
-                          )}
                           {onUpdateStudent && (
                             <button
                               onClick={() => removeFaceData(student)}

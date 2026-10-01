@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
-import { ref, update, set, get } from 'firebase/database';
+import { ref, update, get } from 'firebase/database';
 import { database } from '../../firebase/config';
 import { Student } from '../../types/student';
 import { PendingRegistration } from '../../types/registration';
@@ -9,6 +9,7 @@ import { markLinkAsUsed } from '../../services/tokenService';
 import { LoadingState } from '../loading/LoadingState';
 import { MorphingSquare } from '../MorphingSquare';
 import {
+  ENROLLMENT_SAMPLE_COUNT,
   parseStoredDescriptor,
   checkForTampering,
   migrateToV6,
@@ -114,10 +115,32 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       // نوحّد أي صيغة بصمة إلى v6 نظيفة — v5 (غير مُحاذاة) تُرفض وتُطلب إعادة التسجيل
       let finalDescriptor = req.faceDescriptor;
 
+      // طلب تسجيل الوجه لا يُعتمد بصمت إذا وصلت بيانات الطلب من عميل قديم/ناقص بلا بصمة.
+      if (!req.faceDescriptor && req.linkType !== 'attendance' && req.linkType !== 'test') {
+        toast({
+          variant: 'destructive',
+          title: 'لا يمكن اعتماد الطلب: بصمات الوجه السبع غير موجودة',
+          description: 'اطلب من الطالب إعادة التسجيل ثم أعد الموافقة.',
+        });
+        return;
+      }
+
       if (req.faceDescriptor) {
         const migrated = migrateToV6(req.faceDescriptor);
         if (!migrated) {
           toast({ variant: 'destructive', title: 'البصمة المرفقة فارغة أو بصمة قديمة (v5). اطلب من الطالب إعادة التسجيل.' });
+          return;
+        }
+        const hasSevenAngleManifest = Array.isArray((req.faceDescriptor as { enrollmentAngles?: unknown }).enrollmentAngles);
+        if (hasSevenAngleManifest && (
+          migrated.enrollment.length !== ENROLLMENT_SAMPLE_COUNT ||
+          migrated.enrollmentAngles?.length !== ENROLLMENT_SAMPLE_COUNT
+        )) {
+          toast({
+            variant: 'destructive',
+            title: 'تعذر حفظ البصمات السبع بشكل كامل',
+            description: 'أعد طلب التسجيل ببصمات الزوايا السبع ثم وافق عليه.',
+          });
           return;
         }
 
@@ -148,28 +171,33 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         finalDescriptor = migrated;
       }
 
-      // ── 3) Update ONLY this student using update() — avoids rewriting whole array
-      // faceDescriptor يُكتب في العقدة المنفصلة descriptors/ (بلا مساس بمصفوفة students)
-      const studentRef = ref(database, `${basePath}/${studentKey}`);
-      await update(studentRef, {
-        qrCodeId: req.qrCodeId,
-        faceRegisteredAt: new Date().toISOString(),
-      });
-      if (finalDescriptor !== undefined) {
-        await set(ref(database, `${descriptorsPath}/${req.studentId}`), finalDescriptor);
-      }
-
-      // ── 4) Update pending request status + إزالة قيد فهرس البصمة المعلقة
-      await update(ref(database), {
+      // ── 3) تحديث ذرّي واحد: الطالب + البصمة + حالة الطلب ──
+      const now = new Date().toISOString();
+      const updates: Record<string, unknown> = {
+        [`${basePath}/${studentKey}/faceRegisteredAt`]: now,
         [`registrationSystem/pending/${adminUid}/${req.id}`]: {
           status: 'approved',
-          reviewedAt: new Date().toISOString(),
+          reviewedAt: now,
           reviewedBy: adminUid,
         },
         ...(req.stageId
           ? { [`registrationSystem/pendingFaceIndex/${adminUid}/${req.stageId}/${req.id}`]: null }
           : {}),
-      });
+      };
+      if (typeof req.qrCodeId === 'string') {
+        updates[`${basePath}/${studentKey}/qrCodeId`] = req.qrCodeId;
+      }
+      if (finalDescriptor !== undefined) {
+        if (!migrateToV5(finalDescriptor)) {
+          throw new Error('البصمة غير صالحة؛ لم يتم اعتماد الطلب.');
+        }
+        updates[`${descriptorsPath}/${req.studentId}`] = finalDescriptor;
+        const studentNameEn = req.studentNameEn || finalDescriptor.studentNameEn;
+        if (studentNameEn) {
+          updates[`${basePath}/${studentKey}/nameEn`] = studentNameEn;
+        }
+      }
+      await update(ref(database), updates);
 
       // ── 5) تعليم الرابط المخصص لطالب واحد «مستخدماً» بعد الموافقة فقط
       if (req.linkType === 'single' && req.linkToken) {

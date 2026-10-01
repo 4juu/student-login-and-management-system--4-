@@ -4,9 +4,7 @@ import type { AccuracyReport } from '../../services/faceAI/accuracy';
 import type { CalibrationReport, MatchProfile } from '../../services/faceAI/gallery';
 
 interface FaceHealth {
-  v6Count: number;
-  legacyCount: number;
-  matureCount: number;
+  v5Count: number;
   noFaceCount: number;
   total: number;
 }
@@ -69,18 +67,10 @@ export const FaceHealthPanel: React.FC<FaceHealthPanelProps> = ({
         </span>
       </h3>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3">
         <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
-          <div className="text-2xl font-bold text-emerald-300">{health.v6Count}</div>
-          <div className="text-xs text-emerald-400">بصمة v6 (مُحاذاة)</div>
-        </div>
-        <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
-          <div className="text-2xl font-bold text-purple-300">{health.matureCount}</div>
-          <div className="text-xs text-purple-400">ناضجة (≥80%)</div>
-        </div>
-        <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
-          <div className="text-2xl font-bold text-amber-300">{health.legacyCount}</div>
-          <div className="text-xs text-amber-400">قديمة (v5) — أعد التسجيل</div>
+          <div className="text-2xl font-bold text-emerald-300">{health.v5Count}</div>
+          <div className="text-xs text-emerald-400">بصمات v5 مسجلة</div>
         </div>
         <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
           <div className="text-2xl font-bold text-slate-500">{health.noFaceCount}</div>
@@ -147,9 +137,7 @@ export const FaceHealthPanel: React.FC<FaceHealthPanelProps> = ({
                     <div key={w.id} className="flex items-center justify-between text-[11px] text-slate-300">
                       <span className="truncate">{w.name}</span>
                       <span className="text-amber-300 font-mono shrink-0" dir="ltr">
-                        {w.twinDistance !== undefined
-                          ? `رفض ${(w.rejectRate * 100).toFixed(0)}٪ · توأم بمسافة ${w.twinDistance.toFixed(2)}`
-                          : `رفض ${(w.rejectRate * 100).toFixed(0)}٪ · تشتّت ${w.avgDistance.toFixed(2)}`}
+                        رفض {(w.rejectRate * 100).toFixed(0)}% · d={w.avgDistance.toFixed(2)}
                       </span>
                     </div>
                   ))}
@@ -163,10 +151,7 @@ export const FaceHealthPanel: React.FC<FaceHealthPanelProps> = ({
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-2.5">
               <p className="text-xs font-bold text-red-300 mb-1.5 flex items-center gap-1.5">
                 <TriangleAlert className="w-4 h-4 shrink-0" />
-                {report.dangerPairs.length} زوج متداخل — بصمتاهما متشابكتان وقد يختلط حضورهما
-              </p>
-              <p className="text-[10px] text-red-200/80 mb-2 leading-relaxed">
-                الحل: أعد تسجيل كليهما عبر رابط التسجيل بإضاءة أو زاوية مختلفة — لن يُسجَّل أي منهما حضوره بأمان حتى يتمايزا.
+                {report.dangerPairs.length} زوج طالبين متعارضين — بصمتاهما متشابكتان وقد يختلط حضورهما
               </p>
               <div className="space-y-1.5">
                 {report.dangerPairs.slice(0, 8).map(p => (
@@ -206,17 +191,8 @@ export const FaceHealthPanel: React.FC<FaceHealthPanelProps> = ({
         </div>
       )}
 
-      {health.legacyCount > 0 && (
-        <div className="mb-3 bg-gradient-to-r from-orange-500/10 to-amber-500/10 border border-orange-500/30 rounded-lg p-3 flex items-start gap-2">
-          <TriangleAlert className="w-4 h-4 shrink-0 mt-0.5 text-orange-400" />
-          <div className="flex-1 text-xs text-slate-300">
-            <strong className="text-orange-300">{health.legacyCount} طالب</strong> بصمتهم قديمة (v5 غير مُحاذاة) ولن يُعرَفوا في الحضور — أعد تسجيلهم عبر «إرسال روابط التسجيل» من القائمة الرئيسية لتحصل على بصمة v6 مُحاذاة.
-          </div>
-        </div>
-      )}
-
       <p className="text-xs text-purple-300 mb-3 bg-white/5 p-2 rounded flex items-start gap-1">
-        <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" /> <strong>كيف يعمل؟</strong> اختر الطلاب واضغط زر الإضافة — يلتقط الطالب 10 عينات يدوياً بزوايا وإضاءات مختلفة (يقترح عليك النظام كل زاوية)، ثم يُسجّل حضوره بمجرد المرور أمام الكاميرا. تنوّع العينات مهم: العينات المتشابهة تُضعف التعرّف.
+        <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" /> <strong>كيف يعمل؟</strong> اختر الطلاب واضغط زر الإضافة — يلتقط الطالب 7 عينات يدوياً بزوايا وإضاءات مختلفة (يقترح عليك النظام كل زاوية)، ثم يُسجّل حضوره بمجرد المرور أمام الكاميرا. تنوّع العينات مهم: العينات المتشابهة تُضعف التعرّف.
       </p>
 
       <button

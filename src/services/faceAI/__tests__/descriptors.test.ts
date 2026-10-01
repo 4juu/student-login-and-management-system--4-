@@ -5,13 +5,10 @@ import {
   MATCH_STRICT,
   MATCH_LOOSE,
   MIN_MARGIN,
-  MAX_CLUSTERS,
-  MAX_MERGES_PER_CLUSTER,
-  MIN_CLUSTER_QUALITY,
   parseOneSample,
   isGalleryDescriptor,
   hasValidDescriptor,
-  migrateToV6,
+  migrateToV5,
   parseAllSamples,
   parseStoredDescriptor,
   parseGallerySamples,
@@ -21,18 +18,7 @@ import {
   findBestMatch,
   checkForTampering,
   checkPendingConflict,
-  updateGallery,
-  getCoveragePercent,
-  getMissingBins,
   getGalleryHealthSummary,
-  pruneStaleClusters,
-  bootstrapClusters,
-  minDistanceToOthers,
-  isFarFromAllOthers,
-  computeCentroid,
-  isAlignedDescriptor,
-  ENROLL_SEPARATION_MIN,
-  AUTO_LEARN_SEPARATION_MIN,
   type FaceGalleryDescriptor,
   type PendingFaceRecord,
 } from '../descriptors';
@@ -50,17 +36,6 @@ function makeVec(seed: number, dim = DESC_DIM): Float32Array {
   return f;
 }
 
-/** same base vector with a tiny perturbation → distance well under MAX_NEW_CLUSTER_DISTANCE */
-function perturb(v: Float32Array, amount = 0.02): Float32Array {
-  const out = new Float32Array(v);
-  out[0] = out[0]! + amount;
-  let norm = 0;
-  for (let i = 0; i < out.length; i++) norm += out[i]! * out[i]!;
-  norm = Math.sqrt(norm) || 1;
-  for (let i = 0; i < out.length; i++) out[i] = out[i]! / norm;
-  return out;
-}
-
 function vecToArr(f: Float32Array): number[] {
   return Array.from(f);
 }
@@ -73,24 +48,12 @@ function makeGallery(seeds: number[] = [1]): FaceGalleryDescriptor {
   };
 }
 
-function makeGalleryFromVecs(vecs: Float32Array[]): FaceGalleryDescriptor {
-  return {
-    version: DESC_VERSION_GALLERY,
-    enrollment: vecs.map(v => Array.from(v)),
-    clusters: [],
-  };
-}
-
 describe('constants', () => {
   it('has expected values', () => {
     expect(DESC_DIM).toBe(512);
-    expect(DESC_VERSION_GALLERY).toBe(6);
-    expect(MAX_CLUSTERS).toBe(18);
-    expect(MAX_MERGES_PER_CLUSTER).toBe(12);
+    expect(DESC_VERSION_GALLERY).toBe(5);
     expect(MATCH_STRICT).toBeLessThan(MATCH_LOOSE);
     expect(MIN_MARGIN).toBeGreaterThan(0);
-    expect(MIN_CLUSTER_QUALITY).toBeGreaterThan(0);
-    expect(MIN_CLUSTER_QUALITY).toBeLessThan(1);
   });
 });
 
@@ -165,33 +128,67 @@ describe('hasValidDescriptor', () => {
   });
 });
 
-describe('migrateToV6', () => {
-  it('passes through valid v6 descriptor (normalized)', () => {
-    const result = migrateToV6(makeGallery([1]));
+describe('migrateToV5', () => {
+  it('passes through valid v5 descriptor (normalized)', () => {
+    const result = migrateToV5(makeGallery([1]));
     expect(result).not.toBeNull();
-    expect(result!.version).toBe(6);
+    expect(result!.version).toBe(5);
     expect(result!.enrollment.length).toBe(1);
   });
 
+  it('preserves all seven separate samples and English name through request/approval migration', () => {
+    const seven = makeGallery([1, 2, 3, 4, 5, 6, 7]);
+    seven.studentNameEn = 'Noor Al-Huda Salim';
+    seven.enrollmentAngles = ['front', 'right', 'left', 'up', 'down', 'close', 'far'];
+
+    const migrated = migrateToV5(seven);
+
+    expect(migrated?.version).toBe(DESC_VERSION_GALLERY);
+    expect(migrated?.enrollment).toHaveLength(7);
+    expect(migrated?.enrollment.every(sample => sample.length === DESC_DIM)).toBe(true);
+    expect(new Set(migrated?.enrollment.map(sample => JSON.stringify(sample))).size).toBe(7);
+    expect(migrated?.studentNameEn).toBe('Noor Al-Huda Salim');
+    expect(migrated?.enrollmentAngles).toEqual(seven.enrollmentAngles);
+  });
+
+  it('drops legacy clusters when normalizing a v5 descriptor', () => {
+    const legacy = makeGallery([1, 2, 3, 4, 5, 6, 7]);
+    legacy.clusters = [{
+      bin: 'legacy',
+      vector: vecToArr(makeVec(90)),
+      mergeCount: 8,
+      quality: 0.9,
+      updatedAt: Date.now(),
+    }];
+
+    expect(migrateToV5(legacy)?.clusters).toBeUndefined();
+  });
+
+  it('normalizes legacy enrollment collections to no more than seven samples', () => {
+    const oldTenSampleDescriptor = makeGallery([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+
+    const migrated = migrateToV5(oldTenSampleDescriptor);
+
+    expect(migrated?.enrollment).toHaveLength(7);
+    expect(migrated?.samples).toBe(7);
+    expect(parseGallerySamples(oldTenSampleDescriptor)).toHaveLength(7);
+  });
+
   it('returns null for legacy flat array format', () => {
-    expect(migrateToV6(new Array(DESC_DIM).fill(0.1))).toBeNull();
+    expect(migrateToV5(new Array(DESC_DIM).fill(0.1))).toBeNull();
   });
 
   it('returns null for legacy {descriptor} format', () => {
-    expect(migrateToV6({ descriptor: [1, 2, 3] })).toBeNull();
+    expect(migrateToV5({ descriptor: [1, 2, 3] })).toBeNull();
   });
 
   it('returns null for null/undefined', () => {
-    expect(migrateToV6(null)).toBeNull();
-    expect(migrateToV6(undefined)).toBeNull();
+    expect(migrateToV5(null)).toBeNull();
+    expect(migrateToV5(undefined)).toBeNull();
   });
 
   it('returns null when no valid enrollment samples', () => {
-    expect(migrateToV6({ version: 6, enrollment: [], clusters: [] })).toBeNull();
-  });
-
-  it('returns null for v5 (unaligned) — cannot migrate to aligned v6', () => {
-    expect(migrateToV6({ version: 5, enrollment: [Array.from(makeVec(1))], clusters: [] })).toBeNull();
+    expect(migrateToV5({ version: 5, enrollment: [], clusters: [] })).toBeNull();
   });
 });
 
@@ -207,12 +204,13 @@ describe('parseAllSamples / parseStoredDescriptor / parseGallerySamples', () => 
     expect(samples.length).toBe(2);
   });
 
-  it('includes cluster vectors in gallery samples', () => {
+  it('ignores legacy cluster vectors and returns only the original enrollment samples', () => {
     const fd = makeGallery([1]);
     fd.clusters = [
       { bin: '0_0', vector: vecToArr(makeVec(50)), mergeCount: 1, quality: 0.9, updatedAt: Date.now() },
     ];
-    expect(parseGallerySamples(fd).length).toBe(2);
+    expect(parseGallerySamples(fd).length).toBe(1);
+    expect(parseAllSamples(fd).length).toBe(1);
   });
 
   it('parseStoredDescriptor returns first valid sample', () => {
@@ -334,102 +332,8 @@ describe('checkForTampering', () => {
   });
 });
 
-describe('updateGallery', () => {
-  it('rejects low-quality sample', () => {
-    const g = makeGallery([1]);
-    const r = updateGallery(g, makeVec(2), MIN_CLUSTER_QUALITY - 0.1, '0_0');
-    expect(r.action).toBe('rejected');
-    expect(r.gallery).toBe(g);
-  });
-
-  it('creates a new cluster for empty gallery', () => {
-    const g = makeGallery([1]);
-    const r = updateGallery(g, perturb(makeVec(1)), 0.9, '0_0');
-    expect(r.action).toBe('created');
-    expect(r.gallery.clusters.length).toBe(1);
-    expect(r.bin).toBe('0_0');
-  });
-
-  it('merges into existing same-bin cluster', () => {
-    const g = makeGallery([1]);
-    const first = updateGallery(g, perturb(makeVec(1)), 0.9, '0_0');
-    expect(first.action).toBe('created');
-    const second = updateGallery(first.gallery, perturb(makeVec(1), 0.03), 0.9, '0_0');
-    expect(second.action).toBe('merged');
-    expect(second.gallery.clusters[0]!.mergeCount).toBe(2);
-  });
-
-  it('rejects sample too far from existing gallery (MAX_NEW_CLUSTER_DISTANCE)', () => {
-    const g = makeGallery([1]);
-    const r = updateGallery(g, makeVec(300), 0.9, '0_0');
-    expect(r.action).toBe('rejected');
-  });
-
-  it('skips mature cluster when allowMatureMerge is false', () => {
-    let g = makeGallery([1]);
-    // build up mergeCount to max using close samples
-    for (let i = 0; i < MAX_MERGES_PER_CLUSTER; i++) {
-      const r = updateGallery(g, perturb(makeVec(1), 0.02 + i * 0.001), 0.9, '0_0');
-      if (r.action === 'rejected' || r.action === 'skipped_mature') break;
-      g = r.gallery;
-    }
-    expect(g.clusters[0]!.mergeCount).toBeGreaterThanOrEqual(MAX_MERGES_PER_CLUSTER);
-    const r = updateGallery(g, perturb(makeVec(1), 0.05), 0.9, '0_0', false);
-    expect(r.action).toBe('skipped_mature');
-  });
-
-  it('allows merge on mature cluster when allowMatureMerge=true', () => {
-    let g = makeGallery([1]);
-    for (let i = 0; i < MAX_MERGES_PER_CLUSTER; i++) {
-      const r = updateGallery(g, perturb(makeVec(1), 0.02 + i * 0.001), 0.9, '0_0');
-      if (r.action === 'rejected' || r.action === 'skipped_mature') break;
-      g = r.gallery;
-    }
-    expect(g.clusters[0]!.mergeCount).toBeGreaterThanOrEqual(MAX_MERGES_PER_CLUSTER);
-    const r = updateGallery(g, perturb(makeVec(1), 0.05), 0.9, '0_0', true);
-    expect(r.action).toBe('merged');
-    expect(r.gallery.clusters[0]!.mergeCount).toBeLessThanOrEqual(MAX_MERGES_PER_CLUSTER);
-  });
-});
-
-describe('getCoveragePercent', () => {
-  it('returns 0 for invalid descriptor', () => {
-    expect(getCoveragePercent(null)).toBe(0);
-  });
-
-  it('returns percentage based on cluster count', () => {
-    const g = makeGallery([1]);
-    const empty = getCoveragePercent(g);
-    expect(empty).toBe(0);
-
-    g.clusters = Array.from({ length: 9 }, (_, i) => ({
-      bin: `b${i}`,
-      vector: vecToArr(makeVec(i + 10)),
-      mergeCount: 1,
-      quality: 0.8,
-      updatedAt: Date.now(),
-    }));
-    const pct = getCoveragePercent(g);
-    expect(pct).toBe(50); // 9/18
-  });
-});
-
-describe('getMissingBins', () => {
-  it('returns all bins when no clusters', () => {
-    const missing = getMissingBins(makeGallery([1]));
-    expect(missing.length).toBeGreaterThan(0);
-  });
-
-  it('removes covered bins', () => {
-    const g = makeGallery([1]);
-    g.clusters = [{ bin: '0_0', vector: vecToArr(makeVec(2)), mergeCount: 1, quality: 0.8, updatedAt: Date.now() }];
-    const missing = getMissingBins(g);
-    expect(missing).not.toContain('0_0');
-  });
-});
-
 describe('getGalleryHealthSummary', () => {
-  it('counts valid, mature, and missing descriptors', () => {
+  it('counts registered and missing descriptors without cluster maturity', () => {
     const valid = makeGallery([1]);
     const summary = getGalleryHealthSummary([
       { faceDescriptor: valid },
@@ -437,45 +341,8 @@ describe('getGalleryHealthSummary', () => {
       {},
     ]);
     expect(summary.total).toBe(3);
-    expect(summary.v6Count).toBe(1);
+    expect(summary.v5Count).toBe(1);
     expect(summary.noFaceCount).toBe(2);
-    expect(summary.matureCount).toBe(0); // 0 clusters → 0% coverage
-  });
-});
-
-describe('pruneStaleClusters', () => {
-  it('keeps fresh clusters', () => {
-    const g = makeGallery([1]);
-    g.clusters = [{ bin: 'a', vector: vecToArr(makeVec(2)), mergeCount: 1, quality: 0.8, updatedAt: Date.now() }];
-    const r = pruneStaleClusters(g);
-    expect(r.clusters.length).toBe(1);
-    expect(r).toBe(g); // same reference when nothing pruned
-  });
-
-  it('removes very old low-merge clusters', () => {
-    const g = makeGallery([1]);
-    g.clusters = [{
-      bin: 'old',
-      vector: vecToArr(makeVec(2)),
-      mergeCount: 1,
-      quality: 0.8,
-      updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 200, // 200 days > 120
-    }];
-    const r = pruneStaleClusters(g);
-    expect(r.clusters.length).toBe(0);
-  });
-
-  it('keeps old clusters with high mergeCount (well-learned)', () => {
-    const g = makeGallery([1]);
-    g.clusters = [{
-      bin: 'old-mature',
-      vector: vecToArr(makeVec(2)),
-      mergeCount: 6,
-      quality: 0.9,
-      updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 200,
-    }];
-    const r = pruneStaleClusters(g);
-    expect(r.clusters.length).toBe(1);
   });
 });
 
@@ -542,79 +409,5 @@ describe('checkPendingConflict', () => {
     const r = checkPendingConflict([sample], rec, { selfId: 'me', stageId });
     expect(r.conflict).toBe(true);
     expect(r.matchedWith).toBe('علي حسن');
-  });
-});
-
-describe('فصل البصمات — منع التداخل', () => {
-  it('isAlignedDescriptor: v6 فقط مُحاذاة، v5 ليست كذلك', () => {
-    expect(isAlignedDescriptor(makeGallery([1]))).toBe(true);
-    expect(isAlignedDescriptor({ version: 5, enrollment: [Array.from(makeVec(1))], clusters: [] })).toBe(false);
-  });
-
-  it('minDistanceToOthers: يكشف أقرب طالب ومسافته', () => {
-    const base = makeVec(1);
-    const a = makeGalleryFromVecs([base]);
-    const b = makeGalleryFromVecs([perturb(base, 0.02)]); // قريبة جداً من a
-    const c = makeGalleryFromVecs([makeVec(120)]);          // بعيدة
-    const r = minDistanceToOthers(a, [
-      { id: 'b', name: 'ب', faceDescriptor: b },
-      { id: 'c', name: 'ج', faceDescriptor: c },
-    ], 'a');
-    expect(r.closestId).toBe('b');
-    expect(r.minDistance).toBeLessThan(ENROLL_SEPARATION_MIN);
-  });
-
-  it('minDistanceToOthers: Infinity عندما لا يوجد طلاب آخرون', () => {
-    const r = minDistanceToOthers(makeGallery([1]), [], 'a');
-    expect(r.minDistance).toBe(Infinity);
-  });
-
-  it('isFarFromAllOthers: يرفض عيّنة قريبة من طالب آخر', () => {
-    const base = makeVec(1);
-    const b = makeGalleryFromVecs([base]);
-    const sample = perturb(base, 0.02); // قريبة من b
-    const r = isFarFromAllOthers(sample, [{ id: 'b', name: 'ب', faceDescriptor: b }], 'a', AUTO_LEARN_SEPARATION_MIN);
-    expect(r.ok).toBe(false);
-    expect(r.closestId).toBe('b');
-  });
-
-  it('isFarFromAllOthers: يقبل عيّنة بعيدة عن الجميع', () => {
-    const b = makeGalleryFromVecs([makeVec(120)]);
-    const sample = makeVec(1);
-    const r = isFarFromAllOthers(sample, [{ id: 'b', name: 'ب', faceDescriptor: b }], 'a', AUTO_LEARN_SEPARATION_MIN);
-    expect(r.ok).toBe(true);
-  });
-
-  it('bootstrapClusters: يستخدم الخانات الحقيقية لا e0..e4', () => {
-    const samples = [makeVec(1), makeVec(1.01), makeVec(60)];
-    const bins = ['0_0', '0_0', '30_0'];
-    const clusters = bootstrapClusters(samples, bins, 0.8);
-    const binSet = new Set(clusters.map(c => c.bin));
-    expect(binSet.has('0_0')).toBe(true);
-    expect(binSet.has('30_0')).toBe(true);
-    expect([...binSet].some(b => b.startsWith('e'))).toBe(false);
-  });
-
-  it('قيد المرساة: updateGallery يرفض عيّنة بعيدة عن مرساة التسجيل', () => {
-    const g = makeGallery([1, 1.01, 1.02]); // مرساة قريبة من makeVec(1)
-    const far = makeVec(120); // بعيدة جداً عن المرساة
-    const r = updateGallery(g, far, 0.9, '0_0');
-    expect(r.action).toBe('rejected');
-  });
-
-  it('قيد المرساة: updateGallery يقبل عيّنة قريبة من المرساة', () => {
-    const base = makeVec(1);
-    const g = makeGalleryFromVecs([base, perturb(base, 0.01), perturb(base, 0.02)]);
-    const near = perturb(base, 0.03); // قريبة من المرساة
-    const r = updateGallery(g, near, 0.9, '0_0');
-    expect(r.action === 'merged' || r.action === 'created').toBe(true);
-  });
-
-  it('computeCentroid: يعيد متجهاً مطبّعاً', () => {
-    const c = computeCentroid(makeGallery([1, 2]));
-    expect(c).not.toBeNull();
-    let norm = 0;
-    for (let i = 0; i < c!.length; i++) norm += c![i]! * c![i]!;
-    expect(Math.sqrt(norm)).toBeCloseTo(1, 5);
   });
 });
