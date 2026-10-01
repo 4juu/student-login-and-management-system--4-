@@ -18,7 +18,7 @@ import {
   MIN_RECOG_CONFIDENCE,
   requiredConfirmFrames,
 } from '../../services/faceAI/descriptors';
-import { buildGallery, findBestMatchIndexed } from '../../services/faceAI/gallery';
+import { buildGallery, findBestMatchConsensus } from '../../services/faceAI/gallery';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface FaceScannerProps {
@@ -450,13 +450,15 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               const raw = new Float32Array(res.descriptor);
               const smoothed = trackerRef.current.addEmbedding(trackId, raw, nowTs);
 
-              const match = findBestMatchIndexed(
-                trackerRef.current.getQueries(trackId, smoothed),
+              // مطابقة إجماعية: إطاران مستقلان لازم يتفقا على نفس الطالب قبل تسجيل الحضور
+              const queries = trackerRef.current.getQueries(trackId);
+              const match = findBestMatchConsensus(
+                queries.length ? queries : [smoothed],
                 galleryRef.current, MATCH_LOOSE, res.quality.composite,
               );
               trackerRef.current.setCache(
                 trackId, match?.item.id ?? null, match?.confidence ?? 0,
-                match?.distance ?? 1, match?.margin ?? 1,
+                match?.distance ?? 1, match?.margin ?? 1, match?.supportedSamples ?? 1,
               );
 
               const vbw = res.box.width / scale, vbh = res.box.height / scale;
@@ -481,7 +483,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               }
 
               const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id);
-              const requiredFrames = requiredConfirmFrames(match.distance, match.margin);
+              const requiredFrames = requiredConfirmFrames(match.distance, match.margin, match.supportedSamples);
 
               if (confirmCount < requiredFrames) {
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
@@ -529,7 +531,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
 
               // ⚡ الإطار الثاني المجاني: bumpConfirm على الكاش → تأكيد فوري بدون انتظار re-embed
               const confirmCount = trackerRef.current.bumpConfirm(t.trackId, student.id);
-              const requiredFrames = requiredConfirmFrames(cache.cachedDistance, cache.cachedMargin);
+              const requiredFrames = requiredConfirmFrames(cache.cachedDistance, cache.cachedMargin, cache.cachedSupported);
 
               if (confirmCount >= requiredFrames) {
                 // ✅ تأكيد كامل — نُسجّل الحضور فوراً (نفس الثانية)

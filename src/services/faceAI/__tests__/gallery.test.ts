@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildGallery, findBestMatchIndexed } from '../gallery';
+import { buildGallery, findBestMatchIndexed, findBestMatchConsensus } from '../gallery';
 import { DESC_DIM, MATCH_LOOSE, MATCH_STRICT, descriptorDistance, l2Normalize } from '../descriptors';
 
 /** متجهات شبه عشوائية مستقلة تماماً لكل seed (mulberry32) */
@@ -188,5 +188,58 @@ describe('findBestMatchIndexed', () => {
       { id: 'b', faceDescriptor: { version: 5, enrollment: [arr(b2)] } },
     ]);
     expect(findBestMatchIndexed(x, weakGallery, MATCH_LOOSE)).toBeNull();
+  });
+});
+
+describe('findBestMatchConsensus — إجماع إطارين مستقلين (ضد الخلط)', () => {
+  // عيّنات متمركزة حول وجه واحد (كالتسجيل الحقيقي) بدل متجهات متناثرة
+  function personEnrollment(seed: number): number[][] {
+    const base = makeVec(seed);
+    return Array.from({ length: 7 }, (_, i) => arr(blend(base, orthogonalTo(base, seed + 500 + i), 0.5 + i * 0.1)));
+  }
+  const enrollA = personEnrollment(80);
+  const enrollB = personEnrollment(90);
+  const roster = [
+    { id: 'a', faceDescriptor: { version: 5, enrollment: enrollA } },
+    { id: 'b', faceDescriptor: { version: 5, enrollment: enrollB } },
+  ];
+  const frameA1 = makeVec(80);
+  const frameA2 = Float32Array.from(enrollA[3]!);
+  const frameB1 = makeVec(90);
+  const far = makeVec(12345); // وضعية لا تطابق أحداً
+
+  it('rejects a single lucky frame (إطار واحد لا يكفي)', () => {
+    const g = buildGallery(roster);
+    expect(findBestMatchConsensus([far, frameA1], g, MATCH_LOOSE)).toBeNull();
+  });
+
+  it('accepts when two independent frames agree on the same student', () => {
+    const g = buildGallery(roster);
+    const m = findBestMatchConsensus([far, frameA1, frameA2], g, MATCH_LOOSE);
+    expect(m).not.toBeNull();
+    expect(m!.item.id).toBe('a');
+    expect(m!.agreement).toBe(2);
+    expect(m!.supportedSamples).toBeGreaterThanOrEqual(2);
+  });
+
+  it('rejects when two students each get only one frame (لا أغلبية)', () => {
+    const g = buildGallery(roster);
+    expect(findBestMatchConsensus([frameA1, frameB1], g, MATCH_LOOSE)).toBeNull();
+  });
+
+  it('picks the student backed by more frames', () => {
+    const g = buildGallery(roster);
+    const m = findBestMatchConsensus([frameB1, frameA1, frameA2], g, MATCH_LOOSE);
+    expect(m!.item.id).toBe('a');
+    expect(m!.agreement).toBe(2);
+  });
+
+  it('accepts a lone frame provisionally at track start (يحقمه عدّاد التأكيد)', () => {
+    const g = buildGallery(roster);
+    expect(findBestMatchConsensus([frameA1], g, MATCH_LOOSE)).not.toBeNull();
+  });
+
+  it('returns null for an empty query list', () => {
+    expect(findBestMatchConsensus([], buildGallery(roster), MATCH_LOOSE)).toBeNull();
   });
 });

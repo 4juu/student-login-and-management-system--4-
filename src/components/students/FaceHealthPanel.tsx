@@ -1,5 +1,7 @@
-import React from 'react';
-import { Lightbulb, ScanFace, Smile, TriangleAlert, Zap } from 'lucide-react';
+import React, { useState } from 'react';
+import { Lightbulb, ScanFace, ShieldAlert, Smile, TriangleAlert, Zap } from 'lucide-react';
+import type { Student } from '../../types/student';
+import { findSuspiciousPairs } from '../../services/faceAI/descriptors';
 
 interface FaceHealth {
   v5Count: number;
@@ -16,7 +18,11 @@ interface FaceHealthPanelProps {
   canEnroll: boolean;
   onReEnrollNoFace: () => void;
   onOpenEnroll: () => void;
+  /** للفحص التعارضي: كل الطلاب مع بصماتهم (اختياري) */
+  students?: Student[];
 }
+
+type Conflict = { a: string; b: string; distance: number };
 
 export const FaceHealthPanel: React.FC<FaceHealthPanelProps> = ({
   variant,
@@ -26,7 +32,24 @@ export const FaceHealthPanel: React.FC<FaceHealthPanelProps> = ({
   canEnroll,
   onReEnrollNoFace,
   onOpenEnroll,
+  students,
 }) => {
+  const [conflicts, setConflicts] = useState<Conflict[] | null>(null);
+  const [scanning, setScanning] = useState(false);
+
+  const runConflictScan = () => {
+    setScanning(true);
+    // إخراج الحساب من خيط الرسم حتى لا يتجمّد الواجهة (O(ن²×49) مسافات)
+    window.setTimeout(() => {
+      try {
+        const roster = (students ?? []).map(s => ({ id: s.id, name: s.name, faceDescriptor: s.faceDescriptor }));
+        setConflicts(findSuspiciousPairs(roster));
+      } finally {
+        setScanning(false);
+      }
+    }, 30);
+  };
+
   if (variant === 'banner') {
     if (!(studentsCount > 0 && studentsWithoutFace > 0)) return null;
     return (
@@ -87,6 +110,45 @@ export const FaceHealthPanel: React.FC<FaceHealthPanelProps> = ({
       <p className="text-xs text-purple-300 mb-3 bg-white/5 p-2 rounded flex items-start gap-1">
         <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" /> <strong>كيف يعمل؟</strong> لكل طالب رابط تسجيل خاص — الكاميرا تلتقط 7 زوايا (أمام، يمين، يسار، فوق، تحت، اقترب، ابتعد) وتُحفظ كسبع عينات مستقلة بلا دمج، ثم يتعرف النظام عليه فور ظهور وجهه.
       </p>
+
+      {/* فحص تعارض البصمات — يكشف طالبين ببصمات متقاربة (خطر الخلط) */}
+      {students && students.length > 1 && (
+        <div className="mb-3 bg-white/5 border border-white/10 rounded-lg p-3">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <p className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <ShieldAlert className="w-4 h-4 text-rose-400" /> فحص تعارض البصمات
+            </p>
+            <button
+              type="button"
+              onClick={runConflictScan}
+              disabled={scanning}
+              className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25 disabled:opacity-50 transition"
+            >
+              {scanning ? 'جارٍ الفحص…' : conflicts !== null ? 'إعادة الفحص' : 'ابدأ الفحص'}
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-400 mb-2">
+            يقارن عينات كل طالب السبع بعينات بقية الطلاب — أي تقارب يدل على وجهين متشابهين ويستحق إعادة التسجيل.
+          </p>
+          {conflicts !== null && (
+            conflicts.length === 0 ? (
+              <p className="text-[11px] text-emerald-300 font-bold">✓ لا توجد تعارضات — كل البصمات متميزة عن بعضها.</p>
+            ) : (
+              <ul className="space-y-1">
+                {conflicts.slice(0, 8).map((c, i) => (
+                  <li key={i} className="text-[11px] text-rose-200 bg-rose-500/10 border border-rose-500/20 rounded px-2 py-1 flex justify-between gap-2">
+                    <span className="truncate">{c.a} ↔ {c.b}</span>
+                    <span className="font-mono font-bold shrink-0">{c.distance}</span>
+                  </li>
+                ))}
+                {conflicts.length > 8 && (
+                  <li className="text-[11px] text-slate-400">… و{conflicts.length - 8} تعارض أخرى</li>
+                )}
+              </ul>
+            )
+          )}
+        </div>
+      )}
 
       <button
         onClick={onOpenEnroll}

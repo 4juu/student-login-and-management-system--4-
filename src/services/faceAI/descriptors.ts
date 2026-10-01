@@ -30,8 +30,13 @@ export const CONFIRM_MODERATE = 0.28;    // مسافة ≤ 0.28 → 5 فريما
 export const CONFIRM_AMBIGUOUS_MARGIN = 0.15; // هامش ضيّق بين أولي المرشّحين → 8 فريمات
 export const CONFIRM_FRAMES_MAX = 8;
 
-/** عدد فريمات التأكيد المطلوبة لمسافة وهامش معيّنين */
-export function requiredConfirmFrames(distance: number, margin: number): number {
+/**
+ * عدد فريمات التأكيد المطلوبة — دليل أقوى ⇒ تأكيد أسرع، ودليل أضعف ⇒ تدقيق أطول.
+ * @param supportedSamples زوايا التسجيل الداعمة من الإطار الفائز (من السبع)؛
+ *        زاوية واحدة فقط = دليل ضعيف (أو طالب بعيّنة قليلة) ⇒ أقصى تدقيق 8 فريمات.
+ */
+export function requiredConfirmFrames(distance: number, margin: number, supportedSamples = 2): number {
+  if (supportedSamples < 2) return CONFIRM_FRAMES_MAX;
   if (margin < CONFIRM_AMBIGUOUS_MARGIN) return CONFIRM_FRAMES_MAX;
   if (distance <= CONFIRM_STRONG) return 3;
   if (distance <= CONFIRM_MODERATE) return 5;

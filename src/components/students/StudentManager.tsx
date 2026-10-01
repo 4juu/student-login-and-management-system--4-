@@ -623,6 +623,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
         canEnroll={!!onUpdateStudent}
         onReEnrollNoFace={reEnrollNoFace}
         onOpenEnroll={() => openFaceEnroll()}
+        students={students}
       />
 
       <StudentForm
@@ -668,6 +669,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
         canEnroll={!!onUpdateStudent}
         onReEnrollNoFace={reEnrollNoFace}
         onOpenEnroll={() => openFaceEnroll()}
+        students={students}
       />
 
       <SortFilterPanel

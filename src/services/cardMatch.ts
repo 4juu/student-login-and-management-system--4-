@@ -224,9 +224,43 @@ export function rankByNameInput(typed: string, roster: Student[]): StudentMatch[
 
 /**
  * التحقق من اسم مكتوب يدوياً ضد اسم صاحب الرابط — روابط «بصمة كود»
- * الاسم المكتوب يجب أن يطابق (بعتبة MATCH_THRESHOLD) اسم الطالب المضمّن في الرابط
- * + بوابة العائلة: أسماء تتشابه في الأولى وتختلف بالآخر (علي/عيسى/جواد) تُرفض
+ *
+ * قاعدة صارمة: الطالب **لازم يكتب اسمه كاملًا كما هو في النظام** —
+ * 1) عدد الكلمات يطابق السجل تماماً (لا نقص ولا زيادة).
+ * 2) كل كلمة من السجل تجد مقابلها في المكتوب (مطابقة ثنائية تتسامح مع ترتيب الكلمات).
+ * 3) ممنوع القصّ: «محم» لا تُقبل مكان «محمد» حتى لو التشابه مرتفع.
+ * 4) التسامح في أشكال الحروف فقط (أ/إ/آ→ا ، ة→ه ، ى→ي) والتشكيل، وأخطاء الإملاء البسيطة داخل الكلمة.
+ * + بوابة العائلة: أسماء تتشابه في الأولى وتختلف بالآخر (علي/عيسى/جواد) تُرفض.
  */
+const WORD_SIM_THRESHOLD = 0.75;
+
+function splitNameWords(name: string): string[] {
+  return splitMergedName(name)
+    .split(/\s+/)
+    .map(w => normalizeArabic(w))
+    .filter(w => w.length >= 2);
+}
+
+/** كل كلمة متوقعة تجد مقابلها غير المستعمل في المكتوب — ومنع القصّ */
+function wordsFullyCovered(typedWords: string[], expectedWords: string[]): boolean {
+  const used = typedWords.map(() => false);
+  for (const ew of expectedWords) {
+    let bestIdx = -1;
+    let bestSim = -1;
+    for (let i = 0; i < typedWords.length; i++) {
+      if (used[i]) continue;
+      const tw = typedWords[i]!;
+      // قصّ كلمة: «محم» داخل «محمد» → نقص في الاسم مرفوض
+      if (ew.startsWith(tw) && tw.length < ew.length) return false;
+      const sim = levenshteinRatio(tw, ew);
+      if (sim > bestSim) { bestSim = sim; bestIdx = i; }
+    }
+    if (bestIdx < 0 || bestSim < WORD_SIM_THRESHOLD) return false;
+    used[bestIdx] = true;
+  }
+  return true;
+}
+
 export function matchesExpectedName(
   typed: string,
   expectedName: string | null | undefined,
@@ -235,6 +269,13 @@ export function matchesExpectedName(
     return { matched: false, score: 0 };
   }
   const score = nameSimilarity(typed.trim(), expectedName.trim());
+
+  const typedWords = splitNameWords(typed);
+  const expectedWords = splitNameWords(expectedName);
+  if (!expectedWords.length || !typedWords.length) return { matched: false, score };
+  if (typedWords.length !== expectedWords.length) return { matched: false, score };
+  if (!wordsFullyCovered(typedWords, expectedWords)) return { matched: false, score };
+
   if (score < MATCH_THRESHOLD) return { matched: false, score };
   if (!hasFamilyWord(expectedName, typed)) return { matched: false, score };
   return { matched: true, score };

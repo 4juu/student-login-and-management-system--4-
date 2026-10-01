@@ -21,6 +21,7 @@ interface Track {
   cachedConfidence: number;
   cachedDistance: number;
   cachedMargin: number;
+  cachedSupported: number;
   confirmCount: number;
   // ── #6: Velocity prediction ──
   velocityX: number;
@@ -133,6 +134,7 @@ export class FaceTracker {
         cachedConfidence: 0,
         cachedDistance: 1,
         cachedMargin: 1,
+        cachedSupported: 1,
         confirmCount: 0,
         velocityX: 0,
         velocityY: 0,
@@ -187,23 +189,24 @@ export class FaceTracker {
   }
 
   /**
-   * إيمبدنجات المسار الأخيرة + النسخة المنعّمة — تُمرَّر كمصفوفة استعلامات
-   * لمطابقة «أفضل إطار»: المتوسط وحده يقع بين زاويتين مختلفتين فيُبعِّد المسافة
-   * ويظهر «غير معروف» حتى يتحرّك الوجه ويجد إطاراً مطابقاً.
+   * آخر الإيمبدنجات **المستقلة** للمسار (إطارات حقيقية متتالية).
+   * هي أساس المطابقة الإجماعية: إثباتان مستقلان على الطالب نفسه بدل إطار واحد محظوظ.
+   * (المتوسط المنعّم ليس دليلاً مستقلاً فلا يدخل هنا.)
    */
-  getQueries(trackId: number, smoothed: Float32Array): Float32Array[] {
+  getQueries(trackId: number): Float32Array[] {
     const t = this.tracks.find(tr => tr.id === trackId);
-    if (!t || t.embeddingBuffer.length === 0) return [smoothed];
-    return [...t.embeddingBuffer, smoothed];
+    if (!t || t.embeddingBuffer.length === 0) return [];
+    return [...t.embeddingBuffer];
   }
 
-  setCache(trackId: number, matchId: string | null, confidence: number, distance = 1, margin = 1) {
+  setCache(trackId: number, matchId: string | null, confidence: number, distance = 1, margin = 1, supported = 1) {
     const t = this.tracks.find(tr => tr.id === trackId);
     if (t) {
       t.cachedMatchId = matchId;
       t.cachedConfidence = confidence;
       t.cachedDistance = distance;
       t.cachedMargin = margin;
+      t.cachedSupported = supported;
     }
   }
 

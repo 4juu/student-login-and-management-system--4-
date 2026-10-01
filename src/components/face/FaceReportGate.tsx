@@ -11,7 +11,7 @@ import {
   MIN_RECOG_CONFIDENCE,
   requiredConfirmFrames,
 } from '../../services/faceAI/descriptors';
-import { buildGallery, findBestMatchIndexed } from '../../services/faceAI/gallery';
+import { buildGallery, findBestMatchConsensus } from '../../services/faceAI/gallery';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { MorphingSquare } from '../MorphingSquare';
 
@@ -279,13 +279,15 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
               if (!res || !embTrack) continue;
               const raw = new Float32Array(res.descriptor);
               const smoothed = trackerRef.current.addEmbedding(embTrack.trackId, raw, nowTs);
-              const match = findBestMatchIndexed(
-                trackerRef.current.getQueries(embTrack.trackId, smoothed),
+              // مطابقة إجماعية: إطاران مستقلان لازم يتفقا على نفس الطالب
+              const queries = trackerRef.current.getQueries(embTrack.trackId);
+              const match = findBestMatchConsensus(
+                queries.length ? queries : [smoothed],
                 galleryRef.current, MATCH_LOOSE, res.quality.composite,
               );
               trackerRef.current.setCache(
                 embTrack.trackId, match?.item.id ?? null, match?.confidence ?? 0,
-                match?.distance ?? 1, match?.margin ?? 1,
+                match?.distance ?? 1, match?.margin ?? 1, match?.supportedSamples ?? 1,
               );
 
               const vbw = res.box.width / scale, vbh = res.box.height / scale;
@@ -303,7 +305,7 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
               sawConfident = true;
 
               const confirmCount = trackerRef.current.bumpConfirm(embTrack.trackId, student.id);
-              const requiredFrames = requiredConfirmFrames(match.distance, match.margin);
+              const requiredFrames = requiredConfirmFrames(match.distance, match.margin, match.supportedSamples);
               if (confirmCount < requiredFrames) {
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
                 continue;
@@ -331,7 +333,7 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
             if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE) {
               sawConfident = true;
               const confirmCount = trackerRef.current.bumpConfirm(t.trackId, student.id);
-              const requiredFrames = requiredConfirmFrames(cache.cachedDistance, cache.cachedMargin);
+              const requiredFrames = requiredConfirmFrames(cache.cachedDistance, cache.cachedMargin, cache.cachedSupported);
               if (confirmCount >= requiredFrames) {
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
                 drawBoxes(liveBoxes);

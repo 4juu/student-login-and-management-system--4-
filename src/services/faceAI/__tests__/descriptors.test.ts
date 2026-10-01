@@ -454,3 +454,20 @@ describe('checkPendingConflict', () => {
     expect(r.matchedWith).toBe('علي حسن');
   });
 });
+
+describe('requiredConfirmFrames — دليل زاوية واحدة = أقصى تدقيق', () => {
+  it('single supported sample forces the maximum even for a strong match', () => {
+    expect(requiredConfirmFrames(0.15, 0.30, 1)).toBe(8);
+    expect(requiredConfirmFrames(0.15, 0.30, 0)).toBe(8);
+  });
+
+  it('two or more supported samples use the normal ladder', () => {
+    expect(requiredConfirmFrames(0.15, 0.30, 2)).toBe(3);
+    expect(requiredConfirmFrames(0.25, 0.30, 7)).toBe(5);
+    expect(requiredConfirmFrames(0.40, 0.30, 7)).toBe(6);
+  });
+
+  it('default (no argument) keeps the previous behaviour', () => {
+    expect(requiredConfirmFrames(0.15, 0.30)).toBe(3);
+  });
+});

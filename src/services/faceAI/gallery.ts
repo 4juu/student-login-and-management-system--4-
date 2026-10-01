@@ -67,51 +67,56 @@ export function buildGallery<T extends { id: string; faceDescriptor?: unknown }>
   return gallery;
 }
 
-/**
- * مطابقة مُحسّنة — تقبل استعلاماً واحداً أو **مصفوفة استعلامات** (آخر إيمبدنجات المسار).
- * تُقارن كل استعلام بكل عيّنة وتأخذ أدنى مسافة ⇒ «أي زاوية من الزوايا الأخيرة تكفي»
- * بدل متوسطها الذي يقع بين الزاويتين ويُبعِّد المسافة.
- */
-export function findBestMatchIndexed(
-  query: Float32Array | Float32Array[],
+/** نتيجة مطابقة إطار واحد مقابل المعرض */
+interface QueryHit {
+  entry: GalleryItem;
+  distance: number;
+  threshold: number;
+  margin: number;
+}
+
+/** مرتخي طفيف: لحساب «الزوايا الداعمة» — زاوية على الحدّ ما زالت دليل تأييد */
+const SUPPORTED_SAMPLE_SLACK = 0.08;
+
+/** عتبة المطابقة لطالب: مكافأة العينات + مكافأة الجودة، مسقوفة بـMAX_MATCH_DISTANCE */
+function itemThreshold(sampleCount: number, baseThreshold: number, queryQuality?: number): number {
+  let sampleBonus = 0;
+  if (sampleCount >= ENROLLMENT_SAMPLE_COUNT) sampleBonus = 0.05;
+  else if (sampleCount >= 3) sampleBonus = 0.03;
+  else if (sampleCount >= 2) sampleBonus = 0.01;
+
+  let qualityBonus = 0;
+  if (queryQuality !== undefined) {
+    if (queryQuality >= 0.72) qualityBonus = 0.03;
+    else if (queryQuality < 0.40) qualityBonus = -0.02;
+    else if (queryQuality < 0.55) qualityBonus = -0.01;
+  }
+  return Math.min(baseThreshold + sampleBonus + qualityBonus, MAX_MATCH_DISTANCE);
+}
+
+/** مطابقة إطار واحد: أقرب عيّنة لكل طالب ثم عتبة + سقف + هامش متكيّف */
+function scoreQuery(
+  query: Float32Array,
   gallery: GalleryItem[],
   baseThreshold: number,
   queryQuality?: number,
-): { item: GalleryItem; distance: number; confidence: number; sampleCount: number; margin: number } | null {
-  const queries = Array.isArray(query) ? query.filter(q => q && q.length > 0) : [query];
-  if (queries.length === 0) return null;
-
-  const perItem: Array<{ item: GalleryItem; distance: number; sampleCount: number; threshold: number }> = [];
+): QueryHit | null {
+  const perItem: Array<{ entry: GalleryItem; distance: number; threshold: number }> = [];
 
   for (const entry of gallery) {
-    if (entry.allSamples.length === 0) break;
+    if (entry.allSamples.length === 0) continue;
 
     let bestForItem = Infinity;
-    outer: for (const q of queries) {
-      for (const ref of entry.allSamples) {
-        const distance = descriptorDistance(q, ref);
-        if (distance < bestForItem) bestForItem = distance;
-        if (bestForItem < 0.15) break outer;
-      }
-    }
-
-    let sampleBonus = 0;
-    if (entry.allSamples.length >= ENROLLMENT_SAMPLE_COUNT) sampleBonus = 0.05;
-    else if (entry.allSamples.length >= 3) sampleBonus = 0.03;
-    else if (entry.allSamples.length >= 2) sampleBonus = 0.01;
-
-    let qualityBonus = 0;
-    if (queryQuality !== undefined) {
-      if (queryQuality >= 0.72) qualityBonus = 0.03;
-      else if (queryQuality < 0.40) qualityBonus = -0.02;
-      else if (queryQuality < 0.55) qualityBonus = -0.01;
+    for (const ref of entry.allSamples) {
+      const distance = descriptorDistance(query, ref);
+      if (distance < bestForItem) bestForItem = distance;
+      if (bestForItem < 0.15) break;
     }
 
     perItem.push({
-      item: entry,
+      entry,
       distance: bestForItem,
-      sampleCount: entry.allSamples.length,
-      threshold: Math.min(baseThreshold + sampleBonus + qualityBonus, MAX_MATCH_DISTANCE),
+      threshold: itemThreshold(entry.allSamples.length, baseThreshold, queryQuality),
     });
   }
 
@@ -128,11 +133,122 @@ export function findBestMatchIndexed(
   const requiredMargin = first.distance <= CONFIRM_MODERATE ? STRONG_MATCH_MARGIN : MIN_MARGIN;
   if (second && margin < requiredMargin) return null;
 
+  return { entry: first.entry, distance: first.distance, threshold: first.threshold, margin };
+}
+
+/** كم زاوية من عينات الطالب السبع يدعمها هذا الإطار؟ — دليل تأييد إضافي */
+function countSupportedSamples(query: Float32Array, hit: QueryHit): number {
+  const bound = Math.min(hit.threshold + SUPPORTED_SAMPLE_SLACK, MAX_MATCH_DISTANCE + SUPPORTED_SAMPLE_SLACK);
+  let count = 0;
+  for (const s of hit.entry.allSamples) {
+    if (descriptorDistance(query, s) <= bound) count++;
+  }
+  return count;
+}
+
+function toQueries(query: Float32Array | Float32Array[]): Float32Array[] {
+  const qs = Array.isArray(query) ? query : [query];
+  return qs.filter(q => q && q.length > 0);
+}
+
+/**
+ * مطابقة مُحسّنة — أفضل إطار من مصفوفة استعلامات (best-of).
+ * تُقارن كل استعلام بكل عيّنة وتأخذ أدنى مسافة ⇒ «أي زاوية من الزوايا الأخيرة تكفي»
+ * بدل متوسطها الذي يقع بين الزاويتين ويُبعِّد المسافة.
+ */
+export function findBestMatchIndexed(
+  query: Float32Array | Float32Array[],
+  gallery: GalleryItem[],
+  baseThreshold: number,
+  queryQuality?: number,
+): { item: GalleryItem; distance: number; confidence: number; sampleCount: number; margin: number } | null {
+  const queries = toQueries(query);
+  if (queries.length === 0) return null;
+
+  let best: QueryHit | null = null;
+  for (const q of queries) {
+    const hit = scoreQuery(q, gallery, baseThreshold, queryQuality);
+    if (hit && (!best || hit.distance < best.distance)) best = hit;
+  }
+  if (!best) return null;
+
   return {
-    item: first.item,
-    distance: first.distance,
-    confidence: Math.round((1 - first.distance) * 100),
-    sampleCount: first.sampleCount,
-    margin: Math.round(margin * 100) / 100,
+    item: best.entry,
+    distance: best.distance,
+    confidence: Math.round((1 - best.distance) * 100),
+    sampleCount: best.entry.allSamples.length,
+    margin: Math.round(best.margin * 100) / 100,
+  };
+}
+
+export interface ConsensusMatch {
+  item: GalleryItem;
+  distance: number;
+  confidence: number;
+  sampleCount: number;
+  margin: number;
+  /** عدد الإطارات المستقلة المتفقة على نفس الطالب */
+  agreement: number;
+  /** عدد الزوايا (عينات التسجيل) التي يدعمها الإطار الفائز */
+  supportedSamples: number;
+}
+
+/**
+ * مطابقة **إجماعية** — الحارس الأقوى ضد الخلط:
+ * يستقبل آخر الإيمبدنجات المستقلة (إطارات حقيقية) ويشترط أن **يتفق إطاران على نفس الطالب**،
+ * فتحصل على دليل من مصدرين مستقلين بدل إطار واحد محظوظ قد يُطابق وجه طالب آخر.
+ * - لو توفر إطار واحد فقط (بداية المسار) يُقبل مؤقتاً ثم يحسمه عدّاد التأكيد.
+ * - `supportedSamples` = الزوايا الداعمة من عينات الطالب (خاصية السبع بصمات المميزة).
+ */
+export function findBestMatchConsensus(
+  queries: Float32Array[],
+  gallery: GalleryItem[],
+  baseThreshold: number,
+  queryQuality?: number,
+  minAgree = 2,
+): ConsensusMatch | null {
+  const qs = toQueries(queries);
+  if (qs.length === 0 || gallery.length === 0) return null;
+  const need = Math.min(minAgree, qs.length);
+
+  const groups = new Map<string, Array<{ query: Float32Array; hit: QueryHit }>>();
+  for (const q of qs) {
+    const hit = scoreQuery(q, gallery, baseThreshold, queryQuality);
+    if (!hit) continue;
+    const id = hit.entry.id;
+    const list = groups.get(id);
+    if (list) list.push({ query: q, hit });
+    else groups.set(id, [{ query: q, hit }]);
+  }
+  if (groups.size === 0) return null;
+
+  let winnerId: string | null = null;
+  let winnerList: Array<{ query: Float32Array; hit: QueryHit }> | null = null;
+  for (const [id, list] of groups) {
+    if (list.length < need) continue;
+    if (!winnerList
+      || list.length > winnerList.length
+      || (list.length === winnerList.length && Math.min(...list.map(l => l.hit.distance)) < Math.min(...winnerList.map(l => l.hit.distance)))) {
+      winnerId = id;
+      winnerList = list;
+    }
+  }
+  if (!winnerId || !winnerList || winnerList.length === 0) return null;
+
+  const firstHit = winnerList[0];
+  if (!firstHit) return null;
+  let best = firstHit;
+  for (const cand of winnerList) {
+    if (cand.hit.distance < best.hit.distance) best = cand;
+  }
+
+  return {
+    item: best.hit.entry,
+    distance: best.hit.distance,
+    confidence: Math.round((1 - best.hit.distance) * 100),
+    sampleCount: best.hit.entry.allSamples.length,
+    margin: Math.round(best.hit.margin * 100) / 100,
+    agreement: winnerList.length,
+    supportedSamples: countSupportedSamples(best.query, best.hit),
   };
 }

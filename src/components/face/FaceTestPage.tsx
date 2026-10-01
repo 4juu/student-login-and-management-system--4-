@@ -18,7 +18,7 @@ import {
   MIN_RECOG_CONFIDENCE,
   requiredConfirmFrames,
 } from '../../services/faceAI/descriptors';
-import { buildGallery, findBestMatchIndexed } from '../../services/faceAI/gallery';
+import { buildGallery, findBestMatchConsensus } from '../../services/faceAI/gallery';
 import { getTestLink, validateTestLink, formatRemainingMs, getServerNow } from '../../services/tokenService';
 import { loadStageStudents } from '../SelfRegister/SelfEnrollPage';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
@@ -320,13 +320,15 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               const raw = new Float32Array(res.descriptor);
               const smoothed = trackerRef.current.addEmbedding(trackId, raw, nowTs);
 
-              const match = findBestMatchIndexed(
-                trackerRef.current.getQueries(trackId, smoothed),
+              // مطابقة إجماعية: إطاران مستقلان لازم يتفقا على نفس الطالب قبل القبول
+              const queries = trackerRef.current.getQueries(trackId);
+              const match = findBestMatchConsensus(
+                queries.length ? queries : [smoothed],
                 galleryRef.current, MATCH_LOOSE, res.quality.composite,
               );
               trackerRef.current.setCache(
                 trackId, match?.item.id ?? null, match?.confidence ?? 0,
-                match?.distance ?? 1, match?.margin ?? 1,
+                match?.distance ?? 1, match?.margin ?? 1, match?.supportedSamples ?? 1,
               );
 
               const vbw = res.box.width / scale, vbh = res.box.height / scale;
@@ -345,7 +347,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               anyMatched = true;
 
               const confirmCount = trackerRef.current.bumpConfirm(trackId, student.id);
-              const requiredFrames = requiredConfirmFrames(match.distance, match.margin);
+              const requiredFrames = requiredConfirmFrames(match.distance, match.margin, match.supportedSamples);
 
               if (confirmCount < requiredFrames) {
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
@@ -384,7 +386,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
 
             if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE) {
               const confirmCount = trackerRef.current.bumpConfirm(t.trackId, student.id);
-              const requiredFrames = requiredConfirmFrames(cache.cachedDistance, cache.cachedMargin);
+              const requiredFrames = requiredConfirmFrames(cache.cachedDistance, cache.cachedMargin, cache.cachedSupported);
 
               if (confirmCount >= requiredFrames) {
                 setMatchedStudent(student);

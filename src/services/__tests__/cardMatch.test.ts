@@ -210,6 +210,39 @@ describe('matchesExpectedName — ثلاثة طلاب بنفس الأسماء ا
   });
 });
 
+describe('matchesExpectedName — الاسم الكامل إلزامي (منع نقص الاسم)', () => {
+  const A = 'مجتبى هيثم محمد محسن';
+
+  it('يرفض الاسم الناقص من آخر كلمة («مجتبى هيثم محم»)', () => {
+    const r = matchesExpectedName('مجتبى هيثم محم', A);
+    expect(r.matched).toBe(false);
+  });
+
+  it('يرفض قصّ آخر كلمة حتى لو التشابه مرتفع', () => {
+    expect(matchesExpectedName('مجتبى هيثم محمد مح', A).matched).toBe(false);
+  });
+
+  it('يرفض كلمة ناقصة من وسط الاسم', () => {
+    expect(matchesExpectedName('مجتبى محمد محسن', A).matched).toBe(false);
+  });
+
+  it('يرفض كلمة زائدة', () => {
+    expect(matchesExpectedName('مجتبى هيثم محمد محسن علي', A).matched).toBe(false);
+  });
+
+  it('يقبل اختلافات الحروف والتشكيل (أ/ا، ة/ه، ى/ي، تشكيل)', () => {
+    expect(matchesExpectedName('مجتبى هيثم محمّد محسن', A).matched).toBe(true);
+    expect(matchesExpectedName('مجتبى هيثم محمد محسن', A).matched).toBe(true);
+    expect(matchesExpectedName('احمد', 'أحمد').matched).toBe(true);
+    expect(matchesExpectedName('ساره', 'سارة').matched).toBe(true);
+  });
+
+  it('يرفض الاسم كامل الكلمات لكن بآخر مختلف عن السجل', () => {
+    const r = matchesExpectedName('مجتبى هيثم محمد علي', A);
+    expect(r.matched).toBe(false);
+  });
+});
+
 describe('tripleNameMatch — ثلاثة طلاب بنفس الأسماء الأولى (الحضور)', () => {
   const roster = [
     mkStudent('1', 'نور الهدى محمد صالح علي'),

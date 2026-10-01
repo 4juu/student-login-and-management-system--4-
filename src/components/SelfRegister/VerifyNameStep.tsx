@@ -63,7 +63,7 @@ export const VerifyNameStep: React.FC<VerifyNameStepProps> = ({ expected, onVeri
       setScore(r.score);
       setScreen('result');
     } else {
-      setError('الاسم غير مطابق — تأكد من كتابة اسمك كما هو مسجّل ثم أعد المحاولة.');
+      setError('الاسم غير مطابق — اكتب اسمك كاملاً كما هو مسجّل في النظام (كل الكلمات بلا نقص) ثم أعد المحاولة.');
     }
   };
 
