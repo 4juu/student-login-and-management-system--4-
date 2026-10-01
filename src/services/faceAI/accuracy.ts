@@ -18,7 +18,6 @@
 import {
   buildGallery,
   decisionDistance,
-  excludeSampleFromItem,
   findBestMatchIndexed,
   getLastRejection,
   type MatchOptions,
@@ -100,10 +99,7 @@ export function measureAccuracy(
     const withoutSelf = buildGallery(students.filter(s => s.id !== targetItem.id));
     // نختبر عيّنات التسجيل الحقيقية فقط — العناقيد مشتقة منها (متوسطات) فلا
     // تُحسب probes مستقلة؛ هذا أصدق قياس للزوايا التي التقطها الطالب فعلاً.
-    const selfSamples: Float32Array[] =
-      targetItem.enrollment && targetItem.enrollment.length > 0
-        ? targetItem.enrollment
-        : targetItem.allSamples;
+    const selfSamples: Float32Array[] = targetItem.allSamples;
     let rejects = 0;
     let distSum = 0;
     let twinDist = Infinity;
@@ -126,7 +122,7 @@ export function measureAccuracy(
       }
 
       // ② LOO حقيقي: العيّنة مستبعدة من معرض الهدف — لا تفاؤل train-on-test
-      const targetWithout = excludeSampleFromItem(targetItem, probe);
+      const targetWithout = { ...targetItem, allSamples: targetItem.allSamples.filter(s => s !== probe) };
       const looGallery = targetWithout.allSamples.length > 0
         ? [...withoutSelf, targetWithout]
         : withoutSelf;

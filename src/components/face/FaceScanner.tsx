@@ -49,8 +49,8 @@ const MIN_FACE_PX = 22;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
 const MAX_FACES_PER_FRAME = 10;
-const REEMBED_MIN_INTERVAL = 150;
-const REEMBED_MOVE_THRESHOLD = 0.08;
+const REEMBED_MIN_INTERVAL = 200;
+const REEMBED_MOVE_THRESHOLD = 0.12;
 // مدة كبت منطقة وجه مسجَّل حضوره حتى لا يعاد اكتشافه/رسمه فور انتهائه
 const SUPPRESS_ZONE_TTL = 6_000;
 // نسبة تداخل جديدة ليُعتبَر الوجه ضمن منطقة مكبوتة (يتم تجاهله)

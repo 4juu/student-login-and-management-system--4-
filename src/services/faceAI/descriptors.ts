@@ -241,8 +241,22 @@ export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   return sim > 1 ? 1 : sim < -1 ? -1 : sim;
 }
 
+const distanceCache = new Map<string, number>();
+const DISTANCE_CACHE_MAX = 500;
+
 export function descriptorDistance(a: Float32Array, b: Float32Array): number {
-  return 1 - cosineSimilarity(a, b);
+  const keyA = a.join(',');
+  const keyB = b.join(',');
+  const key = keyA < keyB ? `${keyA}|${keyB}` : `${keyB}|${keyA}`;
+  const cached = distanceCache.get(key);
+  if (cached !== undefined) return cached;
+  const result = 1 - cosineSimilarity(a, b);
+  if (distanceCache.size >= DISTANCE_CACHE_MAX) {
+    const firstKey = distanceCache.keys().next().value;
+    if (firstKey) distanceCache.delete(firstKey);
+  }
+  distanceCache.set(key, result);
+  return result;
 }
 
 export interface BestMatch<T> {
