@@ -91,8 +91,8 @@ function App() {
   const offlineModalDismissed = useUIStore((s) => s.offlineModalDismissed);
   const setOfflineModalDismissed = useUIStore((s) => s.setOfflineModalDismissed);
 
-  const colleges = useStageStore((s) => s.colleges);
-  const stages = useStageStore((s) => s.stages);
+const colleges = useStageStore((s) => s.colleges);
+const stages = useStageStore((s) => s.stages);
   const setColleges = useStageStore((s) => s.setColleges);
   const setStages = useStageStore((s) => s.setStages);
   const selectedCollegeId = useStageStore((s) => s.selectedCollegeId);
@@ -640,6 +640,7 @@ function App() {
             adminUid={getAdminUid()}
             colleges={attendanceLinkScope.colleges}
             stages={attendanceLinkScope.stages}
+            defaultStageId={selectedStageId}
             loadStudents={async (stageId: string) => loadStudentsForStage(getAdminUid(), stageId)}
             telegramConfig={telegramConfig}
             subjectName={currentUser?.bio || currentUser?.displayName || 'المادة'}

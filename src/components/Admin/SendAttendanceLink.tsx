@@ -22,6 +22,8 @@ interface SendAttendanceLinkProps {
   subjectName: string;
   teacherId?: string;
   onClose: () => void;
+  /** المرحلة المفتوحة حالياً — تُختار تلقائياً بدل إجبار المستخدم على اختيار الكلية والمرحلة */
+  defaultStageId?: string | null;
 }
 
 interface GeneratedAttendanceLink {
@@ -187,9 +189,21 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
   subjectName,
   teacherId,
   onClose,
+  defaultStageId = null,
 }) => {
-  const [selectedCollegeId, setSelectedCollegeId] = useState('');
-  const [selectedStageId, setSelectedStageId] = useState('');
+  // المرحلة المفتوحة حالياً — تُختار تلقائياً ما دامت ضمن نطاق الصلاحية
+  const autoStage = useMemo(() => {
+    if (!defaultStageId) return null;
+    const stage = stages.find(s => s.id === defaultStageId);
+    if (!stage) return null;
+    const college = colleges.find(c => c.id === stage.collegeId) ?? null;
+    return { stage, college };
+  }, [defaultStageId, stages, colleges]);
+
+  const [selectedCollegeId, setSelectedCollegeId] = useState(autoStage?.stage.collegeId ?? '');
+  const [selectedStageId, setSelectedStageId] = useState(autoStage?.stage.id ?? '');
+  // عند الاختيار التلقائي تُخفى القوائم ويظهر اسم المرحلة فقط — مع زر «تغيير» يعيدها كما كانت
+  const [showPicker, setShowPicker] = useState(!autoStage);
   const [expiryDays, setExpiryDays] = useState(30);
   const [generatedLink, setGeneratedLink] = useState<GeneratedAttendanceLink | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -407,31 +421,50 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
 
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <div>
-        <label className="block text-sm font-bold text-slate-300 mb-1 flex items-center gap-1.5"><Landmark className="w-4 h-4" /> الكلية</label>
-              <select
-                value={selectedCollegeId}
-                onChange={e => { setSelectedCollegeId(e.target.value); setSelectedStageId(''); }}
-                className="w-full px-3 py-2.5 border border-slate-600 bg-slate-800 text-white rounded-xl focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30"
+          {!showPicker && autoStage ? (
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold text-slate-400 mb-0.5">المرحلة المختارة تلقائياً</p>
+                <p className="text-sm font-extrabold text-white truncate">
+                  {autoStage.college ? `${autoStage.college.icon || ''} ` : ''}{autoStage.stage.name}
+                </p>
+                {autoStage.college && <p className="text-xs text-slate-400 truncate">{autoStage.college.name}</p>}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPicker(true)}
+                className="shrink-0 rounded-lg border border-teal-500/40 px-3 py-2 text-xs font-bold text-teal-300 transition hover:bg-teal-500/15 hover:text-teal-200 focus:outline-none focus:ring-2 focus:ring-teal-500/40"
               >
-                <option value="">اختر كلية...</option>
-                {colleges.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-              </select>
+                تغيير المرحلة
+              </button>
             </div>
-            <div>
-              <label className="block text-sm font-bold text-slate-300 mb-1 flex items-center gap-1.5"><Library className="w-4 h-4" /> المرحلة</label>
-              <select
-                value={selectedStageId}
-                onChange={e => handleStageChange(e.target.value)}
-                disabled={!selectedCollegeId}
-                className="w-full px-3 py-2.5 border border-slate-600 bg-slate-800 text-white rounded-xl disabled:bg-slate-800 disabled:opacity-50 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30"
-              >
-                <option value="">اختر مرحلة...</option>
-                {stagesForCollege.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-bold text-slate-300 mb-1 flex items-center gap-1.5"><Landmark className="w-4 h-4" /> الكلية</label>
+                <select
+                  value={selectedCollegeId}
+                  onChange={e => { setSelectedCollegeId(e.target.value); setSelectedStageId(''); }}
+                  className="w-full px-3 py-2.5 border border-slate-600 bg-slate-800 text-white rounded-xl focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30"
+                >
+                  <option value="">اختر كلية...</option>
+                  {colleges.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-300 mb-1 flex items-center gap-1.5"><Library className="w-4 h-4" /> المرحلة</label>
+                <select
+                  value={selectedStageId}
+                  onChange={e => handleStageChange(e.target.value)}
+                  disabled={!selectedCollegeId}
+                  className="w-full px-3 py-2.5 border border-slate-600 bg-slate-800 text-white rounded-xl disabled:bg-slate-800 disabled:opacity-50 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30"
+                >
+                  <option value="">اختر مرحلة...</option>
+                  {stagesForCollege.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="bg-teal-500/10 border border-teal-500/30 rounded-xl p-4">
             <label className="flex items-center justify-between text-sm font-bold text-teal-300 mb-2">
