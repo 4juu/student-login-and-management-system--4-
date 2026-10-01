@@ -9,7 +9,7 @@ import { LS, saveLocal, loadLocal, isDangerousEmpty, stripUndefined } from "./lo
 import { debouncedSave, scheduleSave, cancelPendingSavesWhere, registerOutboxFallback } from "./saveQueue";
 import { queueOutbox } from "../lib/offlineOutbox";
 import { patchCachedStageData } from "../lib/stageCache";
-import { loadStudents, loadDescriptorOverrides } from "./studentsService";
+import { loadStudents } from "./studentsService";
 
 // lastIndexed: recordId → studentId لكل مفتاح حفظ — لكتابة فارق فقط في فهرس studentAttendance
 const attIndexState = new Map<string, Map<string, string>>();
@@ -272,32 +272,18 @@ export const loadActiveSession = async (
   }
 };
 
-/** Load all stage data in parallel and merge descriptor overrides into students. */
+/** Load all stage data in parallel — البصمة تأتي من عقدة descriptors/ بلا أي طبقة تحسين */
 export const loadStageData = async (
   adminUid: string,
   stageId: string,
   teacherId: string
 ) => {
-  const [students, records, sessions, activeSessionId, overrides] = await Promise.all([
+  const [students, records, sessions, activeSessionId] = await Promise.all([
     loadStudents(adminUid, stageId),
     loadAttendanceRecords(adminUid, stageId, teacherId),
     loadSessions(adminUid, stageId, teacherId),
     loadActiveSession(adminUid, stageId, teacherId),
-    loadDescriptorOverrides(adminUid, stageId).catch(e => {
-      console.warn('[loadStageData] فشل جلب descriptorOverrides:', e);
-      return null;
-    }),
   ]);
-  if (overrides) {
-    for (let i = 0; i < students.length; i++) {
-      const student = students[i];
-      if (!student) continue;
-      const ov = overrides[student.id];
-      if (ov?.faceDescriptor && ov.updatedAt > 0) {
-        students[i] = { ...student, faceDescriptor: ov.faceDescriptor };
-      }
-    }
-  }
   return { students, records, sessions, activeSessionId };
 };
 

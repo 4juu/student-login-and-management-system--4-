@@ -13,11 +13,11 @@ import {
   checkForTampering,
   hasValidDescriptor,
   l2Normalize,
-  bootstrapClusters,
   DESC_DIM,
   DESC_VERSION_GALLERY,
   type FaceGalleryDescriptor,
 } from '../../services/faceAI/descriptors';
+import { ENROLLMENT_ANGLES, ENROLLMENT_SAMPLE_COUNT, type EnrollmentAngle } from '../../services/faceAI/angles';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface SelfCaptureStepProps {
@@ -27,22 +27,11 @@ interface SelfCaptureStepProps {
   onCancel: () => void;
 }
 
-const SAMPLES_NEEDED = 10;
+const SAMPLES_NEEDED = ENROLLMENT_SAMPLE_COUNT;
 const MIN_REL_SIZE = 0.14;
 
-type CapturePhase = 'front' | 'right' | 'left' | 'up' | 'down' | 'front_close' | 'front_far' | 'smile' | 'natural' | 'light';
-const CAPTURE_PHASES: { key: CapturePhase; instruction: string }[] = [
-  { key: 'front', instruction: 'أمام' },
-  { key: 'right', instruction: 'يمين' },
-  { key: 'left', instruction: 'يسار' },
-  { key: 'up', instruction: 'أعلى' },
-  { key: 'down', instruction: 'أسفل' },
-  { key: 'front_close', instruction: 'اقترب' },
-  { key: 'front_far', instruction: 'ابتعد' },
-  { key: 'smile', instruction: 'ابتسم' },
-  { key: 'natural', instruction: 'طبيعي' },
-  { key: 'light', instruction: 'إضاءة' },
-];
+type CapturePhase = EnrollmentAngle['key'];
+const CAPTURE_PHASES: EnrollmentAngle[] = ENROLLMENT_ANGLES;
 
 export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allStudents, onCaptured, onCancel }) => {
   const { ready: engineReady, progress, error, retry } = useFaceAI();
@@ -242,7 +231,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
       }
 
       if (sampleCount >= SAMPLES_NEEDED) {
-        // دمج العينات ثم تطبيع L2
+        // متوسط العينات — لفحص الاحتيال فقط، لا يُحفظ ولا يُدمج في البصمة
         const dim = samplesDataRef.current[0]!.length;
         const avg = new Float32Array(dim);
         for (const s of samplesDataRef.current) for (let i = 0; i < dim; i++) avg[i] = avg[i]! + s[i]!;
@@ -257,15 +246,14 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
           return;
         }
 
-        // حفظ البصمة بصيغة v5 مباشرة — مع bootstrap clusters من التسجيل
+        // 7 عينات مستقلة — كل عينة تحمل حرفها وزاويتها، بلا أي دمج
         const quality = Math.round(((res.quality.composite + 0.8) / 2) * 100) / 100;
-        const clusters = bootstrapClusters(samplesDataRef.current, quality);
         const galleryDescriptor: FaceGalleryDescriptor = {
           version: DESC_VERSION_GALLERY,
           enrollment: samplesDataRef.current.map(s =>
             Array.from(l2Normalize(s)).map(v => Math.round(v * 1e5) / 1e5)
           ),
-          clusters,
+          labels: CAPTURE_PHASES.slice(0, SAMPLES_NEEDED).map(p => p.key),
           samples: SAMPLES_NEEDED,
           quality,
         };
@@ -329,12 +317,17 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
           {/* رأس */}
           <div className="text-center mb-4">
             <h2 className="text-xl font-bold text-white">تسجيل بصمة الوجه</h2>
-            <p className="text-xs text-white/50 mt-1">مرحباً <span className="font-bold text-indigo-300">{student.name}</span> — التقط من 10 زوايا</p>
+            <p className="text-xs text-white/50 mt-1">مرحباً <span className="font-bold text-indigo-300">{student.name}</span> — التقط من {SAMPLES_NEEDED} زوايا مختلفة</p>
           </div>
 
           {/* توجيه الزاوية — أعلى الكاميرا وبخط كبير */}
           <div className="mb-4 rounded-2xl bg-gradient-to-l from-indigo-500/15 to-violet-500/15 border border-indigo-400/30 p-4 text-center">
-            <div className="text-4xl mb-1 leading-none">{CAPTURE_PHASES[samples]?.instruction ?? 'أمام'}</div>
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-indigo-500/25 border border-indigo-400/40 text-indigo-100 text-lg font-black">
+                {CAPTURE_PHASES[samples]?.letter ?? 'A'}
+              </span>
+              <span className="text-sm font-bold text-indigo-200">الزاوية {samples + 1} من {SAMPLES_NEEDED}</span>
+            </div>
             <p className="text-xl font-extrabold text-white leading-snug">{CAPTURE_PHASES[samples]?.instruction ?? 'وجّه وجهك للأمام'}</p>
             <p className="text-[11px] text-indigo-200/80 mt-1.5">زر «التقاط» مفعل دائماً — التقط فور ظهور وجهك</p>
           </div>
@@ -389,7 +382,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
             feedback.startsWith('لا') || feedback.startsWith('اقترب') || feedback.startsWith('ابتد') || feedback.includes('ضعيفة') ? 'text-amber-400' : 'text-slate-300'
           }`}>{feedback}</p>
 
-          {/* دليل الزوايا الثلاث */}
+          {/* دليل الزوايا السبع */}
           {samples < SAMPLES_NEEDED && (
             <div className="flex items-center justify-center gap-1.5 mb-3">
               {CAPTURE_PHASES.map((p, i) => {
@@ -401,7 +394,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
                     active ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-indigo-400/40' :
                     'bg-white/5 text-slate-500'
                   }`}>
-                    <span>{done ? '✓' : (i + 1)}</span>
+                    <span>{done ? '✓' : p.letter}</span>
                     <span className="hidden sm:inline">{p.instruction}</span>
                   </div>
                 );

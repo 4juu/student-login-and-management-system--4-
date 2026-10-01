@@ -1,8 +1,9 @@
 // ─────────────────────────────────────────────────────────────
 // فهرس المعرض المُعرَّف مسبقاً — يُبنى مرة واحدة عند تغيّر الطلاب
-// يُغني عن parseAllSamples كل فريم ويوسّع نطاق المطابقة ضد كل العينات
+// يقارن استعلام الفريم بأي عينة من عينات الطالب السبع فوراً (بلا تحسين)
 // ─────────────────────────────────────────────────────────────
-import { descriptorDistance, MIN_MARGIN, isGalleryDescriptor, normalizeClusters, parseOneSample } from './descriptors';
+import { descriptorDistance, MIN_MARGIN, isGalleryDescriptor, parseOneSample } from './descriptors';
+import { ENROLLMENT_SAMPLE_COUNT } from './angles';
 
 interface GalleryItem {
   id: string;
@@ -20,45 +21,24 @@ export function buildGallery<T extends { id: string; faceDescriptor?: unknown }>
     const fd = item.faceDescriptor;
     if (!isGalleryDescriptor(fd)) continue;
 
-    // ── #3: Weighted centroid — weight clusters by quality ──
-    const enrollmentSamples: Float32Array[] = [];
-    const clusterSamples: Array<{ vec: Float32Array; weight: number }> = [];
-
+    // ── عينات التسجيل المستقلة فقط — بلا عناقيد ولا دمج ──
+    const allSamples: Float32Array[] = [];
     for (const s of fd.enrollment) {
       const p = parseOneSample(s);
-      if (p) enrollmentSamples.push(p);
+      if (p) allSamples.push(p);
     }
-
-    for (const c of normalizeClusters(fd.clusters)) {
-      const p = parseOneSample(c.vector);
-      if (p) clusterSamples.push({ vec: p, weight: Math.max(0.5, c.quality) });
-    }
-
-    const allSamples = [
-      ...enrollmentSamples,
-      ...clusterSamples.map(c => c.vec),
-    ];
     if (allSamples.length === 0) continue;
 
-    // Weighted centroid: enrollment = weight 1.0, clusters = weight by quality
+    // centroid: متوسط العينات (للاستدلال فقط — المطابقة تقارن بكل عينة على حدة)
     const firstSample = allSamples[0];
     if (!firstSample) continue;
     const dim = firstSample.length;
     const avg = new Float32Array(dim);
-    let totalWeight = 0;
 
-    for (const s of enrollmentSamples) {
+    for (const s of allSamples) {
       for (let i = 0; i < dim; i++) avg[i] = (avg[i] ?? 0) + (s[i] ?? 0);
-      totalWeight += 1;
     }
-    for (const c of clusterSamples) {
-      for (let i = 0; i < dim; i++) avg[i] = (avg[i] ?? 0) + (c.vec[i] ?? 0) * c.weight;
-      totalWeight += c.weight;
-    }
-
-    if (totalWeight > 0) {
-      for (let i = 0; i < dim; i++) avg[i] = (avg[i] ?? 0) / totalWeight;
-    }
+    for (let i = 0; i < dim; i++) avg[i] = (avg[i] ?? 0) / allSamples.length;
     let norm = 0;
     for (let i = 0; i < dim; i++) norm += (avg[i] ?? 0) * (avg[i] ?? 0);
     norm = Math.sqrt(norm) || 1;
@@ -104,9 +84,9 @@ export function findBestMatchIndexed(
     }
 
     let sampleBonus = 0;
-    if (entry.allSamples.length >= 5) sampleBonus = 0.07;
-    else if (entry.allSamples.length >= 3) sampleBonus = 0.04;
-    else if (entry.allSamples.length >= 2) sampleBonus = 0.02;
+    if (entry.allSamples.length >= ENROLLMENT_SAMPLE_COUNT) sampleBonus = 0.05;
+    else if (entry.allSamples.length >= 3) sampleBonus = 0.03;
+    else if (entry.allSamples.length >= 2) sampleBonus = 0.01;
 
     let qualityBonus = 0;
     if (queryQuality !== undefined) {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Student } from '../../types/student';
 import {
-  getCoveragePercent,
+  getEnrollmentCount,
   hasValidDescriptor,
   isGalleryDescriptor,
 } from '../../services/faceAI/descriptors';
@@ -357,8 +357,11 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                             صالحة
                           </span>
                           {isGalleryDescriptor(student.faceDescriptor) && (
-                            <span className="text-[10px] text-slate-400" title={`تغطية الزوايا: ${getCoveragePercent(student.faceDescriptor)}%`}>
-                              تغطية: {getCoveragePercent(student.faceDescriptor)}%
+                            <span
+                              className="text-[10px] text-slate-400"
+                              title={`بصمة الوجه: ${getEnrollmentCount(student.faceDescriptor)} عينة محفوظة`}
+                            >
+                              عينات: {getEnrollmentCount(student.faceDescriptor)}
                             </span>
                           )}
                           {onUpdateStudent && (

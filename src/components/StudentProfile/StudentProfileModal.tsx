@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { useModalBehavior } from '../../hooks/useModalBehavior';
 import { Student, AttendanceRecord, AttendanceSession } from '../../types/student';
 import { BookOpen, Check, ClipboardList, Copy, Ticket } from 'lucide-react';
-import { hasValidDescriptor, getCoveragePercent, normalizeClusters } from '../../services/faceAI/descriptors';
+import { hasValidDescriptor } from '../../services/faceAI/descriptors';
+import { ENROLLMENT_ANGLES, ENROLLMENT_SAMPLE_COUNT, angleLabel, sampleLetter } from '../../services/faceAI/angles';
 
 interface StudentProfileModalProps {
   student: Student;
@@ -313,60 +314,66 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
             </div>
           </div>
 
-          {/* ── تحسين بصمة الوجه ── */}
+          {/* ── بصمة الوجه — سبع زوايا مستقلة ── */}
           {hasValidDescriptor(student.faceDescriptor) && (() => {
-            const coverage = getCoveragePercent(student.faceDescriptor);
-            const clusters = normalizeClusters((student.faceDescriptor as any)?.clusters);
-            const enrollmentCount = Array.isArray((student.faceDescriptor as any)?.enrollment)
-              ? (student.faceDescriptor as any).enrollment.length : 0;
-            const totalSamples = enrollmentCount + clusters.reduce((sum: number, c: any) => sum + (c.count || 0), 0);
-            const stage = coverage >= 80 ? { label: 'متطورة', dot: 'bg-emerald-500', barBg: 'bg-emerald-100', bar: 'bg-emerald-500', box: 'bg-emerald-50 text-emerald-700 border-emerald-100' }
-              : coverage >= 50 ? { label: 'متوسطة', dot: 'bg-amber-500', barBg: 'bg-amber-100', bar: 'bg-amber-400', box: 'bg-amber-50 text-amber-700 border-amber-100' }
-              : { label: 'مبتدئة', dot: 'bg-slate-400', barBg: 'bg-slate-100', bar: 'bg-slate-300', box: 'bg-slate-50 text-slate-700 border-slate-200' };
+            const fd = student.faceDescriptor as { enrollment?: unknown[]; labels?: string[] };
+            const enrollment = Array.isArray(fd.enrollment) ? fd.enrollment : [];
+            const labels = Array.isArray(fd.labels) ? fd.labels : [];
+            const count = enrollment.length;
+            const complete = count >= ENROLLMENT_SAMPLE_COUNT;
+
+            const cells: Array<{ letter: string; label: string; has: boolean }> = ENROLLMENT_ANGLES.map((a, i) => ({
+              letter: a.letter,
+              label: angleLabel(labels[i] ?? a.key),
+              has: i < count,
+            }));
+            for (let i = ENROLLMENT_ANGLES.length; i < count; i++) {
+              cells.push({ letter: sampleLetter(i), label: `عيّنة ${i + 1}`, has: true });
+            }
 
             return (
               <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
-                <p className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${stage.dot}`} />
-                  تحسين بصمة الوجه
+                <p className="text-sm font-bold text-gray-800 mb-1 flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${complete ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                  بصمة الوجه {complete ? '— سبع زوايا كاملة' : `— ${count} من ${ENROLLMENT_SAMPLE_COUNT} زوايا`}
+                </p>
+                <p className="text-[11px] text-gray-500 mb-3">
+                  كل زاوية عيّنة مستقلة مميّزة بحرفها — التعرف يجري على أيٍّ منها فوراً بلا دمج.
                 </p>
 
-                {/* شريط التغطية */}
-                <div className="mb-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-gray-500">التغطية</span>
-                    <span className="text-xs font-bold text-gray-800">{coverage}%</span>
-                  </div>
-                  <div className={`w-full h-2 ${stage.barBg} rounded-full overflow-hidden`}>
+                <div className="grid grid-cols-4 gap-2">
+                  {cells.map((c, i) => (
                     <div
-                      className={`h-full rounded-full transition-all duration-500 ${stage.bar}`}
-                      style={{ width: `${coverage}%` }}
-                    />
-                  </div>
+                      key={i}
+                      className={`rounded-lg border p-2 text-center ${
+                        c.has ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-100'
+                      }`}
+                    >
+                      <span
+                        className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-[11px] font-black ${
+                          c.has ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'
+                        }`}
+                      >
+                        {c.letter}
+                      </span>
+                      <p className={`text-[10px] mt-1 font-medium ${c.has ? 'text-gray-700' : 'text-slate-400'}`}>
+                        {c.label}
+                      </p>
+                      <p className={`text-[9px] mt-0.5 ${c.has ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        {c.has ? 'محفوظة' : 'فارغة'}
+                      </p>
+                    </div>
+                  ))}
                 </div>
 
-                {/* الإحصايات */}
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="p-2 rounded-lg bg-slate-50">
-                    <p className="text-lg font-bold text-gray-800">{clusters.length}<span className="text-xs text-gray-400 mr-0.5">/18</span></p>
-                    <p className="text-[10px] text-gray-500 mt-0.5">عنقيد</p>
-                  </div>
-                  <div className="p-2 rounded-lg bg-slate-50">
-                    <p className="text-lg font-bold text-gray-800">{enrollmentCount}</p>
-                    <p className="text-[10px] text-gray-500 mt-0.5">عينة تسجيل</p>
-                  </div>
-                  <div className="p-2 rounded-lg bg-slate-50">
-                    <p className="text-lg font-bold text-gray-800">{totalSamples}</p>
-                    <p className="text-[10px] text-gray-500 mt-0.5">إجمالي العينات</p>
-                  </div>
-                </div>
-
-                {/* المرحلة */}
-                <div className={`mt-3 px-3 py-1.5 rounded-lg ${stage.box} text-xs font-medium text-center border`}>
-                  البصمة {stage.label}
-                  {coverage >= 80 && ' — جاهزة للحضور بالبصمة'}
-                  {coverage >= 50 && coverage < 80 && ' — يُنصح بإجراء اختبار بصمة'}
-                  {coverage < 50 && ' — يحتاج اختبار بصمة لتحسين التعرف'}
+                <div className={`mt-3 px-3 py-1.5 rounded-lg text-xs font-medium text-center border ${
+                  complete
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                    : 'bg-amber-50 text-amber-700 border-amber-100'
+                }`}>
+                  {complete
+                    ? 'البصمة مكتملة — جاهزة للحضور والاختبار'
+                    : `ينقص ${ENROLLMENT_SAMPLE_COUNT - count} زوايا — أعد التسجيل عبر رابط البصمة`}
                 </div>
               </div>
             );
