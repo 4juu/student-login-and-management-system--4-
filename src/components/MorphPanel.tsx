@@ -86,7 +86,7 @@ function useOrbStyles() {
           transparent var(--dot)
         );
         background-size: calc(var(--dot) * 2) calc(var(--dot) * 2);
-        backdrop-filter: blur(calc(var(--blur) * 2)) contrast(calc(var(--contrast) * 2));
+        backdrop-filter: blur(calc(var(--blur) * 2)) contrast(calc(var(--blur) * 2));
         mix-blend-mode: overlay;
       }
 
@@ -153,7 +153,8 @@ const ColorOrb: React.FC<OrbProps> = ({
 
   const pixelDot = dimValue < 50 ? Math.max(dimValue * 0.004, 0.05) : Math.max(dimValue * 0.008, 0.1)
 
-  const shadowRange = dimValue < 50 ? Math.max(dimValue * 0.004, 0.5) : Math.max(dimValue * 0.008, 2)
+  const shadowRange =
+    dimValue < 50 ? Math.max(dimValue * 0.004, 0.5) : Math.max(dimValue * 0.015, 2)
 
   const maskRadius =
     dimValue < 30 ? "0%" : dimValue < 50 ? "5%" : dimValue < 100 ? "15%" : "25%"
@@ -183,97 +184,22 @@ const ColorOrb: React.FC<OrbProps> = ({
 }
 
 interface MorphPanelProps {
-  isExpanded: boolean
   onToggle: () => void
-  input: string
-  onInputChange: (value: string) => void
-  onSend: () => void
-  isTyping: boolean
-  inputRef: React.RefObject<HTMLTextAreaElement | null>
-  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
   className?: string
 }
 
-export function MorphPanel({
-  isExpanded,
-  onToggle,
-  input,
-  onInputChange,
-  isTyping,
-  inputRef,
-  onKeyDown,
-  className,
-}: MorphPanelProps) {
-  if (!isExpanded) {
-    return (
-      <div className={cn("fixed bottom-6 right-6 z-50", className)}>
-        <DockBar onToggle={onToggle} />
-      </div>
-    )
-  }
-
+/** زر الفتح المصغّر (الحبة الملوّنة) — نافذة البحث نفسها داخل SmartChatBot */
+export function MorphPanel({ onToggle, className }: MorphPanelProps) {
   return (
-    <div className="flex items-center justify-center w-full">
-      <InputForm
-        input={input}
-        onInputChange={onInputChange}
-        isTyping={isTyping}
-        inputRef={inputRef}
-        onKeyDown={onKeyDown}
-      />
-    </div>
-  )
-}
-
-function DockBar({ onToggle }: { onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      onMouseDown={onToggle}
-      className="flex h-14 w-14 items-center justify-center rounded-full cursor-pointer select-none hover:scale-105 active:scale-90 transition-transform"
-    >
-      <ColorOrb dimension="44px" tones={{ base: "oklch(22.64% 0 0)" }} />
-    </button>
-  )
-}
-
-function InputForm({
-  input,
-  onInputChange,
-  isTyping,
-  inputRef,
-  onKeyDown,
-}: {
-  input: string
-  onInputChange: (value: string) => void
-  isTyping: boolean
-  inputRef: React.RefObject<HTMLTextAreaElement | null>
-  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
-}) {
-  function handleKeys(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    onKeyDown(e)
-  }
-
-  return (
-    <div className="w-full">
-      <div className="flex flex-col animate-fadeIn">
-        <textarea
-          ref={inputRef as React.Ref<HTMLTextAreaElement>}
-          placeholder="..."
-          value={input}
-          onChange={(e) => onInputChange(e.target.value)}
-          className="w-full resize-none rounded-md px-3 py-2.5 outline-none text-sm bg-transparent text-foreground placeholder-muted-foreground"
-          onKeyDown={handleKeys}
-          onInput={(e) => {
-            const target = e.currentTarget
-            target.style.height = "auto"
-            target.style.height = `${Math.min(target.scrollHeight, 96)}px`
-          }}
-          style={{ minHeight: 44, maxHeight: 96 }}
-          disabled={isTyping}
-          spellCheck={false}
-        />
-      </div>
+    <div className={cn("fixed bottom-6 right-6 z-50", className)}>
+      <button
+        type="button"
+        onMouseDown={onToggle}
+        aria-label="فتح بحث الطلاب"
+        className="flex h-14 w-14 items-center justify-center rounded-full cursor-pointer select-none hover:scale-105 active:scale-90 transition-transform"
+      >
+        <ColorOrb dimension="44px" tones={{ base: "oklch(22.64% 0 0)" }} />
+      </button>
     </div>
   )
 }

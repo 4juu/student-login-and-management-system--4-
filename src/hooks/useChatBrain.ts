@@ -1,6 +1,6 @@
 // حالة وواجهة بحث الطلاب داخل المحادثة (اقتراحات + بطاقة الطالب)
 // — منفصل عن lib/chatBrain (الدوال النقية) و SmartChatBot (العرض)
-import { useCallback, useState, type RefObject } from 'react';
+import { useCallback, useState } from 'react';
 import type { Student } from '../types/student';
 import {
   scoreStudentMatch,
@@ -11,11 +11,9 @@ import {
 
 interface UseChatBrainParams {
   scope: ChatScope;
-  setInput: (value: string) => void;
-  inputRef: RefObject<HTMLTextAreaElement | null>;
 }
 
-export function useChatBrain({ scope, setInput, inputRef }: UseChatBrainParams) {
+export function useChatBrain({ scope }: UseChatBrainParams) {
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [studentSuggestions, setStudentSuggestions] = useState<Student[]>([]);
   const [selectedStudentCard, setSelectedStudentCard] = useState<StudentQuickCard | null>(null);
@@ -53,15 +51,6 @@ export function useChatBrain({ scope, setInput, inputRef }: UseChatBrainParams) 
     setStudentSearchQuery(student.name);
   }, [scope]);
 
-  const sendStudentQuestion = useCallback((student: Student) => {
-    const question = `أعطني تفاصيل حضور وغياب الطالب ${student.name}`;
-    setInput(question);
-    setShowStudentCard(false);
-    setShowSuggestions(false);
-    setStudentSearchQuery('');
-    setTimeout(() => inputRef.current?.focus(), 100);
-  }, [setInput, inputRef]);
-
   /** مسح البحث + الاقتراحات + البطاقة معاً (زر المسح وإغلاق البطاقة) */
   const clearStudentSearch = useCallback(() => {
     setStudentSearchQuery('');
@@ -81,7 +70,6 @@ export function useChatBrain({ scope, setInput, inputRef }: UseChatBrainParams) 
     setShowSuggestions,
     handleStudentSearch,
     handleSelectStudent,
-    sendStudentQuestion,
     clearStudentSearch,
   };
 }
