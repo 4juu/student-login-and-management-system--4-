@@ -15,12 +15,32 @@ interface GalleryItem {
   primary: Float32Array | null;
 }
 
+/** معرّفات الطلاب المكرّرة في القائمة (سجلّان لنفس الرقم) — تُسبب عرض اسم السجل الآخر */
+export function findDuplicateIds<T extends { id?: unknown }>(items: T[]): string[] {
+  const seen = new Set<string>();
+  const dupes = new Set<string>();
+  for (const it of items) {
+    const id = typeof it.id === 'string' ? it.id : '';
+    if (!id) continue;
+    if (seen.has(id)) dupes.add(id);
+    else seen.add(id);
+  }
+  return [...dupes];
+}
+
 /** ابنِ فهرس المعرض من قائمة الطلاب — يُبنى مرة واحدة فقط عند تغيّر الطلاب */
 export function buildGallery<T extends { id: string; faceDescriptor?: unknown }>(
   items: T[],
 ): GalleryItem[] {
   const gallery: GalleryItem[] = [];
+  const seenIds = new Set<string>();
   for (const item of items) {
+    // ✅ سجلّان بنفس المعرّف ⇒ يبقى الأول فقط (وإلا عرضنا اسم السجل الآخر)
+    if (seenIds.has(item.id)) {
+      console.warn('[gallery] معرّف طالب مكرّر — تم تجاهل السجل المكرر:', item.id);
+      continue;
+    }
+    seenIds.add(item.id);
     const fd = item.faceDescriptor;
     if (!isGalleryDescriptor(fd)) continue;
 
@@ -209,7 +229,10 @@ export function findBestMatchConsensus(
 ): ConsensusMatch | null {
   const qs = toQueries(queries);
   if (qs.length === 0 || gallery.length === 0) return null;
-  const need = Math.min(minAgree, qs.length);
+  // ✅ إطاران مستقلان على الأقل دائماً — إطار واحد محظوظ لا يحسم الهوية
+  //    (كان `Math.min(minAgree, qs.length)` ينزل بالشرط إلى 1 عند المسار الجديد)
+  if (qs.length < minAgree) return null;
+  const need = minAgree;
 
   const groups = new Map<string, Array<{ query: Float32Array; hit: QueryHit }>>();
   for (const q of qs) {

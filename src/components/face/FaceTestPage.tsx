@@ -18,9 +18,10 @@ import {
   MIN_RECOG_CONFIDENCE,
   requiredConfirmFrames,
 } from '../../services/faceAI/descriptors';
-import { buildGallery, findBestMatchConsensus } from '../../services/faceAI/gallery';
+import { buildGallery, findBestMatchConsensus, findDuplicateIds } from '../../services/faceAI/gallery';
 import { getTestLink, validateTestLink, formatRemainingMs, getServerNow } from '../../services/tokenService';
-import { loadStageStudents } from '../SelfRegister/SelfEnrollPage';
+import { getActiveAcademicYear } from '../../firebase/dataService';
+import { loadStageStudentsPublic } from '../SelfRegister/SelfEnrollPage';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface FaceTestPageProps {
@@ -60,6 +61,8 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
   const [noMatchOverlay, setNoMatchOverlay] = useState(false);
   const [expiresAt, setExpiresAt] = useState<number>(0);
   const [remainingMs, setRemainingMs] = useState<number>(0);
+  /** ⚠️ معرّفات طلاب مكرّرة في المرحلة (سجلّان لنفس الرقم) */
+  const [duplicateIds, setDuplicateIds] = useState<string[]>([]);
   useBodyScrollLock(phase === 'scanning');
 
   const studentsRef = useRef<Student[]>([]);
@@ -80,15 +83,23 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
         }
         setExpiresAt(link.expiresAt);
         setRemainingMs(link.expiresAt - getServerNow());
+        // ✅ قراءة **مباشرة من السيرفر** بدون كاش الجلسة (٦ ساعات) — الموافقات الجديدة تظهر فوراً
+        //    والبصمات الملغاة تتوقف عن الظهور
         let s: Student[] = [];
         try {
-          s = await loadStageStudents(link.adminUid, link.stageId);
+          const year = await getActiveAcademicYear();
+          s = year ? await loadStageStudentsPublic(link.adminUid, year, link.stageId) : [];
         } catch {
           if (!cancelled) setPhase('loadError');
           return;
         }
         if (cancelled) return;
         studentsRef.current = s;
+        const dupes = findDuplicateIds(s);
+        if (dupes.length > 0) {
+          console.warn('[face-test] معرّفات طلاب مكرّرة في المرحلة:', dupes);
+        }
+        setDuplicateIds(dupes);
         const approved = s.filter(st => hasValidDescriptor(st.faceDescriptor));
         galleryRef.current = buildGallery(approved);
         setPhase('ready');
@@ -495,6 +506,12 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
             </div>
             <h2 className="text-lg font-bold text-white mb-2">اختبار بصمة الوجه</h2>
             <p className="text-sm text-slate-400 mb-1">هذه صفحة لاختبار بصمة وجهك</p>
+            {duplicateIds.length > 0 && (
+              <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-[11px] text-amber-200">
+                ⚠️ يوجد {duplicateIds.length} طالب بنفس الرقم في هذه المرحلة — قد يظهر اسم طالب آخر.
+                راجع إدارة الكلية (استخدم لوحة «تدقيق البصمات»).
+              </div>
+            )}
             {remainingMs > 0 && (
               <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[11px] text-slate-300 mb-3">
                 <svg className="h-3.5 w-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>

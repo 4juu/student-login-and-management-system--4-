@@ -234,9 +234,9 @@ describe('findBestMatchConsensus — إجماع إطارين مستقلين (ض�
     expect(m!.agreement).toBe(2);
   });
 
-  it('accepts a lone frame provisionally at track start (يحقمه عدّاد التأكيد)', () => {
+  it('rejects a lone frame even at track start (إطار واحد لا يحسم الهوية أبداً)', () => {
     const g = buildGallery(roster);
-    expect(findBestMatchConsensus([frameA1], g, MATCH_LOOSE)).not.toBeNull();
+    expect(findBestMatchConsensus([frameA1], g, MATCH_LOOSE)).toBeNull();
   });
 
   it('returns null for an empty query list', () => {

@@ -12,6 +12,7 @@ import { StudentForm } from './StudentForm';
 import { StudentImportPanel } from './StudentImportPanel';
 import { BulkStudentImportModal } from './BulkStudentImportModal';
 import { DuplicateNamesPanel } from './DuplicateNamesPanel';
+import { FaceAuditPanel } from './FaceAuditPanel';
 import { FaceHealthPanel } from './FaceHealthPanel';
 import { SortFilterPanel } from './SortFilterPanel';
 import { BulkActionsBar } from './BulkActionsBar';
@@ -691,6 +692,8 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
         onDeleteSelected={onDeleteSelectedStudents}
         confirm={confirmAction}
       />
+
+      <FaceAuditPanel students={students} />
 
       <BulkActionsBar
         selectedCount={selectedIds.size}

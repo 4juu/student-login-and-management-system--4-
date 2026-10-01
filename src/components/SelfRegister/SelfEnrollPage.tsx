@@ -9,7 +9,7 @@ import { VerifyNameStep } from './VerifyNameStep';
 import { RegistrationSuccess } from './RegistrationSuccess';
 import { getActiveAcademicYear } from '../../firebase/dataService';
 import { decompressRecord } from '../../firebase/dataServiceCompressed';
-import { migrateToV5, parseAllSamples, checkForTampering, checkPendingConflict, type PendingFaceRecord, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
+import { migrateToV5, parseAllSamples, checkForTampering, checkPendingConflict, descriptorDistance, type PendingFaceRecord, type FaceGalleryDescriptor } from '../../services/faceAI/descriptors';
 import { useFaceAI } from '../../hooks/useFaceAI';
 import { EngineOverlay } from '../face/EngineOverlay';
 import {
@@ -57,6 +57,11 @@ interface SelfEnrollPageProps {
   token: string;
   onExit: () => void;
 }
+
+/** أقصى مسافة تقبلها مطابقة «الوجه الجديد» مع «بصمة الطالب السابقة» — تجاوزها = تحذير للأدمن */
+const SELF_MATCH_MAX_DISTANCE = 0.40;
+/** أقل عدد عيّنات في البصمة السابقة حتى تُجرى المقارنة */
+const SELF_MATCH_MIN_SAMPLES = 3;
 
 const dbFetch = async <T,>(path: string, signal?: AbortSignal): Promise<T | null> => {
   const url = `${dbURL}/${path}.json`;
@@ -161,6 +166,8 @@ export const SelfEnrollPage: React.FC<SelfEnrollPageProps> = ({ token, onExit })
   const [sessionNameMap, setSessionNameMap] = useState<Record<string, string>>({});
   const [retryStep, setRetryStep] = useState<Step>('verify');
   const [qrResult, setQrResult] = useState<QrScanResult | null>(null);
+  /** حالة تحميل روستر المرحلة عند خطوة الالتقاط: يُفعّل فحص التكرار و«بصمة موجودة» */
+  const [rosterState, setRosterState] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle');
 
   const needsEngine = step === 'capture-face' || step === 'scan-face';
   const { ready: engineReady, progress, error: engineError, retry: engineRetry } = useFaceAI(needsEngine);
@@ -410,6 +417,39 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
     return () => { mounted = false; clearTimeout(globalTimeout); };
   }, [token, goTo]);
 
+  // ✅ تحميل **روستر المرحلة الحقيقي** عند خطوة الالتقاط
+  //    بدونه كان فحص «البصمة مسجّلة لطالب آخر» يمرّ على قائمة فارغة، و«بصمة موجودة» غير كاشفة.
+  useEffect(() => {
+    if (step !== 'capture-face') return;
+    if (!link?.stageId || !expected?.id) return;
+    if (stageStudents.length > 0) return;
+
+    let cancelled = false;
+    (async () => {
+      setRosterState('loading');
+      try {
+        let year = link.academicYear || '';
+        if (!year) { try { year = await getActiveAcademicYear(); } catch { year = ''; } }
+        if (!year) throw new Error('no-year');
+        const list = await loadStageStudentsPublic(link.adminUid, year, link.stageId);
+        if (cancelled) return;
+        setStageStudents(list);
+        // سجل الطالب الحي يغلب لقطة الرابط (اسم/كود/QR + بصمة موجودة)
+        const live = list.find(s => s.id === expected.id);
+        if (live) {
+          setExpected(prev => (prev ? { ...prev, ...live } : live));
+        }
+        setRosterState('ready');
+      } catch (e) {
+        if (cancelled) return;
+        console.warn('⚠️ تعذر تحميل روستر المرحلة — فحص التكرار سيكون محدوداً:', e);
+        setRosterState('failed');
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, link?.token, link?.stageId, expected?.id]);
+
   const handleVerified = async (student: Student, qr?: QrScanResult | null) => {
     if (!link) return;
     setQrResult(qr ?? null);
@@ -451,19 +491,21 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
     }
 
     // فحص التكرار قبل الإرسال للأدمن
+    let checksFailed = false;
     try {
       const allNewSamples = parseAllSamples(migrated);
       if (allNewSamples.length > 0) {
         let year = link.academicYear || '';
         if (!year) { try { year = await getActiveAcademicYear(); } catch {} }
 
-        const stageStudents = year
-          ? await loadStageStudentsPublic(link.adminUid, year, link.stageId)
-          : [];
+        // روستر المرحلة: من الحالة (محمّل عند capture-face) وإلا يُقرأ الآن
+        const roster = stageStudents.length > 0
+          ? stageStudents
+          : (year ? await loadStageStudentsPublic(link.adminUid, year, link.stageId) : []);
 
         let tamperResult: { tampered: boolean; matchedWith?: string } = { tampered: false };
         for (const sample of allNewSamples) {
-          const r = checkForTampering(sample, stageStudents, expected.id);
+          const r = checkForTampering(sample, roster, expected.id);
           if (r.tampered) { tamperResult = r; break; }
         }
 
@@ -495,7 +537,28 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
         }
       }
     } catch {
+      // ⚠️ الفشل لا يُبتلع صامتاً — يُعلَّم في الطلب ليعرفه الأدمن
+      checksFailed = true;
       console.warn('⚠️ فشل فحص تكرار البصمة، سيتم المتابعة للأدمن كخط دفاع ثانٍ:');
+    }
+
+    // ⚠️ مقارنة الوجه الجديد ببصمة الطالب المسجّلة سابقاً — **تحذير للأدمن** (لا يُمنع الطلب)
+    let selfMismatch = false;
+    try {
+      const mine = expected.faceDescriptor ? parseAllSamples(expected.faceDescriptor) : [];
+      const fresh = parseAllSamples(migrated);
+      if (mine.length >= SELF_MATCH_MIN_SAMPLES && fresh.length > 0) {
+        let best = Infinity;
+        for (const f of fresh) {
+          for (const m of mine) {
+            const d = descriptorDistance(f, m);
+            if (d < best) best = d;
+          }
+        }
+        selfMismatch = best > SELF_MATCH_MAX_DISTANCE;
+      }
+    } catch {
+      /* لا يوجد ما يُقارن — تُتجاهل */
     }
 
     try {
@@ -528,6 +591,8 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
           createdAt: now,
           hasExistingQr: !!expected.qrCodeId,
           hasExistingFace: !!expected.faceDescriptor,
+          selfMismatch,
+          checksFailed,
         },
       };
       if (link.stageId) {
@@ -629,6 +694,16 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
           onCaptured={handleFaceCaptured}
           onCancel={() => goTo('confirm')}
         />
+        {rosterState === 'loading' && (
+          <p className="mt-3 text-center text-xs text-slate-400" role="status">
+            جاري تحميل طلاب المرحلة للتحقق من تكرار البصمة…
+          </p>
+        )}
+        {rosterState === 'failed' && (
+          <p className="mt-3 text-center text-xs text-amber-300" role="alert">
+            ⚠️ تعذّر تحميل طلاب المرحلة — فحص تكرار البصمة سيكون محدوداً وسيصل الطلب للأدمن للتحقق.
+          </p>
+        )}
       </Suspense>
     );
   }

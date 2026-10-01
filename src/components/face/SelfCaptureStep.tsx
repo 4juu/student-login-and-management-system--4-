@@ -13,6 +13,7 @@ import {
   checkForTampering,
   hasValidDescriptor,
   l2Normalize,
+  minDistanceToAny,
   DESC_DIM,
   DESC_VERSION_GALLERY,
   type FaceGalleryDescriptor,
@@ -29,6 +30,27 @@ interface SelfCaptureStepProps {
 
 const SAMPLES_NEEDED = ENROLLMENT_SAMPLE_COUNT;
 const MIN_REL_SIZE = 0.14;
+/**
+ * أقصى بُعد مسموح بين العينة الجديدة و**أقرب** عينة سابقة.
+ * person آخر = بعيد عن كل العيّنات السابقة ⇒ يُرفض.
+ * زاوية أخرى لنفس الشخص = قريبة من عينة واحدة ⇒ تُقبل.
+ */
+const MAX_SAMPLE_DRIFT = 0.22;
+/** أقل عدد عينات سابقة قبل تطبيق البوابة (نحتاج أساساً للمقارنة) */
+const MIN_SAMPLES_FOR_DRIFT_CHECK = 2;
+
+/** المسافة إلى أقرب عينة في القائمة (وليس إلى المتوسط) */
+const nearestSampleDistance = (sample: Float32Array, samples: Float32Array[]): number =>
+  minDistanceToAny(sample, samples);
+
+/** متوسط متجهات العينات المجمَّعة (مُطبَّع) */
+const meanOf = (samples: Float32Array[]): Float32Array => {
+  const dim = samples[0]!.length;
+  const mean = new Float32Array(dim);
+  for (const s of samples) for (let i = 0; i < dim; i++) mean[i] = mean[i]! + s[i]!;
+  for (let i = 0; i < dim; i++) mean[i] = mean[i]! / samples.length;
+  return l2Normalize(mean);
+};
 
 type CapturePhase = EnrollmentAngle['key'];
 const CAPTURE_PHASES: EnrollmentAngle[] = ENROLLMENT_ANGLES;
@@ -218,6 +240,19 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
         return;
       }
 
+      // ── ✅ بوابة الاتساق: العينة الجديدة يجب أن تشبه **أقرب** عينة سابقة
+      //    (شخص ثانٍ/صورة مطبوعة = بعيدة عن كل العيّنات ⇒ تُرفض ولا تُحتسب،
+      //     أما زاوية أخرى لنفس الشخص فأقرب عينة قريبة ⇒ تُقبل)
+      const previous = samplesDataRef.current;
+      if (previous.length >= MIN_SAMPLES_FOR_DRIFT_CHECK) {
+        const drift = nearestSampleDistance(new Float32Array(res.descriptor), previous);
+        if (drift > MAX_SAMPLE_DRIFT) {
+          setFlash('fail');
+          setFeedback('الوجه مختلف عن اللقطات السابقة — تأكد أنك وحدك أمام الكاميرا ثم أعد الالتقاط');
+          return;
+        }
+      }
+
       samplesDataRef.current.push(new Float32Array(res.descriptor));
       const sampleCount = samplesDataRef.current.length;
       setSamples(sampleCount);
@@ -232,11 +267,7 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
 
       if (sampleCount >= SAMPLES_NEEDED) {
         // متوسط العينات — لفحص الاحتيال فقط، لا يُحفظ ولا يُدمج في البصمة
-        const dim = samplesDataRef.current[0]!.length;
-        const avg = new Float32Array(dim);
-        for (const s of samplesDataRef.current) for (let i = 0; i < dim; i++) avg[i] = avg[i]! + s[i]!;
-        for (let i = 0; i < dim; i++) avg[i] = avg[i]! / samplesDataRef.current.length;
-        const finalDesc = l2Normalize(avg);
+        const finalDesc = meanOf(samplesDataRef.current);
 
         // فحص الاحتيال
         const tamper = checkForTampering(finalDesc, othersRef.current, student.id);

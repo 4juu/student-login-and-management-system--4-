@@ -52,6 +52,11 @@ export interface PendingRegistration {
 
   hasExistingQr?: boolean | undefined;
   hasExistingFace?: boolean | undefined;
+
+  /** ⚠️ الوجه الجديد لا يطابق بصمة الطالب المسجّلة سابقاً (لفترة) — الأدمن يقرّر (لا يُمنع) */
+  selfMismatch?: boolean | undefined;
+  /** ⚠️ أخفق فحص التكرار/التعارض قبل الإرسال (روستر غير مقروء) — يجب أن يعرفه الأدمن */
+  checksFailed?: boolean | undefined;
 }
 
 export interface IDExtractionResult {

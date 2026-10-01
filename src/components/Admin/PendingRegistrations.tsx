@@ -9,9 +9,11 @@ import { markLinkAsUsed } from '../../services/tokenService';
 import { LoadingState } from '../loading/LoadingState';
 import { MorphingSquare } from '../MorphingSquare';
 import {
-  parseStoredDescriptor,
+  parseAllSamples,
   checkForTampering,
   migrateToV5,
+  descriptorDistance,
+  MATCH_STRICT,
 } from '../../services/faceAI/descriptors';
 import { Camera, Check, CheckCheck, CircleCheck, CircleX, ClipboardList, Mail, QrCode, Save, Smile, Trash2, TriangleAlert } from 'lucide-react';
 import { useConfirm } from '../../hooks/useConfirm';
@@ -190,17 +192,20 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
         throw new PermanentError('البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.');
       }
 
-      const query = parseStoredDescriptor(migrated);
-      if (!query) {
+      // ✅ فحص التعارض على **كل** عيّنات البصمة (لا أول عينة فقط — عينة الزاوية الضعيفة قد تُطابق غيرها)
+      const newSamples = parseAllSamples(migrated);
+      if (newSamples.length === 0) {
         throw new PermanentError('البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.');
       }
       const allStudents: Student[] = (Array.isArray(data) ? data : Object.values(data)).map(s => {
         const d = descriptors?.[s.id];
         return d !== undefined && d !== null ? { ...s, faceDescriptor: d } : s;
       });
-      const tamper = checkForTampering(query, allStudents, req.studentId);
-      if (tamper.tampered) {
-        throw new PermanentError(`لا يمكن الموافقة: هذه البصمة مطابقة لبصمة الطالب\n${tamper.matchedWith}\n\nيرجى التحقق من صالة الطلب.`);
+      for (const sample of newSamples) {
+        const tamper = checkForTampering(sample, allStudents, req.studentId);
+        if (tamper.tampered) {
+          throw new PermanentError(`لا يمكن الموافقة: هذه البصمة مطابقة لبصمة الطالب\n${tamper.matchedWith}\n\nيرجى التحقق من صالة الطلب.`);
+        }
       }
       finalDescriptor = migrated;
     }
@@ -209,10 +214,17 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
     // faceDescriptor يُكتب في العقدة المنفصلة descriptors/ (بلا مساس بمصفوفة students)
     onProgress?.('حفظ بصمة الوجه...');
     const studentRef = ref(database, `${basePath}/${studentKey}`);
-    await update(studentRef, {
-      qrCodeId: req.qrCodeId,
-      faceRegisteredAt: new Date().toISOString(),
-    });
+    // ⚠️ لا نكتب تاريخ «تسجيل البصمة» ولا نمسح رمز QR إلا عند وجود بصمة/قيمة فعلية
+    const studentPatch: Record<string, unknown> = {};
+    if (typeof req.qrCodeId === 'string' && req.qrCodeId.trim() !== '') {
+      studentPatch.qrCodeId = req.qrCodeId;
+    }
+    if (finalDescriptor !== undefined) {
+      studentPatch.faceRegisteredAt = new Date().toISOString();
+    }
+    if (Object.keys(studentPatch).length > 0) {
+      await update(studentRef, studentPatch);
+    }
     if (finalDescriptor !== undefined) {
       await set(ref(database, `${descriptorsPath}/${req.studentId}`), finalDescriptor);
     }
@@ -236,8 +248,68 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
     }
   };
 
+  /**
+   * ✅ حارس قبل الموافقة:
+   *  - يمنع الموافقة إذا كان للطالب **طلب آخر قيد المراجعة** (يكتب الأخير بصمت).
+   *  - التحذيرات (عدم تطابق الوجه مع البصمة القديمة / فشل الفحص / استبدال بصمة)
+   *    تتحوّل إلى سؤال صريح «موافقة استثنائية» — القرار للأدمن.
+   */
+  const guardBeforeApprove = async (req: PendingRegistration): Promise<boolean> => {
+    const counts = perStudentCount.get(req.studentId);
+    if (counts && counts.pending > 1) {
+      toast({
+        variant: 'destructive',
+        title: 'يوجد طلب آخر قيد المراجعة لنفس الطالب',
+        description: `${req.nameInSystem}: وافق على طلب واحد فقط لهذا الطالب — الموافقة على الاثنين تجعل آخرهما يكتب بصمت.`,
+      });
+      return false;
+    }
+
+    // ⚠️ اكتشاف تعارض البصمة مع الطلبات المعلقة الأخرى (طلاب مختلفون)
+    if (req.faceDescriptor && req.faceDescriptor !== undefined) {
+      const currentSamples = parseAllSamples(req.faceDescriptor);
+      if (currentSamples.length > 0) {
+        for (const otherReq of requests) {
+          if (otherReq.id === req.id || otherReq.status !== 'pending') continue;
+          const otherDescriptor = otherReq.faceDescriptor;
+          if (otherDescriptor && typeof otherDescriptor === 'object') {
+            const otherSamples = parseAllSamples(otherDescriptor);
+            if (otherSamples.length === 0) continue;
+            // تحقق من تشابه كل عينات
+            for (const sample of currentSamples) {
+              for (const otherSample of otherSamples) {
+                const distance = descriptorDistance(sample, otherSample);
+                if (distance < MATCH_STRICT) {
+                  toast({
+                    variant: 'destructive',
+                    title: 'تعارض في البصمات — تم رفض الموافقة',
+                    description: `البصمة ${req.nameInSystem} قريبة جداً (${distance.toFixed(3)}) من ${otherReq.nameInSystem} — إما رفض هذا أو انتظر`,
+                  });
+                  return false;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const notes: string[] = [];
+    if (req.selfMismatch) notes.push('الوجه الجديد لا يطابق بصمة الطالب المسجّلة سابقاً');
+    if (req.checksFailed) notes.push('فحص تكرار البصمة لم يكتمل قبل الإرسال');
+    if (req.hasExistingFace) notes.push('سيتم استبدال بصمة موجودة');
+    if (notes.length === 0) return true;
+
+    return confirmAction({
+      title: 'تأكيد موافقة استثنائية',
+      message: `${req.nameInSystem}: ${notes.join(' · ')}. هل توافق رغم ذلك؟`,
+      confirmLabel: 'موافقة استثنائية',
+    });
+  };
+
   const handleApprove = async (req: PendingRegistration) => {
     if (busyRef.current) return;
+    if (!(await guardBeforeApprove(req))) return;
     busyRef.current = true;
     startProcessing(req.id);
     setSaving({ title: 'جاري حفظ بصمة الطالب', detail: `${req.nameInSystem} — لا تغلق النافذة قبل اكتمال الحفظ` });
@@ -281,6 +353,17 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       for (const [i, req] of pendingList.entries()) {
         startProcessing(req.id);
         setSaving({ title: 'جاري حفظ كل البصمات', detail: `${req.nameInSystem}`, current: i + 1, total });
+        // ✅ الموافقة الجماعية تتخطى الطلبات التي تحتاج قراراً منفرداً (مكرّرة أو بها تحذيرات)
+        const counts = perStudentCount.get(req.studentId);
+        if (counts && counts.pending > 1) {
+          failures.push({ name: req.nameInSystem, msg: 'يوجد طلب آخر لنفس الطالب — راجع الطلبات يدوياً' });
+          continue;
+        }
+        if (req.selfMismatch || req.checksFailed) {
+          const why = req.selfMismatch ? 'الوجه لا يطابق بصمته المسجّلة' : 'فحص التكرار لم يكتمل';
+          failures.push({ name: req.nameInSystem, msg: `${why} — يحتاج موافقة فردية` });
+          continue;
+        }
         try {
           await withRetry(
             () => approveRequest(req, msg => setSaving(prev => (prev ? { ...prev, detail: `${req.nameInSystem} — ${msg}` } : prev))),
@@ -388,6 +471,22 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
     approved: requests.filter(r => r.status === 'approved').length,
     rejected: requests.filter(r => r.status === 'rejected').length,
   }), [requests]);
+
+  /**
+   * ⚠️ عدّاد الطلبات لكل طالب (منها قيد المراجعة) — يمنع الموافقة على أكثر من طلب
+   * لنفس الطالب (الذي يكتب أخيراً هو الفائز بصمت).
+   */
+  const perStudentCount = useMemo(() => {
+    const map = new Map<string, { total: number; pending: number }>();
+    for (const r of requests) {
+      if (!r.studentId) continue;
+      const cur = map.get(r.studentId) ?? { total: 0, pending: 0 };
+      cur.total += 1;
+      if (r.status === 'pending') cur.pending += 1;
+      map.set(r.studentId, cur);
+    }
+    return map;
+  }, [requests]);
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4 animate-fadeIn" dir="rtl">
@@ -556,6 +655,7 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
               const isApproved = req.status === 'approved';
               const isRejected = req.status === 'rejected';
               const isRejecting = rejectingId === req.id;
+              const siblingCount = perStudentCount.get(req.studentId)?.total ?? 0;
 
               return (
                 <div
@@ -645,7 +745,33 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
                         <TriangleAlert className="w-3 h-3" /> سيتم استبدال بصمة قديمة
                       </span>
                     )}
+                    {req.selfMismatch && (
+                      <span className="text-[10px] bg-red-500/15 border border-red-500/40 text-red-300 rounded-full px-2 py-1 flex items-center gap-1">
+                        <TriangleAlert className="w-3 h-3" /> الوجه لا يطابق بصمته المسجّلة
+                      </span>
+                    )}
+                    {req.checksFailed && (
+                      <span className="text-[10px] bg-amber-500/15 border border-amber-500/30 text-amber-300 rounded-full px-2 py-1 flex items-center gap-1">
+                        <TriangleAlert className="w-3 h-3" /> فحص التكرار لم يكتمل
+                      </span>
+                    )}
+                    {siblingCount > 1 && (
+                      <span className="text-[10px] bg-sky-500/15 border border-sky-500/30 text-sky-300 rounded-full px-2 py-1 flex items-center gap-1">
+                        <TriangleAlert className="w-3 h-3" /> {siblingCount} طلبات لنفس الطالب
+                      </span>
+                    )}
                   </div>
+
+                  {req.selfMismatch && (
+                    <div className="mb-3 p-2 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-300">
+                      <strong>تنبيه:</strong> الوجه الجديد لا يشبه بصمة الطالب المسجّلة سابقاً — قد يكون الطلب من طالب آخر، أو تم استبدال الرقم. راجع الطلب قبل الموافقة.
+                    </div>
+                  )}
+                  {req.checksFailed && (
+                    <div className="mb-3 p-2 bg-amber-500/10 border border-amber-500/30 rounded text-xs text-amber-300">
+                      <strong>تنبيه:</strong> لم يكتمل فحص تكرار البصمة قبل الإرسال (تعذّرت قراءة طلاب المرحلة).
+                    </div>
+                  )}
 
                   {isRejected && req.rejectionReason && (
                     <div className="mb-3 p-2 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-300">

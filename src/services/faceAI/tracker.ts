@@ -23,6 +23,10 @@ interface Track {
   cachedMargin: number;
   cachedSupported: number;
   confirmCount: number;
+  /** ✅ آخر معرّف طُبِّق عليه عدّاد التأكيد — مرجع الثبات (ليس الكاش الذي يُكتب قبل الفحص) */
+  lastConfirmId: string | null;
+  /** آخر صندوق **حقيقي مكتشَف** (لا صندوق متوقَّع) — يمنع وراثة هوية وجه آخر بعد اختفاء المسار */
+  lastRealBox: TrackBox | null;
   // ── #6: Velocity prediction ──
   velocityX: number;
   velocityY: number;
@@ -61,6 +65,8 @@ export class FaceTracker {
   private readonly IOU_THRESHOLD = 0.3;
   private readonly MAX_MISSED = 6;
   private readonly BUFFER_SIZE = 4;
+  /** بعد هذا العدد من الإطارات المفقودة تُصفَّر أدلة الهوية (وجه جديد لا يرث هوية سابقه) */
+  private readonly REACQUIRE_RESET_FRAMES = 2;
 
   /** استدعِها كل فريم بعد الكشف — قبل حساب أي embedding */
   update(detections: TrackBox[]): Array<{ trackId: number; box: TrackBox; isNew: boolean }> {
@@ -86,16 +92,31 @@ export class FaceTracker {
     }
 
     for (const track of this.tracks) {
+      // ✅ المطابقة تتم على **آخر صندوق حقيقي** لا على الصندوق المتوقَّع
+      //    (ووجهان متقاطعان كانا يتبادلان المسارات ويرثان مخزن إطارات بعضهما)
+      const refBox = track.lastRealBox ?? track.box;
       let bestIdx = -1, bestScore = this.IOU_THRESHOLD;
       for (let i = 0; i < detections.length; i++) {
         const det = detections[i];
         if (!det || matched.has(i)) continue;
-        const score = iou(track.box, det);
+        const score = iou(refBox, det);
         if (score > bestScore) { bestScore = score; bestIdx = i; }
       }
       if (bestIdx >= 0) {
         const bestDet = detections[bestIdx]!;
         matched.add(bestIdx);
+        // ✅ إعادة التقاط بعد اختفاء ⇒ هوية جديدة: تصفير كل أدلة الهوية المتراكمة
+        if (track.missedFrames >= this.REACQUIRE_RESET_FRAMES) {
+          track.embeddingBuffer = [];
+          track.smoothedEmbedding = null;
+          track.confirmCount = 0;
+          track.lastConfirmId = null;
+          track.cachedMatchId = null;
+          track.cachedConfidence = 0;
+          track.matchChanges = 0;
+          track.lastEmbedTime = 0;
+          track.lastEmbedBox = null;
+        }
         // ── #6: Update velocity ──
         const dt = track.lastBoxTime > 0 ? Math.max(0.016, (now - track.lastBoxTime) / 1000) : 0.05;
         const dx = bestDet.x - track.box.x;
@@ -104,6 +125,7 @@ export class FaceTracker {
         track.velocityY = dy / dt * 0.3 + track.velocityY * 0.7;
 
         track.box = bestDet;
+        track.lastRealBox = bestDet;
         track.missedFrames = 0;
         track.lastBoxTime = now;
         // #1.4: سجل الموضع في السجل (آخر 8 فريمات)
@@ -136,6 +158,8 @@ export class FaceTracker {
         cachedMargin: 1,
         cachedSupported: 1,
         confirmCount: 0,
+        lastConfirmId: null,
+        lastRealBox: det,
         velocityX: 0,
         velocityY: 0,
         lastBoxTime: now,
@@ -214,7 +238,10 @@ export class FaceTracker {
   bumpConfirm(trackId: number, matchId: string): number {
     const t = this.tracks.find(tr => tr.id === trackId);
     if (!t) return 0;
-    if (t.cachedMatchId === matchId) {
+    // ✅ يُقارن بـlastConfirmId (نتيجة **الإطار السابق**) لا بـcachedMatchId
+    //    الذي كُتب قبل هذا الفحص مباشرة — وإلا صار العدّاد مجرّد عدّاد إطارات
+    //    و«حماية تبدّل الهوية» لا تعمل أبداً.
+    if (t.lastConfirmId === matchId) {
       // #1.4 (ملغى): كان يخصم العدّاد لو الوجه ساكن → يبقى «جارٍ تحقق» إلى ما لا نهاية
       // حتى يتعرّف فقط عند حركة الوجه. الأثر حُذف؛ التأكيد يبني على المطابقة + الهامش.
       t.confirmCount++;
@@ -223,9 +250,10 @@ export class FaceTracker {
       t.matchChanges++;
       if (t.matchChanges > 3) {
         t.confirmCount = 0;
+        t.lastConfirmId = null;
         return 0;
       }
-      t.cachedMatchId = matchId;
+      t.lastConfirmId = matchId;
       t.confirmCount = 1;
     }
     return t.confirmCount;

@@ -241,6 +241,19 @@ export function descriptorDistance(a: Float32Array, b: Float32Array): number {
   return 1 - cosineSimilarity(a, b);
 }
 
+/**
+ * المسافة إلى **أقرب** عينة في القائمة.
+ * تُستخدم للتفريق بين: شخص مختلف (بعيد عن كل العيّنات) وزاوية أخرى لنفس الشخص (قريبة من عينة واحدة).
+ */
+export function minDistanceToAny(sample: Float32Array, samples: Float32Array[]): number {
+  let min = Infinity;
+  for (const s of samples) {
+    const d = descriptorDistance(sample, s);
+    if (d < min) min = d;
+  }
+  return min;
+}
+
 export interface BestMatch<T> {
   item: T;
   distance: number;
