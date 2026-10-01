@@ -14,22 +14,16 @@ import { faceEmbedder, type Box } from '../../services/faceAI/embedder';
 import { FaceTracker, type TrackBox } from '../../services/faceAI/tracker';
 import {
   hasValidDescriptor,
-  isGalleryDescriptor,
-  updateGallery,
   MATCH_LOOSE,
   MIN_RECOG_CONFIDENCE,
   MIN_FRAME_QUALITY,
   CONFIRM_FRAMES,
-  AUTO_LEARN_MAX_DISTANCE,
-  AUTO_LEARN_MIN_MARGIN,
 } from '../../services/faceAI/descriptors';
 import { buildGalleryIndex, findBestMatchIndexed, type GalleryIndex } from '../../services/faceAI/gallery';
 
 const EMPTY_INDEX: GalleryIndex = buildGalleryIndex([]);
-import { estimatePose, poseToBin } from '../../services/faceAI/pose';
 import { getTestLink, validateTestLink, formatRemainingMs, getServerNow } from '../../services/tokenService';
-import { loadStageStudentsWithOverrides } from '../SelfRegister/SelfEnrollPage';
-import { updateStudentDescriptorOverride } from '../../firebase/dataService';
+import { loadStageStudentsForRecognition } from '../SelfRegister/SelfEnrollPage';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface FaceTestPageProps {
@@ -37,14 +31,12 @@ interface FaceTestPageProps {
   onExit: () => void;
 }
 
-type TestPhase = 'loading' | 'invalid' | 'loadError' | 'ready' | 'scanning' | 'enhancing' | 'success';
+type TestPhase = 'loading' | 'invalid' | 'loadError' | 'ready' | 'scanning' | 'success';
 
 const MIN_FACE_PX = 22;
 const MAX_FACES_PER_FRAME = 10;
 const REEMBED_MIN_INTERVAL = 150;
 const REEMBED_MOVE_THRESHOLD = 0.08;
-
-const ENHANCE_DURATION_MS = 20_000;
 
 export const FaceTestPage: React.FC<FaceTestPageProps> = ({
   testToken,
@@ -70,32 +62,12 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
   const [noMatchOverlay, setNoMatchOverlay] = useState(false);
   const [expiresAt, setExpiresAt] = useState<number>(0);
   const [remainingMs, setRemainingMs] = useState<number>(0);
-  const [enhanceCountdown, setEnhanceCountdown] = useState<number>(20);
-  // ── دولة الحفظ البصرية ──
-const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null>(null);
-  // ── حالة الحفظ المرئية — تظهر على الشاشة مباشرة (مهمة لأنه لا يمكن فتح Console على الموبايل) ──
-  useBodyScrollLock(phase === 'scanning' || phase === 'enhancing');
-
-  // ── إرشاد الحركة الدوار أثناء التحسين ──
-  const POSE_HINTS = [
-    { icon: '↔', text: 'حرّك رأسك يميناً' },
-    { icon: '↔', text: 'حرّك رأسك يساراً' },
-    { icon: '↕', text: 'اقترب قليلاً من الكاميرا' },
-    { icon: '↕', text: 'ابتعد قليلاً من الكاميرا' },
-  ];
-  const [poseHintIdx, setPoseHintIdx] = useState(0);
+  useBodyScrollLock(phase === 'scanning');
 
   const studentsRef = useRef<Student[]>([]);
   const galleryRef = useRef<GalleryIndex>(EMPTY_INDEX);
   const trackerRef = useRef(new FaceTracker());
   const faceSeenRef = useRef(0);
-
-  // ── refs للتحسين التلقائي ──
-  const enhancingRef = useRef(false);
-  const enhanceStartRef = useRef(0);
-  const enhancedCountRef = useRef(0);
-  const savedDescriptorRef = useRef<any>(null);
-  const linkDataRef = useRef<{ adminUid: string; stageId: string } | null>(null);
 
   // ── تحميل بيانات الرابط وطلاب المرحلة ──
   useEffect(() => {
@@ -110,10 +82,9 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
         }
         setExpiresAt(link.expiresAt);
         setRemainingMs(link.expiresAt - getServerNow());
-        linkDataRef.current = { adminUid: link.adminUid, stageId: link.stageId };
         let s: Student[] = [];
         try {
-          s = await loadStageStudentsWithOverrides(link.adminUid, link.stageId);
+          s = await loadStageStudentsForRecognition(link.adminUid, link.stageId);
         } catch {
           if (!cancelled) setPhase('loadError');
           return;
@@ -149,7 +120,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
   }, [expiresAt]);
 
   // ── فتح/إغلاق الكاميرا ──
-  const needsCamera = (phase === 'scanning' || phase === 'enhancing') && engineReady;
+  const needsCamera = phase === 'scanning' && engineReady;
   useEffect(() => {
     if (!needsCamera) return;
     let localStream: MediaStream | null = null;
@@ -217,7 +188,7 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
 
   // ── حلقة المسح ──
   useEffect(() => {
-    if ((phase !== 'scanning' && phase !== 'enhancing') || !engineReady || !cameraReady) return;
+    if (phase !== 'scanning' || !engineReady || !cameraReady) return;
     runningRef.current = true;
 
     const drawBoxes = (
@@ -361,32 +332,6 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
               const vbx = res.box.x / scale, vby = res.box.y / scale;
               const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
 
-              // ── وضع التحسين: حفظ العناقيد للمطابق ──
-              if (enhancingRef.current && matchedStudent && match && match.item.id === matchedStudent.id) {
-                try {
-                  const origDet = detections.find(d =>
-                    Math.abs(d.box.x - embTrack.box.x) < 1 &&
-                    Math.abs(d.box.y - embTrack.box.y) < 1
-                  );
-                  const pose = estimatePose(origDet?.keypoints);
-                  // 🚫 نفس حارس الإنتاج: لا تعلّم إلا عند ثقة قصوى — يمنع سمّ المعرض
-                  const confident =
-                    match.distance <= AUTO_LEARN_MAX_DISTANCE &&
-                    match.margin >= AUTO_LEARN_MIN_MARGIN;
-                  if (confident && pose && savedDescriptorRef.current && isGalleryDescriptor(savedDescriptorRef.current)) {
-                    const bin = poseToBin(pose);
-                    const result = updateGallery(savedDescriptorRef.current, smoothed, res.quality.composite, bin, true);
-                    if (result.action === 'merged' || result.action === 'created') {
-                      savedDescriptorRef.current = result.gallery;
-                      enhancedCountRef.current += 1;
-                    }
-                  }
-                } catch { /* تجاهل */ }
-
-                liveBoxes.push({ box: boxInVideo, label: matchedStudent.name.split(' ')[0], sub: 'تحسين البصمة', color: '#34d399' });
-                continue;
-              }
-
               if (!match || match.confidence < MIN_RECOG_CONFIDENCE || res.quality.composite < MIN_FRAME_QUALITY) {
                 const smallFace = res.box.width < MIN_FACE_PX * 1.7;
                 liveBoxes.push({ box: boxInVideo, label: smallFace ? 'اقترب قليلاً' : 'غير معروف', color: '#fbbf24' });
@@ -405,17 +350,11 @@ const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null
                 continue;
               }
 
-              // ✅ تأكيد كامل — البدء بتحسين البصمة
+              // تأكيد التعرف عبر عدة إطارات — ثم إنهاء الاختبار بدون تعديل البصمة المحفوظة.
               setMatchedStudent(student);
-              enhancedCountRef.current = 0;
-              savedDescriptorRef.current = student.faceDescriptor;
-              enhancingRef.current = true;
-              enhanceStartRef.current = performance.now();
-setEnhanceCountdown(20);
-                setPhase('enhancing');
-                trackerRef.current.removeTrack(trackId);
-              liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
-              drawBoxes(liveBoxes);
+              trackerRef.current.removeTrack(trackId);
+              stopScan();
+              setPhase('success');
               return;
             }
 
@@ -446,15 +385,9 @@ setEnhanceCountdown(20);
 
               if (confirmCount >= CONFIRM_FRAMES) {
                 setMatchedStudent(student);
-                enhancedCountRef.current = 0;
-                savedDescriptorRef.current = student.faceDescriptor;
-                enhancingRef.current = true;
-                enhanceStartRef.current = performance.now();
-                setEnhanceCountdown(20);
-                setPhase('enhancing');
                 trackerRef.current.removeTrack(t.trackId);
-                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
-                drawBoxes(liveBoxes);
+                stopScan();
+                setPhase('success');
                 return;
               } else {
                 liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
@@ -486,77 +419,7 @@ setEnhanceCountdown(20);
     };
   }, [phase, engineReady, cameraReady, facing, retry, stopScan]);
 
-  // ── عداد تحسين البصمة (20 ثانية) ──
-  useEffect(() => {
-    if (phase !== 'enhancing') return;
-    const start = performance.now();
-    let raf: number;
-    const tick = () => {
-      const elapsed = performance.now() - start;
-      const left = Math.max(0, Math.ceil((ENHANCE_DURATION_MS - elapsed) / 1000));
-      setEnhanceCountdown(left);
-      if (left > 0 && mountedRef.current) {
-        raf = requestAnimationFrame(tick);
-      }
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [phase]);
-
-  // ── إرشاد الحركة الدوار (كل 4 ثوانٍ) ──
-  useEffect(() => {
-    if (phase !== 'enhancing') return;
-    setPoseHintIdx(0);
-    const iv = setInterval(() => setPoseHintIdx(i => (i + 1) % POSE_HINTS.length), 4000);
-    return () => clearInterval(iv);
-  }, [phase]);
-
-  // ── إنهاء التحسين وحفظ البصمة ──
-  useEffect(() => {
-    if (phase !== 'enhancing') return;
-    const timer = window.setTimeout(async () => {
-      enhancingRef.current = false;
-      runningRef.current = false;
-      if (loopTimerRef.current) { clearTimeout(loopTimerRef.current); loopTimerRef.current = 0; }
-      if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
-
-      // حفظ البصمة في descriptorOverrides — يُحفظ دائماً عند وجود طالب مطابق
-      if (matchedStudent && savedDescriptorRef.current && linkDataRef.current) {
-        try {
-          // تحديث الكاش المحلي
-          const students = studentsRef.current;
-          const idx = students.findIndex(s => s.id === matchedStudent.id);
-          if (idx >= 0) {
-            students[idx] = { ...students[idx]!, faceDescriptor: savedDescriptorRef.current };
-            studentsRef.current = students;
-            galleryRef.current = buildGalleryIndex(students.filter(s => hasValidDescriptor(s.faceDescriptor)));
-          }
-          // حفظ في Firebase عبر descriptorOverrides (لا يتطلب تسجيل دخول)
-          await updateStudentDescriptorOverride(
-            linkDataRef.current.adminUid,
-            linkDataRef.current.stageId,
-            matchedStudent.id,
-            savedDescriptorRef.current,
-          );
-          if (mountedRef.current) setSaveStatus({ ok: true, msg: 'تم حفظ البصمة المحسّنة في النظام ✓' });
-        } catch (e) {
-          console.error('[face-test] ❌ فشل حفظ البصمة:', e);
-          if (mountedRef.current) setSaveStatus({ ok: false, msg: `فشل الحفظ: ${e instanceof Error ? e.message : String(e)}` });
-        }
-      } else {
-        console.warn('[face-test] تم تخطي الحفظ — عنقود غير مكتمل:', { matchedStudent: !!matchedStudent, descriptor: !!savedDescriptorRef.current, linkData: !!linkDataRef.current });
-        if (mountedRef.current) setSaveStatus({ ok: false, msg: 'لم يُحفظ — البيانات غير مكتملة' });
-      }
-
-      if (mountedRef.current) setPhase('success');
-    }, ENHANCE_DURATION_MS);
-    return () => clearTimeout(timer);
-  }, [phase, matchedStudent]);
-
   const statusPill = (() => {
-    if (phase === 'enhancing') {
-      return { icon: '⏳', text: 'يرجى الانتظار', cls: 'bg-emerald-500/90 text-white' };
-    }
     if (!engineReady || !cameraReady) return { icon: '⏳', text: 'جاري التحضير...', cls: 'bg-white/10 text-slate-300' };
     return { icon: '✨', text: 'أبقِ وجهك داخل الإطار', cls: 'bg-indigo-500/90 text-white' };
   })();
@@ -672,8 +535,6 @@ setEnhanceCountdown(20);
             onClick={() => {
               setMatchedStudent(null);
               setNoMatchOverlay(false);
-              enhancedCountRef.current = 0;
-              savedDescriptorRef.current = null;
               faceSeenRef.current = 0;
               setPhase('ready');
               trackerRef.current.reset();
@@ -692,7 +553,7 @@ setEnhanceCountdown(20);
       {preScanUI}
       {successOverlay}
 
-      {(phase === 'scanning' || phase === 'enhancing') && (
+      {phase === 'scanning' && (
         <div
           dir="rtl"
           role="dialog"
@@ -793,45 +654,6 @@ setEnhanceCountdown(20);
               </div>
             )}
 
-            {/* نص على الكاميرا مباشرة: تحسين البصمة — بدون خلفية */}
-            {phase === 'enhancing' && matchedStudent && (
-              <div className="absolute inset-x-0 top-0 z-[9999] pointer-events-none flex flex-col items-center pt-8" dir="rtl">
-                {enhanceCountdown > 0 ? (
-                  <>
-                    <div className="px-5 py-3 rounded-2xl bg-black/50 backdrop-blur-sm">
-                      <p className="text-xl sm:text-2xl font-extrabold text-white text-center leading-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
-                        أهلاً {matchedStudent.name.split(' ')[0]}
-                      </p>
-                      <p className="mt-2 text-lg sm:text-xl font-bold text-emerald-300 text-center drop-shadow-[0_2px_6px_rgba(0,0,0,0.7)] transition-all duration-500">
-                        {POSE_HINTS[poseHintIdx]?.icon} {POSE_HINTS[poseHintIdx]?.text}
-                      </p>
-                    </div>
-                    <div className="mt-3 flex flex-col items-center">
-                      <div className="text-5xl sm:text-6xl font-black text-white tabular-nums drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]">
-                        {enhanceCountdown}
-                      </div>
-                      <div className="mt-2 w-48 h-1.5 rounded-full bg-white/20 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-white/80 transition-all duration-1000 ease-linear"
-                          style={{ width: `${((20 - enhanceCountdown) / 20) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="px-5 py-3 rounded-2xl bg-black/50 backdrop-blur-sm">
-                    <p className="text-xl sm:text-2xl font-extrabold text-white text-center drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
-                      ✓ تم تحسين بصمتك بنجاح
-                    </p>
-                  </div>
-                )}
-                {saveStatus && (
-                  <div className={`mt-3 px-4 py-2 rounded-xl text-sm font-bold drop-shadow-lg ${saveStatus.ok ? 'bg-emerald-500/90 text-white' : 'bg-red-500/90 text-white'}`}>
-                    {saveStatus.msg}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           <style>{`

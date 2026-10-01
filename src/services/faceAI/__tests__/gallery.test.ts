@@ -55,20 +55,18 @@ function makeStudent(id: string, name: string, angles: number[]) {
   };
 }
 
-describe('findBestMatchIndexed — مطابقة صارمة بإثبات مزدوج وتصويت', () => {
-  it('يقبل مطابقة قوية متعددة الإثباتات', () => {
+describe('findBestMatchIndexed — المطابقة بأقرب بصمة زاوية', () => {
+  it('يقبل الطالب عند تطابق إحدى بصماته المسجلة', () => {
     const gallery = [makeItem('A', [0.05, 0.06, 0.07, 0.36, 0.37]), makeItem('B', [0.6, 0.62])];
     const match = findBestMatchIndexed(QUERY, gallery, 0.42, 0.7);
     expect(match).not.toBeNull();
     expect(match!.item.id).toBe('A');
-    expect(match!.votes).toBe(3);
     expect(match!.distance).toBeLessThan(0.1);
-    // الثقة من مسافة القرار (متوسط أقرب 3 = 0.06) لا من أقرب عيّنة (0.05)
-    expect(match!.confidence).toBeGreaterThanOrEqual(93);
+    expect(match!.confidence).toBeGreaterThanOrEqual(94);
     expect(match!.nearest).toBeCloseTo(0.05, 3);
   });
 
-  it('يرفض المارٍ بعيّنة واحدة فوق soloCap ويقبل تحتها', () => {
+  it('يرفض عينة منفردة ضعيفة ويقبل المطابقة القوية', () => {
     const gallery = [makeItem('S', [0.19])];
     expect(findBestMatchIndexed(QUERY, gallery, 0.42, 0.7)).toBeNull();
 
@@ -78,14 +76,11 @@ describe('findBestMatchIndexed — مطابقة صارمة بإثبات مزدو
     expect(match!.item.id).toBe('S');
   });
 
-  it('يرفض عند ضعف الإثبات الثاني (d2Cap)', () => {
-    const gallery = [makeItem('A', [0.10, 0.33, 0.34])];
-    expect(findBestMatchIndexed(QUERY, gallery, 0.42, 0.7)).toBeNull();
-  });
-
-  it('يرفض عند تصويت غيركافٍ', () => {
-    const gallery = [makeItem('A', [0.05, 0.06, 0.40, 0.41, 0.42])];
-    expect(findBestMatchIndexed(QUERY, gallery, 0.42, 0.7)).toBeNull();
+  it('يقبل تطابق زاوية واحدة ولو اختلفت بقية زوايا التسجيل', () => {
+    const gallery = [makeItem('A', [0.08, 0.55, 0.60, 0.64, 0.70, 0.75, 0.80])];
+    const match = findBestMatchIndexed(QUERY, gallery, 0.42, 0.7);
+    expect(match?.item.id).toBe('A');
+    expect(match?.nearest).toBeCloseTo(0.08, 2);
   });
 
   it('يرفض عند هامش غيركافٍ بين أفضل طالبين', () => {
@@ -144,15 +139,12 @@ describe('findBestMatchIndexed — مطابقة صارمة بإثبات مزدو
   });
 });
 
-describe('م1 — الإحصاء العادل: لا تحيّز بعدد العيّنات', () => {
-  it('طالب بـ10 عيّنات سيّئة لا يتفوّق على طالب بـ3 عيّنات جيدة', () => {
-    // X: 10 عيّنات، عيّنة واحدة قريبة والباقي بعيد → متوسط الأقرب 3 سيئ
-    const X = makeItem('X', [0.10, 0.30, 0.31, 0.32, 0.33, 0.34, 0.36, 0.40, 0.45, 0.50]);
-    // Y: 3 عيّنات كلها قريبة
-    const Y = makeItem('Y', [0.12, 0.13, 0.14]);
+describe('اختيار الزاوية الأقرب', () => {
+  it('يفوز صاحب العينة الأقرب بغض النظر عن عدد العينات', () => {
+    const X = makeItem('X', [0.05, 0.30, 0.31, 0.32, 0.33, 0.34, 0.36]);
+    const Y = makeItem('Y', [0.25]);
     const match = findBestMatchIndexed(QUERY, [X, Y], 0.42, 0.7);
-    // Y يفوز بالمسافة الحقيقية لا X بأفضل عيّنة
-    expect(match?.item.id).toBe('Y');
+    expect(match?.item.id).toBe('X');
   });
 
   it('مسافة القرار = متوسط أقرب 3 لا أقرب عيّنة', () => {
@@ -161,22 +153,11 @@ describe('م1 — الإحصاء العادل: لا تحيّز بعدد العي
     expect(decisionDistance([0.1, 0.2])).toBeCloseTo(0.15, 5);
   });
 
-  it('يرفض 3 تصويتات من 15 عيّنة (نسبة ضعيفة) — لا شراء القبول بعدد العينات', () => {
-    // 3 عيّنات قريبة، 12 بعيدة جداً ⇒ نسبة 20% < 34%
-    const far = Array.from({ length: 12 }, () => 0.95);
-    const it = makeItem('A', [0.10, 0.30, 0.34, ...far]);
-    const match = findBestMatchIndexed(QUERY, [it], 0.42, 0.7);
-    expect(match).toBeNull();
-    expect(getLastRejection()?.reason).toBe('insufficient-vote-ratio');
-  });
-
-  it('يقبل عندما تكون نسبة التصويت كافية رغم كثرة العينات', () => {
-    // 10 قريبة، 3 بعيدة ⇒ 77% > 34%
-    const near = Array.from({ length: 10 }, (_, i) => 0.05 + i * 0.005);
-    const it = makeItem('A', [...near, 0.95, 0.96, 0.97]);
+  it('يقبل بصمة زاوية واحدة من السبع دون تصويت أو دمج', () => {
+    const it = makeItem('A', [0.10, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95]);
     const match = findBestMatchIndexed(QUERY, [it], 0.42, 0.7);
     expect(match).not.toBeNull();
-    expect(match!.voteRatio).toBeGreaterThanOrEqual(0.34);
+    expect(match!.nearest).toBeCloseTo(0.10, 2);
   });
 });
 
@@ -212,7 +193,6 @@ describe('calibrateGallery / buildGalleryIndex — معايرة تشدد فقط'
 
     // تشديد فقط
     expect(index.profile.d1Cap).toBeLessThanOrEqual(DEFAULT_MATCH_PROFILE.d1Cap);
-    expect(index.profile.d2Cap).toBeLessThanOrEqual(DEFAULT_MATCH_PROFILE.d2Cap);
     expect(index.profile.margin).toBeGreaterThanOrEqual(DEFAULT_MATCH_PROFILE.margin);
     expect(index.profile.soloCap).toBeLessThanOrEqual(DEFAULT_MATCH_PROFILE.soloCap);
   });
@@ -251,8 +231,11 @@ describe('calibrateGallery / buildGalleryIndex — معايرة تشدد فقط'
     expect(near.report.dangerPairs[0]!.aName).toBe('طالب أ');
   });
 
-  it('يبني عناصر المعرض مع مركز ثقيل وعيّنة أساسية', () => {
+  it('يبني عناصر المعرض من عينات التسجيل الأصلية ويتجاهل العناقيد القديمة', () => {
     const students = [makeStudent('a', 'طالب أ', [0, 2, 4])];
+    (students[0]!.faceDescriptor as { clusters: Array<{ bin: string; vector: number[]; mergeCount: number; quality: number; updatedAt: number }> }).clusters = [
+      { bin: 'legacy', vector: Array.from(angleVec(80)), mergeCount: 3, quality: 0.9, updatedAt: Date.now() },
+    ];
     const gallery = buildGallery(students);
     expect(gallery).toHaveLength(1);
     const item = gallery[0]!;

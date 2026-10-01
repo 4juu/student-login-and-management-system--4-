@@ -86,31 +86,13 @@ export const loadStageStudentsPublic = async (
   });
 };
 
-// ── تحميل الطلاب مع دمج التحسينات المحفوظة (descriptorOverrides) ──
-export const loadStageStudentsWithOverrides = async (
+// يقرأ البصمات المعتمدة فقط؛ لا يحمّل أي بصمات تعلم/تحسين قديمة.
+export const loadStageStudentsForRecognition = async (
   adminUid: string,
   stageId: string,
 ): Promise<Student[]> => {
   const year = await getActiveAcademicYear();
-  const students = await loadStageStudentsCached(adminUid, year, stageId);
-  if (students.length === 0) return students;
-
-  try {
-    const overridesPath = `academicYears/${year}/userData/${adminUid}/stageData/${stageId}/descriptorOverrides`;
-    const overridesData = await dbFetch<Record<string, { faceDescriptor: any; updatedAt: number }>>(overridesPath);
-    if (!overridesData) return students;
-
-    const result = students.map(s => {
-      const ov = overridesData[s.id];
-      if (ov?.faceDescriptor && ov.updatedAt > 0) {
-        return { ...s, faceDescriptor: ov.faceDescriptor };
-      }
-      return s;
-    });
-    return result;
-  } catch {
-    return students;
-  }
+  return loadStageStudentsCached(adminUid, year, stageId);
 };
 
 const STAGE_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 ساعات

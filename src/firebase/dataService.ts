@@ -32,9 +32,6 @@ export {
   saveStudents,
   loadStudents,
   mergeDescriptorsIntoStudents,
-  updateStudentDescriptorOverride,
-  loadDescriptorOverrides,
-  clearDescriptorOverrides,
 } from './studentsService';
 
 export {

@@ -14,25 +14,19 @@ import { faceEmbedder, type Box } from '../../services/faceAI/embedder';
 import { FaceTracker, type TrackBox } from '../../services/faceAI/tracker';
 import {
   hasValidDescriptor,
-  isGalleryDescriptor,
-  updateGallery,
   MATCH_LOOSE,
   MIN_RECOG_CONFIDENCE,
   CONFIRM_FRAMES,
-  AUTO_LEARN_MAX_DISTANCE,
-  AUTO_LEARN_MIN_MARGIN,
   MIN_FRAME_QUALITY,
 } from '../../services/faceAI/descriptors';
 import { buildGalleryIndex, findBestMatchIndexed } from '../../services/faceAI/gallery';
 import { recordRejection } from '../../services/faceAI/nearMiss';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
-import { estimatePose, poseToBin } from '../../services/faceAI/pose';
 
 interface FaceScannerProps {
   students: Student[];
   activeSession: AttendanceSession | null;
   onMarkAttendance: (student: Student) => Promise<void> | void;
-  onUpdateStudent: (id: string, updates: Partial<Student>) => void;
   alreadyPresentIds: Set<string>;
   onClose: () => void;
 }
@@ -67,7 +61,6 @@ const AVATAR_COLORS = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-ro
 export const FaceScanner: React.FC<FaceScannerProps> = ({
   students,
   onMarkAttendance,
-  onUpdateStudent,
   alreadyPresentIds,
   onClose,
 }) => {
@@ -114,8 +107,6 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   const hwZoomRange = useRef<{ min: number; max: number; step: number } | null>(null);
   const loggedIdsRef = useRef(new Map<string, boolean>());
   const trackerRef = useRef(new FaceTracker());
-  const updateRef = useRef(onUpdateStudent);
-  updateRef.current = onUpdateStudent;
 
   // مناطق "منتهية" (طلاب سُجّل حضورهم) — تُكبت مؤقتاً كي لا يلتصق الإطار بهم ويترك المجال لغيرهم
   const suppressZonesRef = useRef<Array<{ box: Box; until: number }>>([]);
@@ -522,34 +513,6 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                 markedAny = true;
                 finalizeTrack(student, match.confidence, boxInVideo, trackId);
                 claimFrameBox(boxInVideo);
-
-              // ✅ Pose Grid: تحسين البصمة تدريجياً عبر شبكة الزوايا (فقط عند التضمين الجديد)
-              try {
-                const origDet = bigEnough.find(d =>
-                  Math.abs(d.box.x - embTrack.box.x) < 1 &&
-                  Math.abs(d.box.y - embTrack.box.y) < 1
-                );
-                const pose = estimatePose(origDet?.keypoints);
-
-                if (pose) {
-                  const bin = poseToBin(pose);
-                  if (!isGalleryDescriptor(student.faceDescriptor)) continue;
-
-                  // 🚫 التغذية الراجعة شرطها ثقة قصوى فقط — يوقف السمّ (تضخّم الخطأ في المعرض)
-                  const confident =
-                    match.distance <= AUTO_LEARN_MAX_DISTANCE &&
-                    match.margin >= AUTO_LEARN_MIN_MARGIN;
-                  if (!confident) continue;
-
-                  const result = updateGallery(student.faceDescriptor, smoothed, res.quality.composite, bin);
-
-                  if (result.action === 'merged' || result.action === 'created') {
-                    updateRef.current(student.id, { faceDescriptor: result.gallery });
-                  }
-                }
-              } catch (e) {
-                console.warn('[face-scanner] فشل تحديث معرض الزوايا:', e);
-              }
             }
           }
 

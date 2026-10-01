@@ -5,7 +5,6 @@ import type { CalibrationReport, MatchProfile } from '../../services/faceAI/gall
 
 interface FaceHealth {
   v5Count: number;
-  matureCount: number;
   noFaceCount: number;
   total: number;
 }
@@ -68,14 +67,10 @@ export const FaceHealthPanel: React.FC<FaceHealthPanelProps> = ({
         </span>
       </h3>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3">
         <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
           <div className="text-2xl font-bold text-emerald-300">{health.v5Count}</div>
-          <div className="text-xs text-emerald-400">بصمة v5 (معرض)</div>
-        </div>
-        <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
-          <div className="text-2xl font-bold text-purple-300">{health.matureCount}</div>
-          <div className="text-xs text-purple-400">ناضجة (≥80%)</div>
+          <div className="text-xs text-emerald-400">بصمات v5 مسجلة</div>
         </div>
         <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
           <div className="text-2xl font-bold text-slate-500">{health.noFaceCount}</div>

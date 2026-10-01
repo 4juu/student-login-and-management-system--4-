@@ -6,7 +6,6 @@ import {
   hasValidDescriptor,
   getGalleryHealthSummary,
   isGalleryDescriptor,
-  pruneStaleClusters,
   migrateToV5,
 } from '../../services/faceAI/descriptors';
 import { buildGalleryIndex, type GalleryIndex } from '../../services/faceAI/gallery';
@@ -578,7 +577,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
     setCurrentPage(1);
   }, [searchQuery, groupFilter, pageSize]);
 
-  // تنظيف تلقائي: تقليم العناقيد القديمة + حذف اي بصمة غير متوافقة مع صيغة v5 الصارمة
+  // تنظيف التنسيقات التالفة فقط؛ عينات التسجيل المعتمدة لا تتعلم ولا تتغير بالحضور.
   React.useEffect(() => {
     if (!onUpdateStudent) return;
     try {
@@ -591,8 +590,6 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
             onUpdateStudent(s.id, { faceDescriptor: null });
             return;
           }
-          const pruned = pruneStaleClusters(fd);
-          if (pruned !== fd) onUpdateStudent(s.id, { faceDescriptor: pruned });
         } else {
           // اي تنسيق قديم (مصفوفة مسطحة، {descriptor}...) → حذف
           onUpdateStudent(s.id, { faceDescriptor: null });

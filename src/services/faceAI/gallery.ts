@@ -10,13 +10,8 @@ import {
   descriptorDistance,
   MIN_MARGIN,
   isGalleryDescriptor,
-  normalizeClusters,
   parseOneSample,
   RECOG_D1_CAP,
-  RECOG_D2_CAP,
-  RECOG_VOTE_CAP,
-  RECOG_VOTES,
-  RECOG_VOTE_RATIO,
   RECOG_MATCH_K,
   RECOG_SOLO_CAP,
 } from './descriptors';
@@ -39,48 +34,19 @@ export const DANGER_PAIR_DISTANCE = 0.30;
 export interface MatchProfile {
   /** أقصى مسافة لأول عيّنة */
   d1Cap: number;
-  /** أقصى مسافة للعيّنة الثانية (إثبات مستقل) */
-  d2Cap: number;
-  /** حد التصويت — عيّنات تحته تُعدّ إثباتات */
-  voteCap: number;
-  /** عدد الإثباتات المطلوبة */
-  votes: number;
   /** حد العيّنة الوحيدة (مارٍ بلا إحصاء) */
   soloCap: number;
   /** الهامش الأدنى بين أفضل طالبين */
   margin: number;
-  /**
-   * أدنى نسبة من عيّنات الطالب يجب أن تصوّت (votes/sampleCount).
-   * يمنع الطالب كثيرة العيّنات من «شراء» القبول cheaply —
-   * 3 من 28 لم يعد يكفي.
-   */
-  voteRatio: number;
-  /**
-   * عدد الأقرب المُتوسَّط في حساب مسافة القرار.
-   * 0 = متوسط أقرب 3 (افتراضي). الرقم 1 = أقرب عيّنة (سلوك قديم، محذوف).
-   */
-  k: number;
 }
 
 export const DEFAULT_MATCH_PROFILE: MatchProfile = {
   d1Cap: RECOG_D1_CAP,
-  d2Cap: RECOG_D2_CAP,
-  voteCap: RECOG_VOTE_CAP,
-  votes: RECOG_VOTES,
   soloCap: RECOG_SOLO_CAP,
   margin: MIN_MARGIN,
-  voteRatio: RECOG_VOTE_RATIO,
-  k: RECOG_MATCH_K,
 };
 
-/**
- * مسافة القرار العادلة لطالب: متوسط أقرب `k` عيّنات.
- *
- * لماذا لا `min`؟ لأن `min` يجعل احتمال القبول الخاطئ يتضاعف أُسّياً بعدد
- * عيّنات الطالب (٣ عيّنات ≈ ٢.٨٪ خطأ، ٢٨ عيّنة ≈ ٧٨.٥٪ عند تشابه ١٠٪).
- * أي طالب يحضر أكثر «يشتري» قبولاً أسهل — وهو سبب خلط الأسماء مباشرة.
- * متوسط أقرب 3 يجعل القرار لا يتأثر بعدد عيّنات الطالب.
- */
+/** مقياس داخلي لمعايرة تشتت معرض التسجيل فقط؛ قرار التعرف نفسه يستخدم أقرب عينة. */
 export function decisionDistance(sortedDists: number[], k: number = RECOG_MATCH_K): number {
   const n = sortedDists.length;
   if (n === 0) return Infinity;
@@ -220,8 +186,6 @@ export function calibrateGallery(gallery: GalleryItem[]): {
   }
   profile = {
     ...profile,
-    d2Cap: Math.min(DEFAULT_MATCH_PROFILE.d2Cap, profile.d1Cap + 0.08),
-    voteCap: Math.min(DEFAULT_MATCH_PROFILE.voteCap, profile.d1Cap + 0.10),
     soloCap: Math.min(DEFAULT_MATCH_PROFILE.soloCap, profile.d1Cap - 0.05),
   };
 
@@ -298,27 +262,18 @@ export function buildGallery<T extends { id: string; name?: string; faceDescript
     const fd = item.faceDescriptor;
     if (!isGalleryDescriptor(fd)) continue;
 
-    // ── #3: Weighted centroid — weight clusters by quality ──
+    // عينات التسجيل السبع فقط. بيانات العناقيد القديمة في Firebase تُتجاهل.
     const enrollmentSamples: Float32Array[] = [];
-    const clusterSamples: Array<{ vec: Float32Array; weight: number }> = [];
 
     for (const s of fd.enrollment) {
       const p = parseOneSample(s);
       if (p) enrollmentSamples.push(p);
     }
 
-    for (const c of normalizeClusters(fd.clusters)) {
-      const p = parseOneSample(c.vector);
-      if (p) clusterSamples.push({ vec: p, weight: Math.max(0.5, c.quality) });
-    }
-
-    const allSamples = [
-      ...enrollmentSamples,
-      ...clusterSamples.map(c => c.vec),
-    ];
+    const allSamples = enrollmentSamples;
     if (allSamples.length === 0) continue;
 
-    // Weighted centroid: enrollment = weight 1.0, clusters = weight by quality
+    // مركز مؤقت لمعايرة الفهرس فقط؛ قرار التعرف النهائي يفحص كل عينة تسجيل منفردة.
     const firstSample = allSamples[0];
     if (!firstSample) continue;
     const dim = firstSample.length;
@@ -329,11 +284,6 @@ export function buildGallery<T extends { id: string; name?: string; faceDescript
       for (let i = 0; i < dim; i++) avg[i] = (avg[i] ?? 0) + (s[i] ?? 0);
       totalWeight += 1;
     }
-    for (const c of clusterSamples) {
-      for (let i = 0; i < dim; i++) avg[i] = (avg[i] ?? 0) + (c.vec[i] ?? 0) * c.weight;
-      totalWeight += c.weight;
-    }
-
     if (totalWeight > 0) {
       for (let i = 0; i < dim; i++) avg[i] = (avg[i] ?? 0) / totalWeight;
     }
@@ -373,11 +323,7 @@ export interface IndexedMatch {
   confidence: number;
   sampleCount: number;
   margin: number;
-  /** عدد عيّنات الطالب تحت حد التصويت — الإثباتات المستقلة */
-  votes: number;
-  /** نسبة عيّنات الطالب التي صوّتت */
-  voteRatio: number;
-  /** مسافة أقرب عيّنة مفردة (للتشخيص — ليست مسافة القرار) */
+  /** مسافة أقرب عيّنة زاوية */
   nearest: number;
 }
 
@@ -391,7 +337,7 @@ export interface MatchRejection {
   /** معرّف أقرب طالب (سبب الرفض غالباً) */
   nearestId: string | undefined;
   nearestName: string | undefined;
-  /** مسافة القرار العادلة (متوسط أقرب 3) لأقرب طالب */
+  /** أقرب مسافة عينة لأقرب طالب */
   nearestDistance: number;
   /** مسافة أقرب عيّنة مفردة */
   nearestSample: number;
@@ -407,8 +353,6 @@ export type RejectionReason =
   | 'no-gallery'
   | 'all-too-far'
   | 'weak-second-proof'
-  | 'insufficient-votes'
-  | 'insufficient-vote-ratio'
   | 'tight-margin'
   | 'danger-pair'
   | 'low-quality-frame';
@@ -445,17 +389,7 @@ export function clearLastRejection(): void {
   lastRejection = null;
 }
 
-/**
- * مطابقة مُحسّنة ضد كل العينات — قرار صارم وعادل:
- *  ١) مسافة القرار = متوسط أقرب 3 عيّنات (لا أقرب عيّنة) — لا تحيّز بعدد العينات
- *  ٢) أول عيّنة ضمن d1Cap (مع تشديد عند جودة منخفضة — لا تخفيف أبداً)
- *  ٣) إثبات ثانٍ: عيّنة ثانية ضمن d2Cap
- *  ٤) تصويت: ≥3 عيّنات تحت voteCap **ونسبة** من إجمالي عيّنات الطالب
- *  ٥) هامش ≥ margin بين أفضل طالبين — والأزواج الخطرة تُرفض حتى لو كفى الهامش
- *  ٦) مارٍ بعيّنة واحدة فقط (v4 قديم) — soloCap صارم جداً
- *
- * لا تسجيل حضور أبداً على «عيّنة واحدة قريبة من 15 أخرى بعيدة».
- */
+/** مطابقة أقرب عينة زاوية مع جودة وهامش أمان وتأكيد زمني في FaceScanner. */
 export function findBestMatchIndexed(
   query: Float32Array,
   gallery: GalleryItem[],
@@ -464,10 +398,9 @@ export function findBestMatchIndexed(
   options?: MatchOptions,
 ): IndexedMatch | null {
   const profile = options?.profile ?? DEFAULT_MATCH_PROFILE;
-  const k = profile.k > 0 ? profile.k : RECOG_MATCH_K;
 
-  // ── المرحلة 1: مسافة القرار العادلة لكل طالب (متوسط أقرب k) ──
-  // نحتاج أقرب 3 على الأقل، لذا نجمع أصغر k مسافات لكل طالب ثم نرتّب.
+  // ── المرحلة 1: أقل مسافة إلى أي عينة تسجيل مستقلة ──
+  // يكفي أن تطابق إحدى زوايا الطالب؛ التأكيد الزمني المتتابع يحسم هوية الإطار.
   const perItem: Array<{
     item: GalleryItem;
     distance: number;
@@ -477,21 +410,15 @@ export function findBestMatchIndexed(
   for (const entry of gallery) {
     if (entry.allSamples.length === 0) continue;
 
-    const best: number[] = [];
+    let nearest = Infinity;
     for (const ref of entry.allSamples) {
       const distance = descriptorDistance(query, ref);
-      if (best.length < k) {
-        best.push(distance);
-        best.sort((a, b) => a - b);
-      } else if (distance < (best[k - 1] ?? Infinity)) {
-        best[k - 1] = distance;
-        best.sort((a, b) => a - b);
-      }
+      if (distance < nearest) nearest = distance;
     }
     perItem.push({
       item: entry,
-      distance: decisionDistance(best, k),
-      nearest: best[0] ?? Infinity,
+      distance: nearest,
+      nearest,
       sampleCount: entry.allSamples.length,
     });
   }
@@ -529,32 +456,13 @@ export function findBestMatchIndexed(
     );
   }
 
-  // ── ٢-٣) الإثبات المزدوج والتصويت على كل عيّنات الطالب ──
-  const dists: number[] = [];
-  for (const ref of first.item.allSamples) dists.push(descriptorDistance(query, ref));
-  dists.sort((a, b) => a - b);
-  const votes = dists.filter(d => d <= profile.voteCap).length;
-  const voteRatio = first.sampleCount > 0 ? votes / first.sampleCount : 0;
-
-  if (first.sampleCount <= 1) {
-    if (first.distance > profile.soloCap) return reject('weak-second-proof', detail);
-  } else {
-    const d2 = dists[1] ?? Infinity;
-    if (d2 > profile.d2Cap) return reject('weak-second-proof', detail);
-    if (votes < Math.min(profile.votes, first.sampleCount)) {
-      return reject('insufficient-votes', detail);
-    }
-    // نسبة التصويت: تمنع الطالب كثيرة العيّنات من قبول رخيص
-    if (voteRatio < profile.voteRatio) return reject('insufficient-vote-ratio', detail);
-  }
+  // يكفي تطابق إحدى عينات التسجيل؛ تأكيد الهوية زمنياً يتم عبر إطارات الكاميرا المتتابعة.
+  if (first.sampleCount <= 1 && first.distance > profile.soloCap) return reject('weak-second-proof', detail);
 
   // ── ٤) الهامش + حسم الأزواج الخطرة ──
   if (second) {
     if (margin < profile.margin) return reject('tight-margin', detail);
-    if (
-      second.distance <= profile.voteCap &&
-      options?.dangerKeys?.has(pairKey(first.item.id, second.item.id))
-    ) {
+    if (second.distance <= d1Cap && options?.dangerKeys?.has(pairKey(first.item.id, second.item.id))) {
       return reject('danger-pair', detail);
     }
   }
@@ -566,8 +474,6 @@ export function findBestMatchIndexed(
     confidence: Math.round((1 - first.distance) * 100),
     sampleCount: first.sampleCount,
     margin: Math.round(margin * 100) / 100,
-    votes,
-    voteRatio: Math.round(voteRatio * 100) / 100,
     nearest: Math.round(first.nearest * 1000) / 1000,
   };
 }

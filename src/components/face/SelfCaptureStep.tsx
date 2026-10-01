@@ -259,8 +259,6 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
           enrollment: samplesDataRef.current.map(s =>
             Array.from(l2Normalize(s)).map(v => Math.round(v * 1e5) / 1e5)
           ),
-          // البصمات السبع تحفظ كعينات مستقلة داخل enrollment؛ لا نكررها بعناقيد مشتقة.
-          clusters: [],
           samples: SAMPLES_NEEDED,
           quality,
           studentNameEn: student.nameEn,
