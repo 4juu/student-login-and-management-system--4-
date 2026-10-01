@@ -361,14 +361,14 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               const requiredFrames = requiredConfirmFrames(match.distance, match.margin, match.supportedSamples);
 
               if (confirmCount < requiredFrames) {
-                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
+                liveBoxes.push({ box: boxInVideo, label: student.name, sub: student.id, color: '#818cf8' });
                 continue;
               }
 
               // ✅ تأكيد كامل — التعرف فوري بلا أي تحسين أو حفظ
               setMatchedStudent(student);
               trackerRef.current.removeTrack(trackId);
-              liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
+              liveBoxes.push({ box: boxInVideo, label: student.name, sub: student.id, color: '#34d399' });
               drawBoxes(liveBoxes);
               setPhase('success');
               return;
@@ -402,12 +402,12 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               if (confirmCount >= requiredFrames) {
                 setMatchedStudent(student);
                 trackerRef.current.removeTrack(t.trackId);
-                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
+                liveBoxes.push({ box: boxInVideo, label: student.name, sub: student.id, color: '#34d399' });
                 drawBoxes(liveBoxes);
                 setPhase('success');
                 return;
               } else {
-                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
+                liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'جاري التحقق...', color: '#818cf8' });
               }
             } else {
               liveBoxes.push({ box: boxInVideo, label: 'غير معروف', color: '#fbbf24' });
