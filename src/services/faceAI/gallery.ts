@@ -403,7 +403,7 @@ export function findBestMatchIndexed(
   // ── المرحلة 1: أقل مسافة إلى أي عينة تسجيل مستقلة ──
   // يكفي أن تطابق إحدى زوايا الطالب؛ التأكيد الزمني المتتابع يحسم هوية الإطار.
   // تسريع: إيقاف فوري عند تطابق قوي جداً — لا داعي لفحص بقية العينات.
-  const EARLY_STOP_DISTANCE = 0.12;
+  const EARLY_STOP_DISTANCE = 0.10;
   const perItem: Array<{
     item: GalleryItem;
     distance: number;

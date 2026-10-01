@@ -84,44 +84,44 @@ describe('findBestMatchIndexed — المطابقة بأقرب بصمة زاوي
   });
 
   it('يرفض عند هامش غيركافٍ بين أفضل طالبين', () => {
-    const gallery = [makeItem('A', [0.05, 0.06, 0.07]), makeItem('B', [0.14])];
-    expect(findBestMatchIndexed(QUERY, gallery, 0.42, 0.7)).toBeNull();
+    const gallery = [makeItem('A', [0.05, 0.06, 0.07]), makeItem('B', [0.16])];
+    expect(findBestMatchIndexed(QUERY, gallery, 0.38, 0.7)).toBeNull();
   });
 
   it('يقبل عند هامش كافٍ بين أفضل طالبين', () => {
-    const gallery = [makeItem('A', [0.05, 0.06, 0.07]), makeItem('B', [0.20])];
-    const match = findBestMatchIndexed(QUERY, gallery, 0.42, 0.7);
+    const gallery = [makeItem('A', [0.05, 0.06, 0.07]), makeItem('B', [0.22])];
+    const match = findBestMatchIndexed(QUERY, gallery, 0.38, 0.7);
     expect(match).not.toBeNull();
     expect(match!.item.id).toBe('A');
   });
 
   it('الزوج الخطر يحسم الرفض حتى مع هامش كافٍ', () => {
     const a = makeItem('A', [0.05, 0.06, 0.07]);
-    const b = makeItem('B', [0.25]);
+    const b = makeItem('B', [0.20]);
     const gallery = [a, b];
 
     // بدون مفتاح الخطر: يُقبل (B بعيد بما يكفي)
-    const ok = findBestMatchIndexed(QUERY, gallery, 0.42, 0.7);
+    const ok = findBestMatchIndexed(QUERY, gallery, 0.38, 0.7);
     expect(ok).not.toBeNull();
 
     // مع مفتاح الخطر: يُرفض
     const dangerKeys = new Set([pairKey('A', 'B')]);
-    const rejected = findBestMatchIndexed(QUERY, gallery, 0.42, 0.7, { dangerKeys });
+    const rejected = findBestMatchIndexed(QUERY, gallery, 0.38, 0.7, { dangerKeys });
     expect(rejected).toBeNull();
   });
 
   it('الجودة المنخفضة تشدد ولا تُخفّف أبداً', () => {
-    // مسافة القرار 0.24 (متوسط 0.23/0.24/0.25)
-    const gallery = [makeItem('A', [0.23, 0.24, 0.25])];
+    // مسافة القرار 0.21 (متوسط 0.20/0.21/0.22)
+    const gallery = [makeItem('A', [0.20, 0.21, 0.22])];
 
-    // جودة عالية — الحد الافتراضي 0.25 يقبل 0.24
-    expect(findBestMatchIndexed(QUERY, gallery, 0.42, 0.6)).not.toBeNull();
+    // جودة عالية — الحد الافتراضي 0.22 يقبل 0.21
+    expect(findBestMatchIndexed(QUERY, gallery, 0.38, 0.6)).not.toBeNull();
 
-    // جودة منخفضة جداً — d1Cap ينزل إلى 0.21 فيُرفض 0.24
-    expect(findBestMatchIndexed(QUERY, gallery, 0.42, 0.30)).toBeNull();
+    // جودة منخفضة جداً — d1Cap ينزل إلى 0.18 فيُرفض 0.21
+    expect(findBestMatchIndexed(QUERY, gallery, 0.38, 0.30)).toBeNull();
 
-    // جودة متوسطة — d1Cap ينزل إلى 0.23 فيُرفض 0.24 أيضاً
-    expect(findBestMatchIndexed(QUERY, gallery, 0.42, 0.50)).toBeNull();
+    // جودة متوسطة — d1Cap ينزل إلى 0.20 فيُرفض 0.21 أيضاً
+    expect(findBestMatchIndexed(QUERY, gallery, 0.38, 0.50)).toBeNull();
   });
 
   it('يتجاوز العناصر بلا عينات بدل إيقاف المسح', () => {

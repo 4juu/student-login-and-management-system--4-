@@ -12,25 +12,25 @@ export const DESC_DIM = 512;
 export const DESC_VERSION_GALLERY = 5;
 export const ENROLLMENT_SAMPLE_COUNT = 7;
 
-export const MATCH_STRICT = 0.32;
-export const MATCH_LOOSE = 0.42;
+export const MATCH_STRICT = 0.28;
+export const MATCH_LOOSE = 0.38;
 // الهامش بين أفضل طالبين — كان 0.06 وكان يسمح بتعادل خطر بين وجهين
-export const MIN_MARGIN = 0.10;
-export const TAMPER_THRESHOLD = 0.30;
-// التأكيد على 5 فريمات متتالية (كان 3) + ثبات المسافة عبر tracker — استقرار زمني أقوى
-export const CONFIRM_FRAMES = 5;
+export const MIN_MARGIN = 0.12;
+export const TAMPER_THRESHOLD = 0.28;
+// التأكيد على 7 فريمات متتالية (كان 5) + ثبات المسافة عبر tracker — استقرار زمني أقوى
+export const CONFIRM_FRAMES = 7;
 
 // ══════════════════════════════════════════════════════════════
 // حدود المطابقة على أقرب عينة؛ ثبات الإطارات المتتابعة يثبت التعرف.
 // ══════════════════════════════════════════════════════════════
-/** أقصى مسافة لأول عيّنة (≈ ثقة 75%) — الحد الفعلي القابل للمعايرة */
-export const RECOG_D1_CAP = 0.25;
+/** أقصى مسافة لأول عيّنة (≈ ثقة 78%) — الحد الفعلي القابل للمعايرة */
+export const RECOG_D1_CAP = 0.22;
 /** عدد العينات لأغراض معايرة حدود الأمان فقط، لا لدمج عينات التعرف */
 export const RECOG_MATCH_K = 3;
 /** حد مشدد للتوافق مع سجلات قديمة لا تحتوي إلا على عينة واحدة */
-export const RECOG_SOLO_CAP = 0.18;
+export const RECOG_SOLO_CAP = 0.15;
 /** أقصى تشتت بين مسافات إطارات الكاميرا المتتابعة */
-export const RECOG_SPREAD_MAX = 0.10;
+export const RECOG_SPREAD_MAX = 0.08;
 // 🗄️ Cache for parsed samples (key: JSON string of descriptor, value: Float32Array[])
 const parsedSamplesCache = new Map<string, Float32Array[]>();
 const CACHE_MAX = 200;
@@ -66,10 +66,10 @@ export function parseAllSamples(input: unknown): Float32Array[] {
 }
 
 /** أدنى نسبة ثقة مقبولة للتعرف أثناء الحضور — حارس الدقة الرئيسي */
-export const MIN_RECOG_CONFIDENCE = 75;
+export const MIN_RECOG_CONFIDENCE = 80;
 
 /** حارس جودة الفريم المعمم — يرفض الضبابي/المظلم جداً في كل مسارات المطابقة */
-export const MIN_FRAME_QUALITY = 0.40;
+export const MIN_FRAME_QUALITY = 0.45;
 
 export interface MatchCandidate {
   id: string;
