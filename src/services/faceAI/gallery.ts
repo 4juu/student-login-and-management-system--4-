@@ -205,10 +205,34 @@ export function findBestMatchIndexed(
 }
 
 /**
- * يربط نتيجة المعرض بسجل الطالب — **بالمعرّف والاسم معاً**:
- * لا يكفي تطابق المعرّف وحده، فأي سجل يحمل المعرّف نفسه باسم مختلف يُرفض
- * (يمنع عرض اسم طالب آخر عند تكرار المعرّف في الروستر).
- * الاسم يُقارن بعد توحيد المسافات وتجاهل حالة الأحرف، وفيه «الاسم الأول» أو «الاسم الأخير» مقبول.
+ * تطبيع الاسم الكامل للمقارنة:
+ * يوحّد المسافات المتكرّرة، ويزيل التشكيل العربي (الفتحة/الضمة/الكسرة/التنوين/الشدة/السكون) والهمزات
+ * (أ/إ/آ→ا، ة→ه، ى→ي)، ويخفض حالة الأحرف اللاتينية — فلا يُرفض اسم بسبب فراغ إملائي فقط.
+ */
+export function normalizeName(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/[\u064B-\u0652\u0640]/g, '')        // تشكيل + تطويل
+    .replace(/[\u0622\u0623\u0625]/g, '\u0627')  // آ أ إ → ا
+    .replace(/\u0629/g, '\u0647')                // ة → ه
+    .replace(/\u0649/g, '\u064A')                // ى → ي
+    .replace(/[ً-ْٰ]/g, '')
+    .replace(/[ـ]/g, '')                          // تطويل
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/[ؤئ]/g, 'ء')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * يربط نتيجة المعرض بسجل الطالب — **بالمعرّف والاسم الكامل معاً**:
+ *
+ * - الرقم **فريد**  ⇒ يُرجع السجل، حتى لو اختلف الاسم (تعديل إداري) — لأن الرقم وحده
+ *   يحسم الهوية، ولا يوجد طالب آخر يمكن الخلط معه.
+ * - الرقم **مكرّر** ⇒ لا يكفي الرقم: يجب أن يطابق **الاسم الكامل** واحداً فقط
+ *   (وإلا رُفضت المطابقة بدل عرض اسم طالب آخر).
+ * - لا يوجد سجل بهذا الرقم ⇒ `null`.
  */
 export function resolveStudent<T extends { id?: unknown; name?: unknown }>(
   entry: { id: string; name: string },
@@ -217,13 +241,12 @@ export function resolveStudent<T extends { id?: unknown; name?: unknown }>(
   const sameId = records.filter(r => r && r.id === entry.id);
   if (sameId.length === 0) return null;
   if (sameId.length === 1) return sameId[0] ?? null;
-  const norm = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().toLowerCase() : '');
-  const target = norm(entry.name);
-  if (target) {
-    const exact = sameId.find(r => norm(r.name) === target);
-    if (exact) return exact;
-  }
-  return null;
+
+  // معرّف مكرّر ⇒ الاسم الكامل هو الفيصل الحاسم
+  const target = normalizeName(entry.name);
+  if (!target) return null;
+  const matches = sameId.filter(r => normalizeName(r.name) === target);
+  return matches.length === 1 ? matches[0] ?? null : null;
 }
 
 export interface ConsensusMatch {

@@ -11,7 +11,15 @@ import {
   MIN_RECOG_CONFIDENCE,
   requiredConfirmFrames,
 } from '../../services/faceAI/descriptors';
-import { buildGallery, findBestMatchConsensus } from '../../services/faceAI/gallery';
+import { buildGallery, findBestMatchConsensus, resolveStudent } from '../../services/faceAI/gallery';
+import {
+  identityBlockMessage,
+  isIdentityBlock,
+  resolveDataAdminUid,
+  verifyStudentIdentity,
+} from '../../services/faceAI/identity';
+import { useAuthStore } from '../../store/useAuthStore';
+import { useStageStore } from '../../store/useStageStore';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { MorphingSquare } from '../MorphingSquare';
 
@@ -21,7 +29,7 @@ interface FaceReportGateProps {
   onCancel: () => void;
 }
 
-type GatePhase = 'scanning' | 'found';
+type GatePhase = 'scanning' | 'verifying' | 'found' | 'denied';
 
 const MIN_FACE_PX = 22;
 const MAX_FACES_PER_FRAME = 10;
@@ -62,6 +70,7 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
   const [cameraAttempt, setCameraAttempt] = useState(0);
   const [noMatchOverlay, setNoMatchOverlay] = useState(false);
   const [matchedStudent, setMatchedStudent] = useState<Student | null>(null);
+  const [deniedMsg, setDeniedMsg] = useState<string>('');
 
   useBodyScrollLock(true);
 
@@ -135,15 +144,47 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
     setCameraReady(false);
   }, []);
 
-  // ── لحظة التعرف: إيقاف الكاميرا + لمحة بالاسم ثم فتح التقرير ──
-  const handleMatched = useCallback((student: Student) => {
+  // ── لحظة التعرف: إيقاف الكاميرا + **تحقق من السيرفر** + لمحة بالاسم ثم فتح التقرير ──
+  // لا يُفتح تقرير أبداً على أساس بيانات محمّلة قديمة: لو حُذف الطالب أو غُيّر اسمه أو رُفعت
+  // بصمته بعد فتح الكاميرا، نُبقي الشاشة مغلقة ونُعلمه بدل عرض تقرير شخص آخر.
+  const handleMatched = useCallback(async (student: Student) => {
     if (foundRef.current) return;
     foundRef.current = true;
     stopScan();
     setMatchedStudent(student);
+    setPhase('verifying');
+
+    const adminUid = resolveDataAdminUid(useAuthStore.getState().currentUser);
+    const stageId = useStageStore.getState().selectedStageId;
+    let result = { ok: true, record: null } as Awaited<ReturnType<typeof verifyStudentIdentity>>;
+
+    if (adminUid && stageId) {
+      try {
+        result = await verifyStudentIdentity({ adminUid, stageId, id: student.id, name: student.name });
+      } catch (e) {
+        console.warn('[face-report] تعذّر التحقق من الهوية:', e);
+        result = { ok: true, record: null };
+      }
+    } else {
+      console.warn('[face-report] نطاق المرحلة غير محدّد — تخطّي التحقق:', { adminUid, stageId });
+    }
+
+    if (!mountedRef.current) return;
+    if (!result.ok && isIdentityBlock(result.reason)) {
+      setDeniedMsg(identityBlockMessage(result.reason));
+      setPhase('denied');
+      return;
+    }
+
+    // الاسم الرسمي الحالي هو المعتمد في التقرير
+    const live = result.record;
+    const finalStudent: Student = live
+      ? { ...student, name: live.name, code: live.code ?? student.code, group: live.group ?? student.group }
+      : student;
+    setMatchedStudent(finalStudent);
     setPhase('found');
     flashTimerRef.current = window.setTimeout(() => {
-      onMatchedRef.current(student);
+      onMatchedRef.current(finalStudent);
     }, FOUND_FLASH_MS);
   }, [stopScan]);
 
@@ -288,6 +329,7 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
               trackerRef.current.setCache(
                 embTrack.trackId, match?.item.id ?? null, match?.confidence ?? 0,
                 match?.distance ?? 1, match?.margin ?? 1, match?.supportedSamples ?? 1,
+                match?.item.name ?? '',
               );
 
               const vbw = res.box.width / scale, vbh = res.box.height / scale;
@@ -300,18 +342,19 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
                 continue;
               }
 
-              const student = studentsRef.current.find(s => s.id === match.item.id);
+              // رقم مكرّر ⇒ لازم نطابق **الاسم الكامل** ونحدّد السجل الوحيد، لا نخمّن
+              const student = resolveStudent(match.item, studentsRef.current);
               if (!student) continue;
               sawConfident = true;
 
               const confirmCount = trackerRef.current.bumpConfirm(embTrack.trackId, student.id);
               const requiredFrames = requiredConfirmFrames(match.distance, match.margin, match.supportedSamples);
               if (confirmCount < requiredFrames) {
-                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
+                liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'جاري التحقق...', color: '#818cf8' });
                 continue;
               }
 
-              liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
+              liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'تم التعرف', color: '#34d399' });
               drawBoxes(liveBoxes);
               handleMatched(student);
               return;
@@ -329,18 +372,22 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
               continue;
             }
 
-            const student = studentsRef.current.find(s => s.id === cache.cachedMatchId);
+            // ⚠️ الرقم وحده لا يكفي: معرّف مكرّر بلا اسم متطابق ⇒ لا نخمّن
+            const student = resolveStudent(
+              { id: cache.cachedMatchId, name: cache.cachedMatchName },
+              studentsRef.current,
+            );
             if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE) {
               sawConfident = true;
               const confirmCount = trackerRef.current.bumpConfirm(t.trackId, student.id);
               const requiredFrames = requiredConfirmFrames(cache.cachedDistance, cache.cachedMargin, cache.cachedSupported);
               if (confirmCount >= requiredFrames) {
-                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التعرف', color: '#34d399' });
+                liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'تم التعرف', color: '#34d399' });
                 drawBoxes(liveBoxes);
                 handleMatched(student);
                 return;
               }
-              liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
+              liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'جاري التحقق...', color: '#818cf8' });
             } else {
               liveBoxes.push({ box: boxInVideo, label: 'غير معروف', color: '#fbbf24' });
             }
@@ -540,6 +587,53 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
           </div>
         )}
       </div>
+
+      {/* جاري التحقق من بيانات الطالب في النظام */}
+      {phase === 'verifying' && matchedStudent && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="text-center px-6 max-w-sm">
+            <MorphingSquare size="md" className="mx-auto mb-4" />
+            <h2 className="text-xl font-extrabold text-white mb-1.5">{matchedStudent.name}</h2>
+            <p className="text-sm text-slate-400">جارٍ التحقق من بياناتك في النظام...</p>
+          </div>
+        </div>
+      )}
+
+      {/* تعذّر فتح التقرير — هوية غير مؤكدة */}
+      {phase === 'denied' && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="text-center max-w-sm">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-500/15">
+              <svg className="h-8 w-8 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+            </div>
+            <h2 className="text-lg font-extrabold text-white mb-2">لم يتم فتح التقرير</h2>
+            <p className="text-sm text-rose-300 mb-6">{deniedMsg || 'تعذّر التحقق من بياناتك'}</p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  foundRef.current = false;
+                  trackerRef.current.reset();
+                  setMatchedStudent(null);
+                  setPhase('scanning');
+                }}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#1458E2] to-[#2B7BFF] text-white font-bold text-sm shadow-lg active:scale-95 transition"
+              >
+                إعادة المحاولة
+              </button>
+              <button
+                type="button"
+                onClick={() => { stopScan(); onCancel(); }}
+                className="w-full py-3 rounded-xl bg-white/10 text-white font-bold text-sm active:scale-95 transition"
+              >
+                العودة
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* لمحة التعرف ثم فتح التقرير */}
       {phase === 'found' && matchedStudent && (

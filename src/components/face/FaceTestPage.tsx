@@ -362,14 +362,14 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               const requiredFrames = requiredConfirmFrames(match.distance, match.margin, match.supportedSamples);
 
               if (confirmCount < requiredFrames) {
-                liveBoxes.push({ box: boxInVideo, label: student.name, sub: student.id, color: '#818cf8' });
+                liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'جاري التحقق...', color: '#818cf8' });
                 continue;
               }
 
               // ✅ تأكيد كامل — التعرف فوري بلا أي تحسين أو حفظ
               setMatchedStudent(student);
               trackerRef.current.removeTrack(trackId);
-              liveBoxes.push({ box: boxInVideo, label: student.name, sub: student.id, color: '#34d399' });
+              liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'تم التعرف', color: '#34d399' });
               drawBoxes(liveBoxes);
               setPhase('success');
               return;
@@ -403,7 +403,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               if (confirmCount >= requiredFrames) {
                 setMatchedStudent(student);
                 trackerRef.current.removeTrack(t.trackId);
-                liveBoxes.push({ box: boxInVideo, label: student.name, sub: student.id, color: '#34d399' });
+                liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'تم التعرف', color: '#34d399' });
                 drawBoxes(liveBoxes);
                 setPhase('success');
                 return;
@@ -553,9 +553,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
         </div>
           <h2 className="text-xl font-extrabold text-emerald-300 mb-2">البصمة تعمل!</h2>
           <p className="text-sm text-slate-300 mb-1">تم التعرف على وجهك بنجاح</p>
-          <p className="text-base font-bold text-white mb-1">{matchedStudent.name}</p>
-          <p className="text-sm font-bold text-slate-400 mb-1" dir="ltr">{matchedStudent.id}</p>
-          <p className="text-xs text-slate-500 mb-4">الاسم الكامل والمعرّف معاً — تأكد من مطابقتهما لبياناتك في النظام</p>
+          <p className="text-base font-bold text-white mb-4">{matchedStudent.name}</p>
         <div className="flex flex-col gap-2">
           <button
             onClick={() => {

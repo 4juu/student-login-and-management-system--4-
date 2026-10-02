@@ -18,7 +18,16 @@ import {
   MIN_RECOG_CONFIDENCE,
   requiredConfirmFrames,
 } from '../../services/faceAI/descriptors';
-import { buildGallery, findBestMatchConsensus } from '../../services/faceAI/gallery';
+import { buildGallery, findBestMatchConsensus, resolveStudent } from '../../services/faceAI/gallery';
+import {
+  identityBlockMessage,
+  isIdentityBlock,
+  resolveDataAdminUid,
+  verifyStudentIdentity,
+  type IdentityResult,
+} from '../../services/faceAI/identity';
+import { useAuthStore } from '../../store/useAuthStore';
+import { useStageStore } from '../../store/useStageStore';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface FaceScannerProps {
@@ -40,6 +49,7 @@ interface LogEntry {
   status: 'marked' | 'already' | 'unknown' | 'failed';
   confidence: number;
   time: string;
+  message?: string | undefined;
 }
 
 const RECOGNITION_COOLDOWN = 30_000;
@@ -93,9 +103,6 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   const roster = useMemo(() => students.filter(s => hasValidDescriptor(s.faceDescriptor)), [students]);
   const rosterRef = useRef(roster);
   rosterRef.current = roster;
-  const rosterMap = useMemo(() => new Map(roster.map(s => [s.id, s])), [roster]);
-  const rosterMapRef = useRef(rosterMap);
-  rosterMapRef.current = rosterMap;
   const galleryIndex = useMemo(() => buildGallery(roster), [roster]);
   const galleryRef = useRef(galleryIndex);
   galleryRef.current = galleryIndex;
@@ -103,6 +110,13 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
   presentRef.current = alreadyPresentIds;
   const markRef = useRef(onMarkAttendance);
   markRef.current = onMarkAttendance;
+
+  // تنبيه (غير مُعطِّل): أرقام مكرّرة داخل المرحلة — يجب تمييزها بالاسم الكامل عند الاعتماد
+  const dupIdNotice = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const s of roster) seen.set(s.id, (seen.get(s.id) ?? 0) + 1);
+    return [...seen.values()].filter(n => n > 1).length;
+  }, [roster]);
 
   const cooldowns = useRef(new Map<string, number>());
   const hwZoomRange = useRef<{ min: number; max: number; step: number } | null>(null);
@@ -239,6 +253,27 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     return suppressZonesRef.current.some(z => zoneOverlap(z.box, box) >= SUPPRESS_ZONE_OVERLAP);
   }, []);
 
+  /**
+   * التحقق من هوية الطالب **من السيرفر مباشرة** قبل أي كتابة حضور.
+   * القائمة قد تكون محمّلة قبل دقائق: لو حُذف الطالب أو غُيّر اسمه أو رُفعت بصمته، فالكتابة
+   * القديمة تنتج سجل حضور باسم/بصمة قديمة.
+   * - عطل شبكة (`read-error`) لا يمنع الحضور — نُبقي السلوك السابق مع تحذير.
+   * - سجل محذوف / رقم مكرّر غير محسوم / بصمة محذوفة ⇒ لا كتابة إطلاقاً.
+   */
+  const verifyLive = useCallback(async (student: Student): Promise<IdentityResult> => {
+    const adminUid = resolveDataAdminUid(useAuthStore.getState().currentUser);
+    const stageId = useStageStore.getState().selectedStageId;
+    if (!adminUid || !stageId) {
+      console.warn('[face-scanner] تعذّر تحديد نطاق المرحلة — تخطّي التحقق الشبكي:', {
+        adminUid: adminUid || '(فارغ)',
+        stageId: stageId || '(فارغ)',
+        id: student.id,
+      });
+      return { ok: true, record: null };
+    }
+    return verifyStudentIdentity({ adminUid, stageId, id: student.id, name: student.name });
+  }, []);
+
   // ── تحميل حضور طالب واحد — مشترك بين مسار التضمين ومسار الكاش ──
   const finalizeTrack = useCallback((
     student: Student,
@@ -278,17 +313,50 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     trackerRef.current.removeTrack(trackId);
     suppressZone(boxInVideo);
 
-    if (!loggedIdsRef.current.has(student.id)) {
-      loggedIdsRef.current.set(student.id, true);
-      pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'marked', confidence: matchConfidence });
-    }
-
-    Promise.resolve(markRef.current(student)).catch(e => {
-      console.error('[face-scanner] فشل تسجيل الحضور:', e);
+    // ✅ بوابة الهوية: لا سجل حضور قبل تأكيد السجل الحيّ من السيرفر
+    //    (السجل يُكتب بعد نجاح التحقق، حتى لا نُعلن "تم التسجيل" لما لم يُكتب)
+    verifyLive(student).then(result => {
+      if (!result.ok && isIdentityBlock(result.reason)) {
+        console.warn('[face-scanner] رُفض التسجيل — هوية غير مؤكدة:', student.id, result.reason);
+        loggedIdsRef.current.delete(student.id);
+        pushLog({
+          id: student.id,
+          name: student.name,
+          code: student.code,
+          group: student.group,
+          status: 'failed',
+          confidence: matchConfidence,
+          message: identityBlockMessage(result.reason),
+        });
+        return;
+      }
+      // الاسم الرسمي الحالي هو المعتمد (قد يكون الأدمن غيّره بعد تحميل الكاميرا)
+      const live = result.record;
+      const finalStudent: Student = live
+        ? { ...student, name: live.name, code: live.code ?? student.code, group: live.group ?? student.group }
+        : student;
+      return Promise.resolve(markRef.current(finalStudent)).then(() => {
+        if (loggedIdsRef.current.has(finalStudent.id)) return;
+        loggedIdsRef.current.set(finalStudent.id, true);
+        pushLog({
+          id: finalStudent.id,
+          name: finalStudent.name,
+          code: finalStudent.code,
+          group: finalStudent.group,
+          status: 'marked',
+          confidence: matchConfidence,
+        });
+      }).catch(e => {
+        console.error('[face-scanner] فشل تسجيل الحضور:', e);
+        loggedIdsRef.current.delete(finalStudent.id);
+        pushLog({ id: finalStudent.id, name: finalStudent.name, code: finalStudent.code, group: finalStudent.group, status: 'failed', confidence: matchConfidence });
+      });
+    }).catch(e => {
+      console.error('[face-scanner] فشل التحقق من هوية الطالب:', e);
       loggedIdsRef.current.delete(student.id);
       pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'failed', confidence: matchConfidence });
     });
-  }, [suppressZone, pushLog]);
+  }, [suppressZone, pushLog, verifyLive]);
 
   // ── حلقة المسح ──
   useEffect(() => {
@@ -459,6 +527,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               trackerRef.current.setCache(
                 trackId, match?.item.id ?? null, match?.confidence ?? 0,
                 match?.distance ?? 1, match?.margin ?? 1, match?.supportedSamples ?? 1,
+                match?.item.name ?? '',
               );
 
               const vbw = res.box.width / scale, vbh = res.box.height / scale;
@@ -472,7 +541,8 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                 continue;
               }
 
-              const student = rosterMapRef.current.get(match.item.id);
+              // رقم مكرّر ⇒ لازم نطابق **الاسم الكامل** ونحدّد السجل الوحيد، لا نخمّن
+              const student = resolveStudent(match.item, rosterRef.current);
               if (!student) continue;
 
               // طالب سُجّل حضوراً في هذه الجلسة — حتى لو تحرك مكانه، يختفي إطاره فوراً
@@ -486,7 +556,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               const requiredFrames = requiredConfirmFrames(match.distance, match.margin, match.supportedSamples);
 
               if (confirmCount < requiredFrames) {
-                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
+                liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'جاري التحقق...', color: '#818cf8' });
                 continue;
               }
 
@@ -511,7 +581,11 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
             const vbw = t.box.width, vbh = t.box.height;
             const vbx = t.box.x, vby = t.box.y;
             const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
-            const student = rosterMapRef.current.get(cache.cachedMatchId ?? '');
+            // ⚠️ الرقم وحده لا يكفي: معرّف مكرّر بلا اسم متطابق ⇒ لا نخمّن (resolveStudent ترفض)
+            const student = resolveStudent(
+              { id: cache.cachedMatchId, name: cache.cachedMatchName },
+              rosterRef.current,
+            );
 
             if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE) {
               if (doneStudentsRef.current.has(student.id)) {
@@ -525,7 +599,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                   loggedIdsRef.current.set(student.id, true);
                   pushLog({ id: student.id, name: student.name, code: student.code, group: student.group, status: 'already', confidence: cache.cachedConfidence });
                 }
-                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'مسجل ✓', color: '#34d399' });
+                liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'مسجل ✓', color: '#34d399' });
                 continue;
               }
 
@@ -537,9 +611,9 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                 // ✅ تأكيد كامل — نُسجّل الحضور فوراً (نفس الثانية)
                 markedAny = true;
                 finalizeTrack(student, cache.cachedConfidence, boxInVideo, t.trackId);
-                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'تم التسجيل', color: '#34d399' });
+                liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'تم التسجيل', color: '#34d399' });
               } else {
-                liveBoxes.push({ box: boxInVideo, label: student.name.split(' ')[0], sub: 'جاري التحقق...', color: '#818cf8' });
+                liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'جاري التحقق...', color: '#818cf8' });
               }
             } else {
               liveBoxes.push({ box: boxInVideo, label: 'غير معروف', color: '#fbbf24' });
@@ -643,6 +717,14 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
             </p>
           </div>
         </div>
+        {dupIdNotice > 0 && (
+          <div
+            role="status"
+            className="hidden md:flex items-center gap-1.5 shrink-0 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-400/25 text-amber-200 text-[11px] font-bold"
+          >
+            ⚠︎ أرقام مكرّرة: {dupIdNotice} — يُشترط تطابق الاسم الكامل للتسجيل
+          </div>
+        )}
         <button
           onClick={() => setKiosk(k => !k)}
           aria-label="وضع العرض"
@@ -652,7 +734,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
         </button>
       </header>
 
-      {/* أزرار عائمة داخل الكاميرا — всегда ظاهرة */}
+      {/* أزرار عائمة داخل الكاميرا — ظاهرة دائما */}
       {engineReady && (
         <div className="absolute left-3 z-30 flex items-center gap-2 pointer-events-none" style={{ top: 'calc(env(safe-area-inset-top, 12px) + 12px)' }}>
           <button
@@ -763,8 +845,8 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-white truncate">{log.name}</p>
-                    <p className="text-[11px] text-slate-400">
-                      {log.group && <span>كروب {log.group} · </span>}ثقة {log.confidence}%
+                    <p className={`text-[11px] ${log.message ? 'text-red-300' : 'text-slate-400'}`}>
+                      {log.message ? log.message : <>{log.group && <span>كروب {log.group} · </span>}ثقة {log.confidence}%</>}
                     </p>
                   </div>
                   <div className="text-left shrink-0">

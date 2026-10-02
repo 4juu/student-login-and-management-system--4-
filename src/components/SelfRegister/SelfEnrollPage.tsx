@@ -32,6 +32,7 @@ import { TextScramble } from '../TextScramble';
 import { LoadingState } from '../loading/LoadingState';
 import { MorphingSquare } from '../MorphingSquare';
 import { normalizeDate } from '../../lib/date';
+import { resolveStudent } from '../../services/faceAI/gallery';
 
 const LazySelfCapture = lazy(() =>
   import('../face/SelfCaptureStep').then(m => ({ default: m.SelfCaptureStep }))
@@ -381,7 +382,24 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
 
         // روابط التسجيل الفردية: هوية الطالب مضمّنة داخل الرابط نفسه
         if (linkData.studentName && linkData.studentId) {
-          setExpected(buildStudentFromLink(linkData));
+          // ✅ لا نعتمد هوية الرابط وحدها: نقارنها بسجل المرحلة الحيّ، فالرقم المكرر
+          //    بلا اسم مطابق يعني أننا نخمّن ⇒ نرفض بدل حفظ البصمة على اسم آخر.
+          let year = linkData.academicYear || '';
+          if (!year) { try { year = await getActiveAcademicYear(); } catch { year = ''; } }
+          let live: Student | null = null;
+          if (year) {
+            const list = await loadStageStudentsCached(linkData.adminUid, year, linkData.stageId);
+            if (!mounted) return;
+            live = resolveStudent({ id: linkData.studentId, name: linkData.studentName }, list);
+          }
+          const fromLink = buildStudentFromLink(linkData);
+          if (year && !live) {
+            setErrorMsg('بيانات الرابط لا تطابق طالباً واحداً في هذه المرحلة (رقم مكرّر أو اسم غير مطابق). راجع إدارة الكلية.');
+            goTo('invalid-link');
+            return;
+          }
+          // السجل الحيّ يغلب لقطة الرابط (اسم/كود/QR + بصمة موجودة)
+          setExpected(live ? { ...fromLink, ...live } : fromLink);
           goTo('verify');
           return;
         }
@@ -394,13 +412,16 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
 
           const list = await loadStageStudentsPublic(linkData.adminUid, year, linkData.stageId);
           if (!mounted) return;
-          const bound = list.find(s => s.id === linkData.studentId);
-          if (bound) {
-            setExpected(bound);
+          // بلا اسم في الرابط ⇒ لا حاسم للرقم المكرر ⇒ نقبل فقط الرقم الفريد
+          const bound = list.filter(s => s.id === linkData.studentId);
+          if (bound.length === 1) {
+            setExpected(bound[0] ?? null);
             goTo('verify');
             return;
           }
-          setErrorMsg('لم نجد بيانات الطالب المرتبط بهذا الرابط');
+          setErrorMsg(bound.length > 1
+            ? 'هذا الرابط يشير إلى رقم مكرّر في المرحلة — راجع إدارة الكلية لتفادي تسجيل البصمة على طالب خاطئ.'
+            : 'لم نجد بيانات الطالب المرتبط بهذا الرابط');
           goTo('invalid-link');
           return;
         }
@@ -422,7 +443,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
   useEffect(() => {
     if (step !== 'capture-face') return;
     if (!link?.stageId || !expected?.id) return;
-    if (stageStudents.length > 0) return;
+    if (stageStudents.length > 0) { setRosterState('ready'); return; }
 
     let cancelled = false;
     (async () => {
@@ -434,11 +455,14 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
         const list = await loadStageStudentsPublic(link.adminUid, year, link.stageId);
         if (cancelled) return;
         setStageStudents(list);
-        // سجل الطالب الحي يغلب لقطة الرابط (اسم/كود/QR + بصمة موجودة)
-        const live = list.find(s => s.id === expected.id);
-        if (live) {
-          setExpected(prev => (prev ? { ...prev, ...live } : live));
+        // السجل الحيّ يغلب لقطة الرابط — لكن **بعد** حسم التطابق بالرقم والاسم معاً
+        const live = resolveStudent(expected, list);
+        if (!live) {
+          setErrorMsg('تعذّر تأكيد هوية الطالب في سجلات المرحلة (رقم مكرّر بلا اسم مطابق). لم تُحفظ أي بصمة.');
+          goTo('invalid-link');
+          return;
         }
+        setExpected(prev => (prev ? { ...prev, ...live } : live));
         setRosterState('ready');
       } catch (e) {
         if (cancelled) return;

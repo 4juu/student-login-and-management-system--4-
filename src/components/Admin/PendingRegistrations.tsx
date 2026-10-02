@@ -6,6 +6,7 @@ import { Student } from '../../types/student';
 import { PendingRegistration } from '../../types/registration';
 import { getActiveAcademicYear } from '../../firebase/dataService';
 import { markLinkAsUsed } from '../../services/tokenService';
+import { normalizeName } from '../../services/faceAI/gallery';
 import { LoadingState } from '../loading/LoadingState';
 import { MorphingSquare } from '../MorphingSquare';
 import {
@@ -159,28 +160,37 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
 
     const data = snap.val();
     const descriptors = descSnap.exists() ? (descSnap.val() as Record<string, unknown>) : null;
-    let studentKey: string | number | null = null;
-    let studentData: Student | null = null;
 
-    if (Array.isArray(data)) {
-      const idx = data.findIndex(s => s && s.id === req.studentId);
-      if (idx !== -1) {
-        studentKey = idx;
-        studentData = data[idx];
-      }
-    } else if (data && typeof data === 'object') {
-      for (const [key, val] of Object.entries(data)) {
-        if (val && typeof val === 'object' && (val as Student).id === req.studentId) {
-          studentKey = key;
-          studentData = val as Student;
-          break;
-        }
+    // ── 1) تحديد سجل الطالب بمفتاحه (فهرس المصفوفة أو مفتاح الكائن)
+    //    ⚠️ الرقم المكرر لا يحدّد السجل وحده: نقارن **الاسم الكامل** أيضاً، ونرفض إن لم
+    //    يحسم واحدٌ منهما المطابقة (وإلا كُتبت بصمة الطالب على اسم طالب آخر).
+    const entries: Array<{ key: string | number; student: Student }> = (Array.isArray(data)
+      ? data.map((s, i) => ({ key: i, student: s }))
+      : data && typeof data === 'object'
+        ? Object.entries(data).map(([key, val]) => ({ key, student: val as Student }))
+        : []
+    ).filter(e => !!e.student && typeof e.student === 'object' && e.student.id);
+
+    const sameId = entries.filter(e => e.student.id === req.studentId);
+    let chosen: { key: string | number; student: Student } | null = null;
+    if (sameId.length === 1) {
+      chosen = sameId[0] ?? null;
+    } else if (sameId.length > 1) {
+      const target = normalizeName(req.nameInSystem);
+      const byName = target ? sameId.filter(e => normalizeName(e.student.name) === target) : [];
+      chosen = byName.length === 1 ? (byName[0] ?? null) : null;
+      if (!chosen) {
+        throw new PermanentError(
+          `لا يمكن الموافقة: الرقم ${req.studentId} مكرّر في المرحلة ولا يطابق «${req.nameInSystem}» سجلاً واحداً فقط. ` +
+          'صحّح بيانات الطلاب أو الاسم في الطلب ثم أعد المحاولة.',
+        );
       }
     }
 
-    if (studentKey === null || !studentData) {
+    if (!chosen) {
       throw new PermanentError(`لم نجد الطالب بالمعرف: ${req.studentId}`);
     }
+    const { key: studentKey } = chosen;
 
     // ── 2) Validate + migrate the face descriptor (if provided)
     // نوحّد أي صيغة بصمة إلى v5 نظيفة — نقبل البصمة الجديدة مهما كانت صيغتها المخزّنة
@@ -197,9 +207,9 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
       if (newSamples.length === 0) {
         throw new PermanentError('البصمة المرفقة فارغة أو تالفة. اطلب من الطالب إعادة التسجيل.');
       }
-      const allStudents: Student[] = (Array.isArray(data) ? data : Object.values(data)).map(s => {
-        const d = descriptors?.[s.id];
-        return d !== undefined && d !== null ? { ...s, faceDescriptor: d } : s;
+      const allStudents: Student[] = entries.map(e => {
+        const d = descriptors?.[e.student.id];
+        return d !== undefined && d !== null ? { ...e.student, faceDescriptor: d } : e.student;
       });
       for (const sample of newSamples) {
         const tamper = checkForTampering(sample, allStudents, req.studentId);
@@ -308,13 +318,16 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
   };
 
   const handleApprove = async (req: PendingRegistration) => {
+    // ✅ القفل يُضبط **قبل** أول await: مع `await` في الحارس كان نقرتان متزامنتان يمرّان معاً
+    //    فيكتب كلٌّ منهما بصمته على نفس الطالب، وآخر كتابة تكتم الأولى بصمت.
     if (busyRef.current) return;
-    if (!(await guardBeforeApprove(req))) return;
     busyRef.current = true;
-    startProcessing(req.id);
-    setSaving({ title: 'جاري حفظ بصمة الطالب', detail: `${req.nameInSystem} — لا تغلق النافذة قبل اكتمال الحفظ` });
 
     try {
+      if (!(await guardBeforeApprove(req))) return;
+
+      startProcessing(req.id);
+      setSaving({ title: 'جاري حفظ بصمة الطالب', detail: `${req.nameInSystem} — لا تغلق النافذة قبل اكتمال الحفظ` });
       await withRetry(
         () => approveRequest(req, msg => setSaving(prev => (prev ? { ...prev, detail: `${req.nameInSystem} — ${msg}` } : prev))),
         3,
@@ -333,23 +346,25 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
 
   /** الموافقة على كل الطلبات «قيد المراجعة» دفعة واحدة مع شريط تقدّم وإعادة محاولة تلقائية */
   const handleApproveAll = async () => {
+    // ✅ القفل يغطي نافذة التأكيد أيضاً — نقرتان متزامنتان كانتا تفتحان نافذتين وتكتبان مرتين
     if (busyRef.current) return;
-    const pendingList = requests.filter(r => r.status === 'pending');
-    if (pendingList.length === 0) return;
-
-    const ok = await confirmAction({
-      title: 'الموافقة على كل البصمات',
-      message: `سيتم حفظ بصمات ${pendingList.length} طالباً دفعة واحدة، ولا تُغلق النافذة حتى تكتمل العملية. متابعة؟`,
-      confirmLabel: 'موافقة الكل',
-    });
-    if (!ok) return;
-
     busyRef.current = true;
+
+    const pendingList = requests.filter(r => r.status === 'pending');
     const total = pendingList.length;
     const failures: { name: string; msg: string }[] = [];
-    setSaving({ title: 'جاري حفظ كل البصمات', detail: 'البدء...', current: 0, total });
 
     try {
+      if (total === 0) return;
+
+      const ok = await confirmAction({
+        title: 'الموافقة على كل البصمات',
+        message: `سيتم حفظ بصمات ${total} طالباً دفعة واحدة، ولا تُغلق النافذة حتى تكتمل العملية. متابعة؟`,
+        confirmLabel: 'موافقة الكل',
+      });
+      if (!ok) return;
+
+      setSaving({ title: 'جاري حفظ كل البصمات', detail: 'البدء...', current: 0, total });
       for (const [i, req] of pendingList.entries()) {
         startProcessing(req.id);
         setSaving({ title: 'جاري حفظ كل البصمات', detail: `${req.nameInSystem}`, current: i + 1, total });
@@ -374,21 +389,24 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
           failures.push({ name: req.nameInSystem, msg: e instanceof Error ? e.message : 'خطأ غير معروف' });
         }
       }
+
+      const saved = total - failures.length;
+      if (failures.length === 0) {
+        toast({ title: `تم حفظ ${saved} بصمة ✅`, description: 'كل الطلبات المعلقة محفوظة في قاعدة البيانات.' });
+      } else {
+        toast({
+          variant: 'destructive',
+          title: `تم حفظ ${saved} — وفشل ${failures.length} بعد إعادة المحاولة`,
+          description: failures.slice(0, 5).map(f => `${f.name}: ${f.msg}`).join('\n') + (failures.length > 5 ? `\n+${failures.length - 5} طلبات أخرى` : ''),
+        });
+      }
+    } catch (e) {
+      console.error('❌ خطأ في الموافقة الجماعية:', e);
+      toast({ variant: 'destructive', title: 'فشلت الموافقة الجماعية', description: e instanceof Error ? e.message : 'خطأ غير معروف' });
     } finally {
       clearProcessing();
       setSaving(null);
       busyRef.current = false;
-    }
-
-    const saved = total - failures.length;
-    if (failures.length === 0) {
-      toast({ title: `تم حفظ ${saved} بصمة ✅`, description: 'كل الطلبات المعلقة محفوظة في قاعدة البيانات.' });
-    } else {
-      toast({
-        variant: 'destructive',
-        title: `تم حفظ ${saved} — وفشل ${failures.length} بعد إعادة المحاولة`,
-        description: failures.slice(0, 5).map(f => `${f.name}: ${f.msg}`).join('\n') + (failures.length > 5 ? `\n+${failures.length - 5} طلبات أخرى` : ''),
-      });
     }
   };
 
