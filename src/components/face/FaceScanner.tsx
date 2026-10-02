@@ -18,7 +18,7 @@ import {
   MIN_RECOG_CONFIDENCE,
   requiredConfirmFrames,
 } from '../../services/faceAI/descriptors';
-import { buildGallery, findBestMatchConsensus, resolveStudent } from '../../services/faceAI/gallery';
+import { buildGallery, findBestMatchConsensus, resolveStudent, getLastMatchRejection } from '../../services/faceAI/gallery';
 import {
   identityBlockMessage,
   isIdentityBlock,
@@ -28,6 +28,15 @@ import {
 } from '../../services/faceAI/identity';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useStageStore } from '../../store/useStageStore';
+import {
+  EMPTY_DIAG,
+  diagFromMatch,
+  identityReason,
+  recordAttempt,
+  rejectionReason,
+  toScore,
+  type MatchDiag,
+} from '../../services/faceAI/matchDiagnostics';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface FaceScannerProps {
@@ -280,6 +289,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     matchConfidence: number,
     boxInVideo: Box,
     trackId: number,
+    diag: MatchDiag = EMPTY_DIAG,
   ) => {
     const now = Date.now();
 
@@ -319,6 +329,16 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
       if (!result.ok && isIdentityBlock(result.reason)) {
         console.warn('[face-scanner] رُفض التسجيل — هوية غير مؤكدة:', student.id, result.reason);
         loggedIdsRef.current.delete(student.id);
+        recordAttempt({
+          source: 'attendance',
+          studentId: student.id,
+          studentName: student.name,
+          bestId: student.id,
+          bestScore: matchConfidence,
+          ...diag,
+          decision: 'reject',
+          reason: identityReason(result.reason),
+        });
         pushLog({
           id: student.id,
           name: student.name,
@@ -336,6 +356,16 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
         ? { ...student, name: live.name, code: live.code ?? student.code, group: live.group ?? student.group }
         : student;
       return Promise.resolve(markRef.current(finalStudent)).then(() => {
+        recordAttempt({
+          source: 'attendance',
+          studentId: finalStudent.id,
+          studentName: finalStudent.name,
+          bestId: finalStudent.id,
+          bestScore: matchConfidence,
+          ...diag,
+          decision: 'accept',
+          reason: 'HIGH_CONFIDENCE',
+        });
         if (loggedIdsRef.current.has(finalStudent.id)) return;
         loggedIdsRef.current.set(finalStudent.id, true);
         pushLog({
@@ -534,16 +564,48 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               const vbx = res.box.x / scale, vby = res.box.y / scale;
               const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
 
-              if (!match || match.confidence < MIN_RECOG_CONFIDENCE || res.quality.composite < MIN_FRAME_QUALITY) {
+              const qualityPoor = res.quality.composite < MIN_FRAME_QUALITY;
+              if (!match || match.confidence < MIN_RECOG_CONFIDENCE || qualityPoor) {
                 anyUnknown = true;
+                // ✅ تشخيص «غير معروف» (مبكوف ضد الفيض) — جودة إطار رديئة ليست قرار مطابقة
+                if (!qualityPoor) {
+                  const rej = match ? null : getLastMatchRejection();
+                  recordAttempt({
+                    source: 'attendance',
+                    studentId: null,
+                    studentName: null,
+                    bestId: match ? match.item.id : (rej?.id ?? null),
+                    bestScore: match ? match.confidence : toScore(rej?.distance),
+                    secondId: match ? match.secondId : (rej?.secondId ?? null),
+                    secondScore: match ? toScore(match.secondDistance) : toScore(rej?.secondDistance),
+                    margin: match ? Math.round(match.margin * 100) : (rej ? Math.round(rej.margin * 100) : null),
+                    agreement: match ? match.agreement : 0,
+                    totalFrames: match ? match.totalQueries : 0,
+                    supportedSamples: match ? match.supportedSamples : null,
+                    decision: 'unknown',
+                    reason: match ? 'LOW_CONFIDENCE' : rejectionReason(rej?.cause),
+                  });
+                }
                 const smallFace = res.box.width < MIN_FACE_PX * 1.7;
                 liveBoxes.push({ box: boxInVideo, label: smallFace ? 'اقترب قليلاً' : 'غير معروف', color: '#fbbf24' });
                 continue;
               }
 
-              // رقم مكرّر ⇒ لازم نطابق **الاسم الكامل** ونحدّد السجل الوحيد، لا نخمّن
+              // رقم مكرّر ⇒ لازم نطابق **الاسم الكامل** ونحدّد السجل الواحد، لا نخمّن
               const student = resolveStudent(match.item, rosterRef.current);
-              if (!student) continue;
+              if (!student) {
+                recordAttempt({
+                  source: 'attendance',
+                  studentId: null,
+                  studentName: null,
+                  bestId: match.item.id,
+                  bestScore: match.confidence,
+                  ...diagFromMatch(match),
+                  decision: 'reject',
+                  reason: 'DUPLICATE_ID',
+                });
+                continue;
+              }
 
               // طالب سُجّل حضوراً في هذه الجلسة — حتى لو تحرك مكانه، يختفي إطاره فوراً
               if (doneStudentsRef.current.has(student.id)) {
@@ -563,7 +625,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               // ✅ تأكيد كامل — نُسجّل الحضور عبر الدالة المشتركة
               // البصمة ثابتة منذ التسجيل: لا تحسين ولا تعلّم أثناء الحضور
               markedAny = true;
-              finalizeTrack(student, match.confidence, boxInVideo, trackId);
+              finalizeTrack(student, match.confidence, boxInVideo, trackId, diagFromMatch(match));
             }
           }
 
@@ -610,12 +672,34 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               if (confirmCount >= requiredFrames) {
                 // ✅ تأكيد كامل — نُسجّل الحضور فوراً (نفس الثانية)
                 markedAny = true;
-                finalizeTrack(student, cache.cachedConfidence, boxInVideo, t.trackId);
+                finalizeTrack(student, cache.cachedConfidence, boxInVideo, t.trackId, {
+                  margin: Math.round(cache.cachedMargin * 100),
+                  secondId: null,
+                  secondScore: null,
+                  agreement: confirmCount,
+                  totalFrames: confirmCount,
+                  supportedSamples: cache.cachedSupported,
+                });
                 liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'تم التسجيل', color: '#34d399' });
               } else {
                 liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'جاري التحقق...', color: '#818cf8' });
               }
             } else {
+              recordAttempt({
+                source: 'attendance',
+                studentId: student ? student.id : null,
+                studentName: student ? student.name : null,
+                bestId: cache.cachedMatchId,
+                bestScore: cache.cachedConfidence,
+                margin: Math.round(cache.cachedMargin * 100),
+                secondId: null,
+                secondScore: null,
+                agreement: 0,
+                totalFrames: 0,
+                supportedSamples: cache.cachedSupported,
+                decision: student ? 'unknown' : 'reject',
+                reason: student ? 'LOW_CONFIDENCE' : 'DUPLICATE_ID',
+              });
               liveBoxes.push({ box: boxInVideo, label: 'غير معروف', color: '#fbbf24' });
               anyUnknown = true;
             }

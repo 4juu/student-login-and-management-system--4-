@@ -1,7 +1,15 @@
-import React, { useMemo, useState } from 'react';
-import { Download, ScanFace, ShieldCheck, TriangleAlert, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Activity, Download, Eraser, ScanFace, ShieldCheck, TriangleAlert, X } from 'lucide-react';
 import type { Student } from '../../types/student';
 import { auditFaceDescriptors, auditIssuesToCsv, type AuditIssue } from '../../lib/faceAudit';
+import {
+  attemptsToCsv,
+  clearAttempts,
+  decisionLabelAr,
+  getAttempts,
+  reasonLabelAr,
+  sourceLabelAr,
+} from '../../services/faceAI/matchDiagnostics';
 
 interface FaceAuditPanelProps {
   students: Student[];
@@ -15,11 +23,26 @@ const KIND_LABEL: Record<AuditIssue['kind'], string> = {
   'similar-face': 'وجهان متشابهان',
 };
 
+const DECISION_STYLE: Record<string, string> = {
+  accept: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  reject: 'bg-red-500/15 text-red-300 border-red-500/30',
+  unknown: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+};
+
 /** لوحة تدقيق بصمات المرحلة — قراءة فقط: تكشف ما يحتاج إعادة تسجيل (لا تكتب أي شيء) */
 export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageName }) => {
   const [expanded, setExpanded] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [audit, setAudit] = useState<ReturnType<typeof auditFaceDescriptors> | null>(null);
+  const [attempts, setAttempts] = useState(() => getAttempts());
+
+  // سجل التشخيص يُكتب من مسارات المسح خارج React ⇒ نُحدّثه بنبضة خفيفة أثناء الفتح
+  useEffect(() => {
+    if (!expanded) return;
+    setAttempts(getAttempts());
+    const id = window.setInterval(() => setAttempts(getAttempts()), 2000);
+    return () => window.clearInterval(id);
+  }, [expanded]);
 
   const withFaceCount = useMemo(
     () => students.filter(s => s.faceDescriptor).length,
@@ -27,7 +50,7 @@ export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageN
   );
 
   if (!expanded) {
-    if (withFaceCount === 0) return null;
+    if (withFaceCount === 0 && attempts.length === 0) return null;
     return (
       <button
         type="button"
@@ -65,6 +88,21 @@ export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageN
     a.download = `تدقيق-البصمات-${stageName || 'المرحلة'}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const exportDiagCsv = () => {
+    const blob = new Blob([attemptsToCsv()], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `تشخيص-المطابقة-${stageName || 'المرحلة'}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const clearDiag = () => {
+    clearAttempts();
+    setAttempts(getAttempts());
   };
 
   return (
@@ -157,6 +195,91 @@ export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageN
           </p>
         </>
       )}
+
+      {/* ── تشخيص المطابقة: لماذا قُبل/رُفض كل محاولة (للأدمن، بالذاكرة فقط) ── */}
+      <div className="mt-4 pt-4 border-t border-white/10">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+          <h4 className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+            <Activity className="w-3.5 h-3.5 text-violet-400" /> تشخيص المطابقة
+            <span className="font-normal text-slate-500">
+              ({attempts.length} محاولة{attempts.length >= 200 ? ' — وصلت الحدّ الأقصى' : ''} · بالذاكرة فقط)
+            </span>
+          </h4>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportDiagCsv}
+              disabled={attempts.length === 0}
+              className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-slate-100 text-[11px] rounded-md transition flex items-center gap-1"
+            >
+              <Download className="w-3 h-3" /> CSV
+            </button>
+            <button
+              onClick={clearDiag}
+              disabled={attempts.length === 0}
+              className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-slate-100 text-[11px] rounded-md transition flex items-center gap-1"
+            >
+              <Eraser className="w-3 h-3" /> مسح
+            </button>
+          </div>
+        </div>
+
+        {attempts.length === 0 ? (
+          <p className="text-[11px] text-slate-500 leading-5 py-2">
+            لا محاولات بعد في هذه الجلسة — يُسجَّل كل قبول/رفض/غير معروف عند وقوعه،
+            ويختفي بالكامل عند إغلاق الصفحة (لا يُحفظ في أي قاعدة بيانات).
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px] border-collapse">
+              <thead>
+                <tr className="text-slate-400 text-right border-b border-white/10">
+                  <th className="py-1.5 px-1.5 font-medium">الوقت</th>
+                  <th className="py-1.5 px-1.5 font-medium">المصدر</th>
+                  <th className="py-1.5 px-1.5 font-medium">القرار</th>
+                  <th className="py-1.5 px-1.5 font-medium">سبب القرار</th>
+                  <th className="py-1.5 px-1.5 font-medium">الطالب</th>
+                  <th className="py-1.5 px-1.5 font-medium">أفضل %</th>
+                  <th className="py-1.5 px-1.5 font-medium">الثاني %</th>
+                  <th className="py-1.5 px-1.5 font-medium">الفرق %</th>
+                  <th className="py-1.5 px-1.5 font-medium">اتفاق</th>
+                </tr>
+              </thead>
+              <tbody>
+                {attempts.map(a => (
+                  <tr key={a.attemptId} className="border-b border-white/5 text-slate-300">
+                    <td className="py-1.5 px-1.5 font-mono text-slate-400 whitespace-nowrap">
+                      {new Date(a.at).toLocaleTimeString('en-GB', { hour12: false })}
+                    </td>
+                    <td className="py-1.5 px-1.5">{sourceLabelAr(a.source)}</td>
+                    <td className="py-1.5 px-1.5">
+                      <span
+                        className={`inline-block px-1.5 py-0.5 rounded border text-[10px] font-bold ${
+                          DECISION_STYLE[a.decision] ?? DECISION_STYLE.unknown
+                        }`}
+                      >
+                        {decisionLabelAr(a.decision)}
+                      </span>
+                    </td>
+                    <td className="py-1.5 px-1.5">{reasonLabelAr(a.reason)}</td>
+                    <td className="py-1.5 px-1.5">
+                      {a.studentName ?? a.bestId ?? '—'}
+                      {a.studentId && a.studentName ? (
+                        <span className="text-slate-500 font-mono"> ({a.studentId})</span>
+                      ) : null}
+                    </td>
+                    <td className="py-1.5 px-1.5 font-mono">{a.bestScore ?? '—'}</td>
+                    <td className="py-1.5 px-1.5 font-mono">{a.secondScore ?? '—'}</td>
+                    <td className="py-1.5 px-1.5 font-mono">{a.margin ?? '—'}</td>
+                    <td className="py-1.5 px-1.5 font-mono">
+                      {a.totalFrames ? `${a.agreement}/${a.totalFrames}` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

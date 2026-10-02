@@ -18,7 +18,13 @@ import {
   MIN_RECOG_CONFIDENCE,
   requiredConfirmFrames,
 } from '../../services/faceAI/descriptors';
-import { buildGallery, findBestMatchConsensus, findDuplicateIds, resolveStudent } from '../../services/faceAI/gallery';
+import { buildGallery, findBestMatchConsensus, findDuplicateIds, resolveStudent, getLastMatchRejection } from '../../services/faceAI/gallery';
+import {
+  diagFromMatch,
+  recordAttempt,
+  rejectionReason,
+  toScore,
+} from '../../services/faceAI/matchDiagnostics';
 import { getTestLink, validateTestLink, formatRemainingMs, getServerNow } from '../../services/tokenService';
 import { getActiveAcademicYear } from '../../firebase/dataService';
 import { loadStageStudentsPublic } from '../SelfRegister/SelfEnrollPage';
@@ -348,13 +354,41 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
 
               if (!match || match.confidence < MIN_RECOG_CONFIDENCE) {
+                const rej = match ? null : getLastMatchRejection();
+                recordAttempt({
+                  source: 'test',
+                  studentId: null,
+                  studentName: null,
+                  bestId: match ? match.item.id : (rej?.id ?? null),
+                  bestScore: match ? match.confidence : toScore(rej?.distance),
+                  secondId: match ? match.secondId : (rej?.secondId ?? null),
+                  secondScore: match ? toScore(match.secondDistance) : toScore(rej?.secondDistance),
+                  margin: match ? Math.round(match.margin * 100) : (rej ? Math.round(rej.margin * 100) : null),
+                  agreement: match ? match.agreement : 0,
+                  totalFrames: match ? match.totalQueries : 0,
+                  supportedSamples: match ? match.supportedSamples : null,
+                  decision: 'unknown',
+                  reason: match ? 'LOW_CONFIDENCE' : rejectionReason(rej?.cause),
+                });
                 const smallFace = res.box.width < MIN_FACE_PX * 1.7;
                 liveBoxes.push({ box: boxInVideo, label: smallFace ? 'اقترب قليلاً' : 'غير معروف', color: '#fbbf24' });
                 continue;
               }
 
               const student = resolveStudent(match.item, studentsRef.current);
-              if (!student) continue;
+              if (!student) {
+                recordAttempt({
+                  source: 'test',
+                  studentId: null,
+                  studentName: null,
+                  bestId: match.item.id,
+                  bestScore: match.confidence,
+                  ...diagFromMatch(match),
+                  decision: 'reject',
+                  reason: 'DUPLICATE_ID',
+                });
+                continue;
+              }
 
               anyMatched = true;
 
@@ -367,6 +401,16 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               }
 
               // ✅ تأكيد كامل — التعرف فوري بلا أي تحسين أو حفظ
+              recordAttempt({
+                source: 'test',
+                studentId: student.id,
+                studentName: student.name,
+                bestId: match.item.id,
+                bestScore: match.confidence,
+                ...diagFromMatch(match),
+                decision: 'accept',
+                reason: 'HIGH_CONFIDENCE',
+              });
               setMatchedStudent(student);
               trackerRef.current.removeTrack(trackId);
               liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'تم التعرف', color: '#34d399' });
@@ -401,6 +445,21 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               const requiredFrames = requiredConfirmFrames(cache.cachedDistance, cache.cachedMargin, cache.cachedSupported);
 
               if (confirmCount >= requiredFrames) {
+                recordAttempt({
+                  source: 'test',
+                  studentId: student.id,
+                  studentName: student.name,
+                  bestId: cache.cachedMatchId,
+                  bestScore: cache.cachedConfidence,
+                  margin: Math.round(cache.cachedMargin * 100),
+                  secondId: null,
+                  secondScore: null,
+                  agreement: confirmCount,
+                  totalFrames: confirmCount,
+                  supportedSamples: cache.cachedSupported,
+                  decision: 'accept',
+                  reason: 'HIGH_CONFIDENCE',
+                });
                 setMatchedStudent(student);
                 trackerRef.current.removeTrack(t.trackId);
                 liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'تم التعرف', color: '#34d399' });
@@ -411,6 +470,21 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
                 liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'جاري التحقق...', color: '#818cf8' });
               }
             } else {
+              recordAttempt({
+                source: 'test',
+                studentId: student ? student.id : null,
+                studentName: student ? student.name : null,
+                bestId: cache.cachedMatchId,
+                bestScore: cache.cachedConfidence,
+                margin: Math.round(cache.cachedMargin * 100),
+                secondId: null,
+                secondScore: null,
+                agreement: 0,
+                totalFrames: 0,
+                supportedSamples: cache.cachedSupported,
+                decision: student ? 'unknown' : 'reject',
+                reason: student ? 'LOW_CONFIDENCE' : 'DUPLICATE_ID',
+              });
               liveBoxes.push({ box: boxInVideo, label: 'غير معروف', color: '#fbbf24' });
             }
           }

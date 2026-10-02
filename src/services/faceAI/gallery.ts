@@ -96,6 +96,9 @@ interface QueryHit {
   distance: number;
   threshold: number;
   margin: number;
+  /** أفضل مرشّح ثانٍ في نفس الإطار — للتشخيص فقط (لا يدخل أي قرار) */
+  secondEntry: GalleryItem | null;
+  secondDistance: number | null;
 }
 
 /** مرتخي طفيف: لحساب «الزوايا الداعمة» — زاوية على الحدّ ما زالت دليل تأييد */
@@ -151,12 +154,25 @@ function scoreQuery(
   if (!first) return null;
   const margin = second ? second.distance - first.distance : 1;
 
-  if (first.distance > first.threshold) return null;
+  if (first.distance > first.threshold) {
+    noteRejection(first, second, 'threshold', margin);
+    return null;
+  }
   // هامش متكيّف: قوة المطابقة تحدّد صرامة الفصل عن المرشّح الثاني (منع الخلط بين طالبين)
   const requiredMargin = first.distance <= CONFIRM_MODERATE ? STRONG_MATCH_MARGIN : MIN_MARGIN;
-  if (second && margin < requiredMargin) return null;
+  if (second && margin < requiredMargin) {
+    noteRejection(first, second, 'margin', margin);
+    return null;
+  }
 
-  return { entry: first.entry, distance: first.distance, threshold: first.threshold, margin };
+  return {
+    entry: first.entry,
+    distance: first.distance,
+    threshold: first.threshold,
+    margin,
+    secondEntry: second ? second.entry : null,
+    secondDistance: second ? second.distance : null,
+  };
 }
 
 /** كم زاوية من عينات الطالب السبع يدعمها هذا الإطار؟ — دليل تأييد إضافي */
@@ -174,19 +190,66 @@ function toQueries(query: Float32Array | Float32Array[]): Float32Array[] {
   return qs.filter(q => q && q.length > 0);
 }
 
+// ── التشخيص: لماذا رُفض إطار؟ (لا يغيّر أي قرار — يُعاد فقط لسجل التشخيص) ──
+interface MatchRejection {
+  id: string;
+  distance: number;
+  threshold: number;
+  margin: number;
+  secondId: string | null;
+  secondDistance: number | null;
+  cause: 'threshold' | 'margin' | 'agreement';
+}
+
+/**
+ * آخر رفض سجّله scoreQuery — تُصفّه findBestMatch* عند دخولها فيبقى صالحاً لهذا
+ * النداء فقط. تُقرأ بعد النداء مباشرة (نفس المُتزامن) ثم لا تُستخدم.
+ */
+let lastRejection: MatchRejection | null = null;
+export const getLastMatchRejection = (): MatchRejection | null => lastRejection;
+
+function noteRejection(
+  first: { entry: GalleryItem; distance: number; threshold: number },
+  second: { entry: GalleryItem; distance: number } | undefined,
+  cause: 'threshold' | 'margin',
+  margin: number,
+): void {
+  const rej: MatchRejection = {
+    id: first.entry.id,
+    distance: first.distance,
+    threshold: first.threshold,
+    margin,
+    secondId: second ? second.entry.id : null,
+    secondDistance: second ? second.distance : null,
+    cause,
+  };
+  // نحتفظ بالأقرب (أصغر مسافة) — إنه الأقرب للقبول وأهم للتشخيص
+  if (!lastRejection || rej.distance < lastRejection.distance) lastRejection = rej;
+}
+
 /**
  * مطابقة مُحسّنة — أفضل إطار من مصفوفة استعلامات (best-of).
  * تُقارن كل استعلام بكل عيّنة وتأخذ أدنى مسافة ⇒ «أي زاوية من الزوايا الأخيرة تكفي»
- * بدل متوسطها الذي يقع بين الزاويتين ويُبعِّد المسافة.
+ * بدل متوسطها التي تقع بين الزاويتين ويُبعِّد المسافة.
  */
 export function findBestMatchIndexed(
   query: Float32Array | Float32Array[],
   gallery: GalleryItem[],
   baseThreshold: number,
   queryQuality?: number,
-): { item: GalleryItem; distance: number; confidence: number; sampleCount: number; margin: number } | null {
+): {
+  item: GalleryItem;
+  distance: number;
+  confidence: number;
+  sampleCount: number;
+  margin: number;
+  /** أفضل مرشّح ثانٍ في نفس الإطار — للتشخيص فقط */
+  secondId: string | null;
+  secondDistance: number | null;
+} | null {
   const queries = toQueries(query);
   if (queries.length === 0) return null;
+  lastRejection = null;
 
   let best: QueryHit | null = null;
   for (const q of queries) {
@@ -201,6 +264,8 @@ export function findBestMatchIndexed(
     confidence: Math.round((1 - best.distance) * 100),
     sampleCount: best.entry.allSamples.length,
     margin: Math.round(best.margin * 100) / 100,
+    secondId: best.secondEntry ? best.secondEntry.id : null,
+    secondDistance: best.secondDistance,
   };
 }
 
@@ -259,6 +324,11 @@ export interface ConsensusMatch {
   agreement: number;
   /** عدد الزوايا (عينات التسجيل) التي يدعمها الإطار الفائز */
   supportedSamples: number;
+  /** أفضل مرشّح ثانٍ في نفس الإطار الفائز — للتشخيص فقط (لا يدخل القرار) */
+  secondId: string | null;
+  secondDistance: number | null;
+  /** إجمالي الإطارات المستعلَمة في هذه المحاولة (لحساب الاتفاق X/Y) */
+  totalQueries: number;
 }
 
 /**
@@ -277,6 +347,7 @@ export function findBestMatchConsensus(
 ): ConsensusMatch | null {
   const qs = toQueries(queries);
   if (qs.length === 0 || gallery.length === 0) return null;
+  lastRejection = null;
   // ✅ إطاران مستقلان على الأقل دائماً — إطار واحد محظوظ لا يحسم الهوية
   //    (كان `Math.min(minAgree, qs.length)` ينزل بالشرط إلى 1 عند المسار الجديد)
   if (qs.length < minAgree) return null;
@@ -304,7 +375,28 @@ export function findBestMatchConsensus(
       winnerList = list;
     }
   }
-  if (!winnerId || !winnerList || winnerList.length === 0) return null;
+  if (!winnerId || !winnerList || winnerList.length === 0) {
+    // ✅ مرشّحون مقبولون لكن الإطارات لم تتفق ⇒ رفض اتفاق (للتشخيص: FRAME_DISAGREEMENT)
+    let mostPromising: { query: Float32Array; hit: QueryHit } | null = null;
+    for (const list of groups.values()) {
+      for (const item of list) {
+        if (!mostPromising || item.hit.distance < mostPromising.hit.distance) mostPromising = item;
+      }
+    }
+    if (mostPromising) {
+      const hit = mostPromising.hit;
+      lastRejection = {
+        id: hit.entry.id,
+        distance: hit.distance,
+        threshold: hit.threshold,
+        margin: hit.margin,
+        secondId: hit.secondEntry ? hit.secondEntry.id : null,
+        secondDistance: hit.secondDistance,
+        cause: 'agreement',
+      };
+    }
+    return null;
+  }
 
   const firstHit = winnerList[0];
   if (!firstHit) return null;
@@ -321,5 +413,8 @@ export function findBestMatchConsensus(
     margin: Math.round(best.hit.margin * 100) / 100,
     agreement: winnerList.length,
     supportedSamples: countSupportedSamples(best.query, best.hit),
+    secondId: best.hit.secondEntry ? best.hit.secondEntry.id : null,
+    secondDistance: best.hit.secondDistance,
+    totalQueries: qs.length,
   };
 }

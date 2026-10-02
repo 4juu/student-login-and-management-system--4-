@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildGallery, findBestMatchIndexed, findBestMatchConsensus, resolveStudent } from '../gallery';
+import { buildGallery, findBestMatchIndexed, findBestMatchConsensus, getLastMatchRejection, resolveStudent } from '../gallery';
 import { DESC_DIM, MATCH_LOOSE, MATCH_STRICT, descriptorDistance, l2Normalize } from '../descriptors';
 
 /** متجهات شبه عشوائية مستقلة تماماً لكل seed (mulberry32) */
@@ -286,5 +286,76 @@ describe('findBestMatchConsensus — إجماع إطارين مستقلين (ض�
 
   it('returns null for an empty query list', () => {
     expect(findBestMatchConsensus([], buildGallery(roster), MATCH_LOOSE)).toBeNull();
+  });
+});
+
+describe('حقول التشخيص: secondId/secondDistance/totalQueries + getLastMatchRejection', () => {
+  function personEnrollment(seed: number): number[][] {
+    const base = makeVec(seed);
+    return Array.from({ length: 7 }, (_, i) => arr(blend(base, orthogonalTo(base, seed + 500 + i), 0.5 + i * 0.1)));
+  }
+  const roster = [
+    { id: 'a', faceDescriptor: { version: 5 as const, enrollment: personEnrollment(80) } },
+    { id: 'b', faceDescriptor: { version: 5 as const, enrollment: personEnrollment(90) } },
+  ];
+  const frameA1 = makeVec(80);
+  const frameA2 = Float32Array.from(personEnrollment(80)[3]!);
+  const frameB1 = makeVec(90);
+
+  it('النتيجة الناجحة تعيد الثاني وعدد الإطارات المستعلَمة', () => {
+    const g = buildGallery(roster);
+    const m = findBestMatchConsensus([frameA1, frameA2], g, MATCH_LOOSE);
+    expect(m).not.toBeNull();
+    expect(m!.totalQueries).toBe(2);
+    expect(m!.secondId).toBe('b');
+    expect(m!.secondDistance).toBeGreaterThan(0);
+    expect(getLastMatchRejection()).toBeNull();
+  });
+
+  it('رفض العتبة يسجّل السبب threshold مع أفضل مسافة', () => {
+    const g = buildGallery(roster);
+    expect(findBestMatchIndexed(makeVec(999), g, MATCH_LOOSE)).toBeNull();
+    const rej = getLastMatchRejection();
+    expect(rej?.cause).toBe('threshold');
+    expect(['a', 'b']).toContain(rej!.id);
+    expect(rej!.distance).toBeGreaterThan(0);
+    expect(rej!.secondId).not.toBeNull();
+  });
+
+  it('رفض الهامش يسجّل السبب margin مع الثاني', () => {
+    const a = makeVec(40);
+    const near = new Float32Array(a);
+    near[0] = near[0]! + 0.0005;
+    let n = 0;
+    for (let i = 0; i < DESC_DIM; i++) n += near[i]! * near[i]!;
+    n = Math.sqrt(n) || 1;
+    for (let i = 0; i < DESC_DIM; i++) near[i] = near[i]! / n;
+
+    const both = buildGallery([
+      { id: 'a', faceDescriptor: { version: 5, enrollment: [arr(a)] } },
+      { id: 'b', faceDescriptor: { version: 5, enrollment: [arr(near)] } },
+    ]);
+    expect(findBestMatchIndexed(a, both, MATCH_LOOSE)).toBeNull();
+    const rej = getLastMatchRejection();
+    expect(rej?.cause).toBe('margin');
+    expect(rej?.secondId).toBe('b');
+    expect(rej!.margin).toBeLessThan(0.09);
+  });
+
+  it('خلاف الإطارات يسجّل السبب agreement', () => {
+    const g = buildGallery(roster);
+    expect(findBestMatchConsensus([frameA1, frameB1], g, MATCH_LOOSE)).toBeNull();
+    const rej = getLastMatchRejection();
+    expect(rej?.cause).toBe('agreement');
+    expect(['a', 'b']).toContain(rej!.id);
+    expect(rej!.secondId).not.toBeNull();
+  });
+
+  it('لا يبقى رفض قديم بعد محاولة ناجحة جديدة (تصفير عند كل نداء)', () => {
+    const g = buildGallery(roster);
+    expect(findBestMatchIndexed(makeVec(999), g, MATCH_LOOSE)).toBeNull();
+    expect(getLastMatchRejection()).not.toBeNull();
+    expect(findBestMatchConsensus([frameA1, frameA2], g, MATCH_LOOSE)).not.toBeNull();
+    expect(getLastMatchRejection()).toBeNull();
   });
 });

@@ -11,7 +11,16 @@ import {
   MIN_RECOG_CONFIDENCE,
   requiredConfirmFrames,
 } from '../../services/faceAI/descriptors';
-import { buildGallery, findBestMatchConsensus, resolveStudent } from '../../services/faceAI/gallery';
+import { buildGallery, findBestMatchConsensus, resolveStudent, getLastMatchRejection } from '../../services/faceAI/gallery';
+import {
+  EMPTY_DIAG,
+  diagFromMatch,
+  identityReason,
+  recordAttempt,
+  rejectionReason,
+  toScore,
+  type MatchDiag,
+} from '../../services/faceAI/matchDiagnostics';
 import {
   identityBlockMessage,
   isIdentityBlock,
@@ -147,7 +156,7 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
   // ── لحظة التعرف: إيقاف الكاميرا + **تحقق من السيرفر** + لمحة بالاسم ثم فتح التقرير ──
   // لا يُفتح تقرير أبداً على أساس بيانات محمّلة قديمة: لو حُذف الطالب أو غُيّر اسمه أو رُفعت
   // بصمته بعد فتح الكاميرا، نُبقي الشاشة مغلقة ونُعلمه بدل عرض تقرير شخص آخر.
-  const handleMatched = useCallback(async (student: Student) => {
+  const handleMatched = useCallback(async (student: Student, diag: MatchDiag = EMPTY_DIAG) => {
     if (foundRef.current) return;
     foundRef.current = true;
     stopScan();
@@ -171,6 +180,16 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
 
     if (!mountedRef.current) return;
     if (!result.ok && isIdentityBlock(result.reason)) {
+      recordAttempt({
+        source: 'report',
+        studentId: student.id,
+        studentName: student.name,
+        bestId: student.id,
+        bestScore: null,
+        ...diag,
+        decision: 'reject',
+        reason: identityReason(result.reason),
+      });
       setDeniedMsg(identityBlockMessage(result.reason));
       setPhase('denied');
       return;
@@ -181,6 +200,16 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
     const finalStudent: Student = live
       ? { ...student, name: live.name, code: live.code ?? student.code, group: live.group ?? student.group }
       : student;
+    recordAttempt({
+      source: 'report',
+      studentId: finalStudent.id,
+      studentName: finalStudent.name,
+      bestId: finalStudent.id,
+      bestScore: null,
+      ...diag,
+      decision: 'accept',
+      reason: 'HIGH_CONFIDENCE',
+    });
     setMatchedStudent(finalStudent);
     setPhase('found');
     flashTimerRef.current = window.setTimeout(() => {
@@ -337,14 +366,42 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
               const boxInVideo: Box = { x: vbx, y: vby, width: vbw, height: vbh };
 
               if (!match || match.confidence < MIN_RECOG_CONFIDENCE) {
+                const rej = match ? null : getLastMatchRejection();
+                recordAttempt({
+                  source: 'report',
+                  studentId: null,
+                  studentName: null,
+                  bestId: match ? match.item.id : (rej?.id ?? null),
+                  bestScore: match ? match.confidence : toScore(rej?.distance),
+                  secondId: match ? match.secondId : (rej?.secondId ?? null),
+                  secondScore: match ? toScore(match.secondDistance) : toScore(rej?.secondDistance),
+                  margin: match ? Math.round(match.margin * 100) : (rej ? Math.round(rej.margin * 100) : null),
+                  agreement: match ? match.agreement : 0,
+                  totalFrames: match ? match.totalQueries : 0,
+                  supportedSamples: match ? match.supportedSamples : null,
+                  decision: 'unknown',
+                  reason: match ? 'LOW_CONFIDENCE' : rejectionReason(rej?.cause),
+                });
                 const smallFace = res.box.width < MIN_FACE_PX * 1.7;
                 liveBoxes.push({ box: boxInVideo, label: smallFace ? 'اقترب قليلاً' : 'غير معروف', color: '#fbbf24' });
                 continue;
               }
 
-              // رقم مكرّر ⇒ لازم نطابق **الاسم الكامل** ونحدّد السجل الوحيد، لا نخمّن
+              // رقم مكرّر ⇒ لازم نطابق **الاسم الكامل** ونحدّد السجل الواحد، لا نخمّن
               const student = resolveStudent(match.item, studentsRef.current);
-              if (!student) continue;
+              if (!student) {
+                recordAttempt({
+                  source: 'report',
+                  studentId: null,
+                  studentName: null,
+                  bestId: match.item.id,
+                  bestScore: match.confidence,
+                  ...diagFromMatch(match),
+                  decision: 'reject',
+                  reason: 'DUPLICATE_ID',
+                });
+                continue;
+              }
               sawConfident = true;
 
               const confirmCount = trackerRef.current.bumpConfirm(embTrack.trackId, student.id);
@@ -356,7 +413,7 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
 
               liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'تم التعرف', color: '#34d399' });
               drawBoxes(liveBoxes);
-              handleMatched(student);
+              handleMatched(student, diagFromMatch(match));
               return;
             }
           }
@@ -384,11 +441,33 @@ export const FaceReportGate: React.FC<FaceReportGateProps> = ({ students, onMatc
               if (confirmCount >= requiredFrames) {
                 liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'تم التعرف', color: '#34d399' });
                 drawBoxes(liveBoxes);
-                handleMatched(student);
+                handleMatched(student, {
+                  margin: Math.round(cache.cachedMargin * 100),
+                  secondId: null,
+                  secondScore: null,
+                  agreement: confirmCount,
+                  totalFrames: confirmCount,
+                  supportedSamples: cache.cachedSupported,
+                });
                 return;
               }
               liveBoxes.push({ box: boxInVideo, label: student.name, sub: 'جاري التحقق...', color: '#818cf8' });
             } else {
+              recordAttempt({
+                source: 'report',
+                studentId: student ? student.id : null,
+                studentName: student ? student.name : null,
+                bestId: cache.cachedMatchId,
+                bestScore: cache.cachedConfidence,
+                margin: Math.round(cache.cachedMargin * 100),
+                secondId: null,
+                secondScore: null,
+                agreement: 0,
+                totalFrames: 0,
+                supportedSamples: cache.cachedSupported,
+                decision: student ? 'unknown' : 'reject',
+                reason: student ? 'LOW_CONFIDENCE' : 'DUPLICATE_ID',
+              });
               liveBoxes.push({ box: boxInVideo, label: 'غير معروف', color: '#fbbf24' });
             }
           }
