@@ -9,6 +9,7 @@ import { LS, saveLocal, loadLocal, isDangerousEmpty, stripUndefined } from "./lo
 import { debouncedSave, registerOutboxFallback } from "./saveQueue";
 import { queueOutbox } from "../lib/offlineOutbox";
 import { patchCachedStageData } from "../lib/stageCache";
+import { duplicateValues } from "../lib/studentNumbers";
 
 export const saveStudents = async (
   adminUid: string,
@@ -27,10 +28,16 @@ export const saveStudents = async (
   saveLocal(LS.students(adminUid, stageId), students);
 
   // فصل faceDescriptor إلى عقدة منفصلة — students تبقى خفيفة (بلا بصمات ضخمة)
+  // ✅ حارس أخير: لا بصمة تحت id مكرر (خانة واحدة = بصمة مشتركة لشخصين)
+  const dupIds = duplicateValues(students, 'id');
   const descriptors: Record<string, unknown> = {};
   const stripped = students.map(s => {
     if (s.faceDescriptor !== undefined && s.faceDescriptor !== null) {
-      descriptors[s.id] = s.faceDescriptor;
+      if (dupIds.has(s.id)) {
+        console.warn('[saveStudents] تُجاهلت بصمة لسجل به معرّف مكرر:', s.id, s.name);
+      } else {
+        descriptors[s.id] = s.faceDescriptor;
+      }
     }
     const { faceDescriptor: _fd, ...rest } = s;
     return rest;

@@ -263,6 +263,6 @@ describe('auditFaceDescriptors — تدقيق بصمات المرحلة', () => 
     ]);
     const csv = auditIssuesToCsv(a);
     expect(csv).toContain('النوع');
-    expect(csv).toContain('رقم مكرر');
+    expect(csv).toContain('معرّف مكرر');
   });
 });

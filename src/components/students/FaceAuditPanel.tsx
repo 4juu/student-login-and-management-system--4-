@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Activity, Download, Eraser, ScanFace, ShieldCheck, TriangleAlert, X } from 'lucide-react';
 import type { Student } from '../../types/student';
 import { auditFaceDescriptors, auditIssuesToCsv, type AuditIssue } from '../../lib/faceAudit';
@@ -17,7 +17,10 @@ interface FaceAuditPanelProps {
 }
 
 const KIND_LABEL: Record<AuditIssue['kind'], string> = {
-  'duplicate-id': 'رقم مكرر',
+  'duplicate-id': 'معرّف مكرر',
+  'duplicate-code': 'رمز مكرر',
+  'duplicate-university-id': 'رقم جامعي مكرر',
+  'duplicate-qr': 'QR مكرر',
   'weak-samples': 'بصمة ضعيفة',
   'mixed-samples': 'بصمة ملوّثة',
   'similar-face': 'وجهان متشابهان',
@@ -44,13 +47,9 @@ export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageN
     return () => window.clearInterval(id);
   }, [expanded]);
 
-  const withFaceCount = useMemo(
-    () => students.filter(s => s.faceDescriptor).length,
-    [students],
-  );
-
   if (!expanded) {
-    if (withFaceCount === 0 && attempts.length === 0) return null;
+    // اللوحة تُفتح حتى لو ما فيه بصمات — فحص الأرقام المكرّرة يهم وحده
+    if (students.length === 0 && attempts.length === 0) return null;
     return (
       <button
         type="button"
@@ -70,7 +69,14 @@ export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageN
       try {
         setAudit(
           auditFaceDescriptors(
-            students.map(s => ({ id: s.id, name: s.name, faceDescriptor: s.faceDescriptor })),
+            students.map(s => ({
+              id: s.id,
+              name: s.name,
+              code: s.code,
+              universityId: s.universityId,
+              qrCodeId: s.qrCodeId,
+              faceDescriptor: s.faceDescriptor,
+            })),
           ),
         );
       } finally {
@@ -126,7 +132,7 @@ export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageN
       {!audit ? (
         <div className="text-center py-4">
           <p className="text-xs text-slate-400 mb-3 leading-6">
-            يفحص {withFaceCount} بصمة في هذه المرحلة: أرقام طلاب مكرّرة · بصمات ضعيفة ·
+            يفحص {students.length} طالباً: أي رقم مكرّر (الرمز/الجامعي/QR/المعرّف) · بصمات ضعيفة ·
             بصمات «ملوّثة» (عيّناتها غير متسقة ⇒ شخص تسرّب إليها) · وجهان متشابهان.
             <br />
             <span className="text-sky-300">لا يغيّر أي بيانات — تقرير فقط.</span>

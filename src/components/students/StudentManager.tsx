@@ -20,6 +20,7 @@ import { StudentTable } from './StudentTable';
 import { Pagination } from './Pagination';
 import { LoadingState } from '../loading/LoadingState';
 import { toast } from '@/hooks/use-toast';
+import { findNumberConflict, NUMBER_FIELD_LABEL } from '../../lib/studentNumbers';
 import { Users } from 'lucide-react';
 
 // 🚀 نافذة تسجيل بصمات الوجه (فردية وجماعية) تُحمَّل عند فتحها فقط
@@ -116,11 +117,6 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
       return;
     }
 
-    if (students.some(s => s.code === code)) {
-      setError('هذا الرمز مستخدم بالفعل');
-      return;
-    }
-
     if (!name.trim()) {
       setError('الرجاء إدخال اسم الطالب');
       return;
@@ -131,15 +127,17 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
       return;
     }
 
-    if (universityId.trim() && students.some(s => s.universityId === universityId.trim())) {
-      setError('هذا الرقم الجامعي مستخدم بالفعل');
-      return;
-    }
-
     const cleanQrCode = qrCodeId.trim() ? extractQrCodeId(qrCodeId) : '';
 
-    if (cleanQrCode && students.some(s => s.qrCodeId === cleanQrCode)) {
-      setError('رمز QR هذا مستخدم لطالب آخر بالفعل');
+    // ✅ أي رقم (الرمز/الجامعي/QR/id) لا يتكرر — فحص موحّد يسمّي صاحب الرقم
+    const conflict = findNumberConflict(
+      { code, universityId: universityId.trim(), qrCodeId: cleanQrCode },
+      students,
+    );
+    if (conflict) {
+      setError(
+        `${NUMBER_FIELD_LABEL[conflict.field]} «${conflict.value}» مستخدم بالفعل للطالب ${conflict.holderName}`,
+      );
       return;
     }
 
@@ -296,6 +294,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
       let addedCount = 0;
       let skippedCount = 0;
       let qrLinkedCount = 0;
+      let droppedNumberCount = 0;
 
       const newStudentsBatch: Student[] = [];
 
@@ -318,6 +317,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
           ? student.universityId
           : undefined;
         if (uniId) existingUniIds.add(uniId);
+        else if (student.universityId) droppedNumberCount++;
 
         const qrCode = student.qrCodeId && !existingQrCodes.has(student.qrCodeId)
           ? student.qrCodeId
@@ -325,7 +325,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
         if (qrCode) {
           existingQrCodes.add(qrCode);
           qrLinkedCount++;
-        }
+        } else if (student.qrCodeId) droppedNumberCount++;
 
         const newStudent: Student = {
           id: `${Date.now()}_${addedCount}`,
@@ -357,7 +357,8 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
       setImportMessage(
         `تمت إضافة ${addedCount} طالب بنجاح` +
         (qrLinkedCount > 0 ? ` (${qrLinkedCount} مربوط برمز QR)` : '') +
-        (skippedCount > 0 ? ` (تم تجاهل ${skippedCount} طالب مكرر)` : '')
+        (skippedCount > 0 ? ` (تم تجاهل ${skippedCount} طالب مكرر)` : '') +
+        (droppedNumberCount > 0 ? ` (تم تجاهل ${droppedNumberCount} رقم مكرر)` : '')
       );
     } catch (err) {
       console.error(err);
@@ -373,10 +374,18 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
     const existingNames = new Set(students.map(s => s.name));
 
     const newStudentsBatch: Student[] = [];
+    let skippedCodeCount = 0;
+    let skippedNameCount = 0;
 
     for (const student of parsedStudents) {
-      if (existingNames.has(student.name)) continue;
-      if (existingCodes.has(student.code)) continue;
+      if (existingNames.has(student.name)) {
+        skippedNameCount++;
+        continue;
+      }
+      if (existingCodes.has(student.code)) {
+        skippedCodeCount++;
+        continue;
+      }
 
       const newStudent: Student = {
         id: crypto.randomUUID(),
@@ -400,6 +409,13 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
         }
       }
     }
+
+    // ✅ لا صمت: الكل يعرف كم طالباً رُفض ولماذا (بديل عن التجاهل الصامت)
+    setImportMessage(
+      `تمت إضافة ${newStudentsBatch.length} طالب` +
+      (skippedCodeCount > 0 ? ` (رُفض ${skippedCodeCount} لاحتوائهم رمزاً مكرراً)` : '') +
+      (skippedNameCount > 0 ? ` (رُفض ${skippedNameCount} لاحتوائهم اسماً مكرراً)` : ''),
+    );
   };
 
   const toggleSelectStudent = useCallback((id: string) => {
@@ -460,8 +476,12 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
 
     const trimmedId = editUniversityId.trim();
 
-    if (trimmedId && students.some(s => s.id !== editingUniIdStudent && s.universityId === trimmedId)) {
-      toast({ variant: 'destructive', title: 'هذا الرقم الجامعي مستخدم لطالب آخر' });
+    const conflict = findNumberConflict({ universityId: trimmedId }, students, editingUniIdStudent);
+    if (conflict) {
+      toast({
+        variant: 'destructive',
+        title: `${NUMBER_FIELD_LABEL[conflict.field]} «${conflict.value}» مستخدم للطالب ${conflict.holderName}`,
+      });
       return;
     }
 
@@ -485,8 +505,12 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
 
     const cleanQr = editQrCodeId.trim() ? extractQrCodeId(editQrCodeId) : '';
 
-    if (cleanQr && students.some(s => s.id !== editingQrStudent && s.qrCodeId === cleanQr)) {
-      toast({ variant: 'destructive', title: 'رمز QR هذا مستخدم لطالب آخر' });
+    const conflict = findNumberConflict({ qrCodeId: cleanQr }, students, editingQrStudent);
+    if (conflict) {
+      toast({
+        variant: 'destructive',
+        title: `${NUMBER_FIELD_LABEL[conflict.field]} «${conflict.value}» مستخدم للطالب ${conflict.holderName}`,
+      });
       return;
     }
 

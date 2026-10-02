@@ -4,14 +4,25 @@
 // (عيّناتها غير متسقة ⇒ شخص تسرّب إلى داخل البصمة) · وجهان متشابهان
 // ─────────────────────────────────────────────────────────────
 import { parseAllSamples, descriptorDistance, minDistanceToAny, l2Normalize } from '../services/faceAI/descriptors';
+import { NUMBER_FIELD_LABEL, findDuplicateNumbers, type NumberField } from './studentNumbers';
 
 export interface AuditStudentInput {
   id: string;
   name: string;
+  code?: string | undefined;
+  universityId?: string | undefined;
+  qrCodeId?: string | undefined;
   faceDescriptor?: unknown;
 }
 
-export type AuditIssueKind = 'duplicate-id' | 'weak-samples' | 'mixed-samples' | 'similar-face';
+export type AuditIssueKind =
+  | 'duplicate-id'
+  | 'duplicate-code'
+  | 'duplicate-university-id'
+  | 'duplicate-qr'
+  | 'weak-samples'
+  | 'mixed-samples'
+  | 'similar-face';
 
 export interface AuditIssue {
   kind: AuditIssueKind;
@@ -92,18 +103,24 @@ export function auditFaceDescriptors(students: AuditStudentInput[]): StageAudit 
   const issues: AuditIssue[] = [];
   const affected = new Set<string>();
 
-  // ── 1) معرّفات مكرّرة
-  for (const dupId of findRosterDuplicateIds(students)) {
-    const names = students.filter(s => s.id === dupId).map(s => s.name);
+  // ── 1) أي رقم مكرّر (الرمز/الجامعي/QR/المعرّف) — الرقم الفريد شرط
+  const DUPLICATE_KIND: Record<NumberField, AuditIssueKind> = {
+    id: 'duplicate-id',
+    code: 'duplicate-code',
+    universityId: 'duplicate-university-id',
+    qrCodeId: 'duplicate-qr',
+  };
+  for (const g of findDuplicateNumbers(students)) {
+    const names = g.records.map(r => r.name);
     issues.push({
-      kind: 'duplicate-id',
+      kind: DUPLICATE_KIND[g.field],
       severity: 'high',
-      studentIds: [dupId],
+      studentIds: g.records.map(r => r.id),
       studentNames: names,
-      detail: `الرقم مكرر في ${names.length} سجلات — أي مطابقة ستعرض اسم السجل الأول`,
+      detail: `${NUMBER_FIELD_LABEL[g.field]} «${g.value}» مكرر في ${names.length} سجلات — بصمة واحدة ستعمل للاثنين أو يُمنع أحدهما من الحضور`,
       score: names.length,
     });
-    affected.add(dupId);
+    for (const r of g.records) affected.add(r.id);
   }
 
   // ── 2) تحليل كل بصمة على حدة
@@ -176,7 +193,10 @@ export function auditFaceDescriptors(students: AuditStudentInput[]): StageAudit 
 }
 
 const KIND_LABEL: Record<AuditIssueKind, string> = {
-  'duplicate-id': 'رقم مكرر',
+  'duplicate-id': 'معرّف مكرر',
+  'duplicate-code': 'رمز مكرر',
+  'duplicate-university-id': 'رقم جامعي مكرر',
+  'duplicate-qr': 'QR مكرر',
   'weak-samples': 'بصمة ضعيفة',
   'mixed-samples': 'بصمة ملوّثة',
   'similar-face': 'وجهان متشابهان',
