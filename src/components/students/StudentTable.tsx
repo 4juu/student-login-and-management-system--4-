@@ -25,6 +25,12 @@ interface StudentTableProps {
   setTransferStudentId: React.Dispatch<React.SetStateAction<string | null>>;
   transferGroupValue: string;
   setTransferGroupValue: React.Dispatch<React.SetStateAction<string>>;
+  editingNameStudent: string | null;
+  editName: string;
+  setEditName: React.Dispatch<React.SetStateAction<string>>;
+  startEditName: (student: Student) => void;
+  saveEditName: () => void;
+  cancelEditName: () => void;
   editingUniIdStudent: string | null;
   editUniversityId: string;
   setEditUniversityId: React.Dispatch<React.SetStateAction<string>>;
@@ -59,6 +65,12 @@ export const StudentTable: React.FC<StudentTableProps> = ({
   setTransferStudentId,
   transferGroupValue,
   setTransferGroupValue,
+  editingNameStudent,
+  editName,
+  setEditName,
+  startEditName,
+  saveEditName,
+  cancelEditName,
   editingUniIdStudent,
   editUniversityId,
   setEditUniversityId,
@@ -139,7 +151,51 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                   <td className="px-4 py-4 whitespace-nowrap">
                     <span className="text-lg font-bold text-blue-600">{student.code}</span>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-right">{student.name}</td>
+                  <td className="px-4 py-4 whitespace-nowrap text-right">
+                    {editingNameStudent === student.id ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={editName}
+                          onChange={e => setEditName(e.target.value)}
+                          className="w-48 px-2 py-1 border border-blue-500/40 bg-slate-800 text-white rounded text-sm text-right"
+                          autoFocus
+                          aria-label="اسم الطالب"
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') saveEditName();
+                            if (e.key === 'Escape') cancelEditName();
+                          }}
+                        />
+                        <button
+                          onClick={saveEditName}
+                          className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs"
+                          title="حفظ"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={cancelEditName}
+                          className="px-2 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-xs"
+                          title="إلغاء"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span>{student.name}</span>
+                        {onUpdateStudent && (
+                          <button
+                            onClick={() => startEditName(student)}
+                            className="text-blue-400 hover:text-blue-300 text-xs"
+                            title="تعديل اسم الطالب"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-4 whitespace-nowrap text-right">
                     {transferStudentId === student.id ? (
                       <div className="flex items-center gap-1">

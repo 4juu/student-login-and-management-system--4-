@@ -156,4 +156,48 @@ describe('StudentManager', () => {
     // count indicators — "طالب" word should appear
     expect(screen.getAllByText(/طالب/).length).toBeGreaterThan(0);
   });
+
+  it('edits a student name inline and saves', async () => {
+    const onUpdateStudent = vi.fn();
+    setup({ onUpdateStudent });
+
+    const pencils = screen.getAllByTitle('تعديل اسم الطالب');
+    expect(pencils.length).toBeGreaterThanOrEqual(2);
+    await userEvent.click(pencils[0]!);
+
+    const input = screen.getByLabelText('اسم الطالب');
+    expect(input).toHaveValue('أحمد علي');
+
+    await userEvent.clear(input);
+    await userEvent.type(input, 'أحمد حسن');
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onUpdateStudent).toHaveBeenCalledWith('s1', { name: 'أحمد حسن' });
+    expect(screen.queryByLabelText('اسم الطالب')).not.toBeInTheDocument();
+  });
+
+  it('rejects empty or duplicate name when editing', async () => {
+    const onUpdateStudent = vi.fn();
+    setup({ onUpdateStudent });
+
+    await userEvent.click(screen.getAllByTitle('تعديل اسم الطالب')[0]!);
+    const input = screen.getByLabelText('اسم الطالب');
+
+    // اسم مكرر (اسم طالبة آخر)
+    await userEvent.clear(input);
+    await userEvent.type(input, 'سارة محمد');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onUpdateStudent).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('اسم الطالب')).toBeInTheDocument();
+
+    // اسم فارغ
+    await userEvent.clear(input);
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onUpdateStudent).not.toHaveBeenCalled();
+
+    // الإلغاء يُغلق بلا حفظ
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(screen.queryByLabelText('اسم الطالب')).not.toBeInTheDocument();
+    expect(onUpdateStudent).not.toHaveBeenCalled();
+  });
 });

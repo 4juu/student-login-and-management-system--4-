@@ -88,6 +88,9 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
   const [editingQrStudent, setEditingQrStudent] = useState<string | null>(null);
   const [editQrCodeId, setEditQrCodeId] = useState('');
 
+  const [editingNameStudent, setEditingNameStudent] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+
   const [transferStudentId, setTransferStudentId] = useState<string | null>(null);
   const [transferGroupValue, setTransferGroupValue] = useState('');
 
@@ -524,6 +527,40 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
     setEditQrCodeId('');
   };
 
+  const startEditName = (student: Student) => {
+    setEditingNameStudent(student.id);
+    setEditName(student.name);
+  };
+
+  const saveEditName = () => {
+    if (!editingNameStudent || !onUpdateStudent) return;
+
+    const trimmed = editName.trim();
+    if (!trimmed) {
+      toast({ variant: 'destructive', title: 'الرجاء إدخال اسم الطالب' });
+      return;
+    }
+
+    // الاسم يجب أن يبقى فريداً (نفس شرط الإضافة) — يُستثني الطالب الجاري تعديله
+    const clash = students.some(s => s.id !== editingNameStudent && s.name.trim() === trimmed);
+    if (clash) {
+      toast({ variant: 'destructive', title: `الاسم «${trimmed}» مستخدم بالفعل لطالب آخر` });
+      return;
+    }
+
+    const current = students.find(s => s.id === editingNameStudent);
+    if (current && current.name !== trimmed) {
+      onUpdateStudent(editingNameStudent, { name: trimmed });
+    }
+    setEditingNameStudent(null);
+    setEditName('');
+  };
+
+  const cancelEditName = () => {
+    setEditingNameStudent(null);
+    setEditName('');
+  };
+
   const removeQrLink = async (student: Student) => {
     if (!onUpdateStudent) return;
     const ok = await confirmAction({
@@ -769,6 +806,12 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
         startEditQr={startEditQr}
         saveEditQr={saveEditQr}
         cancelEditQr={cancelEditQr}
+        editingNameStudent={editingNameStudent}
+        editName={editName}
+        setEditName={setEditName}
+        startEditName={startEditName}
+        saveEditName={saveEditName}
+        cancelEditName={cancelEditName}
         removeQrLink={removeQrLink}
         removeFaceData={removeFaceData}
       />
