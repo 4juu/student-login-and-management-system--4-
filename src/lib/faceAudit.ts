@@ -1,9 +1,9 @@
 // ─────────────────────────────────────────────────────────────
 // تدقيق بصمات المرحلة (قراءة فقط — لا يكتب أي شيء)
-// يكشف: معرّفات مكرّرة · بصمات ضعيفة (عيّنات قليلة) · بصمات «ملوّثة»
-// (عيّناتها غير متسقة ⇒ شخص تسرّب إلى داخل البصمة) · وجهان متشابهان
+// يكشف: معرّفات مكرّرة · بصمات ضعيفة (عيّنات قليلة) · وجهان متشابهان
+// (فحص الانحراف بين العيّنات مُلغى — الانحراف 0.45–0.79 طبيعي لنفس الشخص)
 // ─────────────────────────────────────────────────────────────
-import { parseAllSamples, descriptorDistance, minDistanceToAny, l2Normalize } from '../services/faceAI/descriptors';
+import { parseAllSamples, descriptorDistance, l2Normalize } from '../services/faceAI/descriptors';
 import { NUMBER_FIELD_LABEL, findDuplicateNumbers, type NumberField } from './studentNumbers';
 
 export interface AuditStudentInput {
@@ -21,7 +21,6 @@ export type AuditIssueKind =
   | 'duplicate-university-id'
   | 'duplicate-qr'
   | 'weak-samples'
-  | 'mixed-samples'
   | 'similar-face';
 
 export interface AuditIssue {
@@ -44,8 +43,6 @@ export interface StageAudit {
   clean: number;
 }
 
-/** أقصى انحراف مسموح بين أي عينة وأقرب عينة أخرى — نفس عتبة بوابة الالتقاط */
-export const MIXED_SAMPLE_THRESHOLD = 0.22;
 /** أقل عدد عيّنات صالحة تُعدّ البصمة سليمة */
 export const MIN_HEALTHY_SAMPLES = 5;
 /** أقل مسافة بين بِصمتين считаهما «الوجه نفسه» */
@@ -62,19 +59,6 @@ export const centroidOf = (samples: Float32Array[]): Float32Array | null => {
   for (const s of samples) for (let i = 0; i < dim; i++) mean[i] = mean[i]! + s[i]!;
   for (let i = 0; i < dim; i++) mean[i] = mean[i]! / samples.length;
   return l2Normalize(mean);
-};
-
-/** أقصى بُعد لأي عينة عن **أقرب** عينة أخرى داخل نفس البصمة (شخص تسرّب = عينة بعيدة عن الكل) */
-export const maxSampleDeviation = (samples: Float32Array[]): number => {
-  let max = 0;
-  for (const sample of samples) {
-    const nearest = minDistanceToAny(
-      sample,
-      samples.filter(s => s !== sample),
-    );
-    if (nearest > max) max = nearest;
-  }
-  return max;
 };
 
 /** أدنى مسافة بين أي عينة من بصمة وأخرى */
@@ -145,19 +129,6 @@ export function auditFaceDescriptors(students: AuditStudentInput[]): StageAudit 
       });
       affected.add(s.id);
     }
-
-    const drift = maxSampleDeviation(samples);
-    if (drift > MIXED_SAMPLE_THRESHOLD) {
-      issues.push({
-        kind: 'mixed-samples',
-        severity: 'high',
-        studentIds: [s.id],
-        studentNames: [s.name],
-        detail: `بصمة ملوّثة: إحدى العيّنات تبتعد ${drift.toFixed(2)} عن أقرب عينة أخرى — غالباً شخص تسرّب إلى داخل البصمة`,
-        score: drift,
-      });
-      affected.add(s.id);
-    }
   }
 
   // ── 3) وجهان متشابهان بين طلاب (ترشيح بالمتوسط ثم مقارنة كاملة)
@@ -198,7 +169,6 @@ const KIND_LABEL: Record<AuditIssueKind, string> = {
   'duplicate-university-id': 'رقم جامعي مكرر',
   'duplicate-qr': 'QR مكرر',
   'weak-samples': 'بصمة ضعيفة',
-  'mixed-samples': 'بصمة ملوّثة',
   'similar-face': 'وجهان متشابهان',
 };
 

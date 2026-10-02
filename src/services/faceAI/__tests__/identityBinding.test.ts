@@ -5,10 +5,8 @@ import { DESC_DIM, MATCH_LOOSE, l2Normalize, minDistanceToAny } from '../descrip
 import {
   auditFaceDescriptors,
   findRosterDuplicateIds,
-  maxSampleDeviation,
   minSampleDistance,
   auditIssuesToCsv,
-  MIXED_SAMPLE_THRESHOLD,
   MIN_HEALTHY_SAMPLES,
 } from '../../../lib/faceAudit';
 
@@ -211,22 +209,15 @@ describe('auditFaceDescriptors — تدقيق بصمات المرحلة', () => 
     expect(a.affectedIds).toContain('1');
   });
 
-  it('يكشف البصمة الملوّثة (٦ عيّنات له + واحدة لوجه آخر)', () => {
+  it('لا يرفض عيّنة بُعدت عن سابقاتها (فحص الانحراف مُلغى — الانحراف طبيعي لنفس الشخص)', () => {
     const base = makeVec(31);
     const enrollment = [
       ...Array.from({ length: 6 }, (_, i) => arr(blend(base, orthogonalTo(base, 900 + i), 0.05))),
-      arr(makeVec(999)), // شخص آخر تماماً
+      arr(makeVec(999)), // عينة بعيدة جداً — لا تُمنع بعد الإلغاء
     ];
-    const drift = maxSampleDeviation(
-      enrollment.map(e => Float32Array.from(e)),
-    );
-    expect(drift).toBeGreaterThan(MIXED_SAMPLE_THRESHOLD);
-
-    const a = auditFaceDescriptors([{ id: '9', name: 'ملوّث', faceDescriptor: { version: 5, enrollment } }]);
-    const mixed = a.issues.find(i => i.kind === 'mixed-samples');
-    expect(mixed).toBeTruthy();
-    expect(mixed!.severity).toBe('high');
-    expect(a.affectedIds).toContain('9');
+    const a = auditFaceDescriptors([{ id: '9', name: 'بعيدة', faceDescriptor: { version: 5, enrollment } }]);
+    expect(a.issues).toHaveLength(0);
+    expect(a.affectedIds).not.toContain('9');
   });
 
   it('يكشف البصمة الضعيفة (عيّنات قليلة)', () => {

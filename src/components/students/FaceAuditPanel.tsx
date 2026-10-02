@@ -22,7 +22,6 @@ const KIND_LABEL: Record<AuditIssue['kind'], string> = {
   'duplicate-university-id': 'رقم جامعي مكرر',
   'duplicate-qr': 'QR مكرر',
   'weak-samples': 'بصمة ضعيفة',
-  'mixed-samples': 'بصمة ملوّثة',
   'similar-face': 'وجهان متشابهان',
 };
 
@@ -55,7 +54,7 @@ export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageN
         type="button"
         onClick={() => setExpanded(true)}
         className="mb-4 px-4 py-2 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white font-medium rounded-lg transition duration-200 shadow-md flex items-center justify-center gap-2"
-        title="فحص بصمات المرحلة: أرقام مكرّرة، بصمات ملوّثة، وجوه متشابهة (قراءة فقط)"
+        title="فحص بصمات المرحلة: أرقام مكرّرة، بصمات ضعيفة، وجوه متشابهة (قراءة فقط)"
       >
         <ScanFace className="w-4 h-4" /> تدقيق البصمات
       </button>
@@ -133,7 +132,7 @@ export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageN
         <div className="text-center py-4">
           <p className="text-xs text-slate-400 mb-3 leading-6">
             يفحص {students.length} طالباً: أي رقم مكرّر (الرمز/الجامعي/QR/المعرّف) · بصمات ضعيفة ·
-            بصمات «ملوّثة» (عيّناتها غير متسقة ⇒ شخص تسرّب إليها) · وجهان متشابهان.
+            وجهان متشابهان.
             <br />
             <span className="text-sky-300">لا يغيّر أي بيانات — تقرير فقط.</span>
           </p>
@@ -196,7 +195,7 @@ export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageN
           </ul>
 
           <p className="mt-3 text-[11px] text-slate-400 leading-5">
-            بصمات «ملوّثة» و«وجهان متشابهان» تعني احتمال حفظ وجه شخص داخل حساب طالب آخر —
+            «وجهان متشابهان» يعني احتمال حفظ وجه شخص داخل حساب طالب آخر —
             الطالب يحتاج إعادة تسجيل بصمة جديدة عبر رابط «بصمة كود».
           </p>
         </>

@@ -13,7 +13,6 @@ import {
   checkForTampering,
   hasValidDescriptor,
   l2Normalize,
-  minDistanceToAny,
   DESC_DIM,
   DESC_VERSION_GALLERY,
   type FaceGalleryDescriptor,
@@ -30,18 +29,6 @@ interface SelfCaptureStepProps {
 
 const SAMPLES_NEEDED = ENROLLMENT_SAMPLE_COUNT;
 const MIN_REL_SIZE = 0.14;
-/**
- * أقصى بُعد مسموح بين العينة الجديدة و**أقرب** عينة سابقة.
- * person آخر = بعيد عن كل العيّنات السابقة ⇒ يُرفض.
- * زاوية أخرى لنفس الشخص = قريبة من عينة واحدة ⇒ تُقبل.
- */
-const MAX_SAMPLE_DRIFT = 0.22;
-/** أقل عدد عينات سابقة قبل تطبيق البوابة (نحتاج أساساً للمقارنة) */
-const MIN_SAMPLES_FOR_DRIFT_CHECK = 2;
-
-/** المسافة إلى أقرب عينة في القائمة (وليس إلى المتوسط) */
-const nearestSampleDistance = (sample: Float32Array, samples: Float32Array[]): number =>
-  minDistanceToAny(sample, samples);
 
 /** متوسط متجهات العينات المجمَّعة (مُطبَّع) */
 const meanOf = (samples: Float32Array[]): Float32Array => {
@@ -238,19 +225,6 @@ export const SelfCaptureStep: React.FC<SelfCaptureStepProps> = ({ student, allSt
       if ((res.quality.composite ?? 0) < 0.50) {
         setFeedback(res.quality.brightness < 0.3 ? 'الإضاءة ضعيفة جداً' : 'ثبّت وجهك وانظر للكاميرا');
         return;
-      }
-
-      // ── ✅ بوابة الاتساق: العينة الجديدة يجب أن تشبه **أقرب** عينة سابقة
-      //    (شخص ثانٍ/صورة مطبوعة = بعيدة عن كل العيّنات ⇒ تُرفض ولا تُحتسب،
-      //     أما زاوية أخرى لنفس الشخص فأقرب عينة قريبة ⇒ تُقبل)
-      const previous = samplesDataRef.current;
-      if (previous.length >= MIN_SAMPLES_FOR_DRIFT_CHECK) {
-        const drift = nearestSampleDistance(new Float32Array(res.descriptor), previous);
-        if (drift > MAX_SAMPLE_DRIFT) {
-          setFlash('fail');
-          setFeedback('الوجه مختلف عن اللقطات السابقة — تأكد أنك وحدك أمام الكاميرا ثم أعد الالتقاط');
-          return;
-        }
       }
 
       samplesDataRef.current.push(new Float32Array(res.descriptor));
