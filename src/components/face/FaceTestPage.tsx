@@ -18,7 +18,7 @@ import {
   MIN_RECOG_CONFIDENCE,
   requiredConfirmFrames,
 } from '../../services/faceAI/descriptors';
-import { buildGallery, findBestMatchConsensus, findDuplicateIds } from '../../services/faceAI/gallery';
+import { buildGallery, findBestMatchConsensus, findDuplicateIds, resolveStudent } from '../../services/faceAI/gallery';
 import { getTestLink, validateTestLink, formatRemainingMs, getServerNow } from '../../services/tokenService';
 import { getActiveAcademicYear } from '../../firebase/dataService';
 import { loadStageStudentsPublic } from '../SelfRegister/SelfEnrollPage';
@@ -340,6 +340,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               trackerRef.current.setCache(
                 trackId, match?.item.id ?? null, match?.confidence ?? 0,
                 match?.distance ?? 1, match?.margin ?? 1, match?.supportedSamples ?? 1,
+                match?.item.name ?? '',
               );
 
               const vbw = res.box.width / scale, vbh = res.box.height / scale;
@@ -352,7 +353,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
                 continue;
               }
 
-              const student = studentsRef.current.find(s => s.id === match.item.id);
+              const student = resolveStudent(match.item, studentsRef.current);
               if (!student) continue;
 
               anyMatched = true;
@@ -393,7 +394,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
             }
 
             const boxInVideo: Box = { x: t.box.x, y: t.box.y, width: t.box.width, height: t.box.height };
-            const student = studentsRef.current.find(s => s.id === cache.cachedMatchId);
+            const student = resolveStudent({ id: cache.cachedMatchId, name: cache.cachedMatchName }, studentsRef.current);
 
             if (student && cache.cachedConfidence >= MIN_RECOG_CONFIDENCE) {
               const confirmCount = trackerRef.current.bumpConfirm(t.trackId, student.id);
@@ -550,9 +551,11 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/15">
           <svg className="h-8 w-8 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
         </div>
-        <h2 className="text-xl font-extrabold text-emerald-300 mb-2">البصمة تعمل!</h2>
-        <p className="text-sm text-slate-300 mb-1">تم التعرف على وجهك بنجاح</p>
-        <p className="text-base font-bold text-white mb-4">{matchedStudent.name}</p>
+          <h2 className="text-xl font-extrabold text-emerald-300 mb-2">البصمة تعمل!</h2>
+          <p className="text-sm text-slate-300 mb-1">تم التعرف على وجهك بنجاح</p>
+          <p className="text-base font-bold text-white mb-1">{matchedStudent.name}</p>
+          <p className="text-sm font-bold text-slate-400 mb-1" dir="ltr">{matchedStudent.id}</p>
+          <p className="text-xs text-slate-500 mb-4">الاسم الكامل والمعرّف معاً — تأكد من مطابقتهما لبياناتك في النظام</p>
         <div className="flex flex-col gap-2">
           <button
             onClick={() => {

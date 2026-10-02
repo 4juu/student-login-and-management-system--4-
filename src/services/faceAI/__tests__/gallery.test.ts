@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildGallery, findBestMatchIndexed, findBestMatchConsensus } from '../gallery';
+import { buildGallery, findBestMatchIndexed, findBestMatchConsensus, resolveStudent } from '../gallery';
 import { DESC_DIM, MATCH_LOOSE, MATCH_STRICT, descriptorDistance, l2Normalize } from '../descriptors';
 
 /** متجهات شبه عشوائية مستقلة تماماً لكل seed (mulberry32) */
@@ -46,6 +46,51 @@ function blend(a: Float32Array, b: Float32Array, beta: number): Float32Array {
 function sevenAngles(seed: number): number[][] {
   return Array.from({ length: 7 }, (_, i) => arr(makeVec(seed + i)));
 }
+
+describe('resolveStudent — المعرّف + الاسم معاً', () => {
+  it('يربط السجل بالاسم الكامل لا بالمعرّف وحده', () => {
+    const records = [
+      { id: 's1', name: 'محمد أحمد علي' },
+      { id: 's2', name: 'محمد أحمد علي' },
+    ];
+    const entry = { id: 's2', name: 'محمد أحمد علي' };
+    expect(resolveStudent(entry, records)!.id).toBe('s2');
+  });
+
+  it('يرفض السجل الذي يختلف اسمه (يمنع عرض اسم طالب آخر)', () => {
+    const records = [
+      { id: 's1', name: 'حسن كريم' },
+      { id: 's1', name: 'حسن كريم نجم' },
+    ];
+    const entry = { id: 's1', name: 'حسن كريم نجم' };
+    expect(resolveStudent(entry, records)!.name).toBe('حسن كريم نجم');
+  });
+
+  it('لا يرجع سجلاً عندما لا يوجد أي مطابق بالاسم', () => {
+    const records = [
+      { id: 's1', name: 'زينب' },
+      { id: 's1', name: 'عمر' },
+    ];
+    expect(resolveStudent({ id: 's1', name: 'ليلى' }, records)).toBeNull();
+  });
+
+  it('يتجاهل فروق المسافات وحالة الأحرف', () => {
+    const records = [{ id: 's1', name: '  Abd   Allah  ' }];
+    expect(resolveStudent({ id: 's1', name: 'abd allah' }, records)).not.toBeNull();
+  });
+
+  it('معرّف فريد ⇒ يُرجع السجل مباشرة', () => {
+    const records = [{ id: 's1', name: 'أي اسم' }];
+    expect(resolveStudent({ id: 's1', name: 'اسم آخر تماماً' }, records)!.id).toBe('s1');
+  });
+
+  it('buildGallery يخزّن الاسم الكامل كما هو', () => {
+    const g = buildGallery([
+      { id: 's1', name: 'عبد الله محمد الخامس', faceDescriptor: { version: 5, enrollment: sevenAngles(3) } },
+    ]);
+    expect(g[0]!.name).toBe('عبد الله محمد الخامس');
+  });
+});
 
 describe('buildGallery', () => {
   it('indexes enrollment samples only (no cluster blending)', () => {

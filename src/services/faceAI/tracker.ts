@@ -18,6 +18,8 @@ interface Track {
   lastEmbedTime: number;
   lastEmbedBox: TrackBox | null;
   cachedMatchId: string | null;
+  /** اسم الطالب الكامل المرتبط بالمعرّف — يُقرأ من الكاش مع المعرّف معاً (يمنع عرض اسم سجل آخر) */
+  cachedMatchName: string;
   cachedConfidence: number;
   cachedDistance: number;
   cachedMargin: number;
@@ -112,6 +114,7 @@ export class FaceTracker {
           track.confirmCount = 0;
           track.lastConfirmId = null;
           track.cachedMatchId = null;
+          track.cachedMatchName = '';
           track.cachedConfidence = 0;
           track.matchChanges = 0;
           track.lastEmbedTime = 0;
@@ -153,6 +156,7 @@ export class FaceTracker {
         lastEmbedTime: 0,
         lastEmbedBox: null,
         cachedMatchId: null,
+        cachedMatchName: '',
         cachedConfidence: 0,
         cachedDistance: 1,
         cachedMargin: 1,
@@ -223,10 +227,11 @@ export class FaceTracker {
     return [...t.embeddingBuffer];
   }
 
-  setCache(trackId: number, matchId: string | null, confidence: number, distance = 1, margin = 1, supported = 1) {
-    const t = this.tracks.find(tr => tr.id === trackId);
+  setCache(trackId: number, matchId: string | null, confidence: number, distance = 1, margin = 1, supported = 1, matchName = '') {
+    const t = this.tracks.find(t => t.id === trackId);
     if (t) {
       t.cachedMatchId = matchId;
+      t.cachedMatchName = matchId ? matchName : '';
       t.cachedConfidence = confidence;
       t.cachedDistance = distance;
       t.cachedMargin = margin;

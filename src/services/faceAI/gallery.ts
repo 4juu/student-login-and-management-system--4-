@@ -10,6 +10,8 @@ import { ENROLLMENT_SAMPLE_COUNT } from './angles';
 
 interface GalleryItem {
   id: string;
+  /** الاسم الكامل كما في النظام — يُعرض مع المعرّف معاً، ويجوز التحقق منهما معاً عند التعريف */
+  name: string;
   allSamples: Float32Array[];
   centroid: Float32Array | null;
   primary: Float32Array | null;
@@ -29,7 +31,7 @@ export function findDuplicateIds<T extends { id?: unknown }>(items: T[]): string
 }
 
 /** ابنِ فهرس المعرض من قائمة الطلاب — يُبنى مرة واحدة فقط عند تغيّر الطلاب */
-export function buildGallery<T extends { id: string; faceDescriptor?: unknown }>(
+export function buildGallery<T extends { id: string; name?: string; faceDescriptor?: unknown }>(
   items: T[],
 ): GalleryItem[] {
   const gallery: GalleryItem[] = [];
@@ -79,6 +81,7 @@ export function buildGallery<T extends { id: string; faceDescriptor?: unknown }>
 
     gallery.push({
       id: item.id,
+      name: typeof item.name === 'string' ? item.name : '',
       allSamples,
       centroid: norm > 0 ? avg : null,
       primary: allSamples[bestIdx] ?? null,
@@ -199,6 +202,28 @@ export function findBestMatchIndexed(
     sampleCount: best.entry.allSamples.length,
     margin: Math.round(best.margin * 100) / 100,
   };
+}
+
+/**
+ * يربط نتيجة المعرض بسجل الطالب — **بالمعرّف والاسم معاً**:
+ * لا يكفي تطابق المعرّف وحده، فأي سجل يحمل المعرّف نفسه باسم مختلف يُرفض
+ * (يمنع عرض اسم طالب آخر عند تكرار المعرّف في الروستر).
+ * الاسم يُقارن بعد توحيد المسافات وتجاهل حالة الأحرف، وفيه «الاسم الأول» أو «الاسم الأخير» مقبول.
+ */
+export function resolveStudent<T extends { id?: unknown; name?: unknown }>(
+  entry: { id: string; name: string },
+  records: T[],
+): T | null {
+  const sameId = records.filter(r => r && r.id === entry.id);
+  if (sameId.length === 0) return null;
+  if (sameId.length === 1) return sameId[0] ?? null;
+  const norm = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().toLowerCase() : '');
+  const target = norm(entry.name);
+  if (target) {
+    const exact = sameId.find(r => norm(r.name) === target);
+    if (exact) return exact;
+  }
+  return null;
 }
 
 export interface ConsensusMatch {
