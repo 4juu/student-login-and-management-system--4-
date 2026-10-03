@@ -430,7 +430,11 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
         goTo('invalid-link');
       } catch (e: any) {
         if (!mounted) return;
-        setErrorMsg(e?.name === 'AbortError' ? 'تعذر الاتصال بقاعدة البيانات' : 'فشل تحميل بيانات الرابط');
+        // رسالة المستخدم المقصودة (رابط مستهلك) تمر كما هي
+        const msg = e?.code === 'app/used-link' ? e.message
+          : e?.name === 'AbortError' ? 'تعذر الاتصال بقاعدة البيانات'
+          : 'فشل تحميل بيانات الرابط';
+        setErrorMsg(msg);
         goTo('invalid-link');
       } finally { clearTimeout(globalTimeout); }
     })();
@@ -956,7 +960,7 @@ const ReportStep: React.FC<{
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
         <div className="sel-stat sel-stat-green">
           <p className="text-xs font-semibold text-[#34D399] mb-1">حضور</p>
           <div className="sel-stat-num text-[#34D399]">{stats.present}</div>

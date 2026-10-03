@@ -50,7 +50,7 @@ function useNavigation(currentUser: User | null) {
       console.warn('⚠️ فشل الاستماع لطلبات التسجيل:', error);
     });
 
-    return () => { off(requestsRef); unsubscribe(); };
+    return () => { off(requestsRef, 'value', handleSnapshot); unsubscribe(); };
   }, [currentUser, setPendingCount, setPendingRequests]);
 
   return {

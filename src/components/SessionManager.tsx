@@ -100,7 +100,7 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
     const name = `حضور ${dateStr}`;
     
     const newSession: AttendanceSession = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       name,
       date: now.toLocaleDateString('ar-EG'),
       createdAt: now.toISOString(),
@@ -145,7 +145,7 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
 
     const now = new Date();
     const newSession: AttendanceSession = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       name: sessionName.trim(),
       date: now.toLocaleDateString('ar-EG'),
       createdAt: now.toISOString(),

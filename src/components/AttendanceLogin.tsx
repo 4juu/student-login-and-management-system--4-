@@ -77,7 +77,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
 
       const now = new Date();
       const record: AttendanceRecord = {
-        id: Date.now().toString(),
+        id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         studentId: student.id,
         studentName: student.name,
         studentCode: student.code,
@@ -156,7 +156,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
     if (!activeSessionId) throw new Error('لا توجد جلسة نشطة');
     const now = new Date();
     const record: AttendanceRecord = {
-      id: `${Date.now()}_${student.id}`,
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${student.id}`,
       studentId: student.id,
       studentName: student.name,
       studentCode: student.code,

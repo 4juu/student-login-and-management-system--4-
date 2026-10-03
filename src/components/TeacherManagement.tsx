@@ -301,7 +301,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
     setLoading(true);
     try {
       await updateTeacherPassword(selectedTeacher.uid, newPassword, currentTeacherPassword || undefined);
-      setSuccess(`تم تغيير كلمة مرور ${selectedTeacher.displayName}\n\nالكلمة الجديدة: ${newPassword}`);
+      setSuccess(`تم تغيير كلمة مرور ${selectedTeacher.displayName} بنجاح`);
       setShowPasswordModal(false);
       setNewPassword('');
       setCurrentTeacherPassword('');

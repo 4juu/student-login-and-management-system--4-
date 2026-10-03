@@ -13,6 +13,13 @@ import { User, TeacherPermissions } from "../types/user";
 // ⚠️ غيّر هذا الايميل لايميل الأدمن الجديد
 const ADMIN_EMAIL = "mujtabahaitham@gmail.com";
 
+// رسالة مقصودة تمرّ كما هي إلى المستخدم بدل رسائل Firebase العامة
+const appBlockedError = (message: string): Error & { code: string } => {
+  const e = new Error(message) as Error & { code: string };
+  e.code = "app/blocked";
+  return e;
+};
+
 // ============================================================
 // 🔐 تسجيل الدخول
 // ============================================================
@@ -30,11 +37,27 @@ export const signIn = async (email: string, password: string): Promise<User> => 
     
     if (snapshot.exists()) {
       user = snapshot.val();
-      
-      if (user.role === 'teacher' && user.active === false) {
-        console.warn('⚠️ حساب التدريسي معطّل');
+
+      // 🚫 أي حساب معطّل (أدمن أو تدريسي) لا يدخل
+      if (user.active === false) {
+        await firebaseSignOut(auth);
+        throw appBlockedError("حسابك معطّل — تواصل مع الإدارة");
       }
     } else {
+      // 🗑️ حساب محذوف سابقاً (tombstone) — لا يُعاد إنشاؤه
+      //    (قراءة تفشل بأمان إذا كانت قواعد deletedAccounts لم تُرفع بعد — نتعامل معها كعدم وجود)
+      let isDeleted = false;
+      try {
+        const deletedSnap = await get(ref(database, `deletedAccounts/${firebaseUser.uid}`));
+        isDeleted = deletedSnap.exists();
+      } catch (e) {
+        console.warn('تعذّر قراءة deletedAccounts — نتابع الإنشاء:', e);
+      }
+      if (isDeleted) {
+        await firebaseSignOut(auth);
+        throw appBlockedError("هذا الحساب محذوف — تواصل مع الإدارة");
+      }
+
       // 🆕 المستخدم موجود بـ Auth بس مو بـ DB → ننشئه
       
       const role: 'admin' | 'teacher' = 
@@ -58,6 +81,7 @@ export const signIn = async (email: string, password: string): Promise<User> => 
     return user;
     
   } catch (error: any) {
+    if (error?.code === "app/blocked") throw error;
     console.error("❌ خطأ تسجيل الدخول:", error.code, error.message);
     throw new Error(getErrorMessage(error.code) || error.message || 'حدث خطأ');
   }

@@ -342,4 +342,14 @@ if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
     void retryFailedSaves().catch(() => {});
   });
+
+  // 📱 إخفاء التبويب/الصفحة: أفضل وقت لتفريغ الحفظ المعلّق (المتصفح يسمح بالمهلة هنا بعكس beforeunload)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      void flushAllPendingSaves().catch(() => {});
+    }
+  });
+  window.addEventListener('pagehide', () => {
+    void flushAllPendingSaves().catch(() => {});
+  });
 }

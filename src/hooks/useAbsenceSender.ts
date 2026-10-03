@@ -94,7 +94,7 @@ export function useAbsenceSender({
         const absenceCount = (absentCountMap.get(studentId) || 0) + 1;
 
         const record: AttendanceRecord = {
-          id: `absent_${Date.now()}_${studentId}`,
+          id: `absent_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${studentId}`,
           studentId,
           studentName: student.name,
           studentCode: student.code || '',
@@ -183,7 +183,7 @@ export function useAbsenceSender({
         if (!controller.signal.aborted) {
           const allSent = queue.filter(i => i.status === 'sent').length;
           const logEntry: AbsenceSendLogEntry = {
-            id: `log_${Date.now()}`,
+            id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
             sessionId,
             date: dateKey,
             time,

@@ -275,12 +275,20 @@ export const cleanExpiredLinks = async (adminUid: string): Promise<number> => {
  * ملاحظة: لا نرفض الرابط إذا كان «مستخدماً» — روابط الطلاب الفردية تبقى مفتوحة
  * لنفس الطالب (بعد موافقة الأدمن أو أثناء التسجيل) بحيث يستطيع العودة لأول خطوة
  * التحقق دائماً، ولا يُحوَّل لصفحة تسجيل الدخول أبداً.
+ * لكن usedAt (يُكتب عند markLinkAsUsed) يعني أن الرابط استُهلك فعلياً ⇒ نرفضه
+ * مع رسالة طلب رابط جديد بدل قبوله مرة ثانية.
  */
 export const validateLink = (link: RegistrationLink | null): {
   valid: boolean;
   reason?: string;
 } => {
   if (!link) return { valid: false, reason: 'الرابط غير موجود' };
+  // ✅ رابط سبق استهلاكه (usedAt يُكتب مع used في markLinkAsUsed) — يُرفض قبل فحص الانتهاء
+  if (typeof link.usedAt === 'string' && link.usedAt.trim() !== '') {
+    const e = new Error('تم استخدام هذا الرابط مسبقاً — اطلب رابطاً جديداً') as Error & { code: string };
+    e.code = 'app/used-link';
+    throw e;
+  }
   if (!Number.isFinite(link.expiresAt)) return { valid: false, reason: 'الرابط غير صالح' };
   // ✅ حسب وقت سيرفر Firebase لا ساعة الجهاز (serverTimeOffset يُزامَن عند دخول الصفحة)
   if (link.expiresAt < getServerNow()) return { valid: false, reason: 'انتهت صلاحية الرابط' };

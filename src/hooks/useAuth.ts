@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
 import { User } from '../types/user';
 import { auth, database } from '../firebase/config';
 import { signIn, signOut } from '../firebase/authService';
@@ -67,7 +67,26 @@ export function useAuth({ resetData, loadInitialData, registerToken = null }: Us
           let userData: User;
           if (snapshot.exists()) {
             userData = snapshot.val();
+            // 🚫 حساب معطّل لا يستعيد جلسته — يخرج فوراً
+            if (userData.active === false) {
+              await firebaseSignOut(auth);
+              return;
+            }
           } else {
+            // 🗑️ حساب محذوف (tombstone) — لا يُعاد إنشاؤه عند الدخول
+            //    (فشل القراءة بأمان = قواعد لم تُرفع بعد → نتعامل معها كعدم وجود)
+            let isDeleted = false;
+            try {
+              const deletedSnap = await get(dbRefImport(database, `deletedAccounts/${firebaseUser.uid}`));
+              isDeleted = deletedSnap.exists();
+            } catch (e) {
+              console.warn('تعذّر قراءة deletedAccounts — نتابع الإنشاء:', e);
+            }
+            if (isDeleted) {
+              await firebaseSignOut(auth);
+              return;
+            }
+
             userData = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',

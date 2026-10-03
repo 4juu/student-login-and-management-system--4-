@@ -929,6 +929,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                       if (ok) setExportOpen(false);
                     } catch (e) {
                       console.error('Export failed:', e);
+                      toast({ variant: 'destructive', title: 'تعذّر تصدير الملف — حاول مجدداً' });
                     } finally {
                       setExporting(false);
                     }

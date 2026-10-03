@@ -4,6 +4,17 @@ import { useCallback, type ReactNode } from 'react';
 import type { College, Stage, Student, AttendanceRecord, AttendanceSession } from '../types/student';
 import type { User } from '../types/user';
 import { deleteStageData, cancelAllPendingSaves } from '../firebase/dataService';
+import { toast } from '@/hooks/use-toast';
+
+// حذف fire-and-forget كان يبتلع الفشل صامتاً → المرحلة تعود بعد إعادة التحميل بلا أي إشعار
+const reportStageDeleteFailure = (e: unknown) => {
+  console.error('فشل حذف بيانات المرحلة من الخادم:', e);
+  toast({
+    variant: 'destructive',
+    title: 'تعذّر حذف بيانات المرحلة من الخادم',
+    description: 'ربما تعود عند إعادة التحميل — أعد المحاولة لاحقاً.',
+  });
+};
 
 type Updater<T> = T | ((prev: T) => T);
 
@@ -66,13 +77,14 @@ export function useDataActions({
   const handleAddCollege = useCallback((college: College) => setColleges(prev => [...prev, college]), [setColleges]);
 
   const handleDeleteCollege = useCallback((collegeId: string) => {
+    if (!currentUser) return;
     intentionalDeleteRef.current.colleges = true;
     intentionalDeleteRef.current.stages = true;
     setColleges(prev => prev.filter(c => c.id !== collegeId));
     const stagesToDelete = stages.filter(s => s.collegeId === collegeId);
     setStages(prev => prev.filter(s => s.collegeId !== collegeId));
     stagesToDelete.forEach(stage => {
-      deleteStageData(currentUser!.uid, stage.id);
+      deleteStageData(currentUser.uid, stage.id).catch(reportStageDeleteFailure);
       setAllStagesData(prev => { const updated = { ...prev }; delete updated[stage.id]; return updated; });
     });
   }, [stages, currentUser, setColleges, setStages, setAllStagesData, intentionalDeleteRef]);
@@ -80,9 +92,10 @@ export function useDataActions({
   const handleAddStage = useCallback((stage: Stage) => setStages(prev => [...prev, stage]), [setStages]);
 
   const handleDeleteStage = useCallback((stageId: string) => {
+    if (!currentUser) return;
     intentionalDeleteRef.current.stages = true;
     setStages(prev => prev.filter(s => s.id !== stageId));
-    deleteStageData(currentUser!.uid, stageId);
+    deleteStageData(currentUser.uid, stageId).catch(reportStageDeleteFailure);
     setAllStagesData(prev => { const updated = { ...prev }; delete updated[stageId]; return updated; });
   }, [currentUser, setStages, setAllStagesData, intentionalDeleteRef]);
 
@@ -158,8 +171,9 @@ export function useDataActions({
       if (processedAttendanceRef.current.has(cacheKey)) return;
       processedAttendanceRef.current.add(cacheKey);
       setAttendanceRecords(prev => {
+        // إزالة توأم الحضور/الغياب لنفس الطالب+الجلسة — تمنع التكرار حتى بعد مسح الكتم
         const filtered = prev.filter(
-          r => !(r.sessionId === record.sessionId && r.studentId === record.studentId && r.status === 'absent')
+          r => !(r.sessionId === record.sessionId && r.studentId === record.studentId)
         );
         return [...filtered, record];
       });
@@ -171,9 +185,11 @@ export function useDataActions({
   const handleClearRecords = useCallback(() => {
     cancelAllPendingSaves();
     intentionalDeleteRef.current.records = true;
+    // 🧹 مسح الكتمتين معاً — وإلا عُدِّل تسجيل الحضور بعد المسح صامتاً
     markAbsentInFlightRef.current.clear();
+    processedAttendanceRef.current.clear();
     setAttendanceRecords([]);
-  }, [markAbsentInFlightRef, setAttendanceRecords, intentionalDeleteRef]);
+  }, [markAbsentInFlightRef, processedAttendanceRef, setAttendanceRecords, intentionalDeleteRef]);
 
   const handleUpdateRecord = useCallback((recordId: string, updates: Partial<AttendanceRecord>) => {
     setAttendanceRecords(prev => prev.map(r => r.id === recordId ? { ...r, ...updates } : r));
@@ -181,8 +197,11 @@ export function useDataActions({
 
   const handleDeleteRecord = useCallback((recordId: string) => {
     intentionalDeleteRef.current.records = true;
+    // 🧹 إلغاء الكتم بعد حذف سجل — حتى يسمح بإعادة تسجيل الطالب لاحقاً
+    processedAttendanceRef.current.clear();
+    markAbsentInFlightRef.current.clear();
     setAttendanceRecords(prev => prev.filter(r => r.id !== recordId));
-  }, [setAttendanceRecords, intentionalDeleteRef]);
+  }, [setAttendanceRecords, intentionalDeleteRef, processedAttendanceRef, markAbsentInFlightRef]);
 
   const handleCreateSession = useCallback((session: AttendanceSession) => {
     setSessions(prev => [...prev.map(s => ({ ...s, isActive: false })), session]);

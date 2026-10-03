@@ -22,6 +22,7 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
   const [content, setContent] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [readError, setReadError] = useState('');
   const [loaded, setLoaded] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -52,7 +53,10 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
 
   const handleOpen = useCallback(async (n: AdminNotification) => {
     if (!isNotificationRead(n, uid)) {
-      await markNotificationRead(n.id, uid).catch(() => {});
+      setReadError('');
+      await markNotificationRead(n.id, uid).catch(() => {
+        setReadError('تعذّر تحديث حالة القراءة — حاول مجدداً');
+      });
     }
   }, [uid]);
 
@@ -190,6 +194,10 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
 
             {/* List */}
             <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-2.5" style={{ WebkitOverflowScrolling: 'touch' }}>
+              {readError && (
+                <p role="alert" className="text-red-400 text-xs font-bold break-words px-1">{readError}</p>
+              )}
+
               {!loaded && (
                 <LoadingState size="sm" className="py-10" aria-label="جاري تحميل الإشعارات…" />
               )}

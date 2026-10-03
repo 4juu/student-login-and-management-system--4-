@@ -89,6 +89,8 @@ export default function useInitialData({ currentUser }: UseInitialDataParams): U
     } catch (error) {
       console.error('Error loading initial data:', error);
       captureException(error, { fn: 'loadInitialData' });
+      // إعادة الرمي — الشاشة تعرض حالة خطأ مع إعادة محاولة بدل شاشة فارغة
+      throw error;
     }
   }, []);
 

@@ -637,6 +637,8 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
   }, [searchQuery, groupFilter, pageSize]);
 
   // تنظيف تلقائي: حذف اي بصمة غير متوافقة مع صيغة v5 الصارمة
+  // يعتمد على students حتى يعمل فعلاً بعد تحميل البيانات (كان [] فيعمل مرة واحدة والقائمة فارغة)
+  // ويستقر تلقائياً: بعد الحذف يصبح faceDescriptor فارغاً فلا يستدعي التحديث مرة أخرى
   React.useEffect(() => {
     if (!onUpdateStudent) return;
     try {
@@ -656,8 +658,7 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
     } catch (e) {
       console.warn('[student-manager] فشل تنظيف البصمات:', e);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [students, onUpdateStudent]);
 
   const { studentsWithoutFace, health } = useMemo(() => {
     const withFace = students.filter(s => hasValidDescriptor(s.faceDescriptor)).length;

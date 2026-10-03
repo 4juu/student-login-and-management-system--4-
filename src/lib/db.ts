@@ -36,6 +36,22 @@ const openDB = (): Promise<IDBDatabase> => {
   return dbPromise;
 };
 
+/**
+ * 🔒 إغلاق الاتصال المفتوح وإلغاء الاحتفاظ به
+ * يُستخدم قبل/بعد حذف قاعدة البيانات: بقاء الاتصال مفتوحاً يوقف الحذف (onblocked)
+ * ويبقي بيانات قديمة تظهر بعد تسجيل الخروج — وبعد الإغلاق يُفتح اتصال نظيف تلقائياً.
+ */
+export const closeDBConnection = async (): Promise<void> => {
+  const pending = dbPromise;
+  dbPromise = null;
+  if (!pending) return;
+  try {
+    (await pending).close();
+  } catch {
+    // فتح مرفوض أو إغلاق متعثر — تجاهل: أول وصول لاحق يفتح اتصالاً نظيفاً
+  }
+};
+
 export const dbGet = async <T,>(key: string): Promise<T | undefined> => {
   try {
     const db = await openDB();

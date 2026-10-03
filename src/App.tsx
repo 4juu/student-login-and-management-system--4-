@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { Student, AttendanceRecord, AttendanceSession } from './types/student';
 import { User } from './types/user';
 
@@ -91,6 +91,10 @@ function App() {
   const offlineModalDismissed = useUIStore((s) => s.offlineModalDismissed);
   const setOfflineModalDismissed = useUIStore((s) => s.setOfflineModalDismissed);
 
+  // ⚠️ حالات فشل التحميل — تمنع عرض شاشة فارغة كأنها بيانات محمَّلة
+  const [initialLoadError, setInitialLoadError] = useState<string | null>(null);
+  const [stageLoadError, setStageLoadError] = useState<string | null>(null);
+
 const colleges = useStageStore((s) => s.colleges);
 const stages = useStageStore((s) => s.stages);
   const setColleges = useStageStore((s) => s.setColleges);
@@ -176,10 +180,17 @@ const stages = useStageStore((s) => s.stages);
 
   const loadInitialData = useCallback(async (user: User) => {
     setDataLoaded(false);
-    await loadInitialDataBase(user);
-    setActiveTab('stage-selector');
-    setDataLoaded(true);
-  }, [loadInitialDataBase, setActiveTab]);
+    setInitialLoadError(null);
+    try {
+      await loadInitialDataBase(user);
+      setActiveTab('stage-selector');
+    } catch (e) {
+      console.error('فشل التحميل الأولي:', e);
+      setInitialLoadError('تعذّر تحميل البيانات الأولية — تحقق من الاتصال بالإنترنت ثم أعد المحاولة');
+    } finally {
+      setDataLoaded(true);
+    }
+  }, [loadInitialDataBase, setActiveTab, setDataLoaded]);
 
   const resetData = useCallback(() => {
     setDataLoaded(false);
@@ -230,6 +241,7 @@ const stages = useStageStore((s) => s.stages);
     // تحصيل أي حذف/تعديل معلّق للمرحلة السابقة قبل جلبها — وإلا عاد السجل المحذوف من الكاش/الخادم
     await flushAllPendingSaves();
     const runId = ++stageRunIdRef.current;
+    setStageLoadError(null);
     setSelectedCollegeId(collegeId);
     setSelectedStageId(stageId);
     setDataLoaded(false);
@@ -272,6 +284,9 @@ const stages = useStageStore((s) => s.stages);
       })
       .catch(e => {
         console.error('Error loading stage:', e);
+        if (stageRunIdRef.current === runId) {
+          setStageLoadError('تعذّر تحميل بيانات المرحلة — تحقق من الاتصال ثم أعد المحاولة');
+        }
       });
 
     // التيليجرام يُحمَّل مرة واحدة في loadInitialData — لا نعيد جلبه عند كل دخول مرحلة
@@ -419,6 +434,25 @@ const stages = useStageStore((s) => s.stages);
     );
   }
 
+  if (initialLoadError) {
+    return (
+      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
+        <div className="glass-card w-full max-w-md p-8 text-center">
+          <div role="alert" className="mb-4 rounded-lg border border-red-500/30 bg-red-500/15 p-3 text-sm text-red-300">
+            {initialLoadError}
+          </div>
+          <button
+            type="button"
+            className="btn-base btn-primary w-full"
+            onClick={() => void loadInitialData(currentUser)}
+          >
+            إعادة المحاولة
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const selectedStage = stages.find(s => s.id === selectedStageId);
   const selectedCollege = colleges.find(c => c.id === selectedCollegeId);
 
@@ -446,6 +480,23 @@ const stages = useStageStore((s) => s.stages);
         )}
 
         <main id="main-content">
+        {stageLoadError && selectedStage && (
+          <div role="alert" className="max-w-6xl mx-auto mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/15 p-4 text-sm text-red-300">
+            <span>{stageLoadError}</span>
+            <span className="flex gap-2">
+              <button
+                type="button"
+                className="btn-base btn-secondary"
+                onClick={() => { if (selectedCollegeId && selectedStageId) void handleSelectStage(selectedCollegeId, selectedStageId); }}
+              >
+                إعادة المحاولة
+              </button>
+              <button type="button" className="btn-base btn-secondary" onClick={handleBackToStages}>
+                رجوع
+              </button>
+            </span>
+          </div>
+        )}
         <PageTransition dep={selectedStageId || 'stages'}>
         {!selectedStageId && (
           <div className="max-w-6xl mx-auto">

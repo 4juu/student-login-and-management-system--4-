@@ -254,7 +254,10 @@ export const PendingRegistrations: React.FC<PendingRegistrationsProps> = ({
 
     // ── 5) تعليم الرابط المخصص لطالب واحد «مستخدماً» بعد الموافقة فقط
     if (req.linkType === 'single' && req.linkToken) {
-      await markLinkAsUsed(req.linkToken, req.studentId).catch(() => {});
+      await markLinkAsUsed(req.linkToken, req.studentId).catch((e) => {
+        console.error('فشل تعليم الرابط كمستخدم:', e);
+        toast({ variant: 'destructive', title: 'تعذّر تعليم الرابط كمستخدم', description: 'تمت الموافقة، لكن راجع حالة الرابط لاحقاً.' });
+      });
     }
   };
 

@@ -136,6 +136,21 @@ describe('validateLink (RegistrationLink)', () => {
   it('accepts valid future link even if used=true (single links stay open)', () => {
     expect(validateLink({ ...base, used: true }).valid).toBe(true);
   });
+
+  it('يرمي خطأ برمز app/used-link عند وجود usedAt (استُهلك فعلياً)', () => {
+    expect(() => validateLink({ ...base, usedAt: new Date().toISOString() }))
+      .toThrowError('تم استخدام هذا الرابط مسبقاً — اطلب رابطاً جديداً');
+    try {
+      validateLink({ ...base, usedAt: new Date().toISOString() });
+    } catch (e: any) {
+      expect(e.code).toBe('app/used-link');
+    }
+  });
+
+  it('usedAt فارغ/غير نص لا يمنع الرابط', () => {
+    expect(validateLink({ ...base, usedAt: '' }).valid).toBe(true);
+    expect(validateLink({ ...base, usedAt: null as any }).valid).toBe(true);
+  });
 });
 
 describe('createTestLink', () => {

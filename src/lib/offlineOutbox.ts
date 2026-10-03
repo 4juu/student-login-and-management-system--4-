@@ -5,7 +5,7 @@
 // وعند عودة الاتصال تُرفع تلقائياً إلى Firebase ثم يُمسح الصندوق.
 // الضمان: حتى لو أُغلق الموقع أثناء الانقطاع، البيانات لا تضيع.
 
-import { dbGet, dbSet, dbDelete } from './db';
+import { dbGet, dbSet, dbDelete, closeDBConnection } from './db';
 
 const OUTBOX_KEYS_KEY = 'outbox_keys';
 
@@ -123,12 +123,17 @@ export const clearOutbox = async (): Promise<void> => {
 export const clearLocalDatabases = async (): Promise<void> => {
   try {
     if (typeof indexedDB === 'undefined') return;
+    // 🔒 نغلق اتصال IndexedDB المفتوح أولاً: بقاءه مفتوحاً يجعل الحذف «blocked»
+    //    وتبقى بيانات المستخدم السابق ظاهرة بعد تسجيل الخروج
+    await closeDBConnection();
     await new Promise<void>((resolve) => {
       const req = indexedDB.deleteDatabase('attendance_system_cache');
       req.onsuccess = () => resolve();
       req.onerror = () => resolve();
       req.onblocked = () => resolve();
     });
+    // بعد الحذف: نُلغي أي وعد فتح متبقٍ كي يُعاد فتح قاعدة نظيفة عند أول وصول
+    await closeDBConnection();
   } catch {
     // تجاهل
   }

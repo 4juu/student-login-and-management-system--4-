@@ -305,7 +305,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 divide-x divide-x-reverse divide-white/10">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-x-reverse divide-white/10">
                     <div className="text-center py-3 px-2">
                       <p className="text-lg font-bold text-green-400">{selectedStudentCard.attendedCount}</p>
                       <p className="text-[10px] text-slate-400 flex items-center justify-center gap-1"><CircleCheck className="w-3 h-3" /> حضور</p>

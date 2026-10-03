@@ -341,7 +341,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                   كل زاوية عيّنة مستقلة مميّزة بحرفها — التعرف يجري على أيٍّ منها فوراً بلا دمج.
                 </p>
 
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {cells.map((c, i) => (
                     <div
                       key={i}

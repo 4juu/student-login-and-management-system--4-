@@ -50,8 +50,10 @@
     // 🗑️ الحسابات المحذوفة
     // ══════════════════════════════════════════════════════════
     "deletedAccounts": {
-      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'",
-      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'"
+      "$uid": {
+        ".read": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin')",
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'"
+      }
     },
 
     // ══════════════════════════════════════════════════════════
@@ -129,10 +131,11 @@
 
         "userData": {
           "$adminUid": {
-            // 🔒 القراءة للمستخدمين المسجّلين فقط — يمنع سرقة telegramConfig (توكن بوت تيليغرام)
-            //    عبر الروابط العامة. صفحات الطالب تقرأ أبناءها المحدّدين (students, descriptors...)
-            //    التي تحتفظ بـ .read: true الخاص بها في القواعد أدناه.
-            ".read": "auth != null",
+            // 🔒 القراءة لمن يملك هذه البيانات فقط (نفس شرط الكتابة) — يمنع أي مستخدم موثّق
+            //    من قراءة telegramConfig (توكن بوت تيليغرام) لبيانات أدمن آخر.
+            //    أبناءه المحدّدون (students, descriptors...) تحتفظ بـ .read: true الخاصة بهم
+            //    لصفحات الطالب (القراءة عند العقدة يُضاف لشرط الأجداد).
+            ".read": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
             ".write": "auth != null && (auth.uid == $adminUid || root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('adminId').val() == $adminUid)",
 
             "colleges": {
