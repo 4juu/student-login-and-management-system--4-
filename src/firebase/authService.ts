@@ -309,15 +309,15 @@ export const deleteTeacherAccount = async (uid: string): Promise<void> => {
   try {
     await remove(ref(database, `users/${uid}`));
     await remove(ref(database, `teacherAccounts/${uid}`));
-    await remove(ref(database, `userData/${uid}`));
-    
+
     await set(ref(database, `deletedAccounts/${uid}`), {
       deletedAt: new Date().toISOString()
     });
-    
+
   } catch (error: any) {
     console.error("❌ خطأ حذف الحساب:", error);
-    throw new Error('حدث خطأ أثناء حذف الحساب');
+    const cause = typeof error?.code === 'string' ? error.code : (error?.name ?? 'خطأ غير معروف');
+    throw new Error(`حدث خطأ أثناء حذف الحساب (${cause})`);
   }
 };
 
