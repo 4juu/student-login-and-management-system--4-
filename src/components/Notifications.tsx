@@ -30,15 +30,15 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
   const isMainAdmin = currentUser?.role === 'admin';
   const mainAdminCanSend = isMainAdmin;
 
-  // الاشتراك فقط عند فتح اللوحة — يخفّض استهلاك الاتصال والذاكرة في الخلفية
+  // الاشتراك دائمًا منذ الدخول ليظهر عدّاد البججة فورًا (يبقى مُلغى عند التفكيك)
   useEffect(() => {
-    if (!uid || !open) return;
+    if (!uid) return;
     const unsub = subscribeNotifications(
       (list) => { setItems(list); setLoaded(true); },
       () => { setError('فشل تحميل الإشعارات'); setLoaded(true); }
     );
     return unsub;
-  }, [uid, open]);
+  }, [uid]);
 
   const unreadCount = useMemo(
     () => items.filter(n => !isNotificationRead(n, uid)).length,
