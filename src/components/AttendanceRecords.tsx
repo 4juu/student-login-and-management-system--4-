@@ -542,7 +542,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
             </h3>
           </div>
 
-          <div className="ms-auto flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="ms-auto flex flex-col gap-2.5 min-w-0 w-full sm:w-auto">
             <div className="relative flex-1 min-w-0 sm:flex-none sm:min-w-[220px]">
               <select
                 value={selectedSessionId || ''}

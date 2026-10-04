@@ -50,6 +50,8 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editSessionName, setEditSessionName] = useState('');
   const [sendLogSessionId, setSendLogSessionId] = useState<string | null>(null);
+  // سجل الإرسال يظهر فقط للجلسات التي ضُغط عليها زر غياب
+  const [sendLogShownFor, setSendLogShownFor] = useState<Set<string>>(new Set());
 
   const [confirmState, setConfirmState] = useState<{
     title: string;
@@ -453,7 +455,10 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
                     </button>
                   )}
                   <button
-                    onClick={() => handleOpenAbsent(session.id)}
+                    onClick={() => {
+                      handleOpenAbsent(session.id);
+                      setSendLogShownFor(prev => new Set(prev).add(session.id));
+                    }}
                     className="btn-base btn-secondary text-xs sm:text-sm"
                   >
                     <Circle className="w-2.5 h-2.5 fill-red-500 text-red-500" /> غياب
@@ -464,12 +469,14 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
                   >
                     حذف
                   </button>
-                  <button
-                    onClick={() => setSendLogSessionId(session.id)}
-                    className="btn-base btn-secondary text-xs sm:text-sm"
-                  >
-                    <ClipboardList className="w-4 h-4" /> سجل الإرسال
-                  </button>
+                  {sendLogShownFor.has(session.id) && (
+                    <button
+                      onClick={() => setSendLogSessionId(session.id)}
+                      className="btn-base btn-secondary text-xs sm:text-sm"
+                    >
+                      <ClipboardList className="w-4 h-4" /> سجل الإرسال
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
