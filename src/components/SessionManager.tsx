@@ -219,15 +219,15 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
     return createPortal(
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 animate-fadeIn" onClick={() => setSendLogSessionId(null)}>
         <div ref={modalBehaviorRef} role="dialog" aria-modal="true" aria-labelledby="send-log-modal-title" tabIndex={-1} className="modal-height bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden border border-slate-600 animate-modalUp focus:outline-none" dir="rtl" onClick={e => e.stopPropagation()}>
-          <div className="shrink-0 px-6 pt-6 pb-4 border-b border-slate-700">
-            <div className="flex items-center justify-between mb-1">
-              <h2 id="send-log-modal-title" className="text-lg font-bold text-white flex items-center gap-2"><ClipboardList className="w-5 h-5" /> سجل إرسال الغيابات</h2>
-              <button type="button" aria-label="إغلاق" onClick={() => setSendLogSessionId(null)} className="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+          <div className="shrink-0 px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b border-slate-700">
+            <div className="flex items-center justify-between mb-1 gap-2">
+              <h2 id="send-log-modal-title" className="text-base sm:text-lg font-semibold text-white flex items-center gap-2"><ClipboardList className="w-5 h-5" /> سجل إرسال الغيابات</h2>
+              <button type="button" aria-label="إغلاق" onClick={() => setSendLogSessionId(null)} className="w-10 h-10 -me-2 shrink-0 text-slate-400 hover:text-white text-2xl leading-none transition-colors duration-200">&times;</button>
             </div>
-            {log && <p className="text-sm text-slate-400 flex items-center gap-1"><Library className="w-4 h-4" /> {log.subjectName} | {log.groups.join('، ')}</p>}
+            {log && <p className="text-sm text-slate-400 flex items-center gap-1 flex-wrap"><Library className="w-4 h-4" /> {log.subjectName} | {log.groups.join('، ')}</p>}
           </div>
 
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2 min-h-0">
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-2 sm:space-y-3 min-h-0">
             {!hasData ? (
               <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                 <svg className="w-12 h-12 mb-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -239,7 +239,7 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
               groupData.map((group) => (
                 <div
                   key={group.groupName}
-                  className={`flex items-center gap-3 p-3 rounded-xl border transition ${
+                  className={`flex items-center gap-3 p-3 rounded-xl border transition-colors duration-200 ${
                     group.allDone
                       ? 'bg-green-900/40 border-green-700'
                       : 'bg-blue-900/40 border-blue-700'
@@ -258,7 +258,7 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-bold text-white text-sm truncate">{group.groupName}</span>
-                      <span className="text-[10px] text-slate-400 shrink-0">
+                      <span className="text-xs text-slate-400 shrink-0">
                         {group.channels.length} {group.channels.length > 1 ? 'قنوات' : 'قناة'}
                       </span>
                     </div>
@@ -267,7 +267,7 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
                         {group.channels.map((ch) => (
                           <span
                             key={ch.channelLabel}
-                            className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                            className={`text-xs px-1.5 py-0.5 rounded-full ${
                               ch.status === 'sent'
                                 ? 'bg-green-900 text-green-300'
                                 : ch.status === 'failed'
@@ -286,10 +286,10 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
             )}
           </div>
 
-          <div className="shrink-0 px-6 py-4 border-t border-slate-700 flex gap-2">
+          <div className="shrink-0 px-4 sm:px-6 py-4 border-t border-slate-700 flex gap-2">
             <button
               onClick={() => setSendLogSessionId(null)}
-              className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium py-2.5 px-4 rounded-xl transition"
+              className="flex-1 btn-base btn-secondary"
             >
               إغلاق
             </button>
@@ -301,8 +301,8 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
   };
 
   return (
-    <div className="glass-card rounded-xl p-6">
-      <div className="mb-4 p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-lg flex items-center justify-between flex-wrap gap-2">
+    <div className="glass-card p-4 sm:p-6 space-y-4 sm:space-y-6">
+      <div className="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-lg flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <GraduationCap className="w-7 h-7 text-indigo-400" />
           <div>
@@ -317,12 +317,12 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
         </div>
       </div>
 
-      <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
-        <h2 className="text-2xl font-bold text-white">إدارة السجلات</h2>
-        <div className="flex gap-2">
+      <div className="flex justify-between items-center flex-wrap gap-3">
+        <h2 className="text-xl sm:text-2xl font-semibold text-white">إدارة السجلات</h2>
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={handleQuickCreate}
-            className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition duration-200 flex items-center gap-2"
+            className="btn-base btn-primary"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -331,7 +331,7 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
           </button>
           <button
             onClick={() => setShowCreateForm(!showCreateForm)}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-200"
+            className="btn-base btn-secondary"
           >
             سجل مخصص
           </button>
@@ -339,26 +339,26 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
       </div>
 
       {showCreateForm && (
-        <form onSubmit={handleCustomCreate} className="mb-6 p-4 bg-blue-500/10 rounded-lg border border-blue-500/30">
-          <div className="flex gap-4">
+        <form onSubmit={handleCustomCreate} className="p-4 bg-blue-500/10 rounded-lg border border-blue-500/30">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
             <input
               type="text"
               value={sessionName}
               onChange={(e) => setSessionName(e.target.value)}
               placeholder="أدخل اسم السجل (مثال: حضور الاختبار النهائي)"
-              className="flex-1 px-4 py-2 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-500 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="glass-input flex-1 w-full"
               dir="rtl"
             />
             <button
               type="submit"
-              className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition duration-200"
+              className="btn-base btn-primary"
             >
               إنشاء
             </button>
             <button
               type="button"
               onClick={() => setShowCreateForm(false)}
-              className="bg-white/10 hover:bg-white/20 text-slate-200 font-medium py-2 px-4 rounded-md transition duration-200"
+              className="btn-base btn-secondary"
             >
               إلغاء
             </button>
@@ -375,11 +375,11 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
           <p className="text-sm text-slate-400">انقر على "سجل جديد" لإنشاء سجل حضور لليوم</p>
         </div>
       ) : (
-        <div className="space-y-3 animate-staggerFadeIn">
+        <div className="space-y-3 sm:space-y-4 animate-staggerFadeIn">
           {sessions.map((session) => (
             <div
               key={session.id}
-              className={`p-3 sm:p-4 rounded-lg border-2 transition-all ${
+              className={`p-4 rounded-lg border-2 transition-all duration-200 ${
                 session.id === activeSessionId
                   ? 'session-active-glow border-blue-500/50 bg-blue-500/10'
                   : 'border-white/10 bg-white/5 hover:border-white/20'
@@ -389,18 +389,18 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     {session.id === activeSessionId && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-green-500 text-white shrink-0">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-500 text-white shrink-0">
                         نشط الآن
                       </span>
                     )}
-                    <h3 className="text-base sm:text-lg font-bold text-white truncate">
+                    <h3 className="text-base sm:text-lg font-semibold text-white truncate">
                       {editingSessionId === session.id ? (
                         <div className="flex items-center gap-2">
                           <input
                             type="text"
                             value={editSessionName}
                             onChange={e => setEditSessionName(e.target.value)}
-                            className="px-3 py-1 border border-blue-500/40 bg-slate-800 text-white rounded text-base sm:text-lg font-bold"
+                            className="min-h-10 px-3 py-1 border border-blue-500/40 bg-slate-800 text-white rounded text-base sm:text-lg font-bold"
                             autoFocus
                             onKeyDown={e => {
                               if (e.key === 'Enter' && editSessionName.trim()) {
@@ -418,7 +418,7 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
                                 setEditingSessionId(null);
                               }
                             }}
-                            className="text-green-400 hover:text-green-300 shrink-0"
+                            className="min-h-10 min-w-10 flex items-center justify-center text-green-400 hover:text-green-300 shrink-0"
                             title="حفظ الاسم"
                           >
                             <Check className="w-5 h-5" />
@@ -431,14 +431,14 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
                     {onRenameSession && editingSessionId !== session.id && (
                       <button
                         onClick={() => { setEditingSessionId(session.id); setEditSessionName(session.name); }}
-                        className="text-blue-400 hover:text-blue-300 text-xs sm:text-sm shrink-0"
+                        className="min-h-10 min-w-10 flex items-center justify-center text-blue-400 hover:text-blue-300 text-xs sm:text-sm shrink-0"
                         title="تعديل الاسم"
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
                     )}
                   </div>
-                  <p className="text-xs sm:text-sm text-slate-300 mt-1 flex items-center gap-1">
+                  <p className="text-xs text-slate-400 mt-1 flex items-center gap-1 flex-wrap">
                     <Calendar className="w-4 h-4 text-slate-400" /> {session.date} | <CircleCheck className="w-4 h-4 text-green-400" /> {presentCountBySession.get(session.id) || 0} حاضر
                   </p>
                 </div>
@@ -447,26 +447,26 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
                   {session.id !== activeSessionId && (
                     <button
                       onClick={() => handleActivateSession(session.id)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 sm:py-2 px-3 sm:px-4 rounded-md transition duration-200 text-xs sm:text-sm"
+                      className="btn-base btn-primary text-xs sm:text-sm"
                     >
                       تفعيل
                     </button>
                   )}
                   <button
                     onClick={() => handleOpenAbsent(session.id)}
-                    className="bg-orange-500 hover:bg-orange-600 text-white font-medium py-1.5 sm:py-2 px-3 sm:px-4 rounded-md transition duration-200 text-xs sm:text-sm flex items-center gap-1.5"
+                    className="btn-base btn-secondary text-xs sm:text-sm"
                   >
                     <Circle className="w-2.5 h-2.5 fill-red-500 text-red-500" /> غياب
                   </button>
                   <button
                     onClick={() => handleDelete(session.id)}
-                    className="bg-red-600 hover:bg-red-700 text-white font-medium py-1.5 sm:py-2 px-3 sm:px-4 rounded-md transition duration-200 text-xs sm:text-sm"
+                    className="btn-base btn-danger text-xs sm:text-sm"
                   >
                     حذف
                   </button>
                   <button
                     onClick={() => setSendLogSessionId(session.id)}
-                    className="bg-slate-700 hover:bg-slate-600 text-white font-medium py-1.5 sm:py-2 px-3 sm:px-4 rounded-md transition duration-200 text-xs sm:text-sm flex items-center gap-1.5"
+                    className="btn-base btn-secondary text-xs sm:text-sm"
                   >
                     <ClipboardList className="w-4 h-4" /> سجل الإرسال
                   </button>
@@ -481,10 +481,10 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
       {absentSessionId &&
         createPortal(
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 animate-fadeIn" onClick={() => setAbsentSessionId(null)}>
-          <div ref={modalBehaviorRef} role="dialog" aria-modal="true" aria-labelledby="absent-modal-title" tabIndex={-1} className="modal-panel bg-slate-900 border border-white/10 rounded-xl shadow-2xl max-w-lg w-full overflow-y-auto p-6 animate-modalUp focus:outline-none" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 id="absent-modal-title" className="text-xl font-bold text-white flex items-center gap-2"><Circle className="w-3 h-3 fill-red-500 text-red-500" /> تسجيل غياب الكروبات</h3>
-              <button type="button" aria-label="إغلاق" onClick={() => setAbsentSessionId(null)} className="text-slate-400 hover:text-white text-2xl">&times;</button>
+          <div ref={modalBehaviorRef} role="dialog" aria-modal="true" aria-labelledby="absent-modal-title" tabIndex={-1} className="modal-panel bg-slate-900 border border-white/10 rounded-xl shadow-2xl max-w-lg w-full overflow-y-auto p-4 sm:p-6 animate-modalUp focus:outline-none" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 gap-2">
+              <h3 id="absent-modal-title" className="text-xl font-semibold text-white flex items-center gap-2"><Circle className="w-3 h-3 fill-red-500 text-red-500" /> تسجيل غياب الكروبات</h3>
+              <button type="button" aria-label="إغلاق" onClick={() => setAbsentSessionId(null)} className="w-10 h-10 shrink-0 text-slate-400 hover:text-white text-2xl transition-colors duration-200">&times;</button>
             </div>
 
             <p className="text-sm text-slate-300 mb-4">
@@ -497,7 +497,7 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
               </div>
             ) : (
               <div className="space-y-2 mb-4">
-                <label className="flex items-center gap-2 p-2 bg-white/5 rounded-lg hover:bg-white/10 cursor-pointer">
+                <label className="flex items-center gap-2 min-h-10 p-2 bg-white/5 rounded-lg hover:bg-white/10 cursor-pointer transition-colors duration-200">
                   <input
                     type="checkbox"
                     checked={selectedGroups.size === allGroups.length}
@@ -510,7 +510,7 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
                   <span className="font-bold text-slate-200">تحديد الكل</span>
                 </label>
                 {allGroups.map(group => (
-                  <label key={group} className="flex items-center gap-2 p-2 rounded-lg hover:bg-white/10 cursor-pointer border border-white/10">
+                  <label key={group} className="flex items-center gap-2 min-h-10 p-2 rounded-lg hover:bg-white/10 cursor-pointer border border-white/10 transition-colors duration-200">
                     <input
                       type="checkbox"
                       checked={selectedGroups.has(group)}
@@ -543,13 +543,13 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
               <button
                 onClick={handleConfirmAbsent}
                 disabled={getAbsentCandidates.length === 0}
-                className="flex-1 bg-orange-600 hover:bg-orange-700 disabled:bg-white/10 disabled:text-slate-500 text-white font-bold py-3 px-4 rounded-lg transition flex items-center justify-center gap-2"
+                className="flex-1 btn-base btn-primary"
               >
                 <CircleCheck className="w-4 h-4" /> تسجيل غياب ({getAbsentCandidates.length})
               </button>
               <button
                 onClick={() => setAbsentSessionId(null)}
-                className="bg-white/10 hover:bg-white/20 text-slate-200 font-medium py-3 px-4 rounded-lg transition"
+                className="btn-base btn-secondary"
               >
                 إلغاء
               </button>
@@ -563,19 +563,19 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({
       {confirmState &&
         createPortal(
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 animate-fadeIn" onClick={() => setConfirmState(null)}>
-            <div ref={modalBehaviorRef} role="alertdialog" aria-modal="true" aria-labelledby="session-confirm-title" aria-describedby="session-confirm-message" tabIndex={-1} className="modal-panel bg-slate-900 border border-white/10 rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-6 text-center animate-modalUp focus:outline-none" onClick={e => e.stopPropagation()}>
-              <h3 id="session-confirm-title" className="text-lg font-bold text-white mb-2">{confirmState.title}</h3>
+            <div ref={modalBehaviorRef} role="alertdialog" aria-modal="true" aria-labelledby="session-confirm-title" aria-describedby="session-confirm-message" tabIndex={-1} className="modal-panel bg-slate-900 border border-white/10 rounded-xl shadow-2xl max-w-sm w-full overflow-y-auto p-4 sm:p-6 text-center animate-modalUp focus:outline-none" onClick={e => e.stopPropagation()}>
+              <h3 id="session-confirm-title" className="text-base sm:text-lg font-semibold text-white mb-2">{confirmState.title}</h3>
               <p id="session-confirm-message" className="text-sm text-slate-300 mb-6 whitespace-pre-line">{confirmState.message}</p>
               <div className="flex gap-2">
                 <button
                   onClick={confirmState.onConfirm}
-                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-4 rounded-lg transition"
+                  className="flex-1 btn-base btn-primary"
                 >
                   {confirmState.confirmLabel || 'موافق'}
                 </button>
                 <button
                   onClick={() => setConfirmState(null)}
-                  className="bg-white/10 hover:bg-white/20 text-slate-200 font-medium py-3 px-4 rounded-lg transition"
+                  className="btn-base btn-secondary"
                 >
                   إلغاء
                 </button>

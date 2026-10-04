@@ -147,14 +147,14 @@ export const CollegeManager: React.FC<CollegeManagerProps> = React.memo(({
   };
 
   return (
-    <div className="glass-card p-6">
+    <div className="glass-card p-4 sm:p-6 space-y-4 sm:space-y-6">
       <ConfirmDialog open={confirmState.open} title={confirmState.title} message={confirmState.message} onConfirm={confirmState.onConfirm} onCancel={() => setConfirmState(s => ({ ...s, open: false }))} />
 
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-white flex items-center gap-2"><Landmark className="w-6 h-6 text-amber-400" /> إدارة الكليات والمراحل</h2>
+      <div className="flex justify-between items-center flex-wrap gap-3">
+        <h2 className="text-xl sm:text-2xl font-semibold text-white flex items-center gap-2"><Landmark className="w-6 h-6 text-amber-400" /> إدارة الكليات والمراحل</h2>
         <button
           onClick={() => setShowAddCollege(!showAddCollege)}
-          className="btn-base bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-medium py-2 px-4 rounded-xl transition duration-200 flex items-center gap-2 shadow-md"
+          className="btn-base btn-primary"
         >
           <Plus className="w-5 h-5" />
           إضافة كلية / قسم جديد
@@ -162,11 +162,11 @@ export const CollegeManager: React.FC<CollegeManagerProps> = React.memo(({
       </div>
 
       {showAddCollege && (
-        <form onSubmit={handleAddCollege} className="mb-6 p-5 bg-emerald-500/10 border-2 border-emerald-500/20 rounded-xl">
-          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Plus className="w-5 h-5 text-emerald-400" /> إضافة كلية / قسم جديد</h3>
+        <form onSubmit={handleAddCollege} className="p-4 sm:p-5 space-y-4 bg-emerald-500/10 border-2 border-emerald-500/20 rounded-xl">
+          <h3 className="text-base sm:text-lg font-semibold text-white flex items-center gap-2"><Plus className="w-5 h-5 text-emerald-400" /> إضافة كلية / قسم جديد</h3>
           
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-slate-300 mb-2">اسم الكلية / القسم</label>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-slate-300">اسم الكلية / القسم</label>
             <input
               type="text"
               value={collegeName}
@@ -178,8 +178,8 @@ export const CollegeManager: React.FC<CollegeManagerProps> = React.memo(({
             />
           </div>
 
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-slate-300 mb-2">اختر أيقونة:</label>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-slate-300">اختر أيقونة:</label>
             <div className="flex flex-wrap gap-2">
               {iconOptions.map(icon => (
                 <button
@@ -198,8 +198,8 @@ export const CollegeManager: React.FC<CollegeManagerProps> = React.memo(({
             </div>
           </div>
 
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-slate-300 mb-2">اختر اللون:</label>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-slate-300">اختر اللون:</label>
             <div className="flex flex-wrap gap-2">
               {colorOptions.map(color => (
                 <button
@@ -216,13 +216,9 @@ export const CollegeManager: React.FC<CollegeManagerProps> = React.memo(({
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 px-6 rounded-xl transition duration-200">
-              <CircleCheck className="w-4 h-4 inline" /> إنشاء الكلية
-            </button>
-            <button type="button" onClick={() => { setShowAddCollege(false); setCollegeName(''); }} className="bg-white/10 hover:bg-white/15 text-white font-medium py-2 px-4 rounded-xl transition duration-200">
-              إلغاء
-            </button>
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" className="btn-base btn-primary flex-1"><CircleCheck className="w-4 h-4" /> إنشاء الكلية</button>
+            <button type="button" onClick={() => { setShowAddCollege(false); setCollegeName(''); }} className="btn-base btn-secondary">إلغاء</button>
           </div>
         </form>
       )}
@@ -242,26 +238,26 @@ export const CollegeManager: React.FC<CollegeManagerProps> = React.memo(({
             const isExpanded = expandedCollege === college.id;
 
             return (
-              <div key={college.id} className="border-2 border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition-all">
+              <div key={college.id} className="border-2 border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition-colors duration-200">
                 <div className={`bg-gradient-to-r ${getColorClass(college.color)} p-4 text-white`}>
                   <div className="flex items-center justify-between flex-wrap gap-3">
                     <div className="flex items-center gap-3">
                       <span className="text-4xl">{college.icon || '🏛️'}</span>
                       <div>
-                        <h3 className="text-xl font-bold">{college.name}</h3>
+                        <h3 className="text-base sm:text-lg font-semibold">{college.name}</h3>
                         <p className="text-sm opacity-90">{collegeStages.length} مرحلة</p>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => setExpandedCollege(isExpanded ? null : college.id)}
-                        className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-md font-medium transition"
+                        className="btn-base btn-secondary"
                       >
                         {isExpanded ? <><ChevronUp className="w-4 h-4" /> إخفاء</> : <><ChevronDown className="w-4 h-4" /> عرض المراحل</>}
                       </button>
                       <button
                         onClick={() => handleDeleteCollege(college)}
-                        className="bg-red-600 hover:bg-red-700 px-3 py-2 rounded-md font-medium transition"
+                        className="btn-base btn-danger px-3"
                         title="حذف الكلية"
                       >
                         <Trash2 className="w-5 h-5" />
@@ -275,14 +271,14 @@ export const CollegeManager: React.FC<CollegeManagerProps> = React.memo(({
                     <div className="flex flex-wrap gap-2 mb-4">
                       <button
                         onClick={() => setShowAddStage(showAddStage === college.id ? null : college.id)}
-                        className="bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 px-4 rounded-md transition flex items-center gap-2"
+                        className="btn-base btn-primary"
                       >
                         <Plus className="w-4 h-4" /> إضافة مرحلة
                       </button>
                       {collegeStages.length === 0 && (
                         <button
                           onClick={() => handleQuickAdd5Stages(college.id)}
-                          className="bg-purple-600 hover:bg-purple-500 text-white font-medium py-2 px-4 rounded-md transition flex items-center gap-2"
+                          className="btn-base btn-secondary"
                         >
                           <Zap className="w-4 h-4" /> إضافة 5 مراحل دفعة واحدة
                         </button>
@@ -290,33 +286,33 @@ export const CollegeManager: React.FC<CollegeManagerProps> = React.memo(({
                     </div>
 
                     {showAddStage === college.id && (
-                      <div className="mb-4 p-3 bg-white/5 border-2 border-blue-500/20 rounded-md flex gap-2">
+                      <div className="mb-4 p-3 bg-white/5 border-2 border-blue-500/20 rounded-md flex flex-col sm:flex-row gap-2 sm:gap-3">
                         <input
                           type="text"
                           value={stageName}
                           onChange={(e) => setStageName(e.target.value)}
                           placeholder="مثال: المرحلة الأولى"
-                          className="flex-1 glass-input"
+                          className="glass-input flex-1"
                           dir="rtl"
                           autoFocus
                           onKeyDown={(e) => { if (e.key === 'Enter') handleAddStage(college.id); }}
                         />
-                        <button onClick={() => handleAddStage(college.id)} className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-4 rounded-md transition">إضافة</button>
-                        <button onClick={() => { setShowAddStage(null); setStageName(''); }} className="bg-white/10 hover:bg-white/15 text-white font-medium px-4 rounded-md transition">إلغاء</button>
+                        <button onClick={() => handleAddStage(college.id)} className="btn-base btn-primary">إضافة</button>
+                        <button onClick={() => { setShowAddStage(null); setStageName(''); }} className="btn-base btn-secondary">إلغاء</button>
                       </div>
                     )}
 
                     {collegeStages.length === 0 ? (
                       <div className="text-center py-6 text-slate-400">لا توجد مراحل بعد - أضف مرحلة جديدة</div>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                         {collegeStages.map(stage => (
-                          <div key={stage.id} className="bg-white/5 border-2 border-white/10 hover:border-blue-400/50 rounded-lg p-4 transition group">
+                          <div key={stage.id} className="bg-white/5 border-2 border-white/10 hover:border-blue-400/50 rounded-lg p-4 transition-colors duration-200 group">
                             <div className="flex items-center justify-between mb-3">
                               <h4 className="font-bold text-white flex items-center gap-2"><BookOpen className="w-4 h-4 text-blue-400" /> {stage.name}</h4>
                               <button
                                 onClick={() => handleDeleteStage(stage)}
-                                className="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition"
+                                className="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition duration-200"
                                 title="حذف المرحلة"
                               >
                                 <Trash2 className="w-5 h-5" />
@@ -324,7 +320,7 @@ export const CollegeManager: React.FC<CollegeManagerProps> = React.memo(({
                             </div>
                             <button
                               onClick={() => onSelectStage(college.id, stage.id)}
-                              className={`w-full bg-gradient-to-r ${getColorClass(college.color)} hover:opacity-90 text-white font-medium py-2 px-4 rounded-md transition shadow-sm`}
+                              className={`w-full bg-gradient-to-r ${getColorClass(college.color)} hover:opacity-90 text-white font-medium py-2 px-4 rounded-md transition duration-200 shadow-sm`}
                             >
                               <FolderOpen className="w-4 h-4" /> فتح المرحلة
                             </button>

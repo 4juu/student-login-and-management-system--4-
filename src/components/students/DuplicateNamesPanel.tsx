@@ -67,7 +67,7 @@ export const DuplicateNamesPanel: React.FC<DuplicateNamesPanelProps> = ({ studen
       <button
         type="button"
         onClick={() => setExpanded(true)}
-        className="mb-4 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-medium rounded-lg transition duration-200 shadow-md flex items-center justify-center gap-2"
+        className="btn-base btn-secondary"
         title="عرض الأسماء المكررة (تطابق 3 كلمات متتالية)"
       >
         <CopyCheck className="w-4 h-4" /> فحص التكرار
@@ -76,15 +76,15 @@ export const DuplicateNamesPanel: React.FC<DuplicateNamesPanelProps> = ({ studen
   }
 
   return (
-    <div className="mb-4 p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-2 border-amber-500/30 rounded-lg animate-cardEnter">
+    <div className="p-4 sm:p-6 bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-2 border-amber-500/30 rounded-lg animate-cardEnter">
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-        <h3 className="text-sm font-bold text-amber-200 flex items-center gap-2">
+        <h3 className="text-base sm:text-lg font-semibold text-amber-200 flex items-center gap-2">
           <CopyCheck className="w-4 h-4 text-amber-400" /> فحص التكرار
           <span className="text-xs font-normal text-slate-400">(تطابق {MATCH_SIZE} كلمات متتالية)</span>
         </h3>
         <button
           onClick={() => setExpanded(false)}
-          className="text-slate-500 hover:text-slate-300 p-1"
+          className="min-h-10 min-w-10 inline-flex items-center justify-center text-slate-500 hover:text-slate-300 transition-colors duration-200"
           aria-label="إغلاق لوحة فحص التكرار"
         >
           <X className="w-5 h-5" />
@@ -107,22 +107,22 @@ export const DuplicateNamesPanel: React.FC<DuplicateNamesPanelProps> = ({ studen
               {dupCount} طالب في {clusters.length} مجموعة متشابهة
             </p>
             {students.length > 8 && (
-              <div className="relative flex-1 min-w-[180px] max-w-xs">
+              <div className="relative flex-1 min-w-44 max-w-xs">
                 <input
                   type="text"
                   value={query}
                   onChange={e => setQuery(e.target.value)}
                   placeholder="تصفية بالاسم أو الكود..."
                   aria-label="تصفية النتائج بالاسم أو الكود"
-                  className="w-full px-3 py-1.5 pr-8 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-400 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent text-xs"
+                  className="w-full min-h-10 px-3 py-1.5 pe-8 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-400 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent text-xs transition-colors duration-200"
                   dir="rtl"
                 />
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                <Search className="absolute end-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
               </div>
             )}
           </div>
 
-          <div className="space-y-2.5 max-h-[420px] overflow-y-auto pl-1">
+          <div className="space-y-2.5 max-h-[420px] overflow-y-auto pe-1">
             {visibleClusters.map((cluster, ci) => (
               <div key={ci} className="p-3 bg-white/5 border border-white/10 rounded-lg">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -139,7 +139,7 @@ export const DuplicateNamesPanel: React.FC<DuplicateNamesPanelProps> = ({ studen
                     return (
                       <li key={s.id}>
                         <label
-                          className={`flex items-center justify-between gap-3 text-sm px-3 py-2 rounded-lg cursor-pointer transition ${
+                          className={`flex items-center justify-between gap-3 text-sm px-3 py-2 rounded-lg cursor-pointer transition-colors duration-200 ${
                             isChecked ? 'bg-red-500/15 ring-1 ring-red-500/50' : 'bg-slate-800/60 hover:bg-slate-800'
                           }`}
                         >
@@ -170,14 +170,14 @@ export const DuplicateNamesPanel: React.FC<DuplicateNamesPanelProps> = ({ studen
             ))}
           </div>
 
-          <div className="sticky bottom-0 -mx-4 mt-3 px-4 py-3 border-t border-white/10 bg-slate-900/95 backdrop-blur-sm flex items-center justify-between gap-3 flex-wrap rounded-b-lg">
+          <div className="sticky bottom-0 -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mt-3 border-t border-white/10 bg-slate-900/95 backdrop-blur-sm flex items-center justify-between gap-3 flex-wrap rounded-b-lg">
             <p className="text-xs text-slate-400">
               {checked.size > 0 ? `محدد ${checked.size} طالب للحذف` : 'حدد الطلاب الذين تريد حذفهم (أبقِ واحداً على الأقل في كل مجموعة)'}
             </p>
             <button
               onClick={handleDelete}
               disabled={checked.size === 0}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium rounded-lg transition duration-200 flex items-center gap-2"
+              className="btn-base btn-danger disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Trash2 className="w-4 h-4" /> حذف المحدد ({checked.size})
             </button>

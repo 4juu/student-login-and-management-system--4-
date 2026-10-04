@@ -91,7 +91,7 @@ export const VerifyNameStep: React.FC<VerifyNameStepProps> = ({ expected, onVeri
               <p className="sel-identity-label">الاسم</p>
               <p className="sel-identity-name">{expected.name}</p>
               {expected.code && (
-                <div className="mt-2 flex justify-between border-t border-[#22355A] pt-2">
+                <div className="mt-2 flex justify-between gap-3 border-t border-[#22355A] pt-2">
                   <p className="sel-identity-label">كود الطالب</p>
                   <p className="sel-identity-code">{expected.code}</p>
                 </div>
@@ -102,7 +102,7 @@ export const VerifyNameStep: React.FC<VerifyNameStepProps> = ({ expected, onVeri
               <span className="sel-chip sel-chip-green">نسبة التطابق {score}%</span>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               <button type="button" className="sel-btn sel-btn-primary" onClick={() => onVerified(expected)}>
                 <BadgeCheck className="w-5 h-5" /> نعم، هذه هويتي
               </button>
@@ -120,12 +120,12 @@ export const VerifyNameStep: React.FC<VerifyNameStepProps> = ({ expected, onVeri
     <div className="sel-fade">
       <Stepper current={1} />
       <div className="sel-card">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-extrabold text-[#F3F7FF]">التحقق من الهوية الجامعية</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4 sm:mb-5">
+          <h2 className="text-base sm:text-lg font-semibold text-[#F3F7FF]">التحقق من الهوية الجامعية</h2>
           <span className="sel-chip sel-chip-violet">بصمة كود — بكتابة الاسم</span>
         </div>
 
-        <p className="sel-muted mb-5">
+        <p className="sel-muted mb-4 sm:mb-5">
           اكتب اسمك كما هو مسجّل في الجامعة — يُطابق الاسم مع سجل هذا الرابط قبل تسجيل البصمة.
         </p>
 

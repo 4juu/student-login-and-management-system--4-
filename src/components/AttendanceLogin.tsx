@@ -178,40 +178,40 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
 
   return (
     <>
-      <div ref={containerRef} className="bg-slate-900 rounded-2xl shadow-xl p-6 md:p-8 select-none border border-white/10">
-        <div className="text-center mb-6">
+      <div ref={containerRef} className="bg-slate-900 rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 select-none border border-white/10">
+        <div className="text-center mb-4 sm:mb-6">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-3 shadow-lg">
             <svg className="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
             </svg>
           </div>
-          <h2 className="text-3xl font-bold text-white">تسجيل الحضور</h2>
-          <p className="text-sm text-slate-400 mt-1">أدخل رمزك المكون من 4 أرقام أو استخدم QR</p>
+          <h2 className="text-xl sm:text-2xl font-semibold text-white">تسجيل الحضور</h2>
+          <p className="text-sm text-slate-400 mt-1.5">أدخل رمزك المكون من 4 أرقام أو استخدم QR</p>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-4 sm:mb-6">
           <button
             onClick={() => setShowFaceAttendance(true)}
             disabled={!activeSessionId}
-            className="w-full relative overflow-hidden bg-gradient-to-r from-purple-500 via-violet-500 to-indigo-600 hover:from-purple-600 hover:via-violet-600 hover:to-indigo-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 group transition-all duration-200 mb-3"
+            className="btn-base btn-primary w-full min-h-12! text-start gap-3 group"
           >
-            <UserIcon className="w-10 h-10 group-hover:scale-110 transition-transform" />
-            <div className="text-right">
-              <div className="text-base sm:text-lg">تسجيل الحضور ببصمة الوجه</div>
-              <div className="text-[10px] sm:text-xs opacity-90 font-normal">تعرف تلقائي على الوجه وسجل الحضور</div>
-            </div>
+            <UserIcon className="w-8 h-8 shrink-0 group-hover:scale-110 transition-transform duration-200" />
+            <span className="block min-w-0">
+              <span className="block text-base sm:text-lg">تسجيل الحضور ببصمة الوجه</span>
+              <span className="block text-xs opacity-90 font-normal">تعرف تلقائي على الوجه وسجل الحضور</span>
+            </span>
           </button>
 
           <button
             onClick={() => setShowQRScanner(true)}
             disabled={!activeSessionId}
-            className="w-full relative overflow-hidden bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-600 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 group transition-all duration-200"
+            className="btn-base btn-secondary w-full min-h-12! text-start gap-3 group mt-3"
           >
-            <Camera className="w-10 h-10 group-hover:scale-110 transition-transform" />
-            <div className="text-right">
-              <div className="text-base sm:text-lg">تسجيل حضور عن طريق هوية الطالب QR Code</div>
-              <div className="text-[10px] sm:text-xs opacity-90 font-normal">افتح الكاميرا وامسح رمز QR</div>
-            </div>
+            <Camera className="w-8 h-8 shrink-0 group-hover:scale-110 transition-transform duration-200" />
+            <span className="block min-w-0">
+              <span className="block text-base sm:text-lg">تسجيل حضور عن طريق هوية الطالب QR Code</span>
+              <span className="block text-xs opacity-90 font-normal">افتح الكاميرا وامسح رمز QR</span>
+            </span>
           </button>
 
           {students.length > 0 && studentsWithUniId === 0 && (
@@ -226,7 +226,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
           )}
         </div>
 
-        <div className="relative mb-6">
+        <div className="relative mb-4 sm:mb-6">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-white/10"></div>
           </div>
@@ -235,8 +235,8 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
           </div>
         </div>
 
-        <div className="mb-6">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-700 rounded-2xl p-6 border-2 border-slate-600 shadow-inner" dir="ltr">
+        <div className="mb-4 sm:mb-6">
+          <div className="bg-gradient-to-br from-slate-800 to-slate-700 rounded-2xl p-4 sm:p-6 border-2 border-slate-600 shadow-inner" dir="ltr">
             <div className="flex items-center justify-center gap-3 md:gap-4" dir="ltr">
               {codeDigits.map((digit, index) => (
                 <div
@@ -289,7 +289,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
                 key={num}
                 onClick={() => handleCodeInput(numStr)}
                 disabled={code.length >= 4}
-                className={`relative overflow-hidden bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 active:from-blue-700 active:to-blue-800 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white text-2xl sm:text-3xl font-bold py-3 sm:py-5 rounded-xl transition-all duration-150 shadow-md hover:shadow-lg transform active:scale-95 ${
+                className={`relative overflow-hidden bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 active:from-blue-700 active:to-blue-800 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white text-2xl sm:text-3xl font-bold py-3 sm:py-5 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg transform active:scale-95 ${
                   isPressed ? 'scale-95 from-blue-700 to-blue-800 shadow-inner' : ''
                 }`}
                 style={{ fontFamily: 'Arial, sans-serif' }}
@@ -301,7 +301,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
 
           <button
             onClick={handleClear}
-            className={`bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white text-sm sm:text-base font-bold py-3 sm:py-5 rounded-xl transition-all duration-150 shadow-md hover:shadow-lg transform active:scale-95 flex items-center justify-center gap-1 ${
+            className={`bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white text-sm sm:text-base font-bold py-3 sm:py-5 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg transform active:scale-95 flex items-center justify-center gap-1 ${
               pressedKey === 'clear' ? 'scale-95 from-red-700 to-red-800 shadow-inner' : ''
             }`}
           >
@@ -311,7 +311,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
           <button
             onClick={() => handleCodeInput('0')}
             disabled={code.length >= 4}
-            className={`bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white text-2xl sm:text-3xl font-bold py-3 sm:py-5 rounded-xl transition-all duration-150 shadow-md hover:shadow-lg transform active:scale-95 ${
+            className={`bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white text-2xl sm:text-3xl font-bold py-3 sm:py-5 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg transform active:scale-95 ${
               pressedKey === '0' ? 'scale-95 from-blue-700 to-blue-800 shadow-inner' : ''
             }`}
             style={{ fontFamily: 'Arial, sans-serif' }}
@@ -321,7 +321,7 @@ export const AttendanceLogin: React.FC<AttendanceLoginProps> = React.memo(({
 
           <button
             onClick={handleBackspace}
-            className={`bg-gradient-to-br from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xl sm:text-2xl font-bold py-3 sm:py-5 rounded-xl transition-all duration-150 shadow-md hover:shadow-lg transform active:scale-95 flex items-center justify-center ${
+            className={`bg-gradient-to-br from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xl sm:text-2xl font-bold py-3 sm:py-5 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg transform active:scale-95 flex items-center justify-center ${
               pressedKey === 'backspace' ? 'scale-95' : ''
             }`}
           >

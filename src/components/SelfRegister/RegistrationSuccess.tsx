@@ -54,19 +54,19 @@ export const RegistrationSuccess: React.FC<RegistrationSuccessProps> = ({
           <h2 className="sel-heading mt-5 mb-1 flex items-center justify-center gap-2">
             <PartyPopper className="w-6 h-6 text-[#34D399]" /> تم تسجيل طلبك بنجاح
           </h2>
-          <p className="sel-muted mb-5">
+          <p className="sel-muted mb-4 sm:mb-5">
             مرحباً <span className="font-bold text-[#F3F7FF]">{student.name}</span> — بياناتك وصلتنا بأمان
           </p>
 
           {qrVerified ? (
-            <div className="rounded-2xl border border-[#1D5A45] bg-[#0F3A2C] p-4 mb-5">
+            <div className="rounded-2xl border border-[#1D5A45] bg-[#0F3A2C] p-4 mb-4 sm:mb-5 text-start">
               <div className="flex items-center gap-2 text-[#34D399] font-bold mb-1">
                 <CheckCircle2 className="w-5 h-5" /> تم إرسال الطلب بنجاح
               </div>
               <p className="text-sm text-[#34D399]">بانتظار موافقة مسجل الكلية</p>
             </div>
           ) : (
-            <div className="rounded-2xl border border-[#5C4520] bg-[#33270F] p-4 mb-5 text-right">
+            <div className="rounded-2xl border border-[#5C4520] bg-[#33270F] p-4 mb-4 sm:mb-5 text-start">
               <p className="font-bold text-[#FBBF24] mb-1 flex items-center gap-2">
                 <Clock className="w-5 h-5" /> بانتظار موافقة مسجل الكلية
               </p>

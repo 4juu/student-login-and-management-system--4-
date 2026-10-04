@@ -42,25 +42,25 @@ export const ConfirmDialog: FC<ConfirmDialogProps> = ({
         aria-labelledby="confirm-dialog-title"
         aria-describedby={message ? 'confirm-dialog-message' : undefined}
         tabIndex={-1}
-        className="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-modalUp focus:outline-none"
+        className="glass-modal relative w-[calc(100vw-2rem)] max-w-lg animate-modalUp focus:outline-none"
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+        <div className="flex items-center justify-between gap-3 pb-4 border-b border-white/10">
           <div className="flex items-center gap-2">
             <span className="text-xl">{icon || <LogOut className="w-5 h-5 text-red-400" />}</span>
-            <h3 id="confirm-dialog-title" className="font-extrabold text-white">{title}</h3>
+            <h3 id="confirm-dialog-title" className="text-base sm:text-lg font-semibold text-white">{title}</h3>
           </div>
           <button
             onClick={onCancel}
-            className="bg-white/5 hover:bg-white/15 text-slate-300 p-2 rounded-lg transition active:scale-90"
+            className="flex items-center justify-center w-9 h-9 bg-white/5 hover:bg-white/15 text-slate-300 rounded-lg transition duration-200 active:scale-90"
             aria-label="إغلاق"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {message && <p id="confirm-dialog-message" className="px-5 py-4 text-sm text-slate-300 leading-relaxed">{message}</p>}
+        {message && <p id="confirm-dialog-message" className="py-4 text-sm text-slate-300 leading-relaxed">{message}</p>}
 
-        <div className="flex items-center justify-end gap-2 px-5 pb-5 pt-1">
+        <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
           <Button
             variant="ghost"
             size="sm"

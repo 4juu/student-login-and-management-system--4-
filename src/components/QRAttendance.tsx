@@ -375,18 +375,18 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
       <div className="w-full bg-black flex flex-col flex-1 overflow-hidden">
       <header className="flex items-center justify-between px-3 py-2 bg-gray-900/95 border-b border-white/10"
         style={{ paddingTop: `${topSafe + 8}px` }}>
-        <h2 id="qr-scanner-title" className="text-sm font-bold flex items-center gap-1.5">🔳 QR</h2>
+        <h2 id="qr-scanner-title" className="text-base sm:text-lg font-semibold flex items-center gap-1.5">🔳 QR</h2>
         <button type="button" onClick={onClose}
-          className="bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded-lg text-sm font-bold transition active:scale-95">
+          className="min-h-10 bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded-lg text-sm font-bold transition-colors duration-200 active:scale-95">
           ✕ إغلاق
         </button>
       </header>
 
       <div className="flex-1 overflow-hidden flex flex-col">
-        <div ref={scrollAreaRef} className="flex-1 overflow-y-auto p-3 space-y-3 overscroll-contain"
+        <div ref={scrollAreaRef} className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 overscroll-contain"
           style={{ paddingBottom: `${bottomSafe + 16}px` }}>
           <div className="w-full mx-auto rounded-xl overflow-hidden border bg-gray-900 relative max-w-lg border-emerald-500/20">
-            <div id={QR_REGION_ID} className="w-full" style={{ minHeight: '260px' }} />
+            <div id={QR_REGION_ID} className="w-full min-h-[260px]" />
 
             {cameraReady && (
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
@@ -404,7 +404,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             )}
 
             {cameraReady && (
-              <div className="absolute top-2 left-2 flex gap-1.5 z-10">
+              <div className="absolute top-2 end-2 flex gap-1.5 z-10">
                 <button onClick={toggleCamera}
                   className="bg-black/70 text-white p-2.5 rounded-full active:scale-90 text-base shadow-lg border border-white/10"
                   title="تبديل الكاميرا">
@@ -422,7 +422,7 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
               <div className="text-center min-w-[60px]">
                 <div className="text-sm font-bold text-white">{zoom.toFixed(1)}x</div>
                 <div className="w-full h-1 bg-white/20 rounded-full mt-0.5 overflow-hidden">
-                  <div className="h-full bg-emerald-400 transition-all" style={{ width: `${((zoom - minZoom) / (maxZoom - minZoom)) * 100}%` }} />
+                  <div className="h-full bg-emerald-400 transition-all duration-300" style={{ width: `${((zoom - minZoom) / (maxZoom - minZoom)) * 100}%` }} />
                 </div>
               </div>
               <button onClick={() => applyZoom(zoom + 0.3)}
@@ -437,25 +437,25 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2 w-full max-w-lg mx-auto">
-            <div className="bg-white/5 rounded-lg p-2.5 text-center">
-              <div className="text-2xl font-bold text-emerald-400">{scanCount}</div>
-              <div className="text-[10px] text-slate-400">مسجّل</div>
+          <div className="flex gap-2 w-full max-w-lg mx-auto">
+            <div className="flex-1 bg-white/5 rounded-lg p-2.5 text-center">
+              <div className="text-lg sm:text-xl font-bold text-emerald-400">{scanCount}</div>
+              <div className="text-xs text-slate-400">مسجّل</div>
             </div>
-            <div className="bg-white/5 rounded-lg p-2.5 text-center">
-              <div className="text-lg font-bold">{cameraStatus === 'ready' ? '🟢' : '🔴'}</div>
-              <div className="text-[10px] text-slate-400">{cameraStatus === 'ready' ? 'تعمل' : 'خطأ'}</div>
+            <div className="flex-1 bg-white/5 rounded-lg p-2.5 text-center">
+              <div className="text-lg sm:text-xl font-bold">{cameraStatus === 'ready' ? '🟢' : '🔴'}</div>
+              <div className="text-xs text-slate-400">{cameraStatus === 'ready' ? 'تعمل' : 'خطأ'}</div>
             </div>
           </div>
 
           {recentStudents.length > 0 && (
             <div className="w-full max-w-lg mx-auto bg-white/5 rounded-lg p-2.5">
-              <p className="text-[11px] font-bold mb-1.5 text-emerald-300">آخر المسجلين:</p>
+              <p className="text-xs font-semibold mb-1.5 text-emerald-300">آخر المسجلين:</p>
               <div className="space-y-1">
                 {recentStudents.map(s => (
                   <div key={s.id} className="flex justify-between items-center bg-black/30 rounded px-2.5 py-1.5">
                     <span className="text-xs font-medium truncate">{s.name}</span>
-                    <span className="text-[10px] bg-emerald-700/80 px-1.5 py-0.5 rounded-full">{s.group || '-'}</span>
+                    <span className="text-xs bg-emerald-700/80 px-1.5 py-0.5 rounded-full">{s.group || '-'}</span>
                   </div>
                 ))}
               </div>
@@ -466,10 +466,10 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
 
       {pendingQrId && (
 <div className="fixed inset-0 z-[10000] bg-black/90 flex items-center justify-center p-4 animate-fadeIn">
-<div className="bg-slate-900 border border-white/10 text-white rounded-2xl p-5 w-full max-w-sm animate-modalUp">
+<div className="bg-slate-900 border border-white/10 text-white rounded-2xl p-4 sm:p-6 w-full max-w-sm animate-modalUp">
             <div className="text-center mb-4">
               <div className="text-4xl mb-2">🔗</div>
-              <h3 className="text-lg font-bold">ربط هوية</h3>
+              <h3 className="text-base sm:text-lg font-semibold">ربط هوية</h3>
             </div>
             <input ref={qrCodeInputRef}
               type="text" value={qrLinkCode}
@@ -480,11 +480,11 @@ export const QRAttendance: React.FC<QRAttendanceProps> = ({
             {qrLinkMessage && (
               <div className="mt-3 p-2 rounded text-center text-xs font-medium bg-red-500/10 text-red-300 border border-red-500/30">{qrLinkMessage}</div>
             )}
-            <div className="grid grid-cols-2 gap-2 mt-4">
+            <div className="flex gap-2 mt-4">
               <button onClick={() => { setPendingQrId(null); setQrLinkCode(''); }}
-                className="py-3 bg-white/10 hover:bg-white/20 text-slate-300 font-bold rounded-lg active:scale-95">إلغاء</button>
+                className="flex-1 btn-base btn-secondary">إلغاء</button>
               <button onClick={() => handleQrLinkByCode(qrLinkCode)} disabled={qrLinkCode.length !== 4}
-                className="py-3 bg-emerald-600 disabled:opacity-40 text-white font-bold rounded-lg active:scale-95">🔗 ربط</button>
+                className="flex-1 btn-base btn-primary">🔗 ربط</button>
             </div>
           </div>
         </div>

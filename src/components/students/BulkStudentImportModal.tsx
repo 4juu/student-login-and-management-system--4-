@@ -162,21 +162,21 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
         className="bg-slate-900 border border-white/10 rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl animate-modalUp"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-5 border-b border-white/10 sticky top-0 bg-slate-900/95 backdrop-blur z-10 rounded-t-2xl">
-          <h3 id="bulk-import-title" className="text-xl font-bold text-white flex items-center gap-2">
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-white/10 sticky top-0 bg-slate-900/95 backdrop-blur z-10 rounded-t-2xl">
+          <h3 id="bulk-import-title" className="text-xl sm:text-2xl font-semibold text-white flex items-center gap-2">
             <Users className="w-6 h-6 text-blue-400" />
             إضافة جماعية للطلاب
           </h3>
           <button
             onClick={onClose}
-            className="text-2xl text-slate-500 hover:text-slate-300 leading-none p-1"
+            className="min-h-10 min-w-10 inline-flex items-center justify-center text-2xl text-slate-500 hover:text-slate-300 leading-none transition-colors duration-200"
             aria-label="إغلاق"
           >
             <X className="w-6 h-6" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6">
           <div className="mb-5">
             <label className="block text-sm font-medium text-slate-300 mb-2">
               اختر الكروب <span className="text-red-400">*</span>
@@ -185,7 +185,7 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowGroupDropdown(!showGroupDropdown)}
-                className={`w-full px-4 py-3 bg-slate-800 border-2 rounded-lg text-left transition ${
+                className={`w-full min-h-10 px-4 py-3 bg-slate-800 border-2 rounded-lg text-start transition-colors duration-200 ${
                   selectedGroup
                     ? 'border-blue-500 bg-blue-500/10 text-white'
                     : 'border-slate-600 text-slate-400 hover:border-slate-400'
@@ -196,14 +196,14 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
                 <div className="flex items-center justify-between">
                   <span>{selectedGroup || 'اختر الكروب (A1-B8)'}</span>
                   <ChevronDown
-                    className={`w-5 h-5 text-slate-400 transition-transform ${showGroupDropdown ? 'rotate-180' : ''}`}
+                    className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${showGroupDropdown ? 'rotate-180' : ''}`}
                   />
                 </div>
               </button>
 
               {showGroupDropdown && (
                 <div
-                  className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-20 max-h-60 overflow-auto"
+                  className="absolute top-full inset-x-0 mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-20 max-h-60 overflow-auto"
                   role="listbox"
                 >
                   {GROUPS.map(g => (
@@ -213,7 +213,7 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
                       role="option"
                       aria-selected={selectedGroup === g}
                       onClick={() => { setSelectedGroup(g); setShowGroupDropdown(false); }}
-                      className={`w-full px-4 py-2 text-left transition ${
+                      className={`w-full min-h-10 px-4 py-2 text-start transition-colors duration-200 ${
                         selectedGroup === g
                           ? 'bg-blue-500/20 text-blue-300'
                           : 'text-slate-200 hover:bg-slate-700'
@@ -237,7 +237,7 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
                   key={num}
                   type="button"
                   onClick={() => { setLocalPrefix(num); setShowCustomPrefix(false); }}
-                  className={`w-12 h-12 rounded-lg font-bold text-sm transition duration-200 ${
+                  className={`w-12 h-12 rounded-lg font-bold text-sm transition-all duration-200 ${
                     localPrefix === num
                       ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg scale-110'
                       : 'bg-white/10 text-slate-200 border-2 border-slate-600 hover:border-blue-400'
@@ -249,14 +249,14 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
               <button
                 type="button"
                 onClick={() => { setShowCustomPrefix(v => !v); }}
-                className={`w-12 h-12 rounded-lg font-bold text-xs border-2 transition ${showCustomPrefix ? 'border-blue-400 bg-blue-500/20 text-blue-300' : 'border-dashed border-slate-500 text-slate-400 hover:border-blue-400'}`}
+                className={`w-12 h-12 rounded-lg font-bold text-xs border-2 transition-colors duration-200 ${showCustomPrefix ? 'border-blue-400 bg-blue-500/20 text-blue-300' : 'border-dashed border-slate-500 text-slate-400 hover:border-blue-400'}`}
                 title="بادئة مخصصة"
               >
                 <Edit2 className="w-4 h-4 mx-auto" />
               </button>
             </div>
             {showCustomPrefix && (
-              <div className="mt-3 flex items-center gap-2">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <input
                   type="number"
                   min={1}
@@ -265,9 +265,9 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
                   onChange={e => setCustomPrefixVal(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const v = parseInt(customPrefixVal, 10); if (!isNaN(v) && v >= 1 && v <= 9) { setLocalPrefix(v); setShowCustomPrefix(false); setCustomPrefixVal(''); } } }}
                   placeholder="رقم 1-9"
-                  className="w-28 px-3 py-2 bg-slate-800 border-2 border-slate-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-28 min-h-10 px-3 py-2 bg-slate-800 border-2 border-slate-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
-                <button type="button" onClick={() => { const v = parseInt(customPrefixVal, 10); if (!isNaN(v) && v >= 1 && v <= 9) { setLocalPrefix(v); setShowCustomPrefix(false); setCustomPrefixVal(''); } }} className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition">تطبيق</button>
+                <button type="button" onClick={() => { const v = parseInt(customPrefixVal, 10); if (!isNaN(v) && v >= 1 && v <= 9) { setLocalPrefix(v); setShowCustomPrefix(false); setCustomPrefixVal(''); } }} className="btn-base btn-primary px-4 text-sm">تطبيق</button>
               </div>
             )}
             <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
@@ -278,7 +278,7 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
           <div className="mb-5">
             <label className="block text-sm font-medium text-slate-300 mb-2">
               ألصق أسماء الطلاب <span className="text-red-400">*</span>
-              <span className="text-xs text-slate-500 ml-2">(سطر لكل طالب، الأجزاء مفصولة بمسافة)</span>
+              <span className="text-xs text-slate-500 me-2">(سطر لكل طالب، الأجزاء مفصولة بمسافة)</span>
             </label>
             <textarea
               ref={textareaRef}
@@ -294,7 +294,7 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
               dir="rtl"
               disabled={isProcessing}
             />
-            <p className="text-xs text-slate-500 mt-1 text-left">
+            <p className="text-xs text-slate-500 mt-1 text-start">
               مثال: <code className="bg-slate-700 px-1 rounded">مجتبى هيثم محمد محسن</code> = 4 أجزاء = اسم كامل
             </p>
           </div>
@@ -339,14 +339,14 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
               type="button"
               onClick={onClose}
               disabled={isProcessing}
-              className="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white font-medium rounded-md transition disabled:opacity-50"
+              className="btn-base btn-secondary disabled:opacity-50"
             >
               إلغاء
             </button>
             <button
               type="submit"
               disabled={isProcessing || !selectedGroup || !textInput.trim()}
-              className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-md shadow-md transition disabled:opacity-50 flex items-center gap-2"
+              className="btn-base btn-primary disabled:opacity-50"
             >
               {isProcessing ? (
                 <>

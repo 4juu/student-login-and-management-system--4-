@@ -42,8 +42,8 @@ export const StudentImportPanel: React.FC<StudentImportPanelProps> = ({
   };
 
   return (
-    <div className="mb-6 p-5 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border-2 border-blue-500/30 rounded-lg">
-      <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
+    <div className="p-4 sm:p-6 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border-2 border-blue-500/30 rounded-lg">
+      <h3 className="text-base sm:text-lg font-semibold text-white mb-3 flex items-center gap-2">
         <FolderOpen className="w-5 h-5 text-blue-400" /> استيراد الطلاب من ملف Excel
       </h3>
       <div className="mb-4 text-sm text-slate-400 space-y-1">
@@ -67,7 +67,7 @@ export const StudentImportPanel: React.FC<StudentImportPanelProps> = ({
               key={num}
               type="button"
               onClick={() => { onPrefixSelect(num); setShowCustomInput(false); }}
-              className={`w-14 h-14 rounded-lg font-bold text-lg transition duration-200 ${
+              className={`w-14 h-14 rounded-lg font-bold text-lg transition-all duration-200 ${
                 selectedPrefix === num
                   ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg scale-110'
                   : 'bg-white/10 text-slate-200 border-2 border-slate-600 hover:border-blue-400'
@@ -79,15 +79,15 @@ export const StudentImportPanel: React.FC<StudentImportPanelProps> = ({
           <button
             type="button"
             onClick={() => setShowCustomInput(true)}
-            className="w-14 h-14 rounded-lg border-2 border-dashed border-slate-500 text-slate-400 hover:border-blue-400 hover:text-blue-300 transition flex items-center justify-center"
+            className="w-14 h-14 rounded-lg border-2 border-dashed border-slate-500 text-slate-400 hover:border-blue-400 hover:text-blue-300 transition-colors duration-200 flex items-center justify-center"
             title="بادئة مخصصة"
           >
             <Edit2 className="w-5 h-5" />
           </button>
         </div>
-        
+
         {showCustomInput && (
-          <form onSubmit={handleCustomPrefixSubmit} className="mt-3 flex items-center gap-2">
+          <form onSubmit={handleCustomPrefixSubmit} className="mt-3 flex flex-wrap items-center gap-2">
             <input
               type="text"
               value={customPrefix}
@@ -95,13 +95,13 @@ export const StudentImportPanel: React.FC<StudentImportPanelProps> = ({
               onBlur={handleCustomPrefixBlur}
               onKeyDown={e => e.key === 'Enter' && handleCustomPrefixSubmit(e as any)}
               autoFocus
-              className="w-24 px-3 py-2 bg-slate-800 border-2 border-slate-600 rounded-lg text-white text-center font-mono text-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-24 min-h-10 px-3 py-2 bg-slate-800 border-2 border-slate-600 rounded-lg text-white text-center font-mono text-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="1-9"
               maxLength={1}
               inputMode="numeric"
             />
             <span className="text-xs text-slate-500">(1-9)</span>
-            <button type="submit" className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition">تطبيق</button>
+            <button type="submit" className="btn-base btn-primary px-4 text-sm">تطبيق</button>
           </form>
         )}
 
@@ -122,7 +122,7 @@ export const StudentImportPanel: React.FC<StudentImportPanelProps> = ({
         />
         <label
           htmlFor="excel-upload"
-          className={`flex-1 cursor-pointer bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium py-3 px-6 rounded-md transition duration-200 shadow-md flex items-center justify-center gap-2 ${
+          className={`btn-base btn-primary flex-1 ${
             importLoading ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         >
@@ -131,7 +131,7 @@ export const StudentImportPanel: React.FC<StudentImportPanelProps> = ({
       </div>
 
       {importMessage && (
-        <div className="mt-4 p-3 bg-green-500/10 border border-green-500/30 text-green-300 rounded-md" dir="rtl">
+        <div className="mt-4 p-3 bg-green-500/10 border border-green-500/30 text-green-300 rounded-md text-sm" dir="rtl">
           {importMessage}
         </div>
       )}

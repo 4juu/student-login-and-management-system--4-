@@ -26,13 +26,13 @@ export const Pagination: React.FC<PaginationProps> = ({
 
   if (variant === 'top') {
     return (
-      <div className="mb-3 p-3 bg-white/5 border border-white/10 rounded-lg flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2 text-sm">
+      <div className="p-3 sm:p-4 bg-white/5 border border-white/10 rounded-lg flex items-center justify-between flex-wrap gap-2 sm:gap-3">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="text-slate-400">عرض:</span>
           <select
             value={pageSize}
             onChange={e => setPageSize(Number(e.target.value))}
-            className="px-3 py-1 border border-slate-600 bg-slate-800 text-white rounded-md text-sm"
+            className="min-h-10 px-3 py-2 border border-slate-600 bg-slate-800 text-white rounded-md text-sm"
           >
             {PAGE_SIZE_OPTIONS.map(size => (
               <option key={size} value={size}>{size} طالب</option>
@@ -43,11 +43,11 @@ export const Pagination: React.FC<PaginationProps> = ({
           </span>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setCurrentPage(1)}
             disabled={currentPage === 1}
-            className="px-2 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm"
+            className="min-h-10 min-w-10 px-2 inline-flex items-center justify-center bg-white/10 border border-white/15 rounded transition-colors duration-200 disabled:opacity-30 hover:bg-white/20"
             title="الصفحة الأولى"
           >
             <ChevronsRight className="w-4 h-4" />
@@ -55,24 +55,24 @@ export const Pagination: React.FC<PaginationProps> = ({
           <button
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
             disabled={currentPage === 1}
-            className="px-3 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm flex items-center gap-1"
+            className="min-h-10 px-3 inline-flex items-center gap-1.5 bg-white/10 border border-white/15 rounded transition-colors duration-200 disabled:opacity-30 hover:bg-white/20 text-sm"
           >
             <ChevronRight className="w-4 h-4" /> السابق
           </button>
-          <span className="px-3 py-1 bg-blue-600 text-white rounded text-sm font-bold">
+          <span className="min-h-10 px-3 inline-flex items-center rounded bg-blue-600 text-white text-sm font-bold">
             {currentPage} / {totalPages}
           </span>
           <button
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
-            className="px-3 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm flex items-center gap-1"
+            className="min-h-10 px-3 inline-flex items-center gap-1.5 bg-white/10 border border-white/15 rounded transition-colors duration-200 disabled:opacity-30 hover:bg-white/20 text-sm"
           >
             التالي <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             onClick={() => setCurrentPage(totalPages)}
             disabled={currentPage === totalPages}
-            className="px-2 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm"
+            className="min-h-10 min-w-10 px-2 inline-flex items-center justify-center bg-white/10 border border-white/15 rounded transition-colors duration-200 disabled:opacity-30 hover:bg-white/20"
             title="الصفحة الأخيرة"
           >
             <ChevronsLeft className="w-4 h-4" />
@@ -83,18 +83,18 @@ export const Pagination: React.FC<PaginationProps> = ({
   }
 
   return (
-    <div className="mt-4 p-3 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center gap-1 flex-wrap">
+      <div className="p-3 sm:p-4 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center gap-2 flex-wrap">
       <button
         onClick={() => setCurrentPage(1)}
         disabled={currentPage === 1}
-        className="px-2 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm flex items-center gap-1"
+        className="min-h-10 px-3 inline-flex items-center gap-1.5 bg-white/10 border border-white/15 rounded transition-colors duration-200 disabled:opacity-30 hover:bg-white/20 text-sm"
       >
         <ChevronsRight className="w-4 h-4" /> الأولى
       </button>
       <button
         onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
         disabled={currentPage === 1}
-        className="px-3 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm flex items-center gap-1"
+        className="min-h-10 px-3 inline-flex items-center gap-1.5 bg-white/10 border border-white/15 rounded transition-colors duration-200 disabled:opacity-30 hover:bg-white/20 text-sm"
       >
         <ChevronRight className="w-4 h-4" /> السابق
       </button>
@@ -114,7 +114,7 @@ export const Pagination: React.FC<PaginationProps> = ({
           <button
             key={pageNum}
             onClick={() => setCurrentPage(pageNum)}
-            className={`px-3 py-1 rounded text-sm font-medium ${
+            className={`min-h-10 px-3 inline-flex items-center justify-center rounded text-sm font-medium transition-colors duration-200 ${
               pageNum === currentPage
                 ? 'bg-blue-600 text-white'
                 : 'bg-white/10 border border-white/15 hover:bg-white/20'
@@ -128,14 +128,14 @@ export const Pagination: React.FC<PaginationProps> = ({
       <button
         onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
         disabled={currentPage === totalPages}
-        className="px-3 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm flex items-center gap-1"
+        className="min-h-10 px-3 inline-flex items-center gap-1.5 bg-white/10 border border-white/15 rounded transition-colors duration-200 disabled:opacity-30 hover:bg-white/20 text-sm"
       >
         التالي <ChevronLeft className="w-4 h-4" />
       </button>
       <button
         onClick={() => setCurrentPage(totalPages)}
         disabled={currentPage === totalPages}
-        className="px-2 py-1 bg-white/10 border border-white/15 rounded disabled:opacity-30 hover:bg-white/20 text-sm flex items-center gap-1"
+        className="min-h-10 px-3 inline-flex items-center gap-1.5 bg-white/10 border border-white/15 rounded transition-colors duration-200 disabled:opacity-30 hover:bg-white/20 text-sm"
       >
         الأخيرة <ChevronsLeft className="w-4 h-4" />
       </button>

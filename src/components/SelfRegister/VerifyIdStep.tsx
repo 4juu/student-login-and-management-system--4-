@@ -433,7 +433,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
           <div className="sel-cam-pill">
             <div className="sel-cam-pill-inner">
               <IdCard className="w-4 h-4" /> ضع البطاقة داخل الإطار مع وضوح الاسم
-              <span className="mr-1 inline-flex items-center gap-1 text-[10px] font-extrabold text-white/80">
+              <span className="ms-1 inline-flex items-center gap-1 text-xs font-bold text-white/80">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" /> LIVE
               </span>
             </div>
@@ -489,12 +489,12 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
       <div className="sel-fade">
         <Stepper current={1} />
         <div className="sel-card">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-lg font-extrabold text-[#F3F7FF]">التحقق من الهوية الجامعية</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4 sm:mb-5">
+            <h2 className="text-base sm:text-lg font-semibold text-[#F3F7FF]">التحقق من الهوية الجامعية</h2>
             {linkType === 'attendance' && !isVerifyMode && <span className={`sel-chip ${topChip.tone}`}>{topChip.text}</span>}
           </div>
 
-          <p className="sel-muted mb-5">
+          <p className="sel-muted mb-4 sm:mb-5">
             صوّر بطاقتك الجامعية مباشرة.
           </p>
 
@@ -510,7 +510,7 @@ export const VerifyIdStep: React.FC<VerifyIdStepProps> = ({
               <span className="sel-option-icon">
                 <Camera className="w-6 h-6" />
               </span>
-              <span className="text-right">
+              <span className="text-start">
                 <span className="sel-option-title block">تصوير مباشر</span>
                 <span className="sel-option-desc block">افتح الكاميرا ووجّهها نحو البطاقة</span>
               </span>
@@ -665,7 +665,7 @@ const ResultMatch: React.FC<{
       <span className="sel-chip sel-chip-green">نسبة التطابق {score}%</span>
     </div>
 
-    <div className="space-y-2">
+    <div className="space-y-3">
       <button type="button" className="sel-btn sel-btn-primary" onClick={onContinue}>
         <BadgeCheck className="w-5 h-5" /> نعم، هذه هويتي
       </button>

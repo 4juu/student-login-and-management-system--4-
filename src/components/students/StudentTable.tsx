@@ -87,8 +87,8 @@ export const StudentTable: React.FC<StudentTableProps> = ({
   removeFaceData,
 }) => {
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-white/10">
+    <div className="table-container">
+      <table className="glass-table min-w-full divide-y divide-white/10">
         <thead className="bg-white/5">
             <tr>
               <th scope="col" className="px-4 py-3 text-center">
@@ -102,14 +102,14 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                   />
                 )}
               </th>
-              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">#</th>
-              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">الرمز</th>
-              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">الاسم</th>
-              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">الكروب</th>
-              <th scope="col" className="hidden md:table-cell px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><IdCard className="w-3.5 h-3.5" /> الرقم الجامعي</span></th>
-              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> رمز QR</span></th>
+              <th scope="col" className="px-4 py-3 text-start text-xs font-medium text-slate-400 uppercase tracking-wider">#</th>
+              <th scope="col" className="px-4 py-3 text-start text-xs font-medium text-slate-400 uppercase tracking-wider">الرمز</th>
+              <th scope="col" className="px-4 py-3 text-start text-xs font-medium text-slate-400 uppercase tracking-wider">الاسم</th>
+              <th scope="col" className="px-4 py-3 text-start text-xs font-medium text-slate-400 uppercase tracking-wider">الكروب</th>
+              <th scope="col" className="hidden md:table-cell px-4 py-3 text-start text-xs font-medium text-slate-400 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><IdCard className="w-3.5 h-3.5" /> الرقم الجامعي</span></th>
+              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-start text-xs font-medium text-slate-400 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> رمز QR</span></th>
               <th scope="col" className="hidden sm:table-cell px-4 py-3 text-center text-xs font-medium text-slate-400 uppercase tracking-wider"><span className="inline-flex items-center gap-1"><Smile className="w-3.5 h-3.5" /> الوجه</span></th>
-              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">إجراءات</th>
+              <th scope="col" className="px-4 py-3 text-start text-xs font-medium text-slate-400 uppercase tracking-wider">إجراءات</th>
             </tr>
         </thead>
         <tbody className="bg-white/5 divide-y divide-white/10">
@@ -135,9 +135,9 @@ export const StudentTable: React.FC<StudentTableProps> = ({
               return (
                 <tr
                   key={student.id}
-                  className={`hover:bg-white/5 transition ${selectedIds.has(student.id) ? 'bg-blue-500/10' : ''}`}
+                  className={`hover:bg-white/5 transition-colors duration-200 ${selectedIds.has(student.id) ? 'bg-blue-500/10' : ''}`}
                 >
-                  <td className="px-4 py-4 text-center">
+                  <td className="px-4 py-3 text-center">
                     <input
                       type="checkbox"
                       checked={selectedIds.has(student.id)}
@@ -145,20 +145,20 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                       className="w-5 h-5 cursor-pointer accent-blue-600"
                     />
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-sm text-slate-400">
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-400">
                     {globalIndex}
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <span className="text-lg font-bold text-blue-600">{student.code}</span>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-right">
+                  <td className="px-4 py-3 whitespace-nowrap text-start">
                     {editingNameStudent === student.id ? (
                       <div className="flex items-center gap-1">
                         <input
                           type="text"
                           value={editName}
                           onChange={e => setEditName(e.target.value)}
-                          className="w-48 px-2 py-1 border border-blue-500/40 bg-slate-800 text-white rounded text-sm text-right"
+                          className="w-48 px-2 py-1 border border-blue-500/40 bg-slate-800 text-white rounded text-sm text-start"
                           autoFocus
                           aria-label="اسم الطالب"
                           onKeyDown={e => {
@@ -168,14 +168,14 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                         />
                         <button
                           onClick={saveEditName}
-                          className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs"
+                          className="min-h-10 min-w-10 inline-flex items-center justify-center rounded bg-green-500 hover:bg-green-600 text-white text-xs transition-colors duration-200"
                           title="حفظ"
                         >
                           ✓
                         </button>
                         <button
                           onClick={cancelEditName}
-                          className="px-2 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-xs"
+                          className="min-h-10 min-w-10 inline-flex items-center justify-center rounded bg-white/10 hover:bg-white/20 text-white text-xs transition-colors duration-200"
                           title="إلغاء"
                         >
                           ×
@@ -187,7 +187,7 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                         {onUpdateStudent && (
                           <button
                             onClick={() => startEditName(student)}
-                            className="text-blue-400 hover:text-blue-300 text-xs"
+                            className="min-h-10 min-w-10 inline-flex items-center justify-center text-blue-400 hover:text-blue-300 text-xs transition-colors duration-200"
                             title="تعديل اسم الطالب"
                           >
                             <Pencil className="w-4 h-4" />
@@ -196,7 +196,7 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-right">
+                  <td className="px-4 py-3 whitespace-nowrap text-start">
                     {transferStudentId === student.id ? (
                       <div className="flex items-center gap-1">
                         <select
@@ -243,14 +243,14 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                             setTransferStudentId(null);
                             setTransferGroupValue('');
                           }}
-                          className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs"
+                          className="min-h-10 min-w-10 inline-flex items-center justify-center rounded bg-green-500 hover:bg-green-600 text-white text-xs transition-colors duration-200"
                           title="حفظ"
                         >
                           ✓
                         </button>
                         <button
                           onClick={() => { setTransferStudentId(null); setTransferGroupValue(''); }}
-                          className="px-2 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-xs"
+                          className="min-h-10 min-w-10 inline-flex items-center justify-center rounded bg-white/10 hover:bg-white/20 text-white text-xs transition-colors duration-200"
                           title="إلغاء"
                         >
                           ×
@@ -259,7 +259,7 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                     ) : (
                       <div className="flex items-center gap-2">
                         {student.group ? (
-                          <span className="inline-block px-3 py-1 bg-indigo-500/15 text-indigo-300 text-sm font-medium rounded-full">
+                          <span className="glass-badge px-3 py-1 bg-indigo-500/15 text-indigo-300 text-sm font-medium rounded-full">
                             {student.group}
                           </span>
                         ) : (
@@ -268,7 +268,7 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                         {onUpdateStudent && (
                           <button
                             onClick={() => { setTransferStudentId(student.id); setTransferGroupValue(student.group || ''); }}
-                            className="text-blue-400 hover:text-blue-300 text-xs"
+                            className="min-h-10 min-w-10 inline-flex items-center justify-center text-blue-400 hover:text-blue-300 text-xs transition-colors duration-200"
                             title="نقل إلى كروب آخر"
                           >
                             <RefreshCw className="w-4 h-4" />
@@ -278,7 +278,7 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                     )}
                   </td>
 
-                  <td className="hidden md:table-cell px-4 py-4 whitespace-nowrap text-right">
+                  <td className="hidden md:table-cell px-4 py-3 whitespace-nowrap text-start">
                     {editingUniIdStudent === student.id ? (
                       <div className="flex items-center gap-1">
                         <input
@@ -294,14 +294,14 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                         />
                         <button
                           onClick={saveEditUniId}
-                          className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs"
+                          className="min-h-10 min-w-10 inline-flex items-center justify-center rounded bg-green-500 hover:bg-green-600 text-white text-xs transition-colors duration-200"
                           title="حفظ"
                         >
                           ✓
                         </button>
                         <button
                           onClick={cancelEditUniId}
-                          className="px-2 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-xs"
+                          className="min-h-10 min-w-10 inline-flex items-center justify-center rounded bg-white/10 hover:bg-white/20 text-white text-xs transition-colors duration-200"
                           title="إلغاء"
                         >
                           ×
@@ -319,7 +319,7 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                         {onUpdateStudent && (
                           <button
                             onClick={() => startEditUniId(student)}
-                            className="text-blue-400 hover:text-blue-300 text-xs"
+                            className="min-h-10 min-w-10 inline-flex items-center justify-center text-blue-400 hover:text-blue-300 text-xs transition-colors duration-200"
                             title="تعديل الرقم الجامعي"
                           >
                             <Pencil className="w-4 h-4" />
@@ -329,7 +329,7 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                     )}
                   </td>
 
-                  <td className="hidden sm:table-cell px-4 py-4 whitespace-nowrap text-right">
+                  <td className="hidden sm:table-cell px-4 py-3 whitespace-nowrap text-start">
                     {editingQrStudent === student.id ? (
                       <div className="flex items-center gap-1">
                         <input
@@ -347,14 +347,14 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                         />
                         <button
                           onClick={saveEditQr}
-                          className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs"
+                          className="min-h-10 min-w-10 inline-flex items-center justify-center rounded bg-green-500 hover:bg-green-600 text-white text-xs transition-colors duration-200"
                           title="حفظ"
                         >
                           ✓
                         </button>
                         <button
                           onClick={cancelEditQr}
-                          className="px-2 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-xs"
+                          className="min-h-10 min-w-10 inline-flex items-center justify-center rounded bg-white/10 hover:bg-white/20 text-white text-xs transition-colors duration-200"
                           title="إلغاء"
                         >
                           ×
@@ -364,7 +364,7 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                       <div className="flex items-center gap-2">
                         {student.qrCodeId ? (
                           <span
-                            className="inline-block px-2 py-1 bg-emerald-500/10 text-emerald-300 text-xs font-mono rounded border border-emerald-500/30 max-w-[140px] truncate"
+                            className="inline-block px-2 py-1 bg-emerald-500/10 text-emerald-300 text-xs font-mono rounded border border-emerald-500/30 max-w-36 truncate"
                             dir="ltr"
                             title={student.qrCodeId}
                           >
@@ -377,7 +377,7 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                           <>
                             <button
                               onClick={() => startEditQr(student)}
-                              className="text-emerald-400 hover:text-emerald-300 text-xs"
+                              className="min-h-10 min-w-10 inline-flex items-center justify-center text-emerald-400 hover:text-emerald-300 text-xs transition-colors duration-200"
                               title="تعديل رمز QR"
                             >
                               <Pencil className="w-4 h-4" />
@@ -385,7 +385,7 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                             {student.qrCodeId && (
                               <button
                                 onClick={() => removeQrLink(student)}
-                                className="text-red-400 hover:text-red-300 text-xs"
+                                className="min-h-10 min-w-10 inline-flex items-center justify-center text-red-400 hover:text-red-300 text-xs transition-colors duration-200"
                                 title="فك ربط QR"
                               >
                                 <Unlink className="w-4 h-4" />
@@ -397,7 +397,7 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                     )}
                   </td>
 
-                  <td className="hidden sm:table-cell px-4 py-4 whitespace-nowrap text-center">
+                  <td className="hidden sm:table-cell px-4 py-3 whitespace-nowrap text-center">
                     <div className="flex items-center justify-center gap-1">
                       {hasFace ? (
                         <>
@@ -423,7 +423,7 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                           {onUpdateStudent && (
                             <button
                               onClick={() => removeFaceData(student)}
-                              className="text-red-400 hover:text-red-300 text-xs"
+                              className="min-h-10 min-w-10 inline-flex items-center justify-center text-red-400 hover:text-red-300 text-xs transition-colors duration-200"
                               title="حذف بصمة الوجه"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -436,12 +436,12 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                     </div>
                   </td>
 
-                  <td className="px-4 py-4 whitespace-nowrap text-right">
-                    <div className="flex items-center justify-end gap-3">
+                  <td className="px-4 py-3 whitespace-nowrap text-start">
+                    <div className="flex items-center justify-start gap-3">
                       {onUpdateStudent && (
                         <button
                           onClick={() => openFaceEnroll([student.id])}
-                          className="text-violet-400 hover:text-violet-300 font-medium flex items-center gap-1"
+                          className="min-h-10 inline-flex items-center gap-1 text-violet-400 hover:text-violet-300 font-medium transition-colors duration-200"
                           title="تسجيل / إعادة تسجيل بصمة الوجه لهذا الطالب"
                         >
                           بصمة <ScanFace className="w-4 h-4" />
@@ -450,7 +450,7 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                       {onOpenProfile && (
                         <button
                           onClick={() => onOpenProfile(student)}
-                          className="text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1"
+                          className="min-h-10 inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 font-medium transition-colors duration-200"
                           title="فتح ملف الطالب الكامل"
                         >
                           الملف <ClipboardList className="w-4 h-4" />
@@ -458,7 +458,7 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                       )}
                       <button
                         onClick={() => onDeleteStudent(student.id)}
-                        className="text-red-400 hover:text-red-300 font-medium"
+                        className="min-h-10 inline-flex items-center text-red-400 hover:text-red-300 font-medium transition-colors duration-200"
                       >
                         حذف
                       </button>

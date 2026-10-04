@@ -32,8 +32,8 @@ export const StudentForm: React.FC<StudentFormProps> = ({
   onSubmit,
 }) => {
   return (
-    <form onSubmit={onSubmit} className="mb-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <form onSubmit={onSubmit}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <Field label="اسم الطالب" required>
           {(f) => (
             <input
@@ -41,7 +41,7 @@ export const StudentForm: React.FC<StudentFormProps> = ({
               type="text"
               value={name}
               onChange={(e) => onNameChange(e.target.value)}
-              className="w-full px-4 py-2 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-500 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="glass-input"
               placeholder="أدخل اسم الطالب"
               dir="rtl"
             />
@@ -59,7 +59,7 @@ export const StudentForm: React.FC<StudentFormProps> = ({
                 if (value.length <= 4) onCodeChange(value);
               }}
               maxLength={4}
-              className="w-full px-4 py-2 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-500 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-lg font-bold"
+              className="glass-input text-center text-lg font-bold"
               placeholder="1001"
               inputMode="numeric"
             />
@@ -73,7 +73,7 @@ export const StudentForm: React.FC<StudentFormProps> = ({
               type="text"
               value={group}
               onChange={(e) => onGroupChange(e.target.value.toUpperCase())}
-              className="w-full px-4 py-2 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-500 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
+              className="glass-input text-center"
               placeholder="A1"
             />
           )}
@@ -94,7 +94,7 @@ export const StudentForm: React.FC<StudentFormProps> = ({
               type="text"
               value={universityId}
               onChange={(e) => onUniversityIdChange(e.target.value.replace(/\D/g, ''))}
-              className="w-full px-4 py-2 border border-slate-600 bg-slate-800 text-white placeholder:text-slate-500 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center font-mono"
+              className="glass-input text-center font-mono"
               placeholder="8886736221"
               inputMode="numeric"
             />
@@ -130,7 +130,7 @@ export const StudentForm: React.FC<StudentFormProps> = ({
               type="text"
               value={qrCodeId}
               onChange={(e) => onQrCodeIdChange(e.target.value)}
-              className="w-full px-4 py-2 border border-emerald-500/30 bg-slate-800 text-white placeholder:text-slate-500 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono text-sm"
+              className="glass-input font-mono text-sm"
               placeholder="ألصق هنا: https://sis.mohesr.gov.iq/verify?id=... أو الرمز مباشرة"
               dir="ltr"
             />
@@ -141,14 +141,14 @@ export const StudentForm: React.FC<StudentFormProps> = ({
       <div className="mt-4 flex justify-end">
         <button
           type="submit"
-          className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-8 rounded-md transition duration-200 flex items-center gap-2"
+          className="btn-base btn-primary"
         >
           <Plus className="w-4 h-4" /> إضافة طالب
         </button>
       </div>
 
       {error && (
-        <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 text-red-300 rounded-md" role="alert" dir="rtl">
+        <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 text-red-300 text-sm rounded-md" role="alert" dir="rtl">
           {error}
         </div>
       )}

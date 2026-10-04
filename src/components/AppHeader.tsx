@@ -30,9 +30,9 @@ export const AppHeader: FC<AppHeaderProps> = ({
   onProfile,
   onLogout,
 }) => (
-  <div className="mb-8">
-    <div className="flex items-center justify-between gap-3 mb-6">
-      <div className="flex items-center gap-3 min-w-0">
+  <div className="space-y-4 sm:space-y-6">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-w-0">
         <button
           type="button"
           onClick={onProfile}
@@ -45,9 +45,9 @@ export const AppHeader: FC<AppHeaderProps> = ({
             <span className="text-white font-bold text-lg">{currentUser.displayName.charAt(0)}</span>
           )}
         </button>
-        <div className="text-right min-w-0">
+        <div className="text-end min-w-0">
           <p className="text-xs text-slate-400">مرحباً،</p>
-          <p className="font-bold text-slate-100 truncate max-w-[120px] sm:max-w-none">{currentUser.displayName}</p>
+          <p className="text-sm sm:text-base font-semibold text-white truncate max-w-[10rem] sm:max-w-none">{currentUser.displayName}</p>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           {isMainAdmin && (
@@ -78,7 +78,7 @@ export const AppHeader: FC<AppHeaderProps> = ({
         variant="destructive"
         size="sm"
         onClick={onLogout}
-        className="shrink-0 inline-flex items-center gap-2"
+        className="shrink-0 inline-flex items-center gap-2 min-h-10"
         aria-label="تسجيل الخروج"
       >
         <LogOut className="w-4 h-4" />

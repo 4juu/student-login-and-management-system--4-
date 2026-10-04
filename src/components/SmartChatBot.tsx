@@ -176,19 +176,18 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
       {isOpen && (
         <div
           key="chat-window"
-          className={`fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-50 overflow-hidden border border-white/10 shadow-2xl w-[calc(100vw-1.5rem)] sm:w-[38rem] max-h-[calc(100vh-3rem)] overscroll-contain ${closing ? 'animate-chatClose' : 'animate-chatOpen'}`}
-          style={{ backgroundColor: '#0f172a' }}
+          className={`fixed bottom-3 start-3 sm:bottom-6 sm:start-6 z-50 overflow-hidden rounded-2xl border border-white/10 shadow-2xl w-[calc(100vw-1rem)] sm:w-96 max-h-[calc(100dvh-3rem)] overscroll-contain bg-slate-900 ${closing ? 'animate-chatClose' : 'animate-chatOpen'}`}
           onKeyDown={e => { e.stopPropagation(); }}
           onKeyUp={e => { e.stopPropagation(); }}
         >
-          <div className="flex flex-col max-h-[calc(100vh-3rem)]">
+          <div className="flex flex-col max-h-[calc(100dvh-3rem)]">
             {/* شريط علوي: زر الإغلاق (يمين) مع خط فاصل تحته */}
             <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10 flex-shrink-0">
               <span className="text-xs text-slate-400 font-medium">بحث الطلاب</span>
               <button
                 onClick={requestClose}
                 aria-label="إغلاق"
-                className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-red-500/20 text-red-400 hover:text-red-300 text-sm transition"
+                className="w-10 h-10 -my-1 flex items-center justify-center rounded-md hover:bg-red-500/20 text-red-400 hover:text-red-300 text-sm transition duration-200"
               >
                 ✕
               </button>
@@ -200,15 +199,15 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
               className="w-full px-3 pt-3 pb-2.5 border-b border-white/10 bg-white/[0.03] flex-shrink-0"
             >
               <div className="relative">
-                <div className="flex items-center gap-2 bg-slate-800 rounded-xl border border-white/10 focus-within:border-indigo-500/60 focus-within:ring-1 focus-within:ring-indigo-500/30 transition shadow-sm">
-                  <span className="pr-3 text-slate-400 text-sm flex items-center"><Search className="w-4 h-4" /></span>
+                <div className="flex items-center gap-2 min-h-12 bg-slate-800 rounded-xl border border-white/10 focus-within:border-indigo-500/60 focus-within:ring-1 focus-within:ring-indigo-500/30 transition duration-200 shadow-sm">
+                  <span className="ps-3 text-slate-400 text-sm flex items-center"><Search className="w-4 h-4" /></span>
                   <input
                     type="text"
                     value={studentSearchQuery}
                     onChange={e => handleStudentSearch(e.target.value)}
                     onFocus={() => { if (studentSuggestions.length > 0) setShowSuggestions(true); }}
                     placeholder="اكتب اسم الطالب أو كوده..."
-                    className="flex-1 py-2.5 pl-3 text-sm bg-transparent outline-none text-right text-white placeholder:text-slate-500"
+                    className="flex-1 min-w-0 py-2.5 pe-3 text-sm bg-transparent outline-none text-start text-white placeholder:text-slate-500"
                     dir="rtl"
                     autoComplete="off"
                     aria-label="ابحث عن طالب بالاسم أو الكود"
@@ -217,16 +216,16 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
                     <button
                       onClick={clearStudentSearch}
                       aria-label="مسح البحث"
-                      className="pl-2 pr-1 text-slate-400 hover:text-slate-200 transition"
+                      className="min-h-10 min-w-10 flex items-center justify-center text-slate-400 hover:text-slate-200 transition duration-200"
                     >
                       ×
                     </button>
                   )}
                 </div>
-                <p className="text-[10px] text-slate-500 mt-1.5 text-right">اضغط على الطالب لعرض تقرير حضوره وغيابه</p>
+                <p className="text-xs text-slate-500 mt-1.5 text-start">اضغط على الطالب لعرض تقرير حضوره وغيابه</p>
 
                 {showSuggestions && studentSuggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 rounded-xl shadow-xl border border-white/10 z-[70] overflow-hidden max-h-[320px] overflow-y-auto">
+                  <div className="absolute top-full inset-x-0 mt-1 bg-slate-800 rounded-xl shadow-xl border border-white/10 z-[70] overflow-hidden max-h-[320px] overflow-y-auto">
                     {studentSuggestions.map(student => {
                       const sRecords = scope.records.filter(r => r.studentId === student.id);
                       const presentIds = new Set(sRecords.filter(r => r.status === 'present').map(r => r.sessionId));
@@ -238,18 +237,18 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
                         <button
                           key={student.id}
                           onClick={() => handleSelectStudent(student)}
-                          className="w-full text-right px-4 py-3 hover:bg-white/5 flex items-center gap-3 transition border-b border-white/10 last:border-0"
+                          className="w-full text-start px-4 py-3 min-h-10 hover:bg-white/5 flex items-center gap-3 transition duration-200 border-b border-white/10 last:border-0"
                         >
                           <div className="w-10 h-10 bg-blue-500/15 rounded-full flex items-center justify-center text-blue-300 font-bold text-sm border border-blue-500/30">
                             {student.name.charAt(0)}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-white truncate">{student.name}</p>
-                            <p className="text-[11px] text-slate-400">
+                            <p className="text-xs text-slate-400">
                               {student.code && `كود: ${student.code}`}
                               {student.group && ` • كروب: ${student.group}`}
                             </p>
-                            <p className="text-[10px] mt-0.5 text-slate-500">
+                            <p className="text-xs mt-0.5 text-slate-500">
                               ✅ {sAttended} / ❌ {sAbsent} — {sPct}%
                             </p>
                           </div>
@@ -267,14 +266,14 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
               {showStudentCard && selectedStudentCard ? (
                 <div className="bg-slate-800 rounded-xl border border-white/10 shadow-md overflow-hidden">
                   <div className="bg-blue-500/10 px-4 py-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-500/15 rounded-full flex items-center justify-center text-lg font-bold border border-blue-500/30 text-blue-300">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 shrink-0 bg-blue-500/15 rounded-full flex items-center justify-center text-lg font-bold border border-blue-500/30 text-blue-300">
                           {selectedStudentCard.student.name.charAt(0)}
                         </div>
-                        <div>
-                          <h4 className="font-bold text-sm text-white">{selectedStudentCard.student.name}</h4>
-                          <p className="text-[11px] text-slate-400">
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-sm text-white truncate">{selectedStudentCard.student.name}</h4>
+                          <p className="text-xs text-slate-400">
                             {selectedStudentCard.student.code && `كود: ${selectedStudentCard.student.code}`}
                             {selectedStudentCard.student.group && ` • كروب: ${selectedStudentCard.student.group}`}
                           </p>
@@ -297,7 +296,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
                         <button
                           onClick={clearStudentSearch}
                           aria-label="إغلاق بطاقة الطالب"
-                          className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-red-500/20 text-red-400 hover:text-red-300 text-sm transition flex-shrink-0"
+                          className="w-10 h-10 -my-1 flex items-center justify-center rounded-md hover:bg-red-500/20 text-red-400 hover:text-red-300 text-sm transition duration-200 flex-shrink-0"
                         >
                           ✕
                         </button>
@@ -308,17 +307,17 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
                   <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-x-reverse divide-white/10">
                     <div className="text-center py-3 px-2">
                       <p className="text-lg font-bold text-green-400">{selectedStudentCard.attendedCount}</p>
-                      <p className="text-[10px] text-slate-400 flex items-center justify-center gap-1"><CircleCheck className="w-3 h-3" /> حضور</p>
+                      <p className="text-xs text-slate-400 flex items-center justify-center gap-1"><CircleCheck className="w-3 h-3" /> حضور</p>
                     </div>
                     <div className="text-center py-3 px-2">
                       <p className="text-lg font-bold text-red-400">{selectedStudentCard.absentCount}</p>
-                      <p className="text-[10px] text-slate-400 flex items-center justify-center gap-1"><CircleX className="w-3 h-3" /> غياب</p>
+                      <p className="text-xs text-slate-400 flex items-center justify-center gap-1"><CircleX className="w-3 h-3" /> غياب</p>
                     </div>
                     <div className="text-center py-3 px-2">
                       <p className={`text-lg font-bold ${parseFloat(selectedStudentCard.percentage) >= 75 ? 'text-green-400' : parseFloat(selectedStudentCard.percentage) >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
                         {selectedStudentCard.percentage}%
                       </p>
-                      <p className="text-[10px] text-slate-400">النسبة</p>
+                      <p className="text-xs text-slate-400">النسبة</p>
                     </div>
                   </div>
 
@@ -326,7 +325,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
                     <button
                       onClick={() => setShowDayDetails(v => !v)}
                       aria-expanded={showDayDetails}
-                      className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/5 transition"
+                      className="w-full flex items-center justify-between px-4 py-2.5 min-h-10 text-xs font-bold text-slate-300 hover:bg-white/5 transition duration-200"
                     >
                       <span className="flex items-center gap-1.5"><ClipboardList className="w-3.5 h-3.5 text-blue-400" /> أيام الحضور والغياب</span>
                       <span className="text-slate-400">{showDayDetails ? '▲' : '▼'}</span>
@@ -334,27 +333,27 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
                     {showDayDetails && (
                       <div className="px-3 pb-3 space-y-2.5 max-h-48 overflow-y-auto">
                         <div>
-                          <p className="text-[11px] font-bold text-green-400 mb-1">✅ أيام الحضور ({selectedStudentCard.attendedDays.length})</p>
+                          <p className="text-xs font-bold text-green-400 mb-1">✅ أيام الحضور ({selectedStudentCard.attendedDays.length})</p>
                           <div className="space-y-1">
                             {selectedStudentCard.attendedDays.length === 0 ? (
-                              <p className="text-[11px] text-slate-500 px-1">لا يوجد</p>
+                              <p className="text-xs text-slate-500 px-1">لا يوجد</p>
                             ) : selectedStudentCard.attendedDays.map(d => (
                               <div key={d.date} className="flex items-center justify-between bg-green-500/10 border border-green-500/30 rounded-lg px-2.5 py-1.5 text-xs text-green-300">
                                 <span>{d.label}</span>
-                                <span className="text-[10px] text-green-400">{d.count} محاضرة</span>
+                                <span className="text-xs text-green-400">{d.count} محاضرة</span>
                               </div>
                             ))}
                           </div>
                         </div>
                         <div>
-                          <p className="text-[11px] font-bold text-red-400 mb-1">❌ أيام الغياب ({selectedStudentCard.absentDays.length})</p>
+                          <p className="text-xs font-bold text-red-400 mb-1">❌ أيام الغياب ({selectedStudentCard.absentDays.length})</p>
                           <div className="space-y-1">
                             {selectedStudentCard.absentDays.length === 0 ? (
-                              <p className="text-[11px] text-slate-500 px-1">لا يوجد</p>
+                              <p className="text-xs text-slate-500 px-1">لا يوجد</p>
                             ) : selectedStudentCard.absentDays.map(d => (
                               <div key={d.date} className="flex items-center justify-between bg-red-500/10 border border-red-500/30 rounded-lg px-2.5 py-1.5 text-xs text-red-300">
                                 <span>{d.label}</span>
-                                <span className="text-[10px] text-red-400">{d.count} محاضرة</span>
+                                <span className="text-xs text-red-400">{d.count} محاضرة</span>
                               </div>
                             ))}
                           </div>
@@ -366,7 +365,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
                   <div className="p-3 bg-white/5 border-t border-white/10">
                     <button
                       onClick={() => setShowSessionsModal(true)}
-                      className="w-full bg-gradient-to-l from-emerald-500 to-green-600 text-white text-[11px] py-2.5 rounded-lg hover:from-emerald-600 hover:to-green-700 transition font-medium shadow-sm flex items-center justify-center gap-1.5"
+                      className="w-full min-h-10 bg-gradient-to-l from-emerald-500 to-green-600 text-white text-xs py-2.5 rounded-lg hover:from-emerald-600 hover:to-green-700 transition duration-200 font-medium shadow-sm flex items-center justify-center gap-1.5"
                     >
                       <ClipboardList className="w-3.5 h-3.5" /> سجلات الحضور ({selectedStudentCard.attendedSessions.length})
                     </button>
@@ -382,7 +381,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
                     اكتب اسم الطالب أو كوده في البحث بالأعلى — ويطلع تقرير حضوره وغيابه فوراً.
                   </p>
                   {isAdmin && !dataLoaded && (
-                    <p className="text-[11px] text-amber-300 mt-4 leading-relaxed">
+                    <p className="text-xs text-amber-300 mt-4 leading-relaxed">
                       💡 اضغط «⚡ تحميل بيانات الجامعة» في أعلى الشاشة لتحميل طلبة كل المراحل.
                     </p>
                   )}
@@ -401,7 +400,7 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
                     <button
                       onClick={() => setShowSessionsModal(false)}
                       aria-label="إغلاق"
-                      className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-red-500/20 text-red-400 hover:text-red-300 text-sm transition"
+                      className="w-10 h-10 -my-1 flex items-center justify-center rounded-md hover:bg-red-500/20 text-red-400 hover:text-red-300 text-sm transition duration-200"
                     >
                       ✕
                     </button>
@@ -422,24 +421,24 @@ export const SmartChatBot: React.FC<SmartChatBotProps> = React.memo(({
                           <span className="flex-shrink-0">{as_.present ? <CircleCheck className="w-5 h-5 text-green-400" /> : as_.absent ? <CircleX className="w-5 h-5 text-red-400" /> : <CircleX className="w-5 h-5 text-slate-400" />}</span>
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold truncate">{as_.session.name}</p>
-                            <p className={`text-[11px] mt-0.5 ${as_.present ? 'text-green-400' : as_.absent ? 'text-red-400' : 'text-slate-400'}`}>
+                            <p className={`text-xs mt-0.5 ${as_.present ? 'text-green-400' : as_.absent ? 'text-red-400' : 'text-slate-400'}`}>
                               {formatDateWithDay(as_.session._normalizedDate)}
                             </p>
                           </div>
                           {!as_.present && !as_.absent && (
-                            <span className="text-[10px] font-medium text-slate-400 flex-shrink-0">غير مسجل</span>
+                            <span className="text-xs font-medium text-slate-400 flex-shrink-0">غير مسجل</span>
                           )}
                         </div>
                       ))
                     )}
                   </div>
                   <div className="px-4 py-2.5 border-t border-white/10 bg-white/5 flex-shrink-0 flex justify-between items-center">
-                    <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                    <span className="text-xs text-slate-400 flex items-center gap-1">
                       <CircleCheck className="w-3 h-3" /> {selectedStudentCard.attendedCount} حضور • <CircleX className="w-3 h-3" /> {selectedStudentCard.absentCount} غياب
                     </span>
                     <button
                       onClick={() => setShowSessionsModal(false)}
-                      className="px-4 py-1.5 bg-white/10 hover:bg-white/20 text-slate-300 text-xs rounded-lg transition font-medium"
+                      className="px-4 py-1.5 min-h-10 bg-white/10 hover:bg-white/20 text-slate-300 text-xs rounded-lg transition duration-200 font-medium"
                     >
                       إغلاق
                     </button>

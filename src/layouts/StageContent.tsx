@@ -98,7 +98,7 @@ export const StageContent: FC<StageContentProps> = ({
   const teacherBio = currentUser?.bio || currentUser?.displayName || '';
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6">
       <StageTabs />
 
       {!dataLoaded ? (
@@ -125,15 +125,15 @@ export const StageContent: FC<StageContentProps> = ({
         {activeTab === 'login' && (
           <div className="max-w-lg mx-auto">
             {!activeSessionId ? (
-              <div className="glass-card-sm p-6 text-center">
-                <p className="text-amber-300 font-medium mb-4">لا يوجد سجل نشط!</p>
-                <button onClick={() => setActiveTab('sessions')} className="btn-base btn-primary px-6 py-2">
+              <div className="glass-card-sm p-4 sm:p-6 text-center">
+                <p className="text-sm text-amber-300 font-medium mb-4">لا يوجد سجل نشط!</p>
+                <button onClick={() => setActiveTab('sessions')} className="btn-base btn-primary">
                   انتقل لإدارة السجلات
                 </button>
               </div>
             ) : students.length === 0 ? (
-              <div className="glass-card-sm p-6 text-center">
-                <p className="text-amber-300 font-medium">لا يوجد طلاب في هذه المرحلة</p>
+              <div className="glass-card-sm p-4 sm:p-6 text-center">
+                <p className="text-sm text-amber-300 font-medium">لا يوجد طلاب في هذه المرحلة</p>
               </div>
             ) : (
               <Suspense fallback={<TabFallback />}>

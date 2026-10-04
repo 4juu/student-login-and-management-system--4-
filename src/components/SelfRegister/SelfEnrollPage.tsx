@@ -695,8 +695,8 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
   const showEngineGate = needsEngine && !engineReady;
   if (showEngineGate) {
     return (
-      <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
-        <div className="w-full max-w-md">
+      <div className="min-h-dvh bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
+        <div className="w-full max-w-md mx-auto">
           <EngineOverlay
             progress={progress}
             error={engineError}
@@ -712,7 +712,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
   if (step === 'capture-face' && expected) {
     return (
       <Suspense fallback={
-        <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
+        <div className="min-h-dvh bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
           <LoadingState size="lg" />
         </div>
       }>
@@ -740,7 +740,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
   if (step === 'scan-face') {
     return (
       <Suspense fallback={
-        <div className="min-h-screen bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
+        <div className="min-h-dvh bg-[#0B1220] flex items-center justify-center p-4" dir="rtl">
           <LoadingState size="lg" />
         </div>
       }>
@@ -788,7 +788,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
           <div className="sel-logo">
             <IdCard className="w-6 h-6" />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <h1 className="sel-title">{headerCfg.title}</h1>
             <p className="sel-subtitle">{headerCfg.subtitle}</p>
           </div>
@@ -796,7 +796,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
 
         <main className="flex-1" style={{ minHeight: 0 }}>
           {step === 'loading' && (
-            <div className="sel-card mt-6 sel-fade">
+            <div className="sel-card mt-4 sm:mt-6 sel-fade">
               <div className="flex justify-center py-8">
                 <MorphingSquare size="md" />
               </div>
@@ -807,7 +807,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
           )}
 
           {step === 'invalid-link' && (
-            <div className="sel-card mt-6 sel-fade">
+            <div className="sel-card mt-4 sm:mt-6 sel-fade">
               <div className="sel-icon-circle sel-err-soft mx-auto"><AlertTriangle className="w-8 h-8" /></div>
               <h2 className="sel-heading text-center mt-4 mb-2">رابط غير صالح أو منتهٍ</h2>
               <p className="sel-muted text-center mb-6">{errorMsg}</p>
@@ -818,7 +818,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
           )}
 
           {step === 'verify' && (
-            <div className="mt-6">
+            <div className="mt-4 sm:mt-6">
               {link?.type === 'namecheck' ? (
                 <VerifyNameStep
                   expected={expected}
@@ -838,7 +838,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
           )}
 
           {step === 'confirm' && expected && (
-            <div className="sel-card mt-6 sel-fade">
+            <div className="sel-card mt-4 sm:mt-6 sel-fade">
               <div className="text-center">
                 <div className="sel-icon-circle sel-ok mx-auto"><BadgeCheck className="w-8 h-8" /></div>
                 <h2 className="sel-heading mt-4 mb-1">تم تأكيد هويتك</h2>
@@ -857,7 +857,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
               </div>
 
               <div className="rounded-2xl border border-[#24365A] bg-[#132041] p-4 mb-5">
-                <p className="text-sm font-bold text-[#7AA8F0] mb-3 flex items-center gap-2">
+                <p className="text-sm font-semibold text-[#7AA8F0] mb-3 flex items-center gap-2">
                   <Fingerprint className="w-5 h-5" /> خطوات تسجيل البصمة
                 </p>
                 <ul className="space-y-2 text-sm text-[#B7C6E2]">
@@ -867,7 +867,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
                 </ul>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <button type="button" className="sel-btn sel-btn-primary" onClick={() => goTo('capture-face')}>
                   <ScanFace className="w-5 h-5" /> بدء التقاط البصمة
                 </button>
@@ -879,7 +879,7 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
           )}
 
           {step === 'submitting' && (
-            <div className="sel-card mt-6 sel-fade text-center">
+            <div className="sel-card mt-4 sm:mt-6 sel-fade text-center">
               <div className="sel-scan-wrap">
                 <div className="sel-scan-icon"><ScanFace className="w-8 h-8" /></div>
                 <div className="sel-pulse" />
@@ -891,11 +891,11 @@ if (!year) return { records: [], sessions: [], sessionNameMap: {} };
           )}
 
           {step === 'error' && (
-            <div className="sel-card mt-6 sel-fade">
+            <div className="sel-card mt-4 sm:mt-6 sel-fade">
               <div className="sel-icon-circle sel-err-soft mx-auto"><XCircle className="w-8 h-8" /></div>
               <h2 className="sel-heading text-center mt-4 mb-2">حدث خطأ</h2>
               <p className="sel-muted text-center mb-6">{errorMsg}</p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <button type="button" className="sel-btn sel-btn-ghost sel-btn-sm" onClick={onExit}>خروج</button>
                 <button type="button" className="sel-btn sel-btn-primary sel-btn-sm" onClick={() => goTo(retryStep)}>إعادة</button>
               </div>
@@ -943,14 +943,14 @@ const ReportStep: React.FC<{
         </div>
         <div>
           <p className="text-sm text-blue-100">المادة</p>
-          <h1 className="text-xl font-extrabold text-white">{subjectName}</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-white">{subjectName}</h1>
         </div>
       </div>
       <p className="text-blue-100/90 text-sm">تقرير الحضور والغياب — {new Date().toLocaleDateString('ar-IQ')}</p>
     </div>
 
     <div className="sel-card rounded-t-none rounded-b-2xl mt-0">
-      <div className="flex items-center gap-3 p-1 mb-5">
+      <div className="flex items-center gap-3 mb-4 sm:mb-5 min-w-0">
         <div className="sel-option-icon">
           <Users className="w-6 h-6" />
         </div>
@@ -960,7 +960,7 @@ const ReportStep: React.FC<{
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-5 sm:mb-6">
         <div className="sel-stat sel-stat-green">
           <p className="text-xs font-semibold text-[#34D399] mb-1">حضور</p>
           <div className="sel-stat-num text-[#34D399]">{stats.present}</div>
@@ -977,7 +977,7 @@ const ReportStep: React.FC<{
 
       {stats.records.length > 0 ? (
         <>
-          <h3 className="text-sm font-extrabold text-[#F3F7FF] mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-[#F3F7FF] mb-3 flex items-center gap-2">
             <CalendarDays className="w-4 h-4 text-[#60A5FA]" /> تفاصيل الجلسات
           </h3>
           <div className="space-y-2 max-h-72 overflow-y-auto">
@@ -989,8 +989,8 @@ const ReportStep: React.FC<{
                   }`}>
                     {record.status === 'present' ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
                   </div>
-                  <div className="text-right min-w-0">
-                    <p className="font-bold text-[#F3F7FF] text-sm truncate">
+                  <div className="text-start min-w-0">
+                    <p className="font-semibold text-[#F3F7FF] text-sm truncate">
                       {(record as any).sessionName || sessionNameMap[record.sessionId] || 'جلسة'}
                     </p>
                     <p className="text-xs text-[#93A5C8] tabular-nums">
@@ -1010,12 +1010,12 @@ const ReportStep: React.FC<{
           <div className="sel-icon-circle sel-ok-soft mx-auto">
             <Clock className="w-8 h-8" />
           </div>
-          <p className="sel-muted mt-4 mb-1 font-bold text-[#F3F7FF]">لا توجد سجلات بعد</p>
+          <p className="sel-muted mt-4 mb-1 font-semibold text-[#F3F7FF]">لا توجد سجلات بعد</p>
           <p className="sel-muted">عند تسجيل المحاضرات ستظهر بياناتك هنا</p>
         </div>
       )}
 
-      <button type="button" className="sel-btn sel-btn-primary mt-6" onClick={onDone}>
+      <button type="button" className="sel-btn sel-btn-primary mt-4 sm:mt-6" onClick={onDone}>
         <CheckCircle className="w-5 h-5" /> تم
       </button>
     </div>

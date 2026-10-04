@@ -53,7 +53,7 @@ export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageN
       <button
         type="button"
         onClick={() => setExpanded(true)}
-        className="mb-4 px-4 py-2 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white font-medium rounded-lg transition duration-200 shadow-md flex items-center justify-center gap-2"
+        className="btn-base btn-secondary"
         title="فحص بصمات المرحلة: أرقام مكرّرة، بصمات ضعيفة، وجوه متشابهة (قراءة فقط)"
       >
         <ScanFace className="w-4 h-4" /> تدقيق البصمات
@@ -111,9 +111,9 @@ export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageN
   };
 
   return (
-    <div className="mb-4 p-4 bg-gradient-to-br from-sky-500/10 to-indigo-500/10 border-2 border-sky-500/30 rounded-lg animate-cardEnter">
+    <div className="p-4 sm:p-6 bg-gradient-to-br from-sky-500/10 to-indigo-500/10 border-2 border-sky-500/30 rounded-lg animate-cardEnter">
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-        <h3 className="text-sm font-bold text-sky-200 flex items-center gap-2">
+        <h3 className="text-base sm:text-lg font-semibold text-sky-200 flex items-center gap-2">
           <ScanFace className="w-4 h-4 text-sky-400" /> تدقيق البصمات
           <span className="text-xs font-normal text-slate-400">
             (قراءة فقط{stageName ? ` — ${stageName}` : ''})
@@ -121,7 +121,7 @@ export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageN
         </h3>
         <button
           onClick={() => setExpanded(false)}
-          className="text-slate-500 hover:text-slate-300 p-1"
+          className="min-h-10 min-w-10 inline-flex items-center justify-center text-slate-500 hover:text-slate-300 transition-colors duration-200"
           aria-label="إغلاق لوحة تدقيق البصمات"
         >
           <X className="w-5 h-5" />
@@ -139,7 +139,7 @@ export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageN
           <button
             onClick={run}
             disabled={scanning}
-            className="px-4 py-2 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white font-medium rounded-lg transition flex items-center gap-2 mx-auto"
+            className="btn-base btn-primary disabled:opacity-50"
           >
             <ScanFace className="w-4 h-4" /> {scanning ? 'جاري الفحص…' : 'ابدأ الفحص'}
           </button>
@@ -151,7 +151,7 @@ export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageN
           <p className="text-xs text-slate-400 mt-1">
             فُحصت {audit.withFace} بصمة من {audit.totalStudents} طالب — لا نتائج مشبوهة.
           </p>
-          <button onClick={run} className="mt-3 text-xs text-sky-300 hover:text-sky-200 underline">
+          <button onClick={run} className="mt-3 btn-base btn-secondary text-xs px-3">
             إعادة الفحص
           </button>
         </div>
@@ -163,19 +163,19 @@ export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageN
               {audit.issues.length} ملاحظة · {audit.affectedIds.length} طالب يحتاج انتباهاً
             </p>
             <div className="flex items-center gap-2">
-              <button onClick={run} className="text-xs text-sky-300 hover:text-sky-200 underline">
+              <button onClick={run} className="btn-base btn-secondary text-xs px-3">
                 إعادة الفحص
               </button>
               <button
                 onClick={exportCsv}
-                className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-100 text-xs rounded-lg transition flex items-center gap-1.5"
+                className="btn-base btn-secondary text-xs px-3"
               >
                 <Download className="w-3.5 h-3.5" /> تصدير CSV
               </button>
             </div>
           </div>
 
-          <ul className="space-y-1.5 max-h-[380px] overflow-y-auto pl-1">
+          <ul className="space-y-1.5 max-h-[380px] overflow-y-auto pe-1">
             {audit.issues.map((issue, i) => (
               <li
                 key={i}
@@ -204,7 +204,7 @@ export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageN
       {/* ── تشخيص المطابقة: لماذا قُبل/رُفض كل محاولة (للأدمن، بالذاكرة فقط) ── */}
       <div className="mt-4 pt-4 border-t border-white/10">
         <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
-          <h4 className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+          <h4 className="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
             <Activity className="w-3.5 h-3.5 text-violet-400" /> تشخيص المطابقة
             <span className="font-normal text-slate-500">
               ({attempts.length} محاولة{attempts.length >= 200 ? ' — وصلت الحدّ الأقصى' : ''} · بالذاكرة فقط)
@@ -214,14 +214,14 @@ export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageN
             <button
               onClick={exportDiagCsv}
               disabled={attempts.length === 0}
-              className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-slate-100 text-[11px] rounded-md transition flex items-center gap-1"
+              className="btn-base btn-secondary text-xs px-3 disabled:opacity-40"
             >
               <Download className="w-3 h-3" /> CSV
             </button>
             <button
               onClick={clearDiag}
               disabled={attempts.length === 0}
-              className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-slate-100 text-[11px] rounded-md transition flex items-center gap-1"
+              className="btn-base btn-secondary text-xs px-3 disabled:opacity-40"
             >
               <Eraser className="w-3 h-3" /> مسح
             </button>
@@ -235,9 +235,9 @@ export const FaceAuditPanel: React.FC<FaceAuditPanelProps> = ({ students, stageN
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-[11px] border-collapse">
+            <table className="glass-table w-full text-[11px] border-collapse">
               <thead>
-                <tr className="text-slate-400 text-right border-b border-white/10">
+                <tr className="text-slate-400 text-start border-b border-white/10">
                   <th className="py-1.5 px-1.5 font-medium">الوقت</th>
                   <th className="py-1.5 px-1.5 font-medium">المصدر</th>
                   <th className="py-1.5 px-1.5 font-medium">القرار</th>

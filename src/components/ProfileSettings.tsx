@@ -146,34 +146,34 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="glass-card p-4 sm:p-6 space-y-4 sm:space-y-6">
       {ConfirmDialogEl}
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">
+      <h2 className="text-xl sm:text-2xl font-semibold text-white">
         إعدادات الملف الشخصي
       </h2>
 
       {success && (
-        <div role="status" className="mb-4 p-4 bg-green-100 border-2 border-green-400 text-green-700 rounded-md whitespace-pre-line font-medium">
+        <div role="status" className="p-4 bg-green-500/10 border-2 border-green-500/40 text-green-300 rounded-md whitespace-pre-line font-medium">
           {success}
         </div>
       )}
 
       {error && (
-        <div role="alert" className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md">
+        <div role="alert" className="p-3 bg-red-500/10 border border-red-500/40 text-red-300 rounded-md">
           {error}
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         {/* Profile Photo Section */}
-        <div>
-          <h3 className="text-lg font-semibold mb-4 text-gray-700">
+        <div className="space-y-4">
+          <h3 className="text-base sm:text-lg font-semibold text-white">
             الصورة الشخصية
           </h3>
 
-          <div className="flex flex-col items-center">
-            <div className="relative mb-4">
-              <div className="w-40 h-40 rounded-full overflow-hidden bg-gray-200 border-4 border-blue-500 shadow-lg">
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative">
+              <div className="w-40 h-40 rounded-full overflow-hidden bg-slate-800 border-4 border-blue-500 shadow-lg">
                 {photoURL ? (
                   <img
                     src={photoURL}
@@ -196,7 +196,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
               {photoURL && (
                 <button
                   onClick={handleRemovePhoto}
-                  className="absolute top-0 right-0 bg-red-500 hover:bg-red-600 text-white rounded-full p-2 shadow-lg transition duration-200"
+                  className="absolute top-0 start-0 bg-red-500 hover:bg-red-600 text-white rounded-full p-2 shadow-lg transition duration-200"
                   title="حذف الصورة"
                 >
                   <svg
@@ -227,7 +227,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-6 rounded-md transition duration-200 flex items-center gap-2"
+              className="btn-base btn-primary"
             >
               {uploading ? (
                 <>
@@ -254,21 +254,21 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
               )}
             </button>
 
-            <p className="text-xs text-gray-500 mt-2 text-center">
+            <p className="text-xs text-slate-400 text-center">
               JPG, PNG أو GIF (حد أقصى 1MB)
             </p>
           </div>
         </div>
 
         {/* Profile Info Section */}
-        <div>
-          <h3 className="text-lg font-semibold mb-4 text-gray-700">
+        <div className="space-y-4">
+          <h3 className="text-base sm:text-lg font-semibold text-white">
             المعلومات الشخصية
           </h3>
 
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-slate-300">
                 الاسم الكامل
               </label>
               <input
@@ -276,49 +276,49 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 disabled={!canEditNameAndBio}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
+                className="glass-input disabled:opacity-50"
                 placeholder="أحمد محمد"
                 dir="rtl"
               />
               {!canEditNameAndBio && (
-                <p className="text-xs text-orange-500 mt-1">
+                <p className="text-xs text-orange-400">
                   فقط الأدمن يمكنه تعديل الاسم
                 </p>
               )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-slate-300">
                 البريد الإلكتروني
               </label>
               <input
                 type="email"
                 value={currentUser.email}
                 disabled
-                className="w-full px-4 py-2 border border-gray-200 rounded-md bg-gray-100 text-gray-600"
+                className="glass-input text-slate-400"
                 dir="ltr"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-slate-400">
                 لا يمكن تغيير البريد الإلكتروني
               </p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-slate-300">
                 الصلاحية
               </label>
               <div>
                 {currentUser.role === 'admin' ? (
-                  <span className="inline-flex items-center px-4 py-2 bg-purple-100 text-purple-800 text-sm font-medium rounded-full">
-                    <Crown className="w-4 h-4 text-purple-700 ms-1.5" /> أدمن رئيسي
+                  <span className="glass-badge badge-purple">
+                    <Crown className="w-4 h-4" /> أدمن رئيسي
                   </span>
                 ) : currentUser.role === 'college_admin' ? (
-                  <span className="inline-flex items-center px-4 py-2 bg-amber-100 text-amber-800 text-sm font-medium rounded-full">
-                    <Landmark className="w-4 h-4 text-amber-700 ms-1.5" /> أدمن كلية
+                  <span className="glass-badge badge-amber">
+                    <Landmark className="w-4 h-4" /> أدمن كلية
                   </span>
                 ) : (
-                  <span className="inline-flex items-center px-4 py-2 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
-                    <GraduationCap className="w-4 h-4 text-blue-700 ms-1.5" /> تدريسي
+                  <span className="glass-badge badge-blue">
+                    <GraduationCap className="w-4 h-4" /> تدريسي
                   </span>
                 )}
               </div>
@@ -328,11 +328,11 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
       </div>
 
       {/* Bio Section */}
-      <div className="mt-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+      <div className="space-y-1.5">
+        <label className="block text-sm font-medium text-slate-300">
           البايو / وصف المادة
           {currentUser.role === 'teacher' && (
-            <span className="text-gray-500 text-xs mr-2">
+            <span className="text-slate-400 text-xs ms-2">
               (اكتب وصفاً مختصراً عن المادة التي تدرسها)
             </span>
           )}
@@ -343,7 +343,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
           disabled={!canEditNameAndBio}
           rows={4}
           maxLength={500}
-          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
+          className="glass-input disabled:opacity-50"
           placeholder={
             currentUser.role === 'admin'
               ? 'مدير النظام - مسؤول عن إدارة جميع حسابات التدريسيين'
@@ -351,25 +351,25 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
           }
           dir="rtl"
         />
-        <div className="flex justify-between mt-1">
-          <p className="text-xs text-gray-500">{bio.length}/500 حرف</p>
+        <div className="flex justify-between gap-2">
+          <p className="text-xs text-slate-400">{bio.length}/500 حرف</p>
           {bio.length >= 450 && (
-            <p className="text-xs text-orange-500 flex items-center gap-1"><TriangleAlert className="w-3.5 h-3.5" /> اقتربت من الحد الأقصى</p>
+            <p className="text-xs text-orange-400 flex items-center gap-1"><TriangleAlert className="w-3.5 h-3.5" /> اقتربت من الحد الأقصى</p>
           )}
         </div>
         {!canEditNameAndBio && (
-          <p className="text-xs text-orange-500 mt-1">
+          <p className="text-xs text-orange-400">
             فقط الأدمن يمكنه تعديل البايو والاسم
           </p>
         )}
       </div>
 
       {/* Save Buttons */}
-      <div className="mt-6 flex justify-end gap-3">
+      <div className="flex flex-wrap justify-end gap-3">
         <button
           onClick={handleReset}
           disabled={saving}
-          className="bg-gray-400 hover:bg-gray-500 disabled:bg-gray-300 text-white font-medium py-2 px-6 rounded-md transition duration-200 flex items-center gap-2"
+          className="btn-base btn-secondary"
         >
           <svg
             className="w-5 h-5"
@@ -390,7 +390,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
         <button
           onClick={handleSave}
           disabled={saving}
-          className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-2 px-6 rounded-md transition duration-200 flex items-center gap-2"
+          className="btn-base btn-primary"
         >
           {saving ? (
             <>
@@ -420,8 +420,8 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
 
       {/* ✅ Last Updated - يعمل الآن بدون أخطاء */}
       {currentUser.lastUpdated && (
-        <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-          <p className="text-sm text-green-800 flex items-center gap-2">
+        <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+          <p className="text-sm text-green-300 flex items-center gap-2">
             <svg
               className="w-4 h-4"
               fill="none"
@@ -448,10 +448,10 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
       )}
 
       {/* Info Box */}
-      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+      <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
         <div className="flex items-start gap-2">
           <svg
-            className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5"
+            className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -463,7 +463,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
               d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          <div className="text-sm text-blue-800">
+          <div className="text-sm text-blue-300">
             <p className="font-medium mb-1">   معلومات </p>
             <ul className="list-disc list-inside space-y-1">
               <li>الحد الأقصى للصورة 1MB لأفضل أداء</li>

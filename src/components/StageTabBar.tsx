@@ -23,7 +23,7 @@ export const StageTabBar: FC<StageTabBarProps> = ({
   onTabChange,
   onOpenAttendanceLink,
 }) => (
-  <div className="flex overflow-x-auto flex-nowrap md:flex-wrap gap-2 md:gap-3 pb-1 md:pb-0 justify-start md:justify-center mb-4 md:mb-6 scrollbar-none">
+  <div className="flex overflow-x-auto flex-nowrap sm:flex-wrap gap-2 sm:gap-3 pb-1 sm:pb-0 justify-start sm:justify-center mb-4 sm:mb-6 scrollbar-none">
     {/* role=tablist يحتوي أزرار التبويب فقط — زر رابط الحضور خارجه (شرط ARIA) */}
     <div role="tablist" aria-label="أقسام المرحلة" className="contents">
       <button
@@ -67,7 +67,7 @@ export const StageTabBar: FC<StageTabBarProps> = ({
       <button
         type="button"
         onClick={onOpenAttendanceLink}
-        className="btn-base btn-primary shrink-0 text-xs py-1.5 px-2"
+        className="btn-base btn-primary shrink-0 min-h-10"
         title="إنشاء رابط تقرير الحضور والغياب للطلاب"
       >
         <CalendarDays className="w-4 h-4 inline-block align-middle ms-1" /> رابط الحضور والغياب

@@ -16,8 +16,11 @@ export const StageBreadcrumb: FC<StageBreadcrumbProps> = ({
   stageSyncing,
   onBack,
 }) => (
-  <div className="glass-card-sm p-3 flex items-center gap-2 text-sm flex-wrap mt-5">
-    <button onClick={onBack} className="text-blue-400 hover:underline font-medium inline-flex items-center gap-1">
+  <div className="glass-card-sm p-4 flex items-center gap-2 text-sm flex-wrap mt-4 sm:mt-6">
+    <button
+      onClick={onBack}
+      className="min-h-10 text-blue-400 hover:text-blue-300 hover:underline font-medium inline-flex items-center gap-1 transition-colors duration-200"
+    >
       <Home className="w-4 h-4" /> جميع المراحل
     </button>
     <ChevronLeft className="w-4 h-4 text-slate-500" />

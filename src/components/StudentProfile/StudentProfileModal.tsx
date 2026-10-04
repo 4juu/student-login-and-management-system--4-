@@ -150,10 +150,10 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
         {/* ── الهيدر ── */}
         <div className="shrink-0 px-5 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-slate-100">
           <div className="flex items-center justify-between gap-3 mb-3">
-            <h2 id="student-profile-modal-title" className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2"><ClipboardList className="w-5 h-5 text-indigo-600" /> ملف الطالب</h2>
+            <h2 id="student-profile-modal-title" className="text-xl sm:text-2xl font-semibold text-gray-900 flex items-center gap-2"><ClipboardList className="w-5 h-5 text-indigo-600" /> ملف الطالب</h2>
             <button
               onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 text-xl leading-none transition"
+              className="min-h-10 min-w-10 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 text-xl leading-none transition-colors duration-200"
               aria-label="إغلاق"
             >
               &times;
@@ -176,7 +176,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
               <div className="flex items-center gap-2 flex-wrap mt-1.5">
                 <button
                   onClick={copyCode}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 font-mono text-xs font-bold rounded-md border border-blue-100 hover:bg-blue-100 transition"
+                  className="inline-flex items-center gap-1 min-h-10 px-2 bg-blue-50 text-blue-700 font-mono text-xs font-bold rounded-md border border-blue-100 hover:bg-blue-100 transition-colors duration-200"
                   title="نسخ الكود"
                 >
                   {student.code} <Copy className="w-3.5 h-3.5" />
@@ -236,7 +236,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
           {sessions.length > 0 && (
             <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-bold text-gray-800">معدل الحضور</p>
+                <p className="text-base sm:text-lg font-semibold text-gray-800">معدل الحضور</p>
                 <div className="flex items-center gap-3 text-xs text-gray-500">
                   <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> حاضر {presentCount}</span>
                   <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> غائب {absentCount}</span>
@@ -250,7 +250,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
               </div>
 
               {/* طريقة التسجيل */}
-              <div className="grid grid-cols-3 gap-2 mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4">
                 {(['manual', 'qr', 'face'] as const).map(m => (
                   <div key={m} className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 text-center">
                     <p className="text-base font-bold text-gray-800">{methodCounts[m] || 0}</p>
@@ -264,8 +264,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
           {/* شبكة الجلسات */}
           {sessions.length > 0 && (
             <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
-              <p className="text-sm font-bold text-gray-800 mb-3">كل الجلسات</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-52 overflow-y-auto pl-1">
+              <p className="text-base sm:text-lg font-semibold text-gray-800 mb-3">كل الجلسات</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-52 overflow-y-auto pe-1">
                 {sortedByDate.map(s => {
                   const rec = studentRecords.find(r => r.sessionId === s.id);
                   const status = rec ? (rec.status || 'present') : 'none';
@@ -284,8 +284,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
 
           {/* معلومات التسجيل */}
           <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
-            <p className="text-sm font-bold text-gray-800 mb-3">معلومات التسجيل</p>
-            <div className="grid grid-cols-2 sm:grid-cols-2 gap-2.5 text-sm">
+            <p className="text-base sm:text-lg font-semibold text-gray-800 mb-3">معلومات التسجيل</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-sm">
               <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50">
                 <span className="text-gray-500 text-xs">تاريخ الإضافة</span>
                 <span className="text-gray-800 font-medium text-xs">{formatDate(student.createdAt)}</span>
@@ -333,7 +333,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
 
             return (
               <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
-                <p className="text-sm font-bold text-gray-800 mb-1 flex items-center gap-2">
+                <p className="text-base sm:text-lg font-semibold text-gray-800 mb-1 flex items-center gap-2">
                   <span className={`w-2 h-2 rounded-full ${complete ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                   بصمة الوجه {complete ? '— سبع زوايا كاملة' : `— ${count} من ${ENROLLMENT_SAMPLE_COUNT} زوايا`}
                 </p>
@@ -382,8 +382,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
           {/* الخط الزمني */}
           {timeline.length > 0 && (
             <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
-              <p className="text-sm font-bold text-gray-800 mb-3">سجل الحضور ({timeline.length})</p>
-              <div className="space-y-2 max-h-72 overflow-y-auto pl-1">
+              <p className="text-base sm:text-lg font-semibold text-gray-800 mb-3">سجل الحضور ({timeline.length})</p>
+              <div className="space-y-2 max-h-72 overflow-y-auto pe-1">
                 {visibleRecords.map(r => {
                   const meta = STATUS_META[r.status || 'present'] ?? STATUS_META.present ?? STATUS_META_FALLBACK;
                   const method = r.method || 'manual';
@@ -402,11 +402,11 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
               </div>
 
               {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 mt-3">
+                <div className="flex items-center justify-center gap-2 flex-wrap mt-3">
                   <button
                     onClick={() => setPage(p => Math.max(1, p - 1))}
                     disabled={safePage === 1}
-                    className="px-3 py-1 bg-white border border-gray-300 rounded-md text-sm disabled:opacity-30 hover:bg-gray-50"
+                    className="min-h-10 px-3 inline-flex items-center bg-white border border-gray-300 rounded-md text-sm transition-colors duration-200 disabled:opacity-30 hover:bg-gray-50"
                   >
                     السابق
                   </button>
@@ -414,7 +414,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                   <button
                     onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                     disabled={safePage === totalPages}
-                    className="px-3 py-1 bg-white border border-gray-300 rounded-md text-sm disabled:opacity-30 hover:bg-gray-50"
+                    className="min-h-10 px-3 inline-flex items-center bg-white border border-gray-300 rounded-md text-sm transition-colors duration-200 disabled:opacity-30 hover:bg-gray-50"
                   >
                     التالي
                   </button>
@@ -434,13 +434,13 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
         <div className="shrink-0 px-5 sm:px-6 py-3 border-t border-slate-100 flex justify-end gap-2">
           <button
             onClick={copyCode}
-            className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 transition flex items-center gap-1.5"
+            className="min-h-10 px-4 inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors duration-200"
           >
             <Copy className="w-4 h-4" /> نسخ الكود
           </button>
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition"
+            className="min-h-10 px-4 inline-flex items-center bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors duration-200"
           >
             إغلاق
           </button>

@@ -673,159 +673,161 @@ export const StudentManager: React.FC<StudentManagerProps> = React.memo(({
   const isFiltered = !!searchQuery || groupFilter !== 'all';
 
   return (
-    <div className="glass-card rounded-xl p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold text-white">إدارة الطلاب</h2>
+    <div className="glass-card rounded-xl p-4 sm:p-6">
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h2 className="text-xl sm:text-2xl font-semibold text-white">إدارة الطلاب</h2>
+        </div>
+
+        <FaceHealthPanel
+          variant="banner"
+          studentsCount={students.length}
+          studentsWithoutFace={studentsWithoutFace}
+          health={health}
+          canEnroll={!!onUpdateStudent}
+          onReEnrollNoFace={reEnrollNoFace}
+          onOpenEnroll={() => openFaceEnroll()}
+          students={students}
+        />
+
+        <StudentForm
+          name={name}
+          code={code}
+          group={group}
+          universityId={universityId}
+          qrCodeId={qrCodeId}
+          error={error}
+          onNameChange={setName}
+          onCodeChange={setCode}
+          onGroupChange={setGroup}
+          onUniversityIdChange={setUniversityId}
+          onQrCodeIdChange={setQrCodeId}
+          onSubmit={handleSubmit}
+        />
+
+        <StudentImportPanel
+          selectedPrefix={selectedPrefix}
+          importLoading={importLoading}
+          importMessage={importMessage}
+          fileInputRef={fileInputRef}
+          onPrefixSelect={setSelectedPrefix}
+          onFileChange={handleFileUpload}
+        />
+
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowBulkImport(true)}
+            className="btn-base btn-secondary w-full sm:w-auto"
+          >
+            <Users className="w-5 h-5" />
+            استيراد جماعي (لصق أسماء)
+          </button>
+        </div>
+
+        <FaceHealthPanel
+          variant="health"
+          studentsCount={students.length}
+          studentsWithoutFace={studentsWithoutFace}
+          health={health}
+          canEnroll={!!onUpdateStudent}
+          onReEnrollNoFace={reEnrollNoFace}
+          onOpenEnroll={() => openFaceEnroll()}
+          students={students}
+        />
+
+        <SortFilterPanel
+          students={students}
+          studentsCount={students.length}
+          searchQuery={searchQuery}
+          groupFilter={groupFilter}
+          uniqueGroups={uniqueGroups}
+          filteredCount={filteredStudents.length}
+          onSearchChange={setSearchQuery}
+          onGroupFilterChange={setGroupFilter}
+          onSortByName={onSortByName}
+          onSortByGroup={onSortByGroup}
+          confirm={confirmAction}
+        />
+
+        <DuplicateNamesPanel
+          students={students}
+          onDeleteSelected={onDeleteSelectedStudents}
+          confirm={confirmAction}
+        />
+
+        <FaceAuditPanel students={students} />
+
+        <BulkActionsBar
+          selectedCount={selectedIds.size}
+          totalCount={students.length}
+          filteredCount={filteredStudents.length}
+          pageSize={pageSize}
+          onCancelSelection={() => setSelectedIds(new Set())}
+          onSelectAllFiltered={toggleSelectAllFiltered}
+          onDeleteSelected={handleDeleteSelected}
+        />
+
+        <Pagination
+          variant="top"
+          currentPage={safeCurrentPage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          totalItems={filteredStudents.length}
+          setCurrentPage={setCurrentPage}
+          setPageSize={setPageSize}
+        />
+
+        <StudentTable
+          paginatedStudents={paginatedStudents}
+          selectedIds={selectedIds}
+          allInPageSelected={allInPageSelected}
+          isFiltered={isFiltered}
+          safeCurrentPage={safeCurrentPage}
+          pageSize={pageSize}
+          uniqueGroups={uniqueGroups}
+          onUpdateStudent={onUpdateStudent}
+          onOpenProfile={onOpenProfile}
+          onDeleteStudent={onDeleteStudent}
+          toggleSelectStudent={toggleSelectStudent}
+          toggleSelectAllInPage={toggleSelectAllInPage}
+          openFaceEnroll={openFaceEnroll}
+          transferStudentId={transferStudentId}
+          setTransferStudentId={setTransferStudentId}
+          transferGroupValue={transferGroupValue}
+          setTransferGroupValue={setTransferGroupValue}
+          editingUniIdStudent={editingUniIdStudent}
+          editUniversityId={editUniversityId}
+          setEditUniversityId={setEditUniversityId}
+          startEditUniId={startEditUniId}
+          saveEditUniId={saveEditUniId}
+          cancelEditUniId={cancelEditUniId}
+          editingQrStudent={editingQrStudent}
+          editQrCodeId={editQrCodeId}
+          setEditQrCodeId={setEditQrCodeId}
+          startEditQr={startEditQr}
+          saveEditQr={saveEditQr}
+          cancelEditQr={cancelEditQr}
+          editingNameStudent={editingNameStudent}
+          editName={editName}
+          setEditName={setEditName}
+          startEditName={startEditName}
+          saveEditName={saveEditName}
+          cancelEditName={cancelEditName}
+          removeQrLink={removeQrLink}
+          removeFaceData={removeFaceData}
+        />
+
+        <Pagination
+          variant="bottom"
+          currentPage={safeCurrentPage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          totalItems={filteredStudents.length}
+          setCurrentPage={setCurrentPage}
+          setPageSize={setPageSize}
+        />
       </div>
-
-      <FaceHealthPanel
-        variant="banner"
-        studentsCount={students.length}
-        studentsWithoutFace={studentsWithoutFace}
-        health={health}
-        canEnroll={!!onUpdateStudent}
-        onReEnrollNoFace={reEnrollNoFace}
-        onOpenEnroll={() => openFaceEnroll()}
-        students={students}
-      />
-
-      <StudentForm
-        name={name}
-        code={code}
-        group={group}
-        universityId={universityId}
-        qrCodeId={qrCodeId}
-        error={error}
-        onNameChange={setName}
-        onCodeChange={setCode}
-        onGroupChange={setGroup}
-        onUniversityIdChange={setUniversityId}
-        onQrCodeIdChange={setQrCodeId}
-        onSubmit={handleSubmit}
-      />
-
-      <StudentImportPanel
-        selectedPrefix={selectedPrefix}
-        importLoading={importLoading}
-        importMessage={importMessage}
-        fileInputRef={fileInputRef}
-        onPrefixSelect={setSelectedPrefix}
-        onFileChange={handleFileUpload}
-      />
-
-      <div className="mb-4">
-        <button
-          type="button"
-          onClick={() => setShowBulkImport(true)}
-          className="w-full md:w-auto px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-medium rounded-lg transition duration-200 shadow-md flex items-center justify-center gap-2"
-        >
-          <Users className="w-5 h-5" />
-          استيراد جماعي (لصق أسماء)
-        </button>
-      </div>
-
-      <FaceHealthPanel
-        variant="health"
-        studentsCount={students.length}
-        studentsWithoutFace={studentsWithoutFace}
-        health={health}
-        canEnroll={!!onUpdateStudent}
-        onReEnrollNoFace={reEnrollNoFace}
-        onOpenEnroll={() => openFaceEnroll()}
-        students={students}
-      />
-
-      <SortFilterPanel
-        students={students}
-        studentsCount={students.length}
-        searchQuery={searchQuery}
-        groupFilter={groupFilter}
-        uniqueGroups={uniqueGroups}
-        filteredCount={filteredStudents.length}
-        onSearchChange={setSearchQuery}
-        onGroupFilterChange={setGroupFilter}
-        onSortByName={onSortByName}
-        onSortByGroup={onSortByGroup}
-        confirm={confirmAction}
-      />
-
-      <DuplicateNamesPanel
-        students={students}
-        onDeleteSelected={onDeleteSelectedStudents}
-        confirm={confirmAction}
-      />
-
-      <FaceAuditPanel students={students} />
-
-      <BulkActionsBar
-        selectedCount={selectedIds.size}
-        totalCount={students.length}
-        filteredCount={filteredStudents.length}
-        pageSize={pageSize}
-        onCancelSelection={() => setSelectedIds(new Set())}
-        onSelectAllFiltered={toggleSelectAllFiltered}
-        onDeleteSelected={handleDeleteSelected}
-      />
-
-      <Pagination
-        variant="top"
-        currentPage={safeCurrentPage}
-        totalPages={totalPages}
-        pageSize={pageSize}
-        totalItems={filteredStudents.length}
-        setCurrentPage={setCurrentPage}
-        setPageSize={setPageSize}
-      />
-
-      <StudentTable
-        paginatedStudents={paginatedStudents}
-        selectedIds={selectedIds}
-        allInPageSelected={allInPageSelected}
-        isFiltered={isFiltered}
-        safeCurrentPage={safeCurrentPage}
-        pageSize={pageSize}
-        uniqueGroups={uniqueGroups}
-        onUpdateStudent={onUpdateStudent}
-        onOpenProfile={onOpenProfile}
-        onDeleteStudent={onDeleteStudent}
-        toggleSelectStudent={toggleSelectStudent}
-        toggleSelectAllInPage={toggleSelectAllInPage}
-        openFaceEnroll={openFaceEnroll}
-        transferStudentId={transferStudentId}
-        setTransferStudentId={setTransferStudentId}
-        transferGroupValue={transferGroupValue}
-        setTransferGroupValue={setTransferGroupValue}
-        editingUniIdStudent={editingUniIdStudent}
-        editUniversityId={editUniversityId}
-        setEditUniversityId={setEditUniversityId}
-        startEditUniId={startEditUniId}
-        saveEditUniId={saveEditUniId}
-        cancelEditUniId={cancelEditUniId}
-        editingQrStudent={editingQrStudent}
-        editQrCodeId={editQrCodeId}
-        setEditQrCodeId={setEditQrCodeId}
-        startEditQr={startEditQr}
-        saveEditQr={saveEditQr}
-        cancelEditQr={cancelEditQr}
-        editingNameStudent={editingNameStudent}
-        editName={editName}
-        setEditName={setEditName}
-        startEditName={startEditName}
-        saveEditName={saveEditName}
-        cancelEditName={cancelEditName}
-        removeQrLink={removeQrLink}
-        removeFaceData={removeFaceData}
-      />
-
-      <Pagination
-        variant="bottom"
-        currentPage={safeCurrentPage}
-        totalPages={totalPages}
-        pageSize={pageSize}
-        totalItems={filteredStudents.length}
-        setCurrentPage={setCurrentPage}
-        setPageSize={setPageSize}
-      />
 
       {showFaceRegister && onUpdateStudent && (
         <Suspense fallback={

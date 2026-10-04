@@ -523,7 +523,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm animate-fadeIn" dir="rtl">
           <div className="text-center">
             <MorphingSquare size="md" className="mx-auto mb-4" />
-            <p className="text-slate-300 text-sm font-bold">جاري التحقق من الرابط...</p>
+            <p className="text-sm font-semibold text-slate-300">جاري التحقق من الرابط...</p>
           </div>
         </div>
       );
@@ -532,13 +532,13 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
     if (phase === 'invalid') {
       return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm animate-fadeIn" dir="rtl">
-          <div className="text-center px-6">
+          <div className="text-center px-4 sm:px-6 w-full max-w-md mx-auto">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10">
               <svg className="h-8 w-8 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg>
             </div>
-            <h2 className="text-lg font-bold text-white mb-2">الرابط غير صالح</h2>
+            <h2 className="text-lg sm:text-xl font-semibold text-white mb-2">الرابط غير صالح</h2>
             <p className="text-sm text-slate-400 mb-4">الرابط منتهي أو غير موجود. احصل على رابط جديد من الإدارة.</p>
-            <button onClick={onExit} className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition active:scale-95">
+            <button onClick={onExit} className="btn-base btn-primary min-h-12!">
               العودة
             </button>
           </div>
@@ -549,17 +549,17 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
     if (phase === 'loadError') {
       return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm animate-fadeIn" dir="rtl">
-          <div className="text-center px-6">
+          <div className="text-center px-4 sm:px-6 w-full max-w-md mx-auto">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10">
               <svg className="h-8 w-8 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
             </div>
-            <h2 className="text-lg font-bold text-white mb-2">تعذر تحميل بيانات الطلاب</h2>
+            <h2 className="text-lg sm:text-xl font-semibold text-white mb-2">تعذر تحميل بيانات الطلاب</h2>
             <p className="text-sm text-slate-400 mb-4">الرابط صالح لكن تعذر الاتصال بقاعدة البيانات. تأكد من اتصالك بالإنترنت وأعد المحاولة.</p>
-            <div className="flex gap-2 justify-center">
-              <button onClick={onExit} className="px-6 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm transition active:scale-95">
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <button onClick={onExit} className="btn-base btn-secondary min-h-12!">
                 العودة
               </button>
-              <button onClick={() => window.location.reload()} className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition active:scale-95">
+              <button onClick={() => window.location.reload()} className="btn-base btn-primary min-h-12!">
                 إعادة المحاولة
               </button>
             </div>
@@ -571,7 +571,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
     if (phase === 'ready') {
       return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-sm animate-fadeIn" dir="rtl">
-          <div className="text-center px-6">
+          <div className="text-center px-4 sm:px-6 w-full max-w-md mx-auto max-h-full overflow-y-auto py-6">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-[0_8px_20px_rgba(99,102,241,0.3)]">
               <svg className="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2" />
@@ -579,34 +579,34 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
                 <path d="M12 13c-2.67 0-8 1.34-8 4v1h16v-1c0-2.66-5.33-4-8-4z" />
               </svg>
             </div>
-            <h2 className="text-lg font-bold text-white mb-2">اختبار بصمة الوجه</h2>
+            <h2 className="text-xl sm:text-2xl font-semibold text-white mb-2">اختبار بصمة الوجه</h2>
             <p className="text-sm text-slate-400 mb-1">هذه صفحة لاختبار بصمة وجهك</p>
             {duplicateIds.length > 0 && (
-              <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-[11px] text-amber-200">
+              <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs text-amber-200 text-start">
                 ⚠️ يوجد {duplicateIds.length} طالب بنفس الرقم في هذه المرحلة — قد يظهر اسم طالب آخر.
                 راجع إدارة الكلية (استخدم لوحة «تدقيق البصمات»).
               </div>
             )}
             {remainingMs > 0 && (
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[11px] text-slate-300 mb-3">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-slate-300 mb-3">
                 <svg className="h-3.5 w-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
                 صلاحية الرابط متبقية: {formatRemainingMs(remainingMs)}
               </div>
             )}
-            <div className="bg-white/5 border border-white/10 rounded-lg p-3 mb-5">
+            <div className="bg-white/5 border border-white/10 rounded-lg p-3 mb-5 text-start">
               <p className="text-xs text-slate-300 leading-6">
                 <svg className="inline h-3.5 w-3.5 ms-1 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
                 لكي يعمل الاختبار، يجب أن تكون بصمتك <strong className="text-amber-300">محفوظة في النظام وموافق عليها</strong> من قبل الإدارة.
                 إذا لم تسجل بصمتك بعد، استخدم رابط التسجيل أولاً.
               </p>
-              <p className="text-[11px] text-slate-400 leading-5 mt-2 pt-2 border-t border-white/5">
+              <p className="text-xs text-slate-400 leading-5 mt-2 pt-2 border-t border-white/5">
                 <svg className="inline h-3 w-3 ms-1 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
                 ملاحظة: يُرجى من أصحاب النظارات الطبية إبقاء النظارات مرتدينها أثناء إجراء اختبار البصمة، في حال تم تسجيل البصمة مسبقًا أثناء ارتداء النظارات.
               </p>
             </div>
             <button
               onClick={startScan}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-sm shadow-lg hover:shadow-xl transition active:scale-95"
+              className="btn-base btn-primary w-full min-h-12!"
             >
               {engineReady ? 'ابدأ الاختبار' : 'جاري تحميل المحرك...'}
             </button>
@@ -621,13 +621,13 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
   // ── شاشة النجاح ──
   const successOverlay = phase === 'success' && matchedStudent ? (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto animate-fadeIn">
-      <div className="text-center px-6 max-w-sm">
+      <div className="text-center px-4 sm:px-6 w-full max-w-md mx-auto">
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/15">
           <svg className="h-8 w-8 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
         </div>
-          <h2 className="text-xl font-extrabold text-emerald-300 mb-2">البصمة تعمل!</h2>
-          <p className="text-sm text-slate-300 mb-1">تم التعرف على وجهك بنجاح</p>
-          <p className="text-base font-bold text-white mb-4">{matchedStudent.name}</p>
+        <h2 className="text-xl sm:text-2xl font-semibold text-emerald-300 mb-2">البصمة تعمل!</h2>
+        <p className="text-sm text-slate-300 mb-1">تم التعرف على وجهك بنجاح</p>
+        <p className="text-base sm:text-lg font-semibold text-white mb-4">{matchedStudent.name}</p>
         <div className="flex flex-col gap-2">
           <button
             onClick={() => {
@@ -637,7 +637,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               setPhase('ready');
               trackerRef.current.reset();
             }}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-sm shadow-lg active:scale-95 transition"
+            className="btn-base btn-primary w-full min-h-12!"
           >
             اختبار مرة ثانية
           </button>
@@ -665,18 +665,18 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
 
           {/* أزرار عائمة */}
           {engineReady && (
-            <div className="absolute left-3 z-30 flex items-center gap-2 pointer-events-none" style={{ top: 'calc(env(safe-area-inset-top, 12px) + 12px)' }}>
+            <div className="absolute end-3 z-30 flex items-center gap-2 pointer-events-none" style={{ top: 'calc(env(safe-area-inset-top, 12px) + 12px)' }}>
               <button
                 onClick={() => { stopScan(); setPhase('ready'); }}
                 aria-label="إغلاق"
-                className="pointer-events-auto w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-white flex items-center justify-center transition active:scale-90 shadow-lg"
+                className="pointer-events-auto w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-white flex items-center justify-center transition duration-200 active:scale-90 shadow-lg"
               >
                 ✕
               </button>
               <button
                 onClick={() => setFacing(f => (f === 'user' ? 'environment' : 'user'))}
                 aria-label="تبديل الكاميرا"
-                className="pointer-events-auto w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-white flex items-center justify-center transition active:scale-90 shadow-lg"
+                className="pointer-events-auto w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-white flex items-center justify-center transition duration-200 active:scale-90 shadow-lg"
               >
                 🔄
               </button>
@@ -690,7 +690,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               playsInline
               muted
               autoPlay
-              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${cameraReady ? 'opacity-100' : 'opacity-0'}`}
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${cameraReady ? 'opacity-100' : 'opacity-0'}`}
               style={{ transform: facing === 'user' ? 'scaleX(-1)' : undefined }}
             />
             <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
@@ -699,7 +699,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
             {engineReady && cameraReady && (
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                 <div
-                  className="rounded-[38%] border-2 border-dashed border-white/25 animate-pulse-slow transition-all duration-500"
+                  className="rounded-[38%] border-2 border-dashed border-white/25 animate-pulse-slow transition-all duration-300"
                   style={{ width: 'min(58%, 340px)', height: 'min(62%, 420px)' }}
                 />
               </div>
@@ -709,14 +709,14 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
               <div className="absolute inset-0 flex items-center justify-center bg-black">
                 <div className="text-center">
                   <MorphingSquare size="md" className="mx-auto mb-3" />
-                  <p className="text-slate-300 text-sm font-bold">جاري فتح الكاميرا...</p>
+                  <p className="text-sm font-semibold text-slate-300">جاري فتح الكاميرا...</p>
                 </div>
               </div>
             )}
 
             {/* شريط الحالة */}
             <div className="absolute inset-x-0 flex justify-center pointer-events-none px-4" style={{ bottom: 'calc(env(safe-area-inset-bottom, 16px) + 16px)' }}>
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-extrabold backdrop-blur-md transition-all duration-300 ${statusPill.cls}`}>
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold backdrop-blur-md transition-all duration-300 ${statusPill.cls}`}>
                 <span>{statusPill.icon}</span>
                 <span>{statusPill.text}</span>
               </div>
@@ -725,11 +725,11 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
             {/* overlay: لا توجد بصمة */}
             {noMatchOverlay && !matchedStudent && (
 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto animate-fadeIn">
-                <div className="text-center px-6 max-w-sm">
+                <div className="text-center px-4 sm:px-6 w-full max-w-md mx-auto">
                   <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/15">
                     <svg className="h-8 w-8 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
                   </div>
-                  <h2 className="text-lg font-bold text-amber-300 mb-2">لم يتم التعرف على بصمتك</h2>
+                  <h2 className="text-lg sm:text-xl font-semibold text-amber-300 mb-2">لم يتم التعرف على بصمتك</h2>
                   <p className="text-sm text-slate-400 mb-4">
                     يرجى تسجيل البصمة من خلال رابط تسجيل بصمة الوجه المرسل من قبل الإدارة.
                   </p>
@@ -743,7 +743,7 @@ export const FaceTestPage: React.FC<FaceTestPageProps> = ({
                         trackerRef.current.reset();
                         setPhase('ready');
                       }}
-                      className="w-full py-3 rounded-xl bg-gradient-to-r from-[#1458E2] to-[#2B7BFF] text-white font-bold text-sm shadow-lg active:scale-95 transition"
+                      className="btn-base btn-primary w-full min-h-12!"
                     >
                       موافق
                     </button>

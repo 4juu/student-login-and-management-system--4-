@@ -7,6 +7,9 @@
   box-sizing: border-box;
 }
 
+/* مكوّنات في طبقة components — حتى تتفوّق أدوت tailwind (p-*, text-*) فوقها */
+@layer components {
+
 /* ============================================ */
 /* 🪟 Modal Panel (آمن للجوال: dvh + overscroll) */
 /* ============================================ */
@@ -26,11 +29,13 @@
 /* 🪟 Glass Card                                */
 /* ============================================ */
 .glass-card {
-  background: linear-gradient(180deg, #131F38 0%, #0F1A30 100%);
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: linear-gradient(180deg, rgba(19, 31, 56, 0.94) 0%, rgba(15, 26, 48, 0.9) 100%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 20px;
   padding: 20px;
-  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.45);
+  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -40,11 +45,13 @@
 }
 
 .glass-card-sm {
-  background: linear-gradient(180deg, #111C33 0%, #0E192E 100%);
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: linear-gradient(180deg, rgba(17, 28, 51, 0.92) 0%, rgba(14, 25, 46, 0.88) 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 16px;
   padding: 16px;
-  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.35);
+  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -131,11 +138,13 @@
 /* 🪟 Glass Nav                                 */
 /* ============================================ */
 .glass-nav {
-  background: rgba(11, 18, 32, 0.9);
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(11, 18, 32, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 16px;
   padding: 12px 16px;
-  box-shadow: 0 6px 24px rgba(2, 6, 23, 0.4);
+  box-shadow: 0 6px 24px rgba(2, 6, 23, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .glass-nav:hover {
@@ -146,11 +155,13 @@
 /* 🏆 College Card                               */
 /* ============================================ */
 .college-card {
-  background: linear-gradient(180deg, #132038 0%, #0F1A30 100%);
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: linear-gradient(180deg, rgba(19, 32, 56, 0.95) 0%, rgba(15, 26, 48, 0.92) 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 20px;
   padding: 24px;
-  box-shadow: 0 12px 36px rgba(2, 6, 23, 0.4);
+  box-shadow: 0 12px 36px rgba(2, 6, 23, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   cursor: pointer;
   position: relative;
@@ -181,11 +192,13 @@
 /* 🏷️ Stage Card                                */
 /* ============================================ */
 .stage-card {
-  background: rgba(17, 28, 51, 0.75);
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(17, 28, 51, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 16px;
   padding: 20px;
-  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.3);
+  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   cursor: pointer;
 }
@@ -201,11 +214,13 @@
 /* 🪟 Glass Modal                               */
 /* ============================================ */
 .glass-modal {
-  background: #0D1628;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(13, 22, 40, 0.96);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 20px;
   padding: 24px;
-  box-shadow: 0 24px 70px rgba(2, 6, 23, 0.6);
+  box-shadow: 0 24px 70px rgba(2, 6, 23, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   animation: modalEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
   max-height: 90vh;
   overflow-y: auto;
@@ -508,6 +523,8 @@ html, body { overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; 
 }
 @media (min-width: 640px) { .grid-auto-2 { grid-template-columns: repeat(2, 1fr); gap: 16px; } }
 @media (min-width: 1024px) { .grid-auto-2 { gap: 20px; } }
+
+} /* إغلاق layer components */
 
 /* ============================================ */
 /* 🔢 Z-Index Semantic Layers (unified)         */

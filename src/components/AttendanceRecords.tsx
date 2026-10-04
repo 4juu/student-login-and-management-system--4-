@@ -499,10 +499,10 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
   };
 
   return (
-    <div className="glass-card">
+    <div className="glass-card p-4 sm:p-6 space-y-4 sm:space-y-6">
       {ConfirmDialogEl}
       {/* 🆕 شريط السنة الأكاديمية */}
-      <div className="flex items-center gap-2 mb-6">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="glass-badge badge-blue">
           <GraduationCap className="w-4 h-4" />
           السنة الأكاديمية الحالية: {currentAcademicYear.replace('_', ' - ')}
@@ -515,39 +515,39 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
       <button
         type="button"
         onClick={() => setExportOpen(true)}
-        className="group w-full mb-6 sm:mb-8 p-4 sm:p-5 rounded-2xl border border-indigo-500/25 bg-gradient-to-l from-indigo-950/70 via-slate-900 to-slate-900 hover:border-indigo-400/45 hover:shadow-lg hover:shadow-indigo-950/40 transition-all duration-200 flex items-center gap-3 sm:gap-4 cursor-pointer text-right"
+        className="group w-full p-4 sm:p-5 rounded-2xl border border-indigo-500/25 bg-gradient-to-l from-indigo-950/70 via-slate-900 to-slate-900 hover:border-indigo-400/45 hover:shadow-lg hover:shadow-indigo-950/40 transition-all duration-200 flex items-center gap-3 sm:gap-4 cursor-pointer text-start"
       >
-        <span className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-700 flex items-center justify-center shrink-0 shadow-md group-hover:scale-105 transition-transform">
+        <span className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-700 flex items-center justify-center shrink-0 shadow-md group-hover:scale-105 transition-transform duration-200">
           <FileSpreadsheet className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
         </span>
         <span className="flex-1">
-          <span className="block text-base sm:text-lg font-bold text-white">تحميل سجل الحضور والغياب (Excel)</span>
+          <span className="block text-base sm:text-lg font-semibold text-white">تحميل سجل الحضور والغياب (Excel)</span>
           <span className="block text-xs sm:text-sm text-slate-400 mt-0.5">اختر المدة الزمنية ثم قم بتحميل الملف</span>
         </span>
-        <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 text-slate-400 group-hover:-translate-x-1 transition-transform shrink-0" />
+        <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 text-slate-400 group-hover:-translate-x-1 transition-transform duration-200 shrink-0" />
       </button>
 
       {/* ============================================================ */}
       {/* 📋 سجل عمليات الدخول المباشر */}
       {/* ============================================================ */}
-      <div className="mt-8 pt-6 border-t border-white/10">
+      <div className="pt-4 sm:pt-6 border-t border-white/10">
         {/* 🧰 شريط الأدوات */}
         <div className="flex flex-wrap items-center gap-3 sm:gap-4 border-b border-white/10 pb-4 sm:pb-5 mb-4">
           <div className="flex items-center gap-2.5">
             <span className="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center shrink-0">
               <CircleCheck className="w-5 h-5 text-emerald-400" />
             </span>
-            <h3 className="font-bold text-base sm:text-lg text-white">
+            <h3 className="text-base sm:text-lg font-semibold text-white">
               سجل عمليات الدخول المباشر
             </h3>
           </div>
 
           <div className="ms-auto flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
-            <div className="relative flex-1 sm:flex-none sm:min-w-[220px]">
+            <div className="relative flex-1 min-w-0 sm:flex-none sm:min-w-[220px]">
               <select
                 value={selectedSessionId || ''}
                 onChange={(e) => setSelectedSessionId(e.target.value || null)}
-                className="glass-input px-3 py-2 text-sm"
+                className="glass-input px-3 py-2 text-sm min-w-0"
               >
                 <option value="">كل الجلسات ({records.length})</option>
                 {sortedSessions.map(s => {
@@ -564,7 +564,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
             <button
               onClick={handleClearRecords}
               disabled={records.length === 0}
-              className="btn-base btn-secondary border-red-500/30 text-red-300 hover:bg-red-500/10 hover:border-red-400/40 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="btn-base btn-danger"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -581,7 +581,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
             placeholder="🔍 ابحث بالاسم أو الكود أو الوقت..."
             value={searchRecord}
             onChange={(e) => setSearchRecord(e.target.value)}
-            className="glass-input mb-4"
+            className="glass-input"
           />
         </div>
 
@@ -641,7 +641,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                           {onUpdateRecord && (
                             <button
                               onClick={() => handleOpenEdit(rec)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/25 text-amber-300 hover:bg-amber-500/25 transition-colors text-xs font-bold"
+                              className="inline-flex items-center justify-center gap-1 min-h-10 px-2.5 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/25 text-amber-300 hover:bg-amber-500/25 transition-colors duration-200 text-xs font-bold"
                               title="تعديل السجل"
                             >
                               <Pencil className="w-3.5 h-3.5" /> تعديل
@@ -650,7 +650,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                           {onDeleteRecord && (
                             <button
                               onClick={() => handleDeleteRecord(rec)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-500/15 border border-red-500/25 text-red-300 hover:bg-red-500/25 transition-colors text-xs font-bold"
+                              className="inline-flex items-center justify-center gap-1 min-h-10 px-2.5 py-1.5 rounded-lg bg-red-500/15 border border-red-500/25 text-red-300 hover:bg-red-500/25 transition-colors duration-200 text-xs font-bold"
                               title="حذف السجل"
                             >
                               <Trash2 className="w-3.5 h-3.5" /> حذف
@@ -669,7 +669,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                     {searchRecord && (
                       <button
                         onClick={() => setSearchRecord('')}
-                        className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 text-xs font-bold transition-colors"
+                        className="btn-base btn-secondary min-h-10 px-4 py-2 text-xs font-bold"
                       >
                         مسح البحث
                       </button>
@@ -713,7 +713,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                   </div>
 
                   <div className="flex items-center justify-between px-1 text-xs text-slate-400">
-                    <span className="truncate pl-2">{sessionNameMap.get(rec.sessionId) || '—'}</span>
+                    <span className="truncate pe-2">{sessionNameMap.get(rec.sessionId) || '—'}</span>
                     <span className="font-mono shrink-0" dir="ltr">{rec.time || '—'}</span>
                   </div>
                 </div>
@@ -723,7 +723,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                     {onUpdateRecord && (
                       <button
                         onClick={() => handleOpenEdit(rec)}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold bg-amber-500/10 text-amber-300 active:bg-amber-500/25 transition-colors"
+                        className="flex-1 min-h-10 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold bg-amber-500/10 text-amber-300 active:bg-amber-500/25 transition-colors duration-200"
                       >
                         <Pencil className="w-3.5 h-3.5" /> تعديل
                       </button>
@@ -731,7 +731,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                     {onDeleteRecord && (
                       <button
                         onClick={() => handleDeleteRecord(rec)}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold bg-red-500/10 text-red-300 active:bg-red-500/25 transition-colors ${onUpdateRecord ? 'border-r border-r-white/10' : ''}`}
+                        className={`flex-1 min-h-10 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold bg-red-500/10 text-red-300 active:bg-red-500/25 transition-colors duration-200 ${onUpdateRecord ? 'border-s border-s-white/10' : ''}`}
                       >
                         <Trash2 className="w-3.5 h-3.5" /> حذف
                       </button>
@@ -747,7 +747,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
               {searchRecord && (
                 <button
                   onClick={() => setSearchRecord('')}
-                  className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 text-xs font-bold transition-colors"
+                  className="btn-base btn-secondary min-h-10 px-4 py-2 text-xs font-bold"
                 >
                   مسح البحث
                 </button>
@@ -758,13 +758,13 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
         )}
 
         {/* ⏳ شريط الترقيم الموحد */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-white/10">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 mt-4 pt-4 border-t border-white/10">
           <div className="flex items-center gap-2 text-sm text-slate-400">
             <span className="whitespace-nowrap">عرض</span>
             <select
               value={pageSize}
               onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
-              className="bg-slate-800 border border-slate-600/70 rounded-lg text-slate-200 px-2 py-1.5 text-xs sm:text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+              className="min-h-10 bg-slate-800 border border-slate-600/70 rounded-lg text-slate-200 px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-colors duration-200"
             >
               {PAGE_SIZE_OPTIONS.map(ps => (
                 <option key={ps} value={ps}>{ps}</option>
@@ -777,14 +777,14 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
             <button
               onClick={() => setCurrentPage(1)}
               disabled={safeCurrentPage === 1}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-200"
             >
               <ChevronsRight className="w-4 h-4" />
             </button>
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={safeCurrentPage === 1}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-200"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -794,14 +794,14 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
             <button
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={safeCurrentPage === totalPages}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-200"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={() => setCurrentPage(totalPages)}
               disabled={safeCurrentPage === totalPages}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-200"
             >
               <ChevronsLeft className="w-4 h-4" />
             </button>
@@ -827,15 +827,15 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
               tabIndex={-1}
               className="relative w-full max-w-md rounded-2xl overflow-hidden bg-slate-900 border border-slate-700/60 shadow-2xl shadow-slate-950/50 animate-modalUp focus:outline-none"
             >
-              <div className="relative px-6 pt-6 pb-5 overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-700 to-slate-900">
-                <div className="absolute -top-16 -left-16 w-48 h-48 rounded-full bg-white/10 blur-2xl" />
-                <div className="absolute -bottom-20 -right-10 w-40 h-40 rounded-full bg-fuchsia-500/20 blur-2xl" />
+              <div className="relative px-4 sm:px-6 pt-4 sm:pt-6 pb-4 sm:pb-5 overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-700 to-slate-900">
+                <div className="absolute -top-16 -end-16 w-48 h-48 rounded-full bg-white/10 blur-2xl" />
+                <div className="absolute -bottom-20 -start-10 w-40 h-40 rounded-full bg-fuchsia-500/20 blur-2xl" />
                 <div className="relative flex items-center gap-3.5">
                   <div className="w-12 h-12 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0 shadow-inner">
                     <FileSpreadsheet className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <h3 id="export-records-title" className="text-lg font-bold text-white">تصدير سجل الحضور والغياب</h3>
+                    <h3 id="export-records-title" className="text-base sm:text-lg font-semibold text-white">تصدير سجل الحضور والغياب</h3>
                     <p className="text-xs text-indigo-100/80 mt-0.5">حدد المدة الزمنية وقم بتحميل ملف Excel</p>
                   </div>
                 </div>
@@ -843,21 +843,21 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                   type="button"
                   onClick={() => setExportOpen(false)}
                   disabled={exporting}
-                  className="absolute top-4 left-4 w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors disabled:opacity-40"
+                  className="absolute top-4 end-4 w-10 h-10 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors duration-200 disabled:opacity-40"
                   aria-label="إغلاق"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="p-6 space-y-5">
+              <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
                 <div>
                   <p className="text-xs font-bold text-slate-300 mb-2">نوع المدة الزمنية</p>
-                  <div className="grid grid-cols-2 gap-1.5 p-1.5 bg-slate-800/80 border border-slate-700/60 rounded-xl">
+                  <div className="flex gap-1.5 p-1.5 bg-slate-800/80 border border-slate-700/60 rounded-xl">
                     <button
                       type="button"
                       onClick={() => setExportType('single')}
-                      className={`flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                      className={`flex-1 min-h-10 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 ${
                         exportType === 'single'
                           ? 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-600/30'
                           : 'text-slate-400 hover:text-slate-200'
@@ -868,7 +868,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                     <button
                       type="button"
                       onClick={() => setExportType('range')}
-                      className={`flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                      className={`flex-1 min-h-10 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 ${
                         exportType === 'range'
                           ? 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-600/30'
                           : 'text-slate-400 hover:text-slate-200'
@@ -885,7 +885,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                     <select
                       value={singleDate}
                       onChange={e => setSingleDate(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-600/70 text-white rounded-xl px-3.5 py-3 text-sm font-semibold focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow"
+                      className="w-full bg-slate-800 border border-slate-600/70 text-white rounded-xl px-3.5 py-3 text-sm font-semibold focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow duration-200"
                     >
                       {normalizedDateOptions.map(s => (
                         <option key={s.id} value={s.isoDate}>
@@ -903,7 +903,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                             type="date"
                             value={startDate}
                             onChange={e => setStartDate(e.target.value)}
-                            className="w-full bg-slate-800 border border-slate-600/70 text-white rounded-xl px-3.5 py-3 text-sm font-semibold focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow [color-scheme:dark]"
+                            className="w-full bg-slate-800 border border-slate-600/70 text-white rounded-xl px-3.5 py-3 text-sm font-semibold focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow duration-200 [color-scheme:dark]"
                           />
                         </div>
                         <div>
@@ -912,7 +912,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                             type="date"
                             value={endDate}
                             onChange={e => setEndDate(e.target.value)}
-                            className="w-full bg-slate-800 border border-slate-600/70 text-white rounded-xl px-3.5 py-3 text-sm font-semibold focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow [color-scheme:dark]"
+                            className="w-full bg-slate-800 border border-slate-600/70 text-white rounded-xl px-3.5 py-3 text-sm font-semibold focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow duration-200 [color-scheme:dark]"
                           />
                         </div>
                       </div>
@@ -934,7 +934,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                       setExporting(false);
                     }
                   }}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-700 hover:from-indigo-500 hover:to-violet-600 text-white font-bold text-base flex items-center justify-center gap-2 shadow-lg shadow-indigo-700/30 hover:shadow-indigo-600/40 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="btn-base btn-primary w-full"
                 >
                   {exporting ? (
                     <MorphingSquare size="sm" />
@@ -965,35 +965,35 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
               tabIndex={-1}
               className="relative w-full max-w-sm rounded-2xl overflow-hidden bg-slate-900 border border-slate-700/60 shadow-2xl shadow-slate-950/50 animate-modalUp focus:outline-none"
             >
-              <div className="relative px-5 pt-5 pb-4 overflow-hidden bg-gradient-to-br from-amber-600 via-orange-700 to-slate-900">
-                <div className="absolute -top-16 -left-16 w-44 h-44 rounded-full bg-white/10 blur-2xl" />
+              <div className="relative px-4 sm:px-5 pt-4 sm:pt-5 pb-4 overflow-hidden bg-gradient-to-br from-amber-600 via-orange-700 to-slate-900">
+                <div className="absolute -top-16 -end-16 w-44 h-44 rounded-full bg-white/10 blur-2xl" />
                 <div className="relative flex items-center gap-3">
                   <div className="w-11 h-11 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0 shadow-inner">
                     <Pencil className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h3 id="edit-record-title" className="text-base font-bold text-white">تعديل سجل الحضور</h3>
+                    <h3 id="edit-record-title" className="text-base sm:text-lg font-semibold text-white">تعديل سجل الحضور</h3>
                     <p className="text-xs text-amber-100/80 mt-0.5 truncate max-w-[200px]">{editingRecord.studentName}</p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setEditingRecord(null)}
-                  className="absolute top-3.5 left-3.5 w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+                  className="absolute top-4 end-4 w-10 h-10 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors duration-200"
                   aria-label="إغلاق"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="p-5 space-y-4">
+              <div className="p-4 sm:p-5 space-y-4">
                 <div>
                   <p className="text-xs font-bold text-slate-300 mb-2">الحالة</p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => setEditStatus('present')}
-                      className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                      className={`flex-1 min-h-10 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${
                         editStatus === 'present'
                           ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-600/30'
                           : 'bg-slate-800 text-slate-400 hover:text-slate-200'
@@ -1004,7 +1004,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                     <button
                       type="button"
                       onClick={() => setEditStatus('absent')}
-                      className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                      className={`flex-1 min-h-10 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${
                         editStatus === 'absent'
                           ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg shadow-red-600/30'
                           : 'bg-slate-800 text-slate-400 hover:text-slate-200'
@@ -1021,22 +1021,22 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
                     type="time"
                     value={editTime}
                     onChange={e => setEditTime(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-600/70 text-white rounded-xl px-3.5 py-3 text-sm font-semibold focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition-shadow [color-scheme:dark]"
+                    className="w-full bg-slate-800 border border-slate-600/70 text-white rounded-xl px-3.5 py-3 text-sm font-semibold focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition-shadow duration-200 [color-scheme:dark]"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => setEditingRecord(null)}
-                    className="py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm transition-colors"
+                    className="btn-base btn-secondary flex-1"
                   >
                     إلغاء
                   </button>
                   <button
                     type="button"
                     onClick={handleSaveEdit}
-                    className="py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-700/30 transition-all"
+                    className="btn-base btn-primary flex-1"
                   >
                     <Check className="w-4 h-4" /> حفظ التعديل
                   </button>

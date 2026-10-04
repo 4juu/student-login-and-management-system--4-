@@ -25,7 +25,7 @@ export const AdminTabBar: FC<AdminTabBarProps> = ({
   onOpenPending,
 }) => (
   <div className="overflow-x-auto scrollbar-none">
-    <div className="flex flex-nowrap md:flex-wrap gap-2 md:gap-3 pt-3 pb-3 md:pb-3 md:pt-3 justify-start md:justify-center mb-4 md:mb-6">
+    <div className="flex flex-nowrap sm:flex-wrap gap-2 sm:gap-3 py-3 justify-start sm:justify-center mb-4 sm:mb-6">
       {/* role=tablist يحتوي أزرار التبويب فقط — أزرار الإجراءات خارجه (شرط ARIA) */}
       <div role="tablist" aria-label="أقسام لوحة الإدارة" className="contents">
         <button

@@ -74,6 +74,10 @@
   --sel-glow-accent: rgba(59, 130, 246, 0.2);
 }
 
+/* كل قوالب الصفحة داخل @layer components حتى تتفوّق أدوات Tailwind
+   (p-*, m-*, text-*, rounded-*, w-*) عليها — نفس نهج design-system.css */
+@layer components {
+
 .sel-bg {
   min-height: 100vh;
   min-height: 100dvh;
@@ -87,15 +91,25 @@
 }
 
 .sel-shell {
-  max-width: 30rem;
+  max-width: 28rem; /* ≈ max-w-md — عمود واحد مريح على الجوال */
   margin-inline: auto;
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  padding: 1.5rem 1.25rem 1.75rem;
-  padding-top: max(1.5rem, env(safe-area-inset-top));
-  padding-bottom: max(1.75rem, env(safe-area-inset-bottom));
+  width: 100%;
+  padding: 1.25rem 1rem 1.5rem;
+  padding-top: max(1.25rem, env(safe-area-inset-top));
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+}
+
+@media (min-width: 640px) {
+  .sel-shell {
+    max-width: 32rem; /* ≈ sm:max-w-lg */
+    padding: 1.5rem 1.25rem 1.75rem;
+    padding-top: max(1.5rem, env(safe-area-inset-top));
+    padding-bottom: max(1.75rem, env(safe-area-inset-bottom));
+  }
 }
 
 /* ── الترويسة (الشعار) ─────────────────────────────────── */
@@ -119,14 +133,18 @@
 }
 
 .sel-title {
-  font-size: 1.15rem;
-  font-weight: 800;
+  font-size: 1.25rem;
+  font-weight: 600;
   color: var(--sel-text);
   line-height: 1.35;
 }
 
+@media (min-width: 640px) {
+  .sel-title { font-size: 1.5rem; }
+}
+
 .sel-subtitle {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   color: var(--sel-muted);
   margin-top: 0.15rem;
   line-height: 1.6;
@@ -136,7 +154,7 @@
 .sel-steps {
   display: flex;
   align-items: flex-start;
-  margin: 1.5rem 0 1.75rem;
+  margin: 1.25rem 0 1.5rem;
 }
 
 .sel-step {
@@ -191,7 +209,7 @@
 }
 
 .sel-step-label {
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--sel-muted);
   text-align: center;
@@ -206,6 +224,11 @@
   border: 1px solid var(--sel-line);
   border-radius: var(--sel-radius-xl);
   box-shadow: var(--sel-shadow-card);
+  padding: 1.125rem 1rem;
+}
+
+@media (min-width: 640px) {
+  .sel-card { padding: 1.5rem; }
 }
 
 .sel-btn {
@@ -269,9 +292,14 @@
   background: var(--sel-bg-soft);
   border: 1.5px solid var(--sel-line-strong);
   border-radius: var(--sel-radius-lg);
-  padding: 1.1rem 1.25rem;
+  padding: 1rem;
   cursor: pointer;
   transition: all 0.25s ease;
+  text-align: start;
+}
+
+@media (min-width: 640px) {
+  .sel-option { padding: 1.1rem 1.25rem; }
 }
 
 .sel-option:hover {
@@ -301,10 +329,12 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  max-width: 100%;
   padding: 0.4rem 0.9rem;
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 700;
+  text-align: center;
 }
 
 .sel-chip-blue { background: var(--sel-bg-accent); color: var(--sel-accent-lt); border: 1px solid var(--sel-line-accent); }
@@ -348,19 +378,33 @@
 .sel-warn-soft { background: var(--sel-amber-soft); border: 1px solid var(--sel-amber-line); color: var(--sel-amber); }
 .sel-err-soft { background: var(--sel-red-soft); border: 1px solid var(--sel-red-line); color: var(--sel-red); }
 
-.sel-heading { font-size: 1.25rem; font-weight: 800; color: var(--sel-text); }
+.sel-heading { font-size: 1rem; font-weight: 600; color: var(--sel-text); line-height: 1.5; }
+
+@media (min-width: 640px) {
+  .sel-heading { font-size: 1.125rem; }
+}
 .sel-muted { color: var(--sel-muted); font-size: 0.875rem; line-height: 1.7; }
 
 .sel-identity {
   background: linear-gradient(160deg, #132041, #182848);
   border: 1px solid var(--sel-line-lt);
   border-radius: var(--sel-radius-lg);
-  padding: 1.1rem 1.25rem;
-  text-align: right;
+  padding: 1rem;
+  text-align: start;
+}
+
+@media (min-width: 640px) {
+  .sel-identity { padding: 1.1rem 1.25rem; }
 }
 
 .sel-identity-label { font-size: 0.75rem; color: var(--sel-muted); font-weight: 600; }
-.sel-identity-name { font-size: 1.4rem; font-weight: 800; color: var(--sel-text); margin-top: 0.15rem; }
+.sel-identity-name {
+  font-size: clamp(1.125rem, 5vw, 1.4rem);
+  font-weight: 800;
+  color: var(--sel-text);
+  margin-top: 0.15rem;
+  overflow-wrap: anywhere;
+}
 .sel-identity-code {
   font-variant-numeric: tabular-nums;
   font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
@@ -384,6 +428,7 @@
   padding: 0.85rem 1rem;
   cursor: pointer;
   transition: all 0.2s ease;
+  text-align: start;
 }
 
 .sel-suggestion:hover { border-color: var(--sel-accent); }
@@ -454,11 +499,6 @@
   animation: sel-stripes 1s linear infinite;
 }
 
-@keyframes sel-stripes {
-  from { background-position: 0 0, 0 0; }
-  to { background-position: 22px 0, 0 0; }
-}
-
 .sel-scan-wrap { position: relative; width: 4.5rem; height: 4.5rem; margin-inline: auto; }
 
 .sel-scan-icon {
@@ -481,11 +521,6 @@
   border-radius: 50%;
   border: 2px solid rgba(59, 130, 246, 0.4);
   animation: sel-pulse 1.7s ease-out infinite;
-}
-
-@keyframes sel-pulse {
-  0% { transform: scale(0.85); opacity: 1; }
-  100% { transform: scale(1.35); opacity: 0; }
 }
 
 /* ── الكاميرا ─────────────────────────────────────────── */
@@ -559,11 +594,6 @@
 .sel-corner-bl { bottom: -1px; right: -1px; border-right: none; border-top: none; border-bottom-right-radius: 10px; }
 .sel-corner-br { bottom: -1px; left: -1px; border-left: none; border-top: none; border-bottom-left-radius: 10px; }
 
-@keyframes sel-corner-breathe {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
-}
-
 .sel-cam-pill {
   position: absolute;
   top: 1.1rem;
@@ -621,8 +651,12 @@
 .sel-report-hero {
   background: linear-gradient(135deg, var(--sel-accent-deep), var(--sel-accent-bright));
   border-radius: var(--sel-radius-xl) var(--sel-radius-xl) 0 0;
-  padding: 1.5rem;
+  padding: 1.125rem 1rem;
   color: #fff;
+}
+
+@media (min-width: 640px) {
+  .sel-report-hero { padding: 1.5rem; }
 }
 
 .sel-stat {
@@ -655,11 +689,6 @@
 /* ── حركات ─────────────────────────────────────────────── */
 .sel-fade { animation: sel-fade 0.3s ease; }
 
-@keyframes sel-fade {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: none; }
-}
-
 /* ── الإتاحة: حلقة التركيز 🔵 ─────────────────────────── */
 .sel-btn:focus-visible,
 .sel-option:focus-visible,
@@ -685,4 +714,27 @@
   .sel-fade {
     transition: none !important;
   }
+}
+
+} /* @layer components */
+
+/* ── الحركات (خارج الـ layer حتى تبقى متاحة عالميًا) ───── */
+@keyframes sel-stripes {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 22px 0, 0 0; }
+}
+
+@keyframes sel-pulse {
+  0% { transform: scale(0.85); opacity: 1; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+@keyframes sel-corner-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@keyframes sel-fade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
 }

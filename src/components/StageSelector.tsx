@@ -33,15 +33,15 @@ export const StageSelector: React.FC<StageSelectorProps> = ({
 
   if ((user.role === 'teacher' || user.role === 'college_admin') && user.active === false) {
     return (
-      <div className="glass-card p-12 text-center">
+      <div className="glass-card p-5 sm:p-7 text-center">
         <div className="mx-auto w-16 h-16 rounded-full bg-slate-500/10 border border-slate-500/20 flex items-center justify-center mb-4">
           <Lock className="w-8 h-8 text-slate-400" />
         </div>
-        <h2 className="text-2xl font-bold text-white mb-2">
+        <h2 className="text-xl sm:text-2xl font-semibold text-white mb-2">
           حسابك معطّل حالياً
         </h2>
         <div className="max-w-md mx-auto space-y-3">
-          <p className="text-white/60">
+          <p className="text-sm text-slate-400">
             تم تعطيل حسابك بعد تصفير السنة الأكاديمية الماضية.
           </p>
           <div className="glass-card-sm p-4 text-sm text-amber-300 border border-amber-500/30">
@@ -51,7 +51,7 @@ export const StageSelector: React.FC<StageSelectorProps> = ({
             <p>يرجى التواصل مع الأدمن لإعادة تفعيل حسابك وتحديد المراحل المسموح لك بالوصول إليها للسنة الأكاديمية الجديدة.</p>
           </div>
           {user.deactivatedAt && (
-            <p className="text-xs text-white/50">
+            <p className="text-xs text-slate-400">
               تاريخ التعطيل: {new Date(user.deactivatedAt).toLocaleDateString('ar')}
             </p>
           )}
@@ -62,12 +62,12 @@ export const StageSelector: React.FC<StageSelectorProps> = ({
 
   if (allowedColleges.length === 0) {
     return (
-      <div className="glass-card p-12 text-center">
+      <div className="glass-card p-5 sm:p-7 text-center">
         <div className="mx-auto w-16 h-16 rounded-full bg-slate-500/10 border border-slate-500/20 flex items-center justify-center mb-4">
           <Lock className="w-8 h-8 text-slate-400" />
         </div>
-        <h2 className="text-2xl font-bold text-white mb-2">لا توجد صلاحيات وصول</h2>
-        <p className="text-white/60">
+        <h2 className="text-xl sm:text-2xl font-semibold text-white mb-2">لا توجد صلاحيات وصول</h2>
+        <p className="text-sm text-slate-400">
           {user.role === 'admin' || user.role === 'college_admin'
             ? 'ابدأ بإنشاء كلية ومراحل من تبويب "إدارة الكليات"'
             : 'يرجى التواصل مع الأدمن لتحديد الكليات والمراحل المسموح لك بالوصول إليها'}
@@ -77,48 +77,48 @@ export const StageSelector: React.FC<StageSelectorProps> = ({
   }
 
   return (
-    <div className="space-y-8">
-      <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-white mb-2">إلى أين نتوجه اليوم؟</h2>
-        <p className="text-white/60">اختر الكلية والمرحلة لبدء العمل</p>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="text-center">
+        <h2 className="text-xl sm:text-2xl font-semibold text-white mb-2">إلى أين نتوجه اليوم؟</h2>
+        <p className="text-sm text-slate-400">اختر الكلية والمرحلة لبدء العمل</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         {allowedColleges.map(college => {
           const allowedStages = getAllowedStages(college.id);
           if (allowedStages.length === 0 && user.role !== 'admin') return null;
 
           return (
             <div key={college.id} className="college-card overflow-hidden">
-              <div className={`bg-gradient-to-r ${getCollegeGradient(college.color)} p-6 text-white`}>
+              <div className={`bg-gradient-to-r ${getCollegeGradient(college.color)} p-4 sm:p-6 text-white`}>
                 <div className="flex items-center gap-4">
                   {college.icon ? (
                     <span className="text-5xl">{college.icon}</span>
                   ) : (
                     <Landmark className="w-10 h-10 text-white/80" />
                   )}
-                  <div>
-                    <h3 className="text-2xl font-bold">{college.name}</h3>
-                    <p className="opacity-90">{allowedStages.length} مراحل متاحة</p>
+                  <div className="min-w-0">
+                    <h3 className="text-lg sm:text-xl font-semibold text-white">{college.name}</h3>
+                    <p className="text-sm opacity-90">{allowedStages.length} مراحل متاحة</p>
                   </div>
                 </div>
               </div>
 
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 {allowedStages.length === 0 ? (
-                  <p className="text-white/60 text-center py-4">لا توجد مراحل مضافة بعد</p>
+                  <p className="text-sm text-slate-400 text-center py-4">لا توجد مراحل مضافة بعد</p>
                 ) : (
                   <div className="grid grid-cols-1 gap-3">
                     {allowedStages.sort((a,b) => (a.order||0) - (b.order||0)).map(stage => (
                       <button
                         key={stage.id}
                         onClick={() => onSelect(college.id, stage.id)}
-                        className="stage-card flex items-center justify-between p-4 rounded-xl transition group"
+                        className="stage-card flex items-center justify-between gap-3 w-full min-h-10 p-4 rounded-xl transition-colors duration-200 group"
                       >
-                        <span className="font-bold text-white/80 group-hover:text-white flex items-center gap-2">
-                          <BookOpen className="w-4 h-4 text-blue-400" /> {stage.name}
+                        <span className="text-sm font-semibold text-white/80 group-hover:text-white flex items-center gap-2 min-w-0">
+                          <BookOpen className="w-4 h-4 shrink-0 text-blue-400" /> {stage.name}
                         </span>
-                        <span className="inline-flex items-center gap-1 text-blue-400 opacity-0 group-hover:opacity-100 transition">
+                        <span className="shrink-0 inline-flex items-center gap-1 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                           دخول <ChevronLeft className="w-4 h-4" />
                         </span>
                       </button>

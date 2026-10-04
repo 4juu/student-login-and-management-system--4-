@@ -19,7 +19,7 @@ interface SendEnrollLinkProps {
   stages: Stage[];
   loadStudents: (stageId: string) => Promise<Student[]>;
   onClose: () => void;
-  /** 'id' (افتراضي): رفع صورة الهوية · 'name': رابط بصمة كود — الطالب يكتب اسمه */
+  /** 'id' (Ø§ÙØªØ±Ø§Ø¶ÙŠ): Ø±ÙØ¹ ØµÙˆØ±Ø© Ø§Ù„Ù‡ÙˆÙŠØ© Â· 'name': Ø±Ø§Ø¨Ø· Ø¨ØµÙ…Ø© ÙƒÙˆØ¯ â€” Ø§Ù„Ø·Ø§Ù„Ø¨ ÙŠÙƒØªØ¨ Ø§Ø³Ù…Ù‡ */
   mode?: 'id' | 'name' | undefined;
 }
 
@@ -54,13 +54,13 @@ const generateStudentExcel = async (
   const XLSX = await import('xlsx-js-style');
 
   const data: any[][] = [];
-  data.push([meta.mode === 'name' ? 'روابط بصمة كود للطلاب (كتابة الاسم)' : 'روابط تسجيل بصمة الوجه للطلاب', '', '', '']);
+  data.push([meta.mode === 'name' ? 'Ø±ÙˆØ§Ø¨Ø· Ø¨ØµÙ…Ø© ÙƒÙˆØ¯ Ù„Ù„Ø·Ù„Ø§Ø¨ (ÙƒØªØ§Ø¨Ø© Ø§Ù„Ø§Ø³Ù…)' : 'Ø±ÙˆØ§Ø¨Ø· ØªØ³Ø¬ÙŠÙ„ Ø¨ØµÙ…Ø© Ø§Ù„ÙˆØ¬Ù‡ Ù„Ù„Ø·Ù„Ø§Ø¨', '', '', '']);
   data.push(['', '', '', '']);
-  data.push(['الكلية', 'المرحلة', 'صلاحية الرابط', '']);
-  data.push([meta.collegeName, meta.stageName, `${meta.expiryDays} يوم`, '']);
-  data.push(['تاريخ التوليد', meta.date, '', '']);
+  data.push(['Ø§Ù„ÙƒÙ„ÙŠØ©', 'Ø§Ù„Ù…Ø±Ø­Ù„Ø©', 'ØµÙ„Ø§Ø­ÙŠØ© Ø§Ù„Ø±Ø§Ø¨Ø·', '']);
+  data.push([meta.collegeName, meta.stageName, `${meta.expiryDays} ÙŠÙˆÙ…`, '']);
+  data.push(['ØªØ§Ø±ÙŠØ® Ø§Ù„ØªÙˆÙ„ÙŠØ¯', meta.date, '', '']);
   data.push(['', '', '', '']);
-  data.push(['الاسم', 'الكود', 'المجموعة', 'رابط التسجيل']);
+  data.push(['Ø§Ù„Ø§Ø³Ù…', 'Ø§Ù„ÙƒÙˆØ¯', 'Ø§Ù„Ù…Ø¬Ù…ÙˆØ¹Ø©', 'Ø±Ø§Ø¨Ø· Ø§Ù„ØªØ³Ø¬ÙŠÙ„']);
   rows.forEach(r => {
     data.push([r.student.name, r.student.code || '', r.student.group || '', r.url]);
   });
@@ -108,7 +108,7 @@ const generateStudentExcel = async (
 
   const wb = XLSX.utils.book_new();
   wb.Workbook = { Views: [{ RTL: true }] };
-  XLSX.utils.book_append_sheet(wb, ws, 'روابط البصمة');
+  XLSX.utils.book_append_sheet(wb, ws, 'Ø±ÙˆØ§Ø¨Ø· Ø§Ù„Ø¨ØµÙ…Ø©');
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
   return new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 };
@@ -119,14 +119,14 @@ const buildShareText = (
   mode: 'id' | 'name',
 ): string => {
   let text = mode === 'name'
-    ? `🔐 روابط بصمة كود\n\nالكلية: ${meta.collegeName}\nالمرحلة: ${meta.stageName}\nعدد الطلاب: ${rows.length}\n\n`
-    : `🔐 روابط تسجيل بصمة الوجه\n\nالكلية: ${meta.collegeName}\nالمرحلة: ${meta.stageName}\nعدد الطلاب: ${rows.length}\n\n`;
+    ? `ðŸ” Ø±ÙˆØ§Ø¨Ø· Ø¨ØµÙ…Ø© ÙƒÙˆØ¯\n\nØ§Ù„ÙƒÙ„ÙŠØ©: ${meta.collegeName}\nØ§Ù„Ù…Ø±Ø­Ù„Ø©: ${meta.stageName}\nØ¹Ø¯Ø¯ Ø§Ù„Ø·Ù„Ø§Ø¨: ${rows.length}\n\n`
+    : `ðŸ” Ø±ÙˆØ§Ø¨Ø· ØªØ³Ø¬ÙŠÙ„ Ø¨ØµÙ…Ø© Ø§Ù„ÙˆØ¬Ù‡\n\nØ§Ù„ÙƒÙ„ÙŠØ©: ${meta.collegeName}\nØ§Ù„Ù…Ø±Ø­Ù„Ø©: ${meta.stageName}\nØ¹Ø¯Ø¯ Ø§Ù„Ø·Ù„Ø§Ø¨: ${rows.length}\n\n`;
   rows.forEach((r, i) => {
     text += `${i + 1}. ${r.student.name}${r.student.code ? ` (${r.student.code})` : ''}\n${r.url}\n\n`;
   });
   text += mode === 'name'
-    ? 'لكل طالب رابطه الخاص — يفتحه ويكتب اسمه، وإذا طابق مع سجله يسجّل بصمة وجهه.'
-    : 'لكل طالب رابطه الخاص — يفتحه ويرفع صورة هويته ويسجل بصمة وجهه.';
+    ? 'Ù„ÙƒÙ„ Ø·Ø§Ù„Ø¨ Ø±Ø§Ø¨Ø·Ù‡ Ø§Ù„Ø®Ø§Øµ â€” ÙŠÙØªØ­Ù‡ ÙˆÙŠÙƒØªØ¨ Ø§Ø³Ù…Ù‡ØŒ ÙˆØ¥Ø°Ø§ Ø·Ø§Ø¨Ù‚ Ù…Ø¹ Ø³Ø¬Ù„Ù‡ ÙŠØ³Ø¬Ù‘Ù„ Ø¨ØµÙ…Ø© ÙˆØ¬Ù‡Ù‡.'
+    : 'Ù„ÙƒÙ„ Ø·Ø§Ù„Ø¨ Ø±Ø§Ø¨Ø·Ù‡ Ø§Ù„Ø®Ø§Øµ â€” ÙŠÙØªØ­Ù‡ ÙˆÙŠØ±ÙØ¹ ØµÙˆØ±Ø© Ù‡ÙˆÙŠØªÙ‡ ÙˆÙŠØ³Ø¬Ù„ Ø¨ØµÙ…Ø© ÙˆØ¬Ù‡Ù‡.';
   return text;
 };
 
@@ -183,8 +183,8 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
       const list = await loadStudents(stageId);
       setStudents(list.filter(s => s && s.id));
     } catch (e) {
-      console.error('فشل تحميل الطلاب:', e);
-      toast({ variant: 'destructive', title: 'تعذر تحميل قائمة الطلاب' });
+      console.error('ÙØ´Ù„ ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ø·Ù„Ø§Ø¨:', e);
+      toast({ variant: 'destructive', title: 'ØªØ¹Ø°Ø± ØªØ­Ù…ÙŠÙ„ Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø·Ù„Ø§Ø¨' });
     } finally {
       setLoadingStudents(false);
     }
@@ -207,8 +207,8 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
   };
 
   const doGenerateIndividual = async () => {
-    if (!selectedStageId) { toast({ variant: 'destructive', title: 'الرجاء اختيار مرحلة' }); return; }
-    if (selectedIds.size === 0) { toast({ variant: 'destructive', title: 'الرجاء تحديد طالب واحد على الأقل' }); return; }
+    if (!selectedStageId) { toast({ variant: 'destructive', title: 'Ø§Ù„Ø±Ø¬Ø§Ø¡ Ø§Ø®ØªÙŠØ§Ø± Ù…Ø±Ø­Ù„Ø©' }); return; }
+    if (selectedIds.size === 0) { toast({ variant: 'destructive', title: 'Ø§Ù„Ø±Ø¬Ø§Ø¡ ØªØ­Ø¯ÙŠØ¯ Ø·Ø§Ù„Ø¨ ÙˆØ§Ø­Ø¯ Ø¹Ù„Ù‰ Ø§Ù„Ø£Ù‚Ù„' }); return; }
     setGenerating(true);
     try {
       const chosen = students.filter(s => selectedIds.has(s.id));
@@ -226,7 +226,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
       setResultRows(rows);
     } catch (e: any) {
       console.error(e);
-      toast({ variant: 'destructive', title: 'فشل توليد الروابط', description: e?.message || undefined });
+      toast({ variant: 'destructive', title: 'ÙØ´Ù„ ØªÙˆÙ„ÙŠØ¯ Ø§Ù„Ø±ÙˆØ§Ø¨Ø·', description: e?.message || undefined });
     } finally {
       setGenerating(false);
     }
@@ -237,14 +237,14 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
       await navigator.clipboard.writeText(url);
       setResultRows(prev => prev.map((r, i) => i === idx ? { ...r, copied: true } : r));
       setTimeout(() => setResultRows(prev => prev.map((r, i) => i === idx ? { ...r, copied: false } : r)), 2000);
-    } catch { toast({ variant: 'destructive', title: 'فشل النسخ' }); }
+    } catch { toast({ variant: 'destructive', title: 'ÙØ´Ù„ Ø§Ù„Ù†Ø³Ø®' }); }
   };
 
   const downloadStudentExcel = async () => {
     if (resultRows.length === 0) return;
     const blob = await generateStudentExcel(resultRows, {
-      collegeName: selectedCollege?.name || 'غير محدد',
-      stageName: selectedStage?.name || 'غير محدد',
+      collegeName: selectedCollege?.name || 'ØºÙŠØ± Ù…Ø­Ø¯Ø¯',
+      stageName: selectedStage?.name || 'ØºÙŠØ± Ù…Ø­Ø¯Ø¯',
       expiryDays,
       date: getFormattedDate().date,
       mode,
@@ -252,7 +252,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = getFileName(selectedCollege?.name || 'كل', selectedStage?.name || 'الكل', isNameMode ? FILE_PREFIX_NAME : FILE_PREFIX_ID);
+    a.download = getFileName(selectedCollege?.name || 'ÙƒÙ„', selectedStage?.name || 'Ø§Ù„ÙƒÙ„', isNameMode ? FILE_PREFIX_NAME : FILE_PREFIX_ID);
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
@@ -260,8 +260,8 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
   const shareWhatsAppStudents = () => {
     if (resultRows.length === 0) return;
     const text = encodeURIComponent(buildShareText(resultRows, {
-      collegeName: selectedCollege?.name || 'غير محدد',
-      stageName: selectedStage?.name || 'غير محدد',
+      collegeName: selectedCollege?.name || 'ØºÙŠØ± Ù…Ø­Ø¯Ø¯',
+      stageName: selectedStage?.name || 'ØºÙŠØ± Ù…Ø­Ø¯Ø¯',
     }, mode));
     const a = document.createElement('a');
     a.href = `https://wa.me/?text=${text}`;
@@ -272,74 +272,74 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
   const copyAllStudents = async () => {
     if (resultRows.length === 0) return;
     const text = buildShareText(resultRows, {
-      collegeName: selectedCollege?.name || 'غير محدد',
-      stageName: selectedStage?.name || 'غير محدد',
+      collegeName: selectedCollege?.name || 'ØºÙŠØ± Ù…Ø­Ø¯Ø¯',
+      stageName: selectedStage?.name || 'ØºÙŠØ± Ù…Ø­Ø¯Ø¯',
     }, mode);
     try {
       await navigator.clipboard.writeText(text);
-      toast({ title: `تم نسخ ${resultRows.length} رابطاً مع الأسماء` });
-    } catch { toast({ variant: 'destructive', title: 'فشل النسخ' }); }
+      toast({ title: `ØªÙ… Ù†Ø³Ø® ${resultRows.length} Ø±Ø§Ø¨Ø·Ø§Ù‹ Ù…Ø¹ Ø§Ù„Ø£Ø³Ù…Ø§Ø¡` });
+    } catch { toast({ variant: 'destructive', title: 'ÙØ´Ù„ Ø§Ù„Ù†Ø³Ø®' }); }
   };
 
   if (resultRows.length > 0) {
     return createPortal(
       <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4 animate-fadeIn" dir="rtl">
-        <div role="dialog" aria-modal="true" aria-labelledby="enroll-links-result-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-modalUp focus:outline-none">
-          <div className="p-5 border-b border-white/10 bg-gradient-to-l from-violet-500/15 to-purple-500/15">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 id="enroll-links-result-title" className="text-xl font-bold text-white flex items-center gap-2">
-                  <UserCheck className="w-5 h-5 text-violet-400" /> تم توليد {resultRows.length} {isNameMode ? 'رابط بصمة كود' : 'رابط بصمة'}
+        <div role="dialog" aria-modal="true" aria-labelledby="enroll-links-result-title" tabIndex={-1} className="glass-modal p-0 text-white w-[calc(100vw-2rem)] max-w-2xl flex flex-col overflow-hidden animate-modalUp focus:outline-none">
+          <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-white/10 bg-gradient-to-l from-violet-500/15 to-purple-500/15 shrink-0">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h2 id="enroll-links-result-title" className="text-base sm:text-lg font-semibold text-white flex items-center gap-2">
+                  <UserCheck className="w-5 h-5 text-violet-400 shrink-0" /> ØªÙ… ØªÙˆÙ„ÙŠØ¯ {resultRows.length} {isNameMode ? 'Ø±Ø§Ø¨Ø· Ø¨ØµÙ…Ø© ÙƒÙˆØ¯' : 'Ø±Ø§Ø¨Ø· Ø¨ØµÙ…Ø©'}
                 </h2>
                 <p className="text-sm text-slate-400 mt-1">
-                  <strong className="text-violet-300">{selectedStage?.name}</strong> • {selectedCollege?.name}
+                  <strong className="text-violet-300">{selectedStage?.name}</strong> â€¢ {selectedCollege?.name}
                 </p>
               </div>
-              <button onClick={onClose} aria-label="إغلاق" className="bg-red-500/20 hover:bg-red-500/30 text-red-300 w-10 h-10 rounded-full font-bold text-lg transition-all hover:scale-110">✕</button>
+              <button onClick={onClose} aria-label="Ø¥ØºÙ„Ø§Ù‚" className="shrink-0 bg-red-500/20 hover:bg-red-500/30 text-red-300 w-10 h-10 rounded-full font-bold text-lg transition duration-200">âœ•</button>
             </div>
           </div>
 
-          <div className="p-4 border-b border-white/10 bg-white/5 flex flex-wrap gap-2">
-            <button onClick={copyAllStudents} className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl flex items-center gap-1.5 shadow-md">
-              <Copy className="w-4 h-4" /> نسخ الكل
+          <div className="px-4 sm:px-6 py-4 border-b border-white/10 bg-white/5 flex flex-wrap gap-2 items-center shrink-0">
+            <button onClick={copyAllStudents} className="btn-base btn-primary">
+              <Copy className="w-4 h-4" /> Ù†Ø³Ø® Ø§Ù„ÙƒÙ„
             </button>
-            <button onClick={downloadStudentExcel} className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl flex items-center gap-1.5 shadow-md">
-              <FileSpreadsheet className="w-4 h-4" /> تحميل Excel
+            <button onClick={downloadStudentExcel} className="btn-base btn-secondary">
+              <FileSpreadsheet className="w-4 h-4" /> ØªØ­Ù…ÙŠÙ„ Excel
             </button>
-            <button onClick={shareWhatsAppStudents} className="px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-xl flex items-center gap-1.5 shadow-md">
-              <Smartphone className="w-4 h-4" /> واتساب
+            <button onClick={shareWhatsAppStudents} className="btn-base btn-secondary">
+              <Smartphone className="w-4 h-4" /> ÙˆØ§ØªØ³Ø§Ø¨
             </button>
-            <div className="flex-1" />
+            <div className="hidden sm:block flex-1" />
             <div className="flex items-center gap-2 bg-violet-500/15 px-3 py-1.5 rounded-lg border border-violet-500/30">
               <Clock className="w-3.5 h-3.5 text-violet-300" />
-              <span className="text-xs text-violet-300 font-medium">صالحة {expiryDays} يوم</span>
+              <span className="text-xs text-violet-300 font-medium">ØµØ§Ù„Ø­Ø© {expiryDays} ÙŠÙˆÙ…</span>
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4 space-y-3">
             {resultRows.map((r, i) => (
               <div key={r.student.id} className="bg-white/5 border border-white/10 rounded-xl p-3">
                 <div className="flex items-center justify-between gap-3 mb-2">
                   <div className="min-w-0">
                     <p className="font-bold text-white truncate">{r.student.name}</p>
                     <p className="text-xs text-slate-400 font-mono">
-                      {r.student.code || '—'}{r.student.group ? ` • ${r.student.group}` : ''}
+                      {r.student.code || 'â€”'}{r.student.group ? ` â€¢ ${r.student.group}` : ''}
                     </p>
                   </div>
                   <button onClick={() => copyRow(r.url, i)} className="shrink-0 px-3 py-1.5 bg-blue-600/80 hover:bg-blue-600 text-white text-xs font-bold rounded-lg flex items-center gap-1">
-                    {r.copied ? <><Check className="w-3 h-3" /> تم</> : <><Copy className="w-3 h-3" /> نسخ</>}
+                    {r.copied ? <><Check className="w-3 h-3" /> ØªÙ…</> : <><Copy className="w-3 h-3" /> Ù†Ø³Ø®</>}
                   </button>
                 </div>
-                <div className="bg-slate-800 border border-slate-600 rounded-lg px-2 py-1.5 text-[11px] font-mono text-slate-300 break-all" dir="ltr">
+                <div className="bg-slate-800 border border-slate-600 rounded-lg px-2 py-1.5 text-xs font-mono text-slate-300 break-all" dir="ltr">
                   {r.url}
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="p-3 border-t border-white/10 bg-white/5 text-center">
-            <button onClick={() => { setResultRows([]); }} className="text-sm text-violet-400 hover:text-violet-300 font-medium hover:underline flex items-center gap-1 mx-auto">
-              <Link2 className="w-4 h-4" /> توليد روابط أخرى
+          <div className="px-4 sm:px-6 py-3 border-t border-white/10 bg-white/5 text-center shrink-0">
+            <button onClick={() => { setResultRows([]); }} className="text-sm text-violet-400 hover:text-violet-300 font-medium hover:underline flex items-center gap-1 mx-auto transition-colors duration-200">
+              <Link2 className="w-4 h-4" /> ØªÙˆÙ„ÙŠØ¯ Ø±ÙˆØ§Ø¨Ø· Ø£Ø®Ø±Ù‰
             </button>
           </div>
         </div>
@@ -350,45 +350,45 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4 animate-fadeIn" dir="rtl">
-      <div role="dialog" aria-modal="true" aria-labelledby="send-enroll-links-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-modalUp focus:outline-none">
-        <div className="p-5 border-b border-white/10 bg-gradient-to-l from-purple-500/15 to-violet-500/15">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 id="send-enroll-links-title" className="text-xl font-bold text-white flex items-center gap-2">
-                <ScanFace className="w-5 h-5 text-purple-400" /> {isNameMode ? 'إرسال رابط بصمة كود' : 'إرسال روابط تسجيل بصمة الوجه'}
+      <div role="dialog" aria-modal="true" aria-labelledby="send-enroll-links-title" tabIndex={-1} className="glass-modal p-0 text-white w-[calc(100vw-2rem)] max-w-2xl flex flex-col overflow-hidden animate-modalUp focus:outline-none">
+        <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-white/10 bg-gradient-to-l from-purple-500/15 to-violet-500/15 shrink-0">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 id="send-enroll-links-title" className="text-base sm:text-lg font-semibold text-white flex items-center gap-2">
+                <ScanFace className="w-5 h-5 text-purple-400 shrink-0" /> {isNameMode ? 'Ø¥Ø±Ø³Ø§Ù„ Ø±Ø§Ø¨Ø· Ø¨ØµÙ…Ø© ÙƒÙˆØ¯' : 'Ø¥Ø±Ø³Ø§Ù„ Ø±ÙˆØ§Ø¨Ø· ØªØ³Ø¬ÙŠÙ„ Ø¨ØµÙ…Ø© Ø§Ù„ÙˆØ¬Ù‡'}
               </h2>
               <p className="text-sm text-slate-400 mt-1">
                 {isNameMode
-                  ? 'اختر الكلية والمرحلة ثم حدد الطلاب — كل طالب يفتح رابطه ويكتب اسمه بدل رفع الهوية'
-                  : 'اختر الكلية والمرحلة ثم حدد الطلاب لإنشاء رابط خاص لكل طالب'}
+                  ? 'Ø§Ø®ØªØ± Ø§Ù„ÙƒÙ„ÙŠØ© ÙˆØ§Ù„Ù…Ø±Ø­Ù„Ø© Ø«Ù… Ø­Ø¯Ø¯ Ø§Ù„Ø·Ù„Ø§Ø¨ â€” ÙƒÙ„ Ø·Ø§Ù„Ø¨ ÙŠÙØªØ­ Ø±Ø§Ø¨Ø·Ù‡ ÙˆÙŠÙƒØªØ¨ Ø§Ø³Ù…Ù‡ Ø¨Ø¯Ù„ Ø±ÙØ¹ Ø§Ù„Ù‡ÙˆÙŠØ©'
+                  : 'Ø§Ø®ØªØ± Ø§Ù„ÙƒÙ„ÙŠØ© ÙˆØ§Ù„Ù…Ø±Ø­Ù„Ø© Ø«Ù… Ø­Ø¯Ø¯ Ø§Ù„Ø·Ù„Ø§Ø¨ Ù„Ø¥Ù†Ø´Ø§Ø¡ Ø±Ø§Ø¨Ø· Ø®Ø§Øµ Ù„ÙƒÙ„ Ø·Ø§Ù„Ø¨'}
               </p>
             </div>
-            <button onClick={onClose} aria-label="إغلاق" className="bg-red-500/20 hover:bg-red-500/30 text-red-300 w-10 h-10 rounded-full font-bold text-lg transition-all hover:scale-110">✕</button>
+            <button onClick={onClose} aria-label="Ø¥ØºÙ„Ø§Ù‚" className="shrink-0 bg-red-500/20 hover:bg-red-500/30 text-red-300 w-10 h-10 rounded-full font-bold text-lg transition duration-200">âœ•</button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-bold text-slate-300 mb-1 flex items-center gap-1.5"><Landmark className="w-4 h-4" /> الكلية</label>
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="block text-sm font-bold text-slate-300 flex items-center gap-1.5"><Landmark className="w-4 h-4" /> Ø§Ù„ÙƒÙ„ÙŠØ©</label>
               <select
                 value={selectedCollegeId}
                 onChange={e => { setSelectedCollegeId(e.target.value); setSelectedStageId(''); setStudents([]); setSelectedIds(new Set()); }}
-                className="w-full px-3 py-2.5 border border-slate-600 bg-slate-800 text-white rounded-xl focus:border-violet-500 focus:ring-2 focus:ring-violet-500/30"
+                className="glass-input appearance-none text-sm"
               >
-                <option value="">اختر كلية...</option>
+                <option value="">Ø§Ø®ØªØ± ÙƒÙ„ÙŠØ©...</option>
                 {colleges.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-bold text-slate-300 mb-1 flex items-center gap-1.5"><Library className="w-4 h-4" /> المرحلة</label>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-bold text-slate-300 flex items-center gap-1.5"><Library className="w-4 h-4" /> Ø§Ù„Ù…Ø±Ø­Ù„Ø©</label>
               <select
                 value={selectedStageId}
                 onChange={e => handleStageChange(e.target.value)}
                 disabled={!selectedCollegeId}
-                className="w-full px-3 py-2.5 border border-slate-600 bg-slate-800 text-white rounded-xl disabled:bg-slate-800 disabled:opacity-50 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/30"
+                className="glass-input appearance-none text-sm disabled:opacity-50"
               >
-                <option value="">اختر مرحلة...</option>
+                <option value="">Ø§Ø®ØªØ± Ù…Ø±Ø­Ù„Ø©...</option>
                 {stagesForCollege.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
@@ -396,8 +396,8 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
 
           <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl p-3">
             <label className="flex items-center justify-between text-sm font-bold text-violet-300 mb-1">
-              <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" /> مدة صلاحية الروابط</span>
-              <span className="bg-violet-600 text-white px-3 py-1 rounded-full text-xs">{expiryDays} يوم</span>
+              <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" /> Ù…Ø¯Ø© ØµÙ„Ø§Ø­ÙŠØ© Ø§Ù„Ø±ÙˆØ§Ø¨Ø·</span>
+              <span className="bg-violet-600 text-white px-3 py-1 rounded-full text-xs">{expiryDays} ÙŠÙˆÙ…</span>
             </label>
             <input type="range" min="1" max="90" value={expiryDays} onChange={e => setExpiryDays(Number(e.target.value))} className="w-full accent-violet-500 h-2" />
           </div>
@@ -406,7 +406,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
             <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <p className="text-sm font-bold text-slate-200 flex items-center gap-1.5">
-                  <Users className="w-4 h-4" /> الطلاب ({students.length})
+                  <Users className="w-4 h-4" /> Ø§Ù„Ø·Ù„Ø§Ø¨ ({students.length})
                 </p>
                 <div className="flex items-center gap-2">
                   {groups.length > 0 && (
@@ -415,7 +415,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
                       onChange={e => setGroupFilter(e.target.value)}
                       className="px-2 py-1.5 border border-slate-600 bg-slate-800 text-white rounded-lg text-xs"
                     >
-                      <option value="">كل المجموعات</option>
+                      <option value="">ÙƒÙ„ Ø§Ù„Ù…Ø¬Ù…ÙˆØ¹Ø§Øª</option>
                       {groups.map(g => <option key={g} value={g}>{g}</option>)}
                     </select>
                   )}
@@ -423,7 +423,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
                     onClick={toggleSelectAll}
                     className="px-3 py-1.5 bg-violet-600/20 hover:bg-violet-600/40 text-violet-200 text-xs font-bold rounded-lg border border-violet-500/30"
                   >
-                    {filteredStudents.length > 0 && filteredStudents.every(s => selectedIds.has(s.id)) ? 'إلغاء تحديد الكل' : 'تحديد الكل'}
+                    {filteredStudents.length > 0 && filteredStudents.every(s => selectedIds.has(s.id)) ? 'Ø¥Ù„ØºØ§Ø¡ ØªØ­Ø¯ÙŠØ¯ Ø§Ù„ÙƒÙ„' : 'ØªØ­Ø¯ÙŠØ¯ Ø§Ù„ÙƒÙ„'}
                   </button>
                 </div>
               </div>
@@ -433,7 +433,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
               ) : (
                 <div className="max-h-64 overflow-y-auto space-y-1.5 border border-white/10 rounded-lg p-2">
                   {filteredStudents.length === 0 && (
-                    <p className="text-center text-sm text-slate-500 py-6">لا يوجد طلاب في هذه المرحلة</p>
+                    <p className="text-center text-sm text-slate-500 py-6">Ù„Ø§ ÙŠÙˆØ¬Ø¯ Ø·Ù„Ø§Ø¨ ÙÙŠ Ù‡Ø°Ù‡ Ø§Ù„Ù…Ø±Ø­Ù„Ø©</p>
                   )}
                   {filteredStudents.map(s => {
                     const sel = selectedIds.has(s.id);
@@ -442,7 +442,7 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
                         <input type="checkbox" checked={sel} onChange={() => toggleStudent(s.id)} className="w-4 h-4 accent-violet-500" />
                         <span className="flex-1 min-w-0">
                           <span className="block text-sm font-bold text-white truncate">{s.name}</span>
-                          <span className="block text-[11px] text-slate-400">{s.code || '—'}{s.group ? ` • ${s.group}` : ''}</span>
+                          <span className="block text-xs text-slate-400">{s.code || 'â€”'}{s.group ? ` â€¢ ${s.group}` : ''}</span>
                         </span>
                       </label>
                     );
@@ -452,21 +452,21 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
 
               <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2 text-sm text-emerald-300">
                 {isNameMode
-                  ? <>تم تحديد <strong>{selectedIds.size}</strong> طالب — سيُولَّد رابط خاص بكل طالب، يفتحه ويكتب اسمه ويُطابق مع سجله قبل تسجيل البصمة.</>
-                  : <>تم تحديد <strong>{selectedIds.size}</strong> طالب — سيُولَّد رابط خاص بكل طالب يحمل اسمه وكوده، ولا يعمل إلا له.</>}
+                  ? <>ØªÙ… ØªØ­Ø¯ÙŠØ¯ <strong>{selectedIds.size}</strong> Ø·Ø§Ù„Ø¨ â€” Ø³ÙŠÙÙˆÙ„ÙŽÙ‘Ø¯ Ø±Ø§Ø¨Ø· Ø®Ø§Øµ Ø¨ÙƒÙ„ Ø·Ø§Ù„Ø¨ØŒ ÙŠÙØªØ­Ù‡ ÙˆÙŠÙƒØªØ¨ Ø§Ø³Ù…Ù‡ ÙˆÙŠÙØ·Ø§Ø¨Ù‚ Ù…Ø¹ Ø³Ø¬Ù„Ù‡ Ù‚Ø¨Ù„ ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø¨ØµÙ…Ø©.</>
+                  : <>ØªÙ… ØªØ­Ø¯ÙŠØ¯ <strong>{selectedIds.size}</strong> Ø·Ø§Ù„Ø¨ â€” Ø³ÙŠÙÙˆÙ„ÙŽÙ‘Ø¯ Ø±Ø§Ø¨Ø· Ø®Ø§Øµ Ø¨ÙƒÙ„ Ø·Ø§Ù„Ø¨ ÙŠØ­Ù…Ù„ Ø§Ø³Ù…Ù‡ ÙˆÙƒÙˆØ¯Ù‡ØŒ ÙˆÙ„Ø§ ÙŠØ¹Ù…Ù„ Ø¥Ù„Ø§ Ù„Ù‡.</>}
               </div>
             </div>
           )}
         </div>
 
-        <div className="p-4 border-t border-white/10 bg-gradient-to-l from-purple-500/15 to-violet-500/15">
+        <div className="px-4 sm:px-6 py-4 border-t border-white/10 bg-gradient-to-l from-purple-500/15 to-violet-500/15 shrink-0">
           <button
             onClick={() => {
               if (selectedIds.size === 0 && selectedStageId) {
                 setConfirmState({
-                  title: 'توليد روابط لكل طلاب المرحلة',
-                  message: `لم تحدد طلاباً. هل تريد توليد رابط لكل طلاب مرحلة «${selectedStage?.name}» (${students.length} طالب)؟`,
-                  confirmLabel: 'نعم، الكل',
+                  title: 'ØªÙˆÙ„ÙŠØ¯ Ø±ÙˆØ§Ø¨Ø· Ù„ÙƒÙ„ Ø·Ù„Ø§Ø¨ Ø§Ù„Ù…Ø±Ø­Ù„Ø©',
+                  message: `Ù„Ù… ØªØ­Ø¯Ø¯ Ø·Ù„Ø§Ø¨Ø§Ù‹. Ù‡Ù„ ØªØ±ÙŠØ¯ ØªÙˆÙ„ÙŠØ¯ Ø±Ø§Ø¨Ø· Ù„ÙƒÙ„ Ø·Ù„Ø§Ø¨ Ù…Ø±Ø­Ù„Ø© Â«${selectedStage?.name}Â» (${students.length} Ø·Ø§Ù„Ø¨)ØŸ`,
+                  confirmLabel: 'Ù†Ø¹Ù…ØŒ Ø§Ù„ÙƒÙ„',
                   onConfirm: () => { setSelectedIds(new Set(students.map(s => s.id))); setConfirmState(null); doGenerateIndividual(); },
                 });
                 return;
@@ -474,24 +474,24 @@ export const SendEnrollLink: React.FC<SendEnrollLinkProps> = ({
               doGenerateIndividual();
             }}
             disabled={!selectedStageId || generating}
-            className="w-full bg-gradient-to-l from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl active:scale-[0.98] transition-all shadow-lg flex items-center justify-center gap-2 text-lg"
+            className="btn-base btn-primary w-full"
           >
-            {generating ? <><MorphingSquare size="sm" /> جاري التوليد...</> : <><Rocket className="w-5 h-5" /> توليد الروابط المحددة</>}
+            {generating ? <><MorphingSquare size="sm" /> Ø¬Ø§Ø±ÙŠ Ø§Ù„ØªÙˆÙ„ÙŠØ¯...</> : <><Rocket className="w-5 h-5" /> ØªÙˆÙ„ÙŠØ¯ Ø§Ù„Ø±ÙˆØ§Ø¨Ø· Ø§Ù„Ù…Ø­Ø¯Ø¯Ø©</>}
           </button>
         </div>
 
         {confirmState &&
           createPortal(
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] p-4 animate-fadeIn" onClick={() => setConfirmState(null)}>
-              <div ref={modalBehaviorRef} role="alertdialog" aria-modal="true" aria-labelledby="send-enroll-confirm-title" tabIndex={-1} className="bg-slate-900 border border-white/10 text-white rounded-xl shadow-2xl max-w-sm w-full p-6 text-center animate-modalUp focus:outline-none" onClick={e => e.stopPropagation()}>
-                <h3 id="send-enroll-confirm-title" className="text-lg font-bold text-white mb-2">{confirmState.title}</h3>
+              <div ref={modalBehaviorRef} role="alertdialog" aria-modal="true" aria-labelledby="send-enroll-confirm-title" tabIndex={-1} className="glass-modal w-[calc(100vw-2rem)] max-w-sm text-white text-center animate-modalUp focus:outline-none" onClick={e => e.stopPropagation()}>
+                <h3 id="send-enroll-confirm-title" className="text-base sm:text-lg font-semibold text-white mb-2">{confirmState.title}</h3>
                 <p className="text-sm text-slate-400 mb-6 whitespace-pre-line">{confirmState.message}</p>
-                <div className="flex gap-2">
-                  <button onClick={confirmState.onConfirm} className="flex-1 bg-violet-600 hover:bg-violet-500 text-white font-bold py-3 px-4 rounded-lg transition">
-                    {confirmState.confirmLabel || 'موافق'}
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={confirmState.onConfirm} className="btn-base btn-primary flex-1">
+                    {confirmState.confirmLabel || 'Ù…ÙˆØ§ÙÙ‚'}
                   </button>
-                  <button onClick={() => setConfirmState(null)} className="bg-white/10 hover:bg-white/20 text-slate-300 font-medium py-3 px-4 rounded-lg transition">
-                    إلغاء
+                  <button onClick={() => setConfirmState(null)} className="btn-base btn-secondary flex-1">
+                    Ø¥Ù„ØºØ§Ø¡
                   </button>
                 </div>
               </div>

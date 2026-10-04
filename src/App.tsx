@@ -461,7 +461,7 @@ const stages = useStageStore((s) => s.stages);
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:start-4 focus:z-[9999] focus:bg-white focus:text-black focus:px-4 focus:py-2 focus:rounded-lg focus:font-bold">
         تخطي إلى المحتوى الرئيسي
       </a>
-      <div className="container mx-auto px-3 md:px-4 py-3 md:py-6">
+      <div className="container mx-auto px-4 md:px-6 py-4 md:py-6">
         <AppHeader
           systemTitle={systemTitle}
           currentAcademicYear={currentAcademicYear}

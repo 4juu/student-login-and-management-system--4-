@@ -99,7 +99,7 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
       {/* 🔔 Bell button */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="relative shrink-0 w-11 h-11 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-slate-200 flex items-center justify-center transition active:scale-90"
+        className="relative shrink-0 w-11 h-11 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-slate-200 flex items-center justify-center transition duration-200 active:scale-90"
         aria-label="الإشعارات"
       >
         <Bell className="w-5 h-5" />
@@ -124,20 +124,20 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
             aria-labelledby="notifications-panel-title"
             tabIndex={-1}
             dir="rtl"
-            className="relative w-full sm:max-w-md max-h-[88dvh] bg-slate-900 border border-white/10 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-modalUp focus:outline-none"
+            className="glass-modal p-0 relative w-full sm:max-w-md max-h-[88dvh] rounded-t-3xl rounded-b-none overflow-hidden flex flex-col animate-modalUp focus:outline-none"
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-4 border-b border-white/10 shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
                 <span className="text-xl">📬</span>
-                <h3 id="notifications-panel-title" className="font-extrabold text-white">إشعارات الإدارة</h3>
+                <h3 id="notifications-panel-title" className="text-base sm:text-lg font-semibold text-white truncate">إشعارات الإدارة</h3>
                 {unreadCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 text-[10px] font-bold">{unreadCount} غير مقروءة</span>
+                  <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 text-xs font-bold shrink-0">{unreadCount} غير مقروءة</span>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 {mainAdminCanSend && (
-                  <button onClick={handleStartCompose} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition active:scale-95">
+                  <button onClick={handleStartCompose} className="btn-base btn-primary text-xs">
                     <Send className="w-3.5 h-3.5" /> إرسال
                   </button>
                 )}
@@ -151,13 +151,13 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
                       });
                       if (ok) await deleteAllNotifications();
                     }}
-                    className="bg-white/5 hover:bg-red-500/15 text-slate-300 hover:text-red-300 p-2 rounded-lg transition active:scale-90"
+                    className="bg-white/5 hover:bg-red-500/15 text-slate-300 hover:text-red-300 p-2 rounded-lg transition duration-200 active:scale-90"
                     title="حذف الكل"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 )}
-                <button type="button" aria-label="إغلاق" onClick={() => { setOpen(false); setComposeOpen(false); }} className="bg-white/5 hover:bg-white/15 text-slate-300 p-2 rounded-lg transition active:scale-90">
+                <button type="button" aria-label="إغلاق" onClick={() => { setOpen(false); setComposeOpen(false); }} className="bg-white/5 hover:bg-white/15 text-slate-300 p-2 rounded-lg transition duration-200 active:scale-90">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -165,25 +165,25 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
 
             {/* Compose form (admin) */}
             {composeOpen && mainAdminCanSend && (
-              <div className="px-5 py-4 border-b border-white/10 bg-blue-950/20 space-y-2.5">
+              <div className="px-4 sm:px-5 py-4 border-b border-white/10 bg-blue-950/20 space-y-2.5">
                 <textarea
                   value={content}
                   onChange={e => setContent(e.target.value)}
                   placeholder="محتوى الإشعار... يظهر لكل التدريسيين"
                   rows={3}
                   maxLength={500}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-800 border border-white/15 text-white placeholder:text-slate-500 focus:border-blue-500 outline-none text-sm resize-none"
+                  className="glass-input text-sm resize-none"
                 />
-                <div className="text-[10px] text-slate-500 text-left">{content.length}/500</div>
+                <div className="text-xs text-slate-500 text-end">{content.length}/500</div>
                 {error && <p className="text-red-400 text-xs font-bold break-words">{error}</p>}
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] text-slate-500">يُبثّ لجميع التدريسيين</span>
+                  <span className="text-xs text-slate-500">يُبثّ لجميع التدريسيين</span>
                   <div className="flex items-center gap-2">
                     <button onClick={() => setComposeOpen(false)} className="text-slate-400 text-xs font-bold px-3 py-2 hover:text-white">إلغاء</button>
                     <button
                       onClick={handleSend}
                       disabled={sending || !content.trim()}
-                      className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1 transition active:scale-95"
+                      className="btn-base btn-primary text-xs"
                     >
                       {sending ? 'جاري الإرسال...' : 'إرسال الإشعار'}
                     </button>
@@ -193,7 +193,7 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
             )}
 
             {/* List */}
-            <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-2.5" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-2.5" style={{ WebkitOverflowScrolling: 'touch' }}>
               {readError && (
                 <p role="alert" className="text-red-400 text-xs font-bold break-words px-1">{readError}</p>
               )}
@@ -217,7 +217,7 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
                   <button
                     key={n.id}
                     onClick={() => handleOpen(n)}
-                    className={`w-full text-right block p-3.5 rounded-2xl border transition-all duration-200 active:scale-[0.99] ${
+                    className={`w-full text-start block p-3.5 rounded-2xl border transition duration-200 active:scale-[0.99] ${
                       read
                         ? 'bg-white/5 border-white/10'
                         : 'bg-red-500/10 border-red-500/40'
@@ -231,15 +231,15 @@ export const Notifications: React.FC<NotificationsProps> = ({ currentUser }) => 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
                           {showTitle && <p className={`font-extrabold text-sm truncate ${read ? 'text-slate-200' : 'text-white'}`}>{title}</p>}
-                          <span className={`text-[10px] text-slate-500 shrink-0 whitespace-nowrap ${showTitle ? '' : 'ms-auto'}`}>{formatTime(n.createdAt)}</span>
+                          <span className={`text-xs text-slate-500 shrink-0 whitespace-nowrap ${showTitle ? '' : 'ms-auto'}`}>{formatTime(n.createdAt)}</span>
                         </div>
                         <p className={`text-xs mt-1 leading-relaxed break-words ${read ? 'text-slate-400' : 'text-slate-200'}`}>{n.body}</p>
                         <div className="flex items-center justify-between mt-2">
-                          <span className="text-[10px] text-slate-500">من: {n.senderName || 'الإدارة'}</span>
+                          <span className="text-xs text-slate-500">من: {n.senderName || 'الإدارة'}</span>
                           {mainAdminCanSend && (
                             <span
                               onClick={async (e) => { e.stopPropagation(); await deleteNotification(n.id); }}
-                              className="inline-flex items-center gap-1 text-[10px] text-red-400/80 hover:text-red-300"
+                              className="inline-flex items-center gap-1 text-xs text-red-400/80 hover:text-red-300"
                             >
                               <Trash2 className="w-3 h-3" /> حذف
                             </span>
