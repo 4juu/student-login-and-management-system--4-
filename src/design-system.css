@@ -30,8 +30,6 @@
 /* ============================================ */
 .glass-card {
   background: linear-gradient(180deg, rgba(19, 31, 56, 0.94) 0%, rgba(15, 26, 48, 0.9) 100%);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 20px;
   padding: 20px;
@@ -46,8 +44,6 @@
 
 .glass-card-sm {
   background: linear-gradient(180deg, rgba(17, 28, 51, 0.92) 0%, rgba(14, 25, 46, 0.88) 100%);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 16px;
   padding: 16px;
@@ -139,8 +135,6 @@
 /* ============================================ */
 .glass-nav {
   background: rgba(11, 18, 32, 0.88);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 16px;
   padding: 12px 16px;
@@ -156,8 +150,6 @@
 /* ============================================ */
 .college-card {
   background: linear-gradient(180deg, rgba(19, 32, 56, 0.95) 0%, rgba(15, 26, 48, 0.92) 100%);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 20px;
   padding: 24px;
@@ -193,8 +185,6 @@
 /* ============================================ */
 .stage-card {
   background: rgba(17, 28, 51, 0.82);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 16px;
   padding: 20px;
@@ -221,7 +211,7 @@
   border-radius: 20px;
   padding: 24px;
   box-shadow: 0 24px 70px rgba(2, 6, 23, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  animation: modalEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: modalEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1) backwards;
   max-height: 90vh;
   overflow-y: auto;
 }
@@ -435,7 +425,7 @@
   to { opacity: 1; transform: translateY(0); }
 }
 .animate-fadeUp {
-  animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 @keyframes modalUp {
@@ -443,7 +433,7 @@
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .animate-modalUp {
-  animation: modalUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: modalUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 @keyframes modalDown {
@@ -461,7 +451,7 @@
 }
 .animate-chatOpen {
   transform-origin: bottom right;
-  animation: chatOpen 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: chatOpen 0.45s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 @keyframes chatClose {

@@ -68,12 +68,12 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
     onClose: () => { if (resetDialog?.type !== 'success') setResetDialog(null); },
   });
 
-  // ðŸ›ï¸ Ø¹Ù†ÙˆØ§Ù† Ø§Ù„Ù†Ø¸Ø§Ù… (Ù„Ù„Ø£Ø¯Ù…Ù† Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠ ÙÙ‚Ø·)
+  // 🏛️ عنوان النظام (للأدمن الرئيسي فقط)
   const [systemTitleDraft, setSystemTitleDraft] = useState(systemTitle);
   const [systemTitleSaving, setSystemTitleSaving] = useState(false);
   const [systemTitleMessage, setSystemTitleMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // ðŸ¤– Telegram
+  // 🤖 Telegram
   const [telegramConfig, setTelegramConfig] = useState<TelegramConfig | null>(null);
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [telegramSaving, setTelegramSaving] = useState(false);
@@ -87,7 +87,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
   const handleSystemTitleSave = useCallback(async () => {
     const title = systemTitleDraft.trim();
     if (!title) {
-      setSystemTitleMessage({ type: 'error', text: 'Ø§Ù„Ø±Ø¬Ø§Ø¡ Ø¥Ø¯Ø®Ø§Ù„ Ø¹Ù†ÙˆØ§Ù† Ø§Ù„Ù†Ø¸Ø§Ù…' });
+      setSystemTitleMessage({ type: 'error', text: 'الرجاء إدخال عنوان النظام' });
       return;
     }
     setSystemTitleSaving(true);
@@ -95,15 +95,15 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
     try {
       await saveSystemTitle(title);
       onSystemTitleChange?.(title);
-      setSystemTitleMessage({ type: 'success', text: 'ØªÙ… Ø­ÙØ¸ Ø¹Ù†ÙˆØ§Ù† Ø§Ù„Ù†Ø¸Ø§Ù… Ø¨Ù†Ø¬Ø§Ø­' });
+      setSystemTitleMessage({ type: 'success', text: 'تم حفظ عنوان النظام بنجاح' });
     } catch {
-      setSystemTitleMessage({ type: 'error', text: 'ÙØ´Ù„ Ø­ÙØ¸ Ø§Ù„Ø¹Ù†ÙˆØ§Ù†ØŒ Ø­Ø§ÙˆÙ„ Ù…Ø¬Ø¯Ø¯Ø§Ù‹' });
+      setSystemTitleMessage({ type: 'error', text: 'فشل حفظ العنوان، حاول مجدداً' });
     } finally {
       setSystemTitleSaving(false);
     }
   }, [systemTitleDraft, onSystemTitleChange]);
 
-  // âœ… Ø¯Ø§Ù„Ø© Ø¹Ø±Ø¶ Ø§Ù„Ø­Ø¬Ù… Ø¨Ø´ÙƒÙ„ Ø°ÙƒÙŠ
+  // ✅ دالة عرض الحجم بشكل ذكي
   const formatSize = useCallback((kb: number): string => {
     if (kb < 1024) {
       return `${kb.toFixed(1)} KB`;
@@ -114,12 +114,12 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
     }
   }, []);
 
-  // âœ… Ø­Ø³Ø§Ø¨ ØµØ­ÙŠØ­ Ù„Ù„Ù†Ø³Ø¨Ø© (ØªØ­ÙˆÙŠÙ„ Ø§Ù„ÙˆØ­Ø¯Ø§Øª)
+  // ✅ حساب صحيح للنسبة (تحويل الوحدات)
   const firebaseQuotaMB = 1024;
   const firebaseQuotaKB = firebaseQuotaMB * 1024;
   const usagePercent = useMemo(() => stats ? (stats.totalSizeKB / firebaseQuotaKB) * 100 : 0, [stats?.totalSizeKB]);
 
-  // ðŸ¤– ØªÙ‡ÙŠØ¦Ø© Ø§Ù„ØªÙ„ØºØ±Ø§Ù… Ù…Ù† Ø§Ù„Ù…ØªØ¬Ø± (ØªÙØ­Ù…ÙŽÙ‘Ù„ Ù…Ø±Ø© ÙˆØ§Ø­Ø¯Ø© ÙÙŠ loadInitialData) â€” Ø¨Ù„Ø§ Ø¬Ù„Ø¨ Ù…ÙƒØ±Ø±
+  // 🤖 تهيئة التلغرام من المتجر (تُحمَّل مرة واحدة في loadInitialData) — بلا جلب مكرر
   useEffect(() => {
     if (initialTelegramConfig) {
       setTelegramConfig(initialTelegramConfig);
@@ -141,7 +141,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
   const handleTelegramSave = useCallback(async () => {
     if (!currentUser) return;
     if (!telegramBotToken.trim()) {
-      setTelegramMessage({ type: 'error', text: 'Ø§Ù„Ø±Ø¬Ø§Ø¡ Ø¥Ø¯Ø®Ø§Ù„ ØªÙˆÙƒÙ† Ø§Ù„Ø¨ÙˆØª' });
+      setTelegramMessage({ type: 'error', text: 'الرجاء إدخال توكن البوت' });
       return;
     }
     setTelegramSaving(true);
@@ -157,9 +157,9 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
       await saveTelegramConfig(getAdminUid(), config);
       setTelegramConfig(config);
       onTelegramConfigChange?.(config);
-      setTelegramMessage({ type: 'success', text: 'ØªÙ… Ø­ÙØ¸ Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Ø¨Ù†Ø¬Ø§Ø­!' });
+      setTelegramMessage({ type: 'success', text: 'تم حفظ الإعدادات بنجاح!' });
     } catch (e: any) {
-      setTelegramMessage({ type: 'error', text: 'ÙØ´Ù„ Ø§Ù„Ø­ÙØ¸: ' + (e.message || '') });
+      setTelegramMessage({ type: 'error', text: 'فشل الحفظ: ' + (e.message || '') });
     } finally {
       setTelegramSaving(false);
     }
@@ -167,7 +167,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
 
   const handleVerifyBot = useCallback(async () => {
     if (!telegramBotToken.trim()) {
-      setTelegramMessage({ type: 'error', text: 'Ø§Ù„Ø±Ø¬Ø§Ø¡ Ø¥Ø¯Ø®Ø§Ù„ Ø§Ù„ØªÙˆÙƒÙ† Ø£ÙˆÙ„Ø§Ù‹' });
+      setTelegramMessage({ type: 'error', text: 'الرجاء إدخال التوكن أولاً' });
       return;
     }
     setTelegramMessage(null);
@@ -175,11 +175,11 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
     if (result.ok) {
       setBotVerified(true);
       setBotUsername(result.username || '');
-      setTelegramMessage({ type: 'success', text: `ØªÙ… Ø§Ù„ØªØ­Ù‚Ù‚! Ø§Ù„Ø¨ÙˆØª: @${result.username}` });
+      setTelegramMessage({ type: 'success', text: `تم التحقق! البوت: @${result.username}` });
     } else {
       setBotVerified(false);
       setBotUsername('');
-      setTelegramMessage({ type: 'error', text: (result.error || 'ØªÙˆÙƒÙ† ØºÙŠØ± ØµØ­ÙŠØ­') });
+      setTelegramMessage({ type: 'error', text: (result.error || 'توكن غير صحيح') });
     }
   }, [telegramBotToken]);
 
@@ -241,9 +241,9 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
     setTelegramMessage(null);
     const ok = await sendTestMessage(telegramConfig, stageId);
     if (ok) {
-      setTelegramMessage({ type: 'success', text: 'ØªÙ… Ø¥Ø±Ø³Ø§Ù„ Ø±Ø³Ø§Ù„Ø© Ø§Ø®ØªØ¨Ø§Ø± Ù„Ù„Ù‚Ù†Ø§Ø©!' });
+      setTelegramMessage({ type: 'success', text: 'تم إرسال رسالة اختبار للقناة!' });
     } else {
-      setTelegramMessage({ type: 'error', text: 'ÙØ´Ù„ Ø§Ù„Ø¥Ø±Ø³Ø§Ù„. ØªØ£ÙƒØ¯ Ù…Ù† Chat ID ÙˆØ§Ù„Ø¨ÙˆØª Ù…Ø¶Ø§Ù ÙƒØ£Ø¯Ù…Ù† ÙÙŠ Ø§Ù„Ù‚Ù†Ø§Ø©' });
+      setTelegramMessage({ type: 'error', text: 'فشل الإرسال. تأكد من Chat ID والبوت مضاف كأدمن في القناة' });
     }
   }, [telegramConfig]);
 
@@ -262,7 +262,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
       const data = await getDatabaseStats(adminUid);
       setStats(data);
     } catch (e) {
-      console.warn('ÙØ´Ù„ ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ø¥Ø­ØµØ§ÙŠØ§Øª:', e);
+      console.warn('فشل تحميل الإحصايات:', e);
     } finally {
       setLoadingStats(false);
     }
@@ -273,12 +273,12 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
       const years = await listAllAcademicYears();
       setAcademicYears(years);
     } catch (e) {
-      console.warn('ÙØ´Ù„ ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ø³Ù†ÙˆØ§Øª:', e);
+      console.warn('فشل تحميل السنوات:', e);
     }
   }, []);
 
-  // âœ… Ù‚Ø±Ø§Ø¡Ø© ÙÙ‡Ø±Ø³ Ø§Ù„Ø³Ù†ÙˆØ§Øª Ø§Ù„ØµØºÙŠØ± ÙÙ‚Ø· Ø¹Ù†Ø¯ Ø§Ù„ÙØªØ­ â€” Ø§Ù„Ø¥Ø­ØµØ§ÙŠØ§Øª Ø¹Ù†Ø¯ Ø§Ù„Ø·Ù„Ø¨ (Ø²Ø± "ØªØ­Ø¯ÙŠØ«")
-  //    Ø­ØªÙ‰ Ù„Ø§ ÙŠÙØ³Ø­Ø¨ Ø´Ø¬Ø±Ø© Ø¹Ø§Ù… ÙƒØ§Ù…Ù„ ÙˆØªØªØ¬Ù…Ù‘Ø¯ Ø§Ù„ÙˆØ§Ø¬Ù‡Ø© ÙƒÙ„ Ù…Ø±Ø© ØªÙÙØªØ­ ÙÙŠÙ‡Ø§ Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª
+  // ✅ قراءة فهرس السنوات الصغير فقط عند الفتح — الإحصايات عند الطلب (زر "تحديث")
+  //    حتى لا يُسحب شجرة عام كامل وتتجمّد الواجهة كل مرة تُفتح فيها الإعدادات
   useEffect(() => {
     if (isAdmin && currentUser) {
       loadYears();
@@ -291,12 +291,12 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
     const targetYear = newYearDraft.trim();
 
     if (!isValidAcademicYearFormat(targetYear)) {
-      setResetDialog({ type: 'error', message: 'ØµÙŠØºØ© Ø§Ù„Ø³Ù†Ø© ØºÙŠØ± ØµØ­ÙŠØ­Ø©. Ù…Ø«Ø§Ù„ ØµØ­ÙŠØ­: 2025_2026' });
+      setResetDialog({ type: 'error', message: 'صيغة السنة غير صحيحة. مثال صحيح: 2025_2026' });
       return;
     }
 
     if (targetYear === currentAcademicYear) {
-      setResetDialog({ type: 'error', message: 'ÙŠØ¬Ø¨ Ø£Ù† ØªØ®ØªÙ„Ù Ø§Ù„Ø³Ù†Ø© Ø§Ù„Ø¬Ø¯ÙŠØ¯Ø© Ø¹Ù† Ø§Ù„Ø³Ù†Ø© Ø§Ù„Ø­Ø§Ù„ÙŠØ©' });
+      setResetDialog({ type: 'error', message: 'يجب أن تختلف السنة الجديدة عن السنة الحالية' });
       return;
     }
 
@@ -316,7 +316,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
       setResetDialog({ type: 'success', oldYear: result.oldYear, newYear: result.newYear });
       onResetComplete?.();
     } catch (e: any) {
-      setResetDialog({ type: 'error', message: (e.message || 'Ø®Ø·Ø£ ØºÙŠØ± Ù…Ø¹Ø±ÙˆÙ') });
+      setResetDialog({ type: 'error', message: (e.message || 'خطأ غير معروف') });
     } finally {
       setResetting(false);
     }
@@ -333,15 +333,15 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
 
   return (
     <div className="glass-card rounded-xl p-4 sm:p-6 space-y-4 sm:space-y-6">
-      <h2 className="text-xl sm:text-2xl font-semibold text-white flex items-center gap-2"><SettingsIcon className="w-6 h-6" /> Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª</h2>
+      <h2 className="text-xl sm:text-2xl font-semibold text-white flex items-center gap-2"><SettingsIcon className="w-6 h-6" /> الإعدادات</h2>
 
-      {/* Ø´Ø±ÙŠØ· Ø§Ù„Ø³Ù†Ø© Ø§Ù„Ø£ÙƒØ§Ø¯ÙŠÙ…ÙŠØ© */}
+      {/* شريط السنة الأكاديمية */}
       <div className="p-4 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border-2 border-indigo-400/30 rounded-xl">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <GraduationCap className="w-9 h-9 text-indigo-400 shrink-0" />
             <div>
-              <h3 className="text-base sm:text-lg font-semibold text-indigo-300">Ø§Ù„Ø³Ù†Ø© Ø§Ù„Ø£ÙƒØ§Ø¯ÙŠÙ…ÙŠØ© Ø§Ù„Ø­Ø§Ù„ÙŠØ©</h3>
+              <h3 className="text-base sm:text-lg font-semibold text-indigo-300">السنة الأكاديمية الحالية</h3>
               <p className="text-2xl font-bold text-indigo-300">
                 {currentAcademicYear.replace('_', ' - ')}
               </p>
@@ -349,19 +349,19 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
           </div>
           {academicYears.length > 0 && (
             <div className="text-sm text-indigo-300 bg-white/5 px-3 py-2 rounded-lg border border-indigo-400/20 flex items-center gap-1.5">
-              <Library className="w-4 h-4" /> {academicYears.length} Ø³Ù†Ø© ÙÙŠ Ø§Ù„Ù†Ø¸Ø§Ù…
+              <Library className="w-4 h-4" /> {academicYears.length} سنة في النظام
             </div>
           )}
         </div>
       </div>
 
-      {/* ðŸ›ï¸ Ù‡ÙˆÙŠØ© Ø§Ù„Ù†Ø¸Ø§Ù… - Ù„Ù„Ø£Ø¯Ù…Ù† Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠ ÙÙ‚Ø· */}
+      {/* 🏛️ هوية النظام - للأدمن الرئيسي فقط */}
       {isAdmin && (
         <div className="p-4 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border-2 border-blue-400/30 rounded-xl">
           <div className="flex items-center gap-3 mb-3">
             <Landmark className="w-9 h-9 text-blue-400 shrink-0" />
             <div>
-              <h3 className="text-base sm:text-lg font-semibold text-blue-300">Ù‡ÙˆÙŠØ© Ø§Ù„Ù†Ø¸Ø§Ù…</h3>
+              <h3 className="text-base sm:text-lg font-semibold text-blue-300">هوية النظام</h3>
             </div>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
@@ -369,7 +369,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
               type="text"
               value={systemTitleDraft}
               onChange={(e) => setSystemTitleDraft(e.target.value)}
-              placeholder="Ù†Ø¸Ø§Ù… Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„Ø­Ø¶ÙˆØ± Ø§Ù„Ø¬Ø§Ù…Ø¹ÙŠ"
+              placeholder="نظام إدارة الحضور الجامعي"
               className="glass-input flex-1"
               maxLength={60}
             />
@@ -378,7 +378,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
               disabled={systemTitleSaving}
               className="btn-base btn-primary shrink-0 flex items-center justify-center gap-2"
             >
-              {systemTitleSaving ? <><MorphingSquare size="sm" /> Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø­ÙØ¸...</> : <><Save className="w-4 h-4" /> Ø­ÙØ¸ Ø§Ù„Ø¹Ù†ÙˆØ§Ù†</>}
+              {systemTitleSaving ? <><MorphingSquare size="sm" /> جاري الحفظ...</> : <><Save className="w-4 h-4" /> حفظ العنوان</>}
             </button>
           </div>
           {systemTitleMessage && (
@@ -389,32 +389,32 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
         </div>
       )}
 
-      {/* Ø¥Ø­ØµØ§ÙŠØ§Øª Firebase (Ù„Ù„Ø£Ø¯Ù…Ù†) */}
+      {/* إحصايات Firebase (للأدمن) */}
       {isAdmin && (
         <div>
           <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
-            <h3 className="text-base sm:text-lg font-semibold text-slate-300 flex items-center gap-2"><ChartColumn className="w-5 h-5" /> Ø§Ø³ØªØ®Ø¯Ø§Ù… Firebase</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-slate-300 flex items-center gap-2"><ChartColumn className="w-5 h-5" /> استخدام Firebase</h3>
             <button
               onClick={loadStats}
               disabled={loadingStats}
               className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1.5"
             >
-              {loadingStats ? <><MorphingSquare size="sm" /> ...</> : <><RefreshCw className="w-4 h-4" /> ØªØ­Ø¯ÙŠØ«</>}
+              {loadingStats ? <><MorphingSquare size="sm" /> ...</> : <><RefreshCw className="w-4 h-4" /> تحديث</>}
             </button>
           </div>
 
           {stats ? (
             <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-2 border-blue-400/20 rounded-xl p-4">
-              {/* Ø´Ø±ÙŠØ· Ø§Ù„Ø§Ø³ØªØ®Ø¯Ø§Ù… - âœ… Ù…ØµØ­Ø­ */}
+              {/* شريط الاستخدام - ✅ مصحح */}
               <div className="mb-4">
                 <div className="flex justify-between text-sm font-medium text-slate-300 mb-2">
-                  <span>Ø§Ù„Ø­Ø¬Ù… Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…</span>
+                  <span>الحجم المستخدم</span>
                   <span className={
                     usagePercent > 70 ? 'text-red-600' : 
                     usagePercent > 40 ? 'text-yellow-600' : 
                     'text-green-600'
                   }>
-                    {formatSize(stats.totalSizeKB)} Ù…Ù† 1 GB ({usagePercent.toFixed(4)}%)
+                    {formatSize(stats.totalSizeKB)} من 1 GB ({usagePercent.toFixed(4)}%)
                   </span>
                 </div>
                 <div className="w-full bg-slate-700 rounded-full h-3 overflow-hidden border border-blue-400/20">
@@ -429,27 +429,27 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
                 </div>
               </div>
 
-              {/* Ø§Ù„Ø¥Ø­ØµØ§ÙŠØ§Øª */}
+              {/* الإحصايات */}
               <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-5 gap-4 sm:gap-6">
                 <div className="bg-slate-800 rounded-lg p-3 text-center shadow-sm">
                   <div className="text-2xl font-bold text-blue-400">{stats.totalStudents}</div>
-                  <div className="text-xs text-slate-400 flex items-center justify-center gap-1"><UserIcon className="w-3.5 h-3.5" /> Ø·Ø§Ù„Ø¨</div>
+                  <div className="text-xs text-slate-400 flex items-center justify-center gap-1"><UserIcon className="w-3.5 h-3.5" /> طالب</div>
                 </div>
                 <div className="bg-slate-800 rounded-lg p-3 text-center shadow-sm">
                   <div className="text-2xl font-bold text-purple-400">{stats.totalRecords}</div>
-                  <div className="text-xs text-slate-400 flex items-center justify-center gap-1"><SquarePen className="w-3.5 h-3.5" /> Ø³Ø¬Ù„ Ø­Ø¶ÙˆØ±</div>
+                  <div className="text-xs text-slate-400 flex items-center justify-center gap-1"><SquarePen className="w-3.5 h-3.5" /> سجل حضور</div>
                 </div>
                 <div className="bg-slate-800 rounded-lg p-3 text-center shadow-sm">
                   <div className="text-2xl font-bold text-pink-400">{stats.totalSessions}</div>
-                  <div className="text-xs text-slate-400 flex items-center justify-center gap-1"><ClipboardList className="w-3.5 h-3.5" /> Ø¬Ù„Ø³Ø©</div>
+                  <div className="text-xs text-slate-400 flex items-center justify-center gap-1"><ClipboardList className="w-3.5 h-3.5" /> جلسة</div>
                 </div>
                 <div className="bg-slate-800 rounded-lg p-3 text-center shadow-sm">
                   <div className="text-2xl font-bold text-emerald-400">{stats.totalTeachers}</div>
-                  <div className="text-xs text-slate-400 flex items-center justify-center gap-1"><GraduationCap className="w-3.5 h-3.5" /> Ù…Ø¯Ø±Ø³</div>
+                  <div className="text-xs text-slate-400 flex items-center justify-center gap-1"><GraduationCap className="w-3.5 h-3.5" /> مدرس</div>
                 </div>
                 <div className="bg-slate-800 rounded-lg p-3 text-center shadow-sm">
                   <div className="text-2xl font-bold text-amber-400">{stats.totalFaceDescriptors}</div>
-                  <div className="text-xs text-slate-400 flex items-center justify-center gap-1"><Smile className="w-3.5 h-3.5" /> Ø¨ØµÙ…Ø© ÙˆØ¬Ù‡</div>
+                  <div className="text-xs text-slate-400 flex items-center justify-center gap-1"><Smile className="w-3.5 h-3.5" /> بصمة وجه</div>
                 </div>
               </div>
 
@@ -457,7 +457,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
             </div>
           ) : (
             <div className="bg-slate-800/30 border border-white/10 rounded-lg p-4 text-center text-slate-500 flex items-center justify-center gap-2">
-              {loadingStats ? <><MorphingSquare size="sm" /> Ø¬Ø§Ø±ÙŠ ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ø¥Ø­ØµØ§ÙŠØ§Øª...</> : 'Ø§Ø¶ØºØ· "ØªØ­Ø¯ÙŠØ«" Ù„Ø¹Ø±Ø¶ Ø§Ù„Ø¥Ø­ØµØ§ÙŠØ§Øª'}
+              {loadingStats ? <><MorphingSquare size="sm" /> جاري تحميل الإحصايات...</> : 'اضغط "تحديث" لعرض الإحصايات'}
             </div>
           )}
         </div>
@@ -465,21 +465,21 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
 
 
 
-      {/* Ù…Ù†Ø·Ù‚Ø© Ø§Ù„Ø®Ø·Ø± */}
+      {/* منطقة الخطر */}
       {isAdmin && (
         <div>
           <h3 className="text-base sm:text-lg font-semibold mb-3 text-red-400 flex items-center gap-2">
-            <TriangleAlert className="w-5 h-5" /> Ù…Ù†Ø·Ù‚Ø© Ø§Ù„Ø®Ø·Ø±
+            <TriangleAlert className="w-5 h-5" /> منطقة الخطر
           </h3>
           <div className="bg-gradient-to-br from-red-500/10 to-orange-500/10 border-2 border-red-400/30 rounded-xl p-4 sm:p-5">
             <div className="flex items-start gap-3 mb-4">
               <RefreshCw className="w-10 h-10 text-red-400 shrink-0" />
               <div className="flex-1">
-                <h4 className="font-semibold text-red-300 text-base sm:text-lg mb-2">Ø¨Ø¯Ø¡ Ø³Ù†Ø© Ø£ÙƒØ§Ø¯ÙŠÙ…ÙŠØ© Ø¬Ø¯ÙŠØ¯Ø©</h4>
+                <h4 className="font-semibold text-red-300 text-base sm:text-lg mb-2">بدء سنة أكاديمية جديدة</h4>
                 <div className="bg-slate-800/30 border border-red-400/20 rounded-lg p-3 text-sm">
                   <p className="text-red-400 flex items-start gap-2">
                     <TriangleAlert className="w-4 h-4 shrink-0 mt-0.5" />
-                    Ù…Ù„Ø§Ø­Ø¸Ø©: Ø³ÙŠØªÙ… Ø­Ø°Ù Ø¬Ù…ÙŠØ¹ Ø§Ù„Ø·Ù„Ø§Ø¨ ÙˆØ³Ø¬Ù„Ø§Øª Ø§Ù„Ø­Ø¶ÙˆØ± ÙÙ‚Ø·ØŒ ÙˆØªØ¨Ù‚Ù‰ Ø§Ù„ÙƒÙ„ÙŠØ§Øª ÙˆØ§Ù„Ù…Ø±Ø§Ø­Ù„ ÙˆØ§Ù„ØªØ¯Ø±ÙŠØ³ÙŠÙˆÙ†.
+                    ملاحظة: سيتم حذف جميع الطلاب وسجلات الحضور فقط، وتبقى الكليات والمراحل والتدريسيون.
                   </p>
                 </div>
               </div>
@@ -487,7 +487,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
 
             <div className="space-y-1.5 mb-4">
               <label className="block text-sm font-bold text-red-300 flex items-center gap-1.5">
-                <CalendarDays className="w-4 h-4" /> Ø§Ù„Ø³Ù†Ø© Ø§Ù„Ø¬Ø¯ÙŠØ¯Ø© (Ù‚Ø§Ø¨Ù„Ø© Ù„Ù„ØªØ¹Ø¯ÙŠÙ„)
+                <CalendarDays className="w-4 h-4" /> السنة الجديدة (قابلة للتعديل)
               </label>
               <input
                 type="text"
@@ -497,7 +497,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
                 dir="ltr"
                 className="glass-input font-mono text-center text-sm"
               />
-              <p className="text-xs text-red-400">Ø§Ù„ØµÙŠØºØ©: 2025_2026</p>
+              <p className="text-xs text-red-400">الصيغة: 2025_2026</p>
             </div>
 
             <button
@@ -506,23 +506,23 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
               className="btn-base btn-danger w-full"
             >
               {resetting ? (
-                <><MorphingSquare size="sm" /> Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø¨Ø¯Ø¡... Ù„Ø§ ØªØºÙ„Ù‚ Ø§Ù„ØµÙØ­Ø©!</>
+                <><MorphingSquare size="sm" /> جاري البدء... لا تغلق الصفحة!</>
               ) : (
-                <><RefreshCw className="w-5 h-5" /> Ø¨Ø¯Ø¡ Ø³Ù†Ø© Ø£ÙƒØ§Ø¯ÙŠÙ…ÙŠØ© Ø¬Ø¯ÙŠØ¯Ø©</>
+                <><RefreshCw className="w-5 h-5" /> بدء سنة أكاديمية جديدة</>
               )}
             </button>
 
             <p className="text-xs text-red-400 mt-2 text-center font-medium flex items-center justify-center gap-1.5">
-              <TriangleAlert className="w-3.5 h-3.5" /> Ù‡Ø°Ù‡ Ø§Ù„Ø¹Ù…Ù„ÙŠØ© Ù„Ø§ ÙŠÙ…ÙƒÙ† Ø§Ù„ØªØ±Ø§Ø¬Ø¹ Ø¹Ù†Ù‡Ø§
+              <TriangleAlert className="w-3.5 h-3.5" /> هذه العملية لا يمكن التراجع عنها
             </p>
           </div>
         </div>
       )}
 
-      {/* Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø³Ù†ÙˆØ§Øª Ø§Ù„Ø£ÙƒØ§Ø¯ÙŠÙ…ÙŠØ© */}
+      {/* قائمة السنوات الأكاديمية */}
       {isAdmin && academicYears.length > 0 && (
         <div>
-          <h3 className="text-base sm:text-lg font-semibold mb-3 text-slate-300 flex items-center gap-2"><Library className="w-5 h-5" /> Ø§Ù„Ø³Ù†ÙˆØ§Øª Ø§Ù„Ø£ÙƒØ§Ø¯ÙŠÙ…ÙŠØ©</h3>
+          <h3 className="text-base sm:text-lg font-semibold mb-3 text-slate-300 flex items-center gap-2"><Library className="w-5 h-5" /> السنوات الأكاديمية</h3>
           <div className="bg-slate-800/30 border border-white/10 rounded-lg p-4">
             <div className="flex flex-wrap gap-2">
               {academicYears.map(year => (
@@ -543,25 +543,25 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
         </div>
       )}
 
-      {/* ðŸ¤– Ù‚Ø³Ù… Ø§Ù„ØªÙ„ØºØ±Ø§Ù… */}
+      {/* 🤖 قسم التلغرام */}
       <div>
         <h3 className="text-base sm:text-lg font-semibold mb-3 text-slate-300 flex items-center gap-2">
-          <Bot className="w-5 h-5" /> Ø¨ÙˆØª Ø§Ù„ØªÙ„ØºØ±Ø§Ù… (Ø¥Ø´Ø¹Ø§Ø±Ø§Øª Ø§Ù„Ø­Ø¶ÙˆØ±)
+          <Bot className="w-5 h-5" /> بوت التلغرام (إشعارات الحضور)
         </h3>
 
         <div className="bg-gradient-to-br from-sky-500/10 to-blue-500/10 border-2 border-sky-400/30 rounded-xl p-4 sm:p-5 mb-4">
           <div className="flex items-start gap-2 sm:gap-3 mb-4">
             <Megaphone className="w-8 h-8 sm:w-10 sm:h-10 text-sky-400 shrink-0" />
             <div className="flex-1 min-w-0">
-              <h4 className="font-bold text-sky-300 text-base sm:text-lg mb-1">Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Ø§Ù„Ø¨ÙˆØª</h4>
+              <h4 className="font-bold text-sky-300 text-base sm:text-lg mb-1">إعدادات البوت</h4>
               <p className="text-xs sm:text-sm text-sky-300">
-                Ø£Ø±Ø³Ù„ Ø¥Ø´Ø¹Ø§Ø±Ø§Øª Ø§Ù„Ø­Ø¶ÙˆØ± ÙˆØ§Ù„ØºÙŠØ§Ø¨ ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹ Ø¥Ù„Ù‰ Ù‚Ù†ÙˆØ§Øª Ø§Ù„ØªÙ„ØºØ±Ø§Ù… Ù„ÙƒÙ„ Ù…Ø§Ø¯Ø©
+                أرسل إشعارات الحضور والغياب تلقائياً إلى قنوات التلغرام لكل مادة
               </p>
             </div>
           </div>
 
           <div className="bg-slate-800/30 border border-sky-400/20 rounded-lg p-3 sm:p-4 mb-4 space-y-1.5">
-            <label className="block text-xs sm:text-sm font-bold text-slate-300 flex items-center gap-1.5"><KeyRound className="w-4 h-4" /> ØªÙˆÙƒÙ† Ø§Ù„Ø¨ÙˆØª (Bot Token)</label>
+            <label className="block text-xs sm:text-sm font-bold text-slate-300 flex items-center gap-1.5"><KeyRound className="w-4 h-4" /> توكن البوت (Bot Token)</label>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="text"
@@ -575,32 +575,32 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
                 onClick={handleVerifyBot}
                 className="btn-base btn-secondary"
               >
-                <Search className="w-4 h-4" /> ØªØ­Ù‚Ù‚
+                <Search className="w-4 h-4" /> تحقق
               </button>
             </div>
             {botVerified && (
-              <p className="text-xs sm:text-sm text-green-400 mt-2 font-medium flex items-center gap-1.5"><CircleCheck className="w-4 h-4" /> Ø§Ù„Ø¨ÙˆØª Ù…ÙˆØ«ÙˆÙ‚: @{botUsername}</p>
+              <p className="text-xs sm:text-sm text-green-400 mt-2 font-medium flex items-center gap-1.5"><CircleCheck className="w-4 h-4" /> البوت موثوق: @{botUsername}</p>
             )}
             <div className="mt-2 bg-slate-800/30 border border-white/10 rounded-lg p-2 sm:p-3 text-xs sm:text-xs text-slate-400">
-              <p className="font-bold mb-1 flex items-center gap-1.5"><Info className="w-4 h-4" /> ÙƒÙŠÙÙŠØ© Ø§Ù„Ø­ØµÙˆÙ„ Ø¹Ù„Ù‰ Ø§Ù„ØªÙˆÙƒÙ†:</p>
+              <p className="font-bold mb-1 flex items-center gap-1.5"><Info className="w-4 h-4" /> كيفية الحصول على التوكن:</p>
                   <ol className="list-decimal list-inside space-y-1 ms-2">
-                <li>Ø§ÙØªØ­ <a href="https://t.me/BotFather" target="_blank" className="text-blue-400 underline">@BotFather</a> ÙÙŠ ØªÙ„ØºØ±Ø§Ù…</li>
-                <li>Ø£Ø±Ø³Ù„ <code className="bg-white/10 px-1 rounded">/newbot</code> ÙˆØ§ØªØ¨Ø¹ Ø§Ù„ØªØ¹Ù„ÙŠÙ…Ø§Øª</li>
-                <li>Ø§Ù†Ø³Ø® Ø§Ù„ØªÙˆÙƒÙ† ÙˆØ£Ù„ØµÙ‚Ù‡ Ù‡Ù†Ø§</li>
+                <li>افتح <a href="https://t.me/BotFather" target="_blank" className="text-blue-400 underline">@BotFather</a> في تلغرام</li>
+                <li>أرسل <code className="bg-white/10 px-1 rounded">/newbot</code> واتبع التعليمات</li>
+                <li>انسخ التوكن وألصقه هنا</li>
               </ol>
             </div>
           </div>
 
-          {/* Ø±Ø¨Ø· Ø§Ù„Ù‚Ù†ÙˆØ§Øª */}
+          {/* ربط القنوات */}
           <div className="bg-slate-800/30 border border-sky-400/20 rounded-lg p-3 sm:p-4">
-            <h4 className="font-bold text-slate-300 mb-3 text-sm sm:text-base flex items-center gap-2"><Megaphone className="w-4 h-4 text-sky-400" /> Ø±Ø¨Ø· Ø§Ù„Ù‚Ù†ÙˆØ§Øª Ø­Ø³Ø¨ Ø§Ù„Ù…Ø§Ø¯Ø©</h4>
+            <h4 className="font-bold text-slate-300 mb-3 text-sm sm:text-base flex items-center gap-2"><Megaphone className="w-4 h-4 text-sky-400" /> ربط القنوات حسب المادة</h4>
             <p className="text-xs sm:text-xs text-slate-500 mb-3">
-              Ù„ÙƒÙ„ Ù…Ø§Ø¯Ø© (Ù…Ø±Ø­Ù„Ø©)ØŒ Ø£Ø¯Ø®Ù„ Chat ID Ø§Ù„Ù‚Ù†Ø§Ø© Ø§Ù„Ø®Ø§ØµØ© Ø¨Ù‡Ø§
+              لكل مادة (مرحلة)، أدخل Chat ID القناة الخاصة بها
             </p>
 
             {stages.length === 0 ? (
               <div className="bg-yellow-500/10 border border-yellow-400/20 rounded-lg p-3 text-xs sm:text-sm text-yellow-400 text-center flex items-center justify-center gap-2">
-                <TriangleAlert className="w-4 h-4 shrink-0" /> Ù„Ø§ ØªÙˆØ¬Ø¯ Ù…Ø±Ø§Ø­Ù„ Ù…Ø¶Ø§ÙØ©. Ø£Ø¶Ù Ø§Ù„Ù…Ø±Ø§Ø­Ù„ Ø£ÙˆÙ„Ø§Ù‹ Ù…Ù† ØµÙØ­Ø© Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„ÙƒÙ„ÙŠØ§Øª.
+                <TriangleAlert className="w-4 h-4 shrink-0" /> لا توجد مراحل مضافة. أضف المراحل أولاً من صفحة إدارة الكليات.
               </div>
             ) : (
               <div className="space-y-3 max-h-80 overflow-y-auto">
@@ -628,7 +628,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
                             onChange={e => handleChannelToggle(stage.id, 'enabled', e.target.checked)}
                             className="accent-sky-600"
                           />
-                          Ù…ÙØ¹Ù‘Ù„
+                          مفعّل
                         </label>
                       </div>
                       <div className="flex flex-col sm:flex-row gap-2">
@@ -645,7 +645,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
                           disabled={!chatId || !telegramConfig?.botToken}
                           className="bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white text-xs font-medium px-3 py-1.5 rounded-md transition duration-200 flex items-center gap-1.5"
                         >
-                          <Send className="w-3.5 h-3.5" /> Ø§Ø®ØªØ¨Ø§Ø±
+                          <Send className="w-3.5 h-3.5" /> اختبار
                         </button>
                       </div>
                       {chatId && (
@@ -654,7 +654,7 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
                             <input type="checkbox" checked={channel?.notifyOnAbsence ?? true}
                               onChange={e => handleChannelToggle(stage.id, 'notifyOnAbsence', e.target.checked)}
                               className="accent-sky-600 w-3 h-3" />
-                            ØºÙŠØ§Ø¨
+                            غياب
                           </label>
                         </div>
                       )}
@@ -666,12 +666,12 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
 
             {stages.length > 0 && (
               <div className="mt-3 bg-slate-800/30 border border-white/10 rounded-lg p-2 sm:p-3 text-xs sm:text-xs text-slate-400">
-                <p className="font-bold mb-1 flex items-center gap-1.5"><Info className="w-4 h-4" /> ÙƒÙŠÙÙŠØ© Ø§Ù„Ø­ØµÙˆÙ„ Ø¹Ù„Ù‰ Chat ID:</p>
+                <p className="font-bold mb-1 flex items-center gap-1.5"><Info className="w-4 h-4" /> كيفية الحصول على Chat ID:</p>
               <ol className="list-decimal list-inside space-y-1 ms-2">
-                  <li>Ø£Ø¶Ù Ø§Ù„Ø¨ÙˆØª ÙƒØ£Ø¯Ù…Ù† ÙÙŠ Ø§Ù„Ù‚Ù†Ø§Ø©</li>
-                  <li>Ø£Ø±Ø³Ù„ Ø±Ø³Ø§Ù„Ø© ÙÙŠ Ø§Ù„Ù‚Ù†Ø§Ø©</li>
-                  <li>Ø§ÙØªØ­ <a href="https://t.me/GetChatID_Bot" target="_blank" className="text-blue-400 underline">@GetChatID_Bot</a></li>
-                  <li>Ø§Ù†Ø³Ø® Ø§Ù„Ø±Ù‚Ù… (ÙŠØ¨Ø¯Ø£ Ø¨Ù€ -100) ÙˆØ£Ù„ØµÙ‚Ù‡ Ù‡Ù†Ø§</li>
+                  <li>أضف البوت كأدمن في القناة</li>
+                  <li>أرسل رسالة في القناة</li>
+                  <li>افتح <a href="https://t.me/GetChatID_Bot" target="_blank" className="text-blue-400 underline">@GetChatID_Bot</a></li>
+                  <li>انسخ الرقم (يبدأ بـ -100) وألصقه هنا</li>
                 </ol>
               </div>
             )}
@@ -693,15 +693,15 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
             className="mt-4 btn-base btn-primary w-full"
           >
             {telegramSaving ? (
-              <><MorphingSquare size="sm" /> Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø­ÙØ¸...</>
+              <><MorphingSquare size="sm" /> جاري الحفظ...</>
             ) : (
-              <><Save className="w-5 h-5" /> Ø­ÙØ¸ Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Ø§Ù„ØªÙ„ØºØ±Ø§Ù…</>
+              <><Save className="w-5 h-5" /> حفظ إعدادات التلغرام</>
             )}
           </button>
         </div>
       </div>
 
-      {/* ðŸ“‹ Ù†Ø§ÙØ°Ø© ØªØ£ÙƒÙŠØ¯ Ø¯Ø§Ø®Ù„ÙŠØ© (Ø¨Ø¯Ù„ window.confirm/prompt Ø§Ù„ØªÙŠ ØªØªØ¬Ù…Ø¯ Ø¹Ù„Ù‰ Ø§Ù„Ø¬ÙˆØ§Ù„) */}
+      {/* 📋 نافذة تأكيد داخلية (بدل window.confirm/prompt التي تتجمد على الجوال) */}
       {resetDialog && createPortal(
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 animate-fadeIn"
@@ -719,40 +719,40 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
           >
             {resetDialog.type === 'confirm' && (
               <>
-                <h3 id="reset-dialog-title" className="text-base sm:text-lg font-semibold text-white">ØªØ­Ø°ÙŠØ± Ø®Ø·ÙŠØ±</h3>
+                <h3 id="reset-dialog-title" className="text-base sm:text-lg font-semibold text-white">تحذير خطير</h3>
                 <p className="text-sm text-slate-400 whitespace-pre-line text-start">
-                  {`Ø§Ù„Ø³Ù†Ø© Ø§Ù„Ø¬Ø¯ÙŠØ¯Ø©: ${newYearDraft}\n\n` +
-                   `Ø³ÙŠØªÙ… Ø­Ø°Ù Ø¬Ù…ÙŠØ¹ Ø§Ù„Ø·Ù„Ø§Ø¨ ÙˆØ³Ø¬Ù„Ø§Øª Ø§Ù„Ø­Ø¶ÙˆØ± ÙˆØ§Ù„Ø¬Ù„Ø³Ø§Øª\n` +
-                   `Ø³ÙŠØªÙ… ØªØ¹Ø·ÙŠÙ„ ØµÙ„Ø§Ø­ÙŠØ§Øª Ø¬Ù…ÙŠØ¹ Ø§Ù„ØªØ¯Ø±ÙŠØ³ÙŠÙŠÙ† (Ø§Ù„Ø­Ø³Ø§Ø¨Ø§Øª ØªØ¨Ù‚Ù‰)\n\n` +
-                   `Ù…Ø§ Ø³ÙŠØ¨Ù‚Ù‰:\n` +
-                   `Ø§Ù„ÙƒÙ„ÙŠØ§Øª ÙˆØ§Ù„Ù…Ø±Ø§Ø­Ù„ ÙƒÙ…Ø§ Ù‡ÙŠ\n` +
-                   `Ø­Ø³Ø§Ø¨Ùƒ (Ø§Ù„Ø£Ø¯Ù…Ù†) ÙˆØ­Ø³Ø§Ø¨Ø§Øª Ø§Ù„ØªØ¯Ø±ÙŠØ³ÙŠÙŠÙ†`}
+                  {`السنة الجديدة: ${newYearDraft}\n\n` +
+                   `سيتم حذف جميع الطلاب وسجلات الحضور والجلسات\n` +
+                   `سيتم تعطيل صلاحيات جميع التدريسيين (الحسابات تبقى)\n\n` +
+                   `ما سيبقى:\n` +
+                   `الكليات والمراحل كما هي\n` +
+                   `حسابك (الأدمن) وحسابات التدريسيين`}
                 </p>
                 <div className="space-y-1.5 text-start">
                   <label className="block text-xs font-bold text-slate-300">
-                    Ù„Ù„ØªØ£ÙƒÙŠØ¯ Ø§Ù„Ù†Ù‡Ø§Ø¦ÙŠØŒ Ø§ÙƒØªØ¨: "ØªØµÙÙŠØ±"
+                    للتأكيد النهائي، اكتب: "تصفير"
                   </label>
                   <input
                     type="text"
                     value={resetTypedConfirm}
                     onChange={e => setResetTypedConfirm(e.target.value)}
-                    placeholder="ØªØµÙÙŠØ±"
+                    placeholder="تصفير"
                     className="glass-input text-center text-sm"
                   />
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={confirmReset}
-                    disabled={resetTypedConfirm !== 'ØªØµÙÙŠØ±' || resetting}
+                    disabled={resetTypedConfirm !== 'تصفير' || resetting}
                     className="btn-base btn-danger flex-1"
                   >
-                    {resetting ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„ØªÙ†ÙÙŠØ°...' : 'ØªØ£ÙƒÙŠØ¯ Ø§Ù„ØªÙ†ÙÙŠØ°'}
+                    {resetting ? 'جاري التنفيذ...' : 'تأكيد التنفيذ'}
                   </button>
                   <button
                     onClick={() => setResetDialog(null)}
                     className="btn-base btn-secondary"
                   >
-                    Ø¥Ù„ØºØ§Ø¡
+                    إلغاء
                   </button>
                 </div>
               </>
@@ -760,31 +760,31 @@ export const Settings: React.FC<SettingsProps> = React.memo(({
 
             {resetDialog.type === 'success' && (
               <>
-                <h3 id="reset-dialog-title" className="text-base sm:text-lg font-semibold text-green-400">ØªÙ… Ø¨Ø¯Ø¡ Ø§Ù„Ø³Ù†Ø© Ø§Ù„Ø¬Ø¯ÙŠØ¯Ø© Ø¨Ù†Ø¬Ø§Ø­!</h3>
+                <h3 id="reset-dialog-title" className="text-base sm:text-lg font-semibold text-green-400">تم بدء السنة الجديدة بنجاح!</h3>
                 <p className="text-sm text-slate-400 whitespace-pre-line text-start">
-                  {`Ø§Ù„Ø³Ù†Ø© Ø§Ù„Ø³Ø§Ø¨Ù‚Ø©: ${resetDialog.oldYear}\n` +
-                   `Ø§Ù„Ø³Ù†Ø© Ø§Ù„Ø¬Ø¯ÙŠØ¯Ø©: ${resetDialog.newYear}\n\n` +
-                   `ØªÙ… Ø­Ø°Ù Ø§Ù„Ø·Ù„Ø§Ø¨ ÙˆØ³Ø¬Ù„Ø§Øª Ø§Ù„Ø­Ø¶ÙˆØ±\n` +
-                   `ØªÙ… ØªØ¹Ø·ÙŠÙ„ ØµÙ„Ø§Ø­ÙŠØ§Øª Ø§Ù„ØªØ¯Ø±ÙŠØ³ÙŠÙŠÙ†`}
+                  {`السنة السابقة: ${resetDialog.oldYear}\n` +
+                   `السنة الجديدة: ${resetDialog.newYear}\n\n` +
+                   `تم حذف الطلاب وسجلات الحضور\n` +
+                   `تم تعطيل صلاحيات التدريسيين`}
                 </p>
                 <button
                   onClick={closeResetDialog}
                   className="btn-base btn-primary w-full"
                 >
-                  Ø¥Ø¹Ø§Ø¯Ø© ØªØ­Ù…ÙŠÙ„ Ø§Ù„ØµÙØ­Ø©
+                  إعادة تحميل الصفحة
                 </button>
               </>
             )}
 
             {resetDialog.type === 'error' && (
               <>
-                <h3 id="reset-dialog-title" className="text-base sm:text-lg font-semibold text-red-400">ÙØ´Ù„ Ø§Ù„Ø¹Ù…Ù„ÙŠØ©</h3>
+                <h3 id="reset-dialog-title" className="text-base sm:text-lg font-semibold text-red-400">فشل العملية</h3>
                 <p className="text-sm text-slate-400 whitespace-pre-line">{resetDialog.message}</p>
                 <button
                   onClick={() => setResetDialog(null)}
                   className="btn-base btn-danger w-full"
                 >
-                  Ø¥ØºÙ„Ø§Ù‚
+                  إغلاق
                 </button>
               </>
             )}

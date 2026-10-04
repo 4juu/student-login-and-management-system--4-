@@ -31,8 +31,8 @@ export const AppHeader: FC<AppHeaderProps> = ({
   onLogout,
 }) => (
   <div className="space-y-4 sm:space-y-6">
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-w-0">
+    <div className="flex items-center justify-between gap-2 sm:gap-3">
+      <div className="flex items-center gap-2 sm:gap-x-3 min-w-0">
         <button
           type="button"
           onClick={onProfile}

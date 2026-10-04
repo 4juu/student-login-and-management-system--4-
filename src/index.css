@@ -986,7 +986,7 @@
 }
 
 .animate-pageEnter {
-  animation: pageEnter 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: pageEnter 0.55s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 @keyframes pageExit {
@@ -1007,7 +1007,7 @@
 }
 
 .animate-cardEnter {
-  animation: cardEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: cardEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 .animate-cardEnter:nth-child(1) { animation-delay: 0ms; }
@@ -1040,7 +1040,7 @@
 }
 
 .animate-rowFadeIn {
-  animation: rowFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: rowFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 /* == تأثير hover على صفوف الجدول == */
@@ -1080,7 +1080,7 @@
 }
 
 .animate-staggerFadeIn > * {
-  animation: staggerFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: staggerFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 .animate-staggerFadeIn > *:nth-child(1) { animation-delay: 0ms; }

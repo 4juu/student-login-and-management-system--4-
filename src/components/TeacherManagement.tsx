@@ -46,12 +46,12 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [editProfileName, setEditProfileName] = useState('');
   const [editProfileBio, setEditProfileBio] = useState('');
-  // Ã™â€žÃ™â€žÃ˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã˜Â§Ã™â€žÃ˜Â±Ã˜Â¦Ã™Å Ã˜Â³Ã™Å : Ã˜Â§Ã˜Â®Ã˜ÂªÃ™Å Ã˜Â§Ã˜Â± Ã™Æ’Ã™â€žÃ™Å Ã˜Â© Ã™â€žÃ˜Â¹Ã˜Â±Ã˜Â¶ Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã™Å Ã™â€¡Ã˜Â§
+  // للأدمن الرئيسي: اختيار كلية لعرض تدريسييها
   const [selectedCollegeId, setSelectedCollegeId] = useState<string | null>(null);
-  // migratoryja: Ã˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€  Ã™Æ’Ã™â€žÃ™Å Ã˜Â© Ã™â€žÃ™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã™Å Ã™â€  Ã˜Â§Ã™â€žÃ™â€šÃ˜Â¯Ã˜Â§Ã™â€¦Ã™â€°
+  // migratoryja: تعيين كلية للتدريسيين القدامى
   const [migrationMap, setMigrationMap] = useState<{[uid: string]: string}>({});
 
-  // Ã°Å¸â€ â€¢ Ã˜Â¥Ã˜Â¯Ã˜Â§Ã˜Â±Ã˜Â© Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã˜Â§Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â© Ã™â€¦Ã™â€  Ã˜Â¨Ã˜Â·Ã˜Â§Ã™â€šÃ˜Â© Ã˜Â§Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â©
+  // 🆕 إدارة أدمن الكلية من بطاقة الكلية
   const [showAssignAdminModal, setShowAssignAdminModal] = useState(false);
   const [assignAdminCollegeId, setAssignAdminCollegeId] = useState<string | null>(null);
   const [assignAdminCollegeName, setAssignAdminCollegeName] = useState('');
@@ -86,14 +86,14 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
       }
 
       if (isMainAdmin) {
-        // Ã™Æ’Ã™â€žÃ™Å Ã˜Â© Ã™â€¦Ã˜Â­Ã˜Â¯Ã˜Â¯Ã˜Â© Ã¢â€ â€™ Ã˜Â§Ã˜Â³Ã˜ÂªÃ˜Â¹Ã™â€žÃ˜Â§Ã™â€¦ Ã™â€¦Ã™ÂÃ™â€¡Ã˜Â±Ã˜Â³ Ã˜Â¨Ã˜Â§Ã™â€žÃ™â‚¬collegeId
+        // كلية محددة → استعلام مفهرس بالـcollegeId
         if (selectedCollegeId && selectedCollegeId !== '__all__') {
           const list = await getAllTeachersForCollege(selectedCollegeId);
           setTeachers(list);
           return;
         }
 
-        // Ã˜Â§Ã™â€žÃ™Æ’Ã™â€ž (Ã˜Â¨Ã™â€žÃ˜Â§ Ã˜Â§Ã˜Â®Ã˜ÂªÃ™Å Ã˜Â§Ã˜Â± Ã˜Â£Ã™Ë† "__all__") Ã¢â€ â€™ Ã˜Â§Ã˜Â³Ã˜ÂªÃ˜Â¹Ã™â€žÃ˜Â§Ã™â€¦Ã˜Â§Ã™â€  Ã™â€¦Ã˜Â­Ã˜Â¯Ã™Ë†Ã˜Â¯Ã˜Â§Ã™â€  Ã˜Â¨Ã˜Â§Ã™â€žÃ˜Â¯Ã™Ë†Ã˜Â± Ã˜Â¨Ã˜Â¯Ã™â€ž users Ã™Æ’Ã˜Â§Ã™â€¦Ã™â€žÃ˜Â©
+        // الكل (بلا اختيار أو "__all__") → استعلامان محدودان بالدور بدل users كاملة
         const { ref, get, query, orderByChild, equalTo } = await import('firebase/database');
         const { database } = await import('../firebase/config');
         const fetchByRole = async (role: string): Promise<User[]> => {
@@ -118,9 +118,9 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
 
   const handleFixOldTeachers = async () => {
     const ok = await confirmAction({
-      title: 'Ã˜Â¥Ã˜ÂµÃ™â€žÃ˜Â§Ã˜Â­ Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã™Å Ã™â€  Ã˜Â§Ã™â€žÃ™â€šÃ˜Â¯Ã˜Â§Ã™â€¦Ã™â€°',
-      message: 'Ã™â€¡Ã˜Â°Ã™â€¡ Ã˜Â§Ã™â€žÃ˜Â£Ã˜Â¯Ã˜Â§Ã˜Â© Ã˜Â³Ã˜ÂªÃ˜Â±Ã˜Â¨Ã˜Â· Ã˜Â¬Ã™â€¦Ã™Å Ã˜Â¹ Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã™Å Ã™â€  Ã˜Â§Ã™â€žÃ™â€šÃ˜Â¯Ã˜Â§Ã™â€¦Ã™â€° Ã˜Â¨Ã˜Â­Ã˜Â³Ã˜Â§Ã˜Â¨Ã™Æ’ (Ã™Æ’Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€ ) Ã™Ë†Ã˜ÂªÃ˜Â¬Ã™â€¡Ã˜Â²Ã™â€¡Ã™â€¦ Ã™â€žÃ˜Â§Ã˜Â³Ã˜ÂªÃ™â€šÃ˜Â¨Ã˜Â§Ã™â€ž Ã˜Â§Ã™â€žÃ˜ÂµÃ™â€žÃ˜Â§Ã˜Â­Ã™Å Ã˜Â§Ã˜Âª. Ã™â€¦Ã˜ÂªÃ˜Â§Ã˜Â¨Ã˜Â¹Ã˜Â©Ã˜Å¸',
-      confirmLabel: 'Ã™â€¦Ã˜ÂªÃ˜Â§Ã˜Â¨Ã˜Â¹Ã˜Â©',
+      title: 'إصلاح التدريسيين القدامى',
+      message: 'هذه الأداة ستربط جميع التدريسيين القدامى بحسابك (كأدمن) وتجهزهم لاستقبال الصلاحيات. متابعة؟',
+      confirmLabel: 'متابعة',
     });
     if (!ok) return;
     setLoading(true);
@@ -154,7 +154,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
         }
       }
       await loadTeachers();
-      toast({ title: `Ã˜ÂªÃ™â€¦ Ã˜Â¥Ã˜ÂµÃ™â€žÃ˜Â§Ã˜Â­ ${fixed} Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å .\nÃ˜Â§Ã™â€žÃ˜Â¢Ã™â€  Ã˜ÂªÃ™â€šÃ˜Â¯Ã˜Â± Ã˜ÂªÃ˜Â¶Ã˜ÂºÃ˜Â· "Ã˜Â§Ã™â€žÃ˜ÂµÃ™â€žÃ˜Â§Ã˜Â­Ã™Å Ã˜Â§Ã˜Âª" Ã™â€žÃ™Æ’Ã™â€ž Ã™Ë†Ã˜Â§Ã˜Â­Ã˜Â¯ Ã™â€¦Ã™â€ Ã™â€¡Ã™â€¦ Ã™Ë†Ã˜ÂªÃ˜Â­Ã˜Â¯Ã˜Â¯ Ã™â€žÃ™â€¡ Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â±Ã˜Â§Ã˜Â­Ã™â€ž.` });
+      toast({ title: `تم إصلاح ${fixed} تدريسي.\nالآن تقدر تضغط "الصلاحيات" لكل واحد منهم وتحدد له المراحل.` });
     } catch (e: any) {
       toast({ variant: 'destructive', title: e.message });
     } finally {
@@ -164,9 +164,9 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
 
   const handleReactivateTeacher = async (teacher: User) => {
     const ok = await confirmAction({
-      title: 'Ã˜Â¥Ã˜Â¹Ã˜Â§Ã˜Â¯Ã˜Â© Ã˜ÂªÃ™ÂÃ˜Â¹Ã™Å Ã™â€ž Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å ',
-      message: `Ã˜Â¥Ã˜Â¹Ã˜Â§Ã˜Â¯Ã˜Â© Ã˜ÂªÃ™ÂÃ˜Â¹Ã™Å Ã™â€ž ${teacher.displayName}Ã˜Å¸ Ã˜Â³Ã™Å Ã˜ÂªÃ™â€¦ Ã˜ÂªÃ™ÂÃ˜Â¹Ã™Å Ã™â€ž Ã˜Â­Ã˜Â³Ã˜Â§Ã˜Â¨Ã™â€¡ Ã˜Â¨Ã˜Â¯Ã™Ë†Ã™â€  Ã˜ÂµÃ™â€žÃ˜Â§Ã˜Â­Ã™Å Ã˜Â§Ã˜Âª. Ã˜Â¨Ã˜Â¹Ã˜Â¯ Ã˜Â°Ã™â€žÃ™Æ’ Ã™Å Ã˜Â¬Ã˜Â¨ Ã˜ÂªÃ˜Â­Ã˜Â¯Ã™Å Ã˜Â¯ Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â±Ã˜Â§Ã˜Â­Ã™â€ž Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â³Ã™â€¦Ã™Ë†Ã˜Â­Ã˜Â© Ã™â€žÃ™â€¡ Ã™â€¦Ã™â€  Ã˜Â²Ã˜Â± "Ã˜Â§Ã™â€žÃ˜ÂµÃ™â€žÃ˜Â§Ã˜Â­Ã™Å Ã˜Â§Ã˜Âª".`,
-      confirmLabel: 'Ã˜Â¥Ã˜Â¹Ã˜Â§Ã˜Â¯Ã˜Â© Ã˜ÂªÃ™ÂÃ˜Â¹Ã™Å Ã™â€ž',
+      title: 'إعادة تفعيل تدريسي',
+      message: `إعادة تفعيل ${teacher.displayName}؟ سيتم تفعيل حسابه بدون صلاحيات. بعد ذلك يجب تحديد المراحل المسموحة له من زر "الصلاحيات".`,
+      confirmLabel: 'إعادة تفعيل',
     });
     if (!ok) return;
     setLoading(true);
@@ -176,7 +176,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
         canViewRecords: true,
         canTakeAttendance: true,
       });
-      setSuccess(`Ã˜ÂªÃ™â€¦ Ã˜ÂªÃ™ÂÃ˜Â¹Ã™Å Ã™â€ž ${teacher.displayName}. Ã˜Â§Ã™â€žÃ˜Â¢Ã™â€  Ã˜Â­Ã˜Â¯Ã˜Â¯ Ã™â€žÃ™â€¡ Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â±Ã˜Â§Ã˜Â­Ã™â€ž Ã™â€¦Ã™â€  Ã˜Â²Ã˜Â± "Ã˜Â§Ã™â€žÃ˜ÂµÃ™â€žÃ˜Â§Ã˜Â­Ã™Å Ã˜Â§Ã˜Âª".`);
+      setSuccess(`تم تفعيل ${teacher.displayName}. الآن حدد له المراحل من زر "الصلاحيات".`);
       await loadTeachers();
       setTimeout(() => setSuccess(''), 5000);
     } catch (e: any) {
@@ -211,7 +211,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
       await loadTeachers();
       setSelectedTeacher({ ...teacher, permissions: newPermissions });
     } catch {
-      toast({ variant: 'destructive', title: 'Ã™ÂÃ˜Â´Ã™â€ž Ã˜ÂªÃ˜Â­Ã˜Â¯Ã™Å Ã˜Â« Ã˜Â§Ã™â€žÃ˜ÂµÃ™â€žÃ˜Â§Ã˜Â­Ã™Å Ã˜Â§Ã˜Âª' });
+      toast({ variant: 'destructive', title: 'فشل تحديث الصلاحيات' });
     }
   };
 
@@ -230,7 +230,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
       await loadTeachers();
       setSelectedTeacher({ ...teacher, permissions: newPermissions });
     } catch {
-      toast({ variant: 'destructive', title: 'Ã™ÂÃ˜Â´Ã™â€ž Ã˜ÂªÃ˜Â­Ã˜Â¯Ã™Å Ã˜Â« Ã˜Â§Ã™â€žÃ˜ÂµÃ™â€žÃ˜Â§Ã˜Â­Ã™Å Ã˜Â§Ã˜Âª' });
+      toast({ variant: 'destructive', title: 'فشل تحديث الصلاحيات' });
     }
   };
 
@@ -248,7 +248,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
       await loadTeachers();
       setSelectedTeacher({ ...teacher, permissions: newPermissions });
     } catch {
-      toast({ variant: 'destructive', title: 'Ã™ÂÃ˜Â´Ã™â€ž Ã˜ÂªÃ˜Â­Ã˜Â¯Ã™Å Ã˜Â« Ã˜Â§Ã™â€žÃ˜ÂµÃ™â€žÃ˜Â§Ã˜Â­Ã™Å Ã˜Â§Ã˜Âª' });
+      toast({ variant: 'destructive', title: 'فشل تحديث الصلاحيات' });
     }
   };
 
@@ -257,10 +257,10 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
     setError('');
     setSuccess('');
     if (!formData.email || !formData.password || !formData.displayName) {
-      return setError('Ã˜Â§Ã™â€¦Ã™â€žÃ˜Â£ Ã˜Â¬Ã™â€¦Ã™Å Ã˜Â¹ Ã˜Â§Ã™â€žÃ˜Â­Ã™â€šÃ™Ë†Ã™â€ž');
+      return setError('املأ جميع الحقول');
     }
     if (formData.password.length < 6) {
-      return setError('Ã™Æ’Ã™â€žÃ™â€¦Ã˜Â© Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â±Ã™Ë†Ã˜Â± Ã™Å Ã˜Â¬Ã˜Â¨ Ã˜Â£Ã™â€  Ã˜ÂªÃ™Æ’Ã™Ë†Ã™â€  6 Ã˜Â£Ã˜Â­Ã˜Â±Ã™Â Ã˜Â¹Ã™â€žÃ™â€° Ã˜Â§Ã™â€žÃ˜Â£Ã™â€šÃ™â€ž');
+      return setError('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
     }
     const collegeId = formData.collegeId || (selectedCollegeId || (isCollegeAdmin ? currentUser.collegeId : undefined));
     setLoading(true);
@@ -272,7 +272,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
         currentUser.uid,
         collegeId
       );
-      setSuccess(`Ã˜ÂªÃ™â€¦ Ã˜Â¥Ã™â€ Ã˜Â´Ã˜Â§Ã˜Â¡ Ã˜Â­Ã˜Â³Ã˜Â§Ã˜Â¨ ${formData.displayName} Ã˜Â¨Ã™â€ Ã˜Â¬Ã˜Â§Ã˜Â­!\n\nÃ˜Â§Ã™â€žÃ˜Â¢Ã™â€  Ã˜Â§Ã˜Â¶Ã˜ÂºÃ˜Â· Ã˜Â¹Ã™â€žÃ™â€° "Ã˜Â§Ã™â€žÃ˜ÂµÃ™â€žÃ˜Â§Ã˜Â­Ã™Å Ã˜Â§Ã˜Âª" Ã˜Â¨Ã˜Â¬Ã™â€ Ã˜Â¨ Ã˜Â§Ã˜Â³Ã™â€¦Ã™â€¡ Ã™â€žÃ˜ÂªÃ˜Â­Ã˜Â¯Ã™Å Ã˜Â¯ Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â±Ã˜Â§Ã˜Â­Ã™â€ž Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â³Ã™â€¦Ã™Ë†Ã˜Â­Ã˜Â©.`);
+      setSuccess(`تم إنشاء حساب ${formData.displayName} بنجاح!\n\nالآن اضغط على "الصلاحيات" بجنب اسمه لتحديد المراحل المسموحة.`);
       setShowAddForm(false);
       setFormData({ email: '', password: '', displayName: '', collegeId: '' });
       await loadTeachers();
@@ -296,12 +296,12 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
     if (!selectedTeacher) return;
     setError('');
     if (!newPassword.trim() || newPassword.length < 6) {
-      return setError('Ã™Æ’Ã™â€žÃ™â€¦Ã˜Â© Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â±Ã™Ë†Ã˜Â± Ã™Å Ã˜Â¬Ã˜Â¨ Ã˜Â£Ã™â€  Ã˜ÂªÃ™Æ’Ã™Ë†Ã™â€  6 Ã˜Â£Ã˜Â­Ã˜Â±Ã™Â Ã˜Â¹Ã™â€žÃ™â€° Ã˜Â§Ã™â€žÃ˜Â£Ã™â€šÃ™â€ž');
+      return setError('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
     }
     setLoading(true);
     try {
       await updateTeacherPassword(selectedTeacher.uid, newPassword, currentTeacherPassword || undefined);
-      setSuccess(`Ã˜ÂªÃ™â€¦ Ã˜ÂªÃ˜ÂºÃ™Å Ã™Å Ã˜Â± Ã™Æ’Ã™â€žÃ™â€¦Ã˜Â© Ã™â€¦Ã˜Â±Ã™Ë†Ã˜Â± ${selectedTeacher.displayName} Ã˜Â¨Ã™â€ Ã˜Â¬Ã˜Â§Ã˜Â­`);
+      setSuccess(`تم تغيير كلمة مرور ${selectedTeacher.displayName} بنجاح`);
       setShowPasswordModal(false);
       setNewPassword('');
       setCurrentTeacherPassword('');
@@ -326,7 +326,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
         bio: editProfileBio.trim(),
         lastUpdated: new Date().toISOString()
       });
-      setSuccess(`Ã˜ÂªÃ™â€¦ Ã˜ÂªÃ˜Â­Ã˜Â¯Ã™Å Ã˜Â« Ã™â€¦Ã™â€žÃ™Â ${editProfileName.trim()}`);
+      setSuccess(`تم تحديث ملف ${editProfileName.trim()}`);
       setShowProfileModal(false);
       await loadTeachers();
       setTimeout(() => setSuccess(''), 5000);
@@ -339,15 +339,15 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
 
   const handleDeleteTeacher = async (teacher: User) => {
     const ok = await confirmAction({
-      title: 'Ã˜Â­Ã˜Â°Ã™Â Ã˜Â­Ã˜Â³Ã˜Â§Ã˜Â¨ Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å ',
-      message: `Ã™â€¡Ã™â€ž Ã˜Â£Ã™â€ Ã˜Âª Ã™â€¦Ã˜ÂªÃ˜Â£Ã™Æ’Ã˜Â¯ Ã™â€¦Ã™â€  Ã˜Â­Ã˜Â°Ã™Â Ã˜Â­Ã˜Â³Ã˜Â§Ã˜Â¨ ${teacher.displayName}Ã˜Å¸ Ã˜Â³Ã™Å Ã˜ÂªÃ™â€¦ Ã˜Â­Ã˜Â°Ã™Â Ã˜Â¬Ã™â€¦Ã™Å Ã˜Â¹ Ã˜Â¨Ã™Å Ã˜Â§Ã™â€ Ã˜Â§Ã˜ÂªÃ™â€¡ Ã™â€ Ã™â€¡Ã˜Â§Ã˜Â¦Ã™Å Ã˜Â§Ã™â€¹!`,
-      confirmLabel: 'Ã˜Â­Ã˜Â°Ã™Â Ã™â€ Ã™â€¡Ã˜Â§Ã˜Â¦Ã™Å ',
+      title: 'حذف حساب تدريسي',
+      message: `هل أنت متأكد من حذف حساب ${teacher.displayName}؟ سيتم حذف جميع بياناته نهائياً!`,
+      confirmLabel: 'حذف نهائي',
     });
     if (!ok) return;
     setLoading(true);
     try {
       await deleteTeacherAccount(teacher.uid);
-      setSuccess(`Ã˜ÂªÃ™â€¦ Ã˜Â­Ã˜Â°Ã™Â Ã˜Â­Ã˜Â³Ã˜Â§Ã˜Â¨ ${teacher.displayName}`);
+      setSuccess(`تم حذف حساب ${teacher.displayName}`);
       await loadTeachers();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
@@ -357,7 +357,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
     }
   };
 
-  // Ã˜ÂªÃ˜Â±Ã˜Â­Ã™Å Ã™â€ž Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã™Å Ã™â€  Ã˜Â§Ã™â€žÃ™â€šÃ˜Â¯Ã˜Â§Ã™â€¦Ã™â€° Ã™â€žÃ˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€  Ã™Æ’Ã™â€žÃ™Å Ã˜Â©
+  // ترحيل التدريسيين القدامى لتعيين كلية
   const handleMigrateCollege = async () => {
     setLoading(true);
     setError('');
@@ -374,7 +374,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
           count++;
         }
       }
-      setSuccess(`Ã˜ÂªÃ™â€¦ Ã˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€  Ã™Æ’Ã™â€žÃ™Å Ã˜Â© Ã™â€žÃ™â‚¬ ${count} Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å `);
+      setSuccess(`تم تعيين كلية لـ ${count} تدريسي`);
       setShowMigrationModal(false);
       setMigrationMap({});
       await loadTeachers();
@@ -394,7 +394,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
   const activeTeachers = teachers.filter(t => t.active !== false).length;
   const deactivatedTeachers = teachers.filter(t => t.active === false).length;
 
-  // Ã˜Â®Ã˜Â±Ã™Å Ã˜Â·Ã˜Â© Ã™Æ’Ã™â€ž Ã™Æ’Ã™â€žÃ™Å Ã˜Â© Ã¢â€ â€™ Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€ Ã™â€¡Ã˜Â§ Ã˜Â§Ã™â€žÃ˜Â­Ã˜Â§Ã™â€žÃ™Å 
+  // خريطة كل كلية → أدمنها الحالي
   const collegeAdminMap: {[collegeId: string]: User} = {};
   teachers.forEach(t => {
     if (t.role === 'college_admin' && t.collegeId) {
@@ -402,7 +402,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
     }
   });
 
-  // --- Ã˜Â´Ã˜Â§Ã˜Â´Ã˜Â© Ã™Æ’Ã˜Â±Ã™Ë†Ã˜Âª Ã˜Â§Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â§Ã˜Âª Ã™â€žÃ™â€žÃ˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã˜Â§Ã™â€žÃ˜Â±Ã˜Â¦Ã™Å Ã˜Â³Ã™Å  ---
+  // --- شاشة كروت الكليات للأدمن الرئيسي ---
   if (isMainAdmin && !selectedCollegeId) {
     const allTeachersFull = teachers;
     const collegeTeacherCount: {[collegeId: string]: number} = {};
@@ -412,25 +412,25 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
     const unassignedCount = allTeachersFull.filter(t => !t.collegeId).length;
 
     return (
-      <div className="glass-card rounded-xl p-4 sm:p-6">
-        <div className="flex justify-between items-center mb-4 sm:mb-6 flex-wrap gap-3">
-          <h2 className="text-xl sm:text-2xl font-semibold text-white flex items-center gap-2"><GraduationCap className="w-6 h-6" /> Ã˜Â§Ã˜Â®Ã˜ÂªÃ™Å Ã˜Â§Ã˜Â± Ã˜Â§Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â© Ã™â€žÃ˜Â¹Ã˜Â±Ã˜Â¶ Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã™Å Ã™â€ </h2>
+      <div className="glass-card rounded-xl p-6">
+        <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
+          <h2 className="text-2xl font-bold text-white flex items-center gap-2"><GraduationCap className="w-6 h-6" /> اختيار الكلية لعرض التدريسيين</h2>
           <div className="flex gap-2 flex-wrap">
             {!selectedCollegeId && allTeachersFull.some(t => !t.collegeId) && (
               <button
                 onClick={() => setShowMigrationModal(true)}
                 disabled={loading}
-                className="btn-base btn-secondary"
+                className="bg-orange-500 hover:bg-orange-600 disabled:bg-white/10 text-white font-medium py-2 px-4 rounded-md flex items-center gap-2 shadow-md"
               >
-                <Truck className="w-4 h-4" /> Ã˜ÂªÃ˜Â±Ã˜Â­Ã™Å Ã™â€ž Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã™Å Ã™â€  Ã˜Â§Ã™â€žÃ™â€šÃ˜Â¯Ã˜Â§Ã™â€¦Ã™â€°
+                <Truck className="w-4 h-4" /> ترحيل التدريسيين القدامى
               </button>
             )}
             <button
               onClick={handleFixOldTeachers}
               disabled={loading}
-              className="btn-base btn-secondary disabled:opacity-50"
+              className="bg-orange-500 hover:bg-orange-600 disabled:bg-white/10 text-white font-medium py-2 px-4 rounded-md flex items-center gap-2 shadow-md"
             >
-              <Wrench className="w-4 h-4" /> Ã˜Â¥Ã˜ÂµÃ™â€žÃ˜Â§Ã˜Â­ Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã™Å Ã™â€  Ã˜Â§Ã™â€žÃ™â€šÃ˜Â¯Ã˜Â§Ã™â€¦Ã™â€°
+              <Wrench className="w-4 h-4" /> إصلاح التدريسيين القدامى
             </button>
           </div>
         </div>
@@ -447,43 +447,43 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
             <TriangleAlert className="w-7 h-7 text-yellow-600" />
             <div className="flex-1">
               <p className="text-sm font-bold text-yellow-300">
-                Ã™Å Ã™Ë†Ã˜Â¬Ã˜Â¯ {unassignedCount} Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å  Ã˜Â¨Ã˜Â¯Ã™Ë†Ã™â€  Ã™Æ’Ã™â€žÃ™Å Ã˜Â© Ã™â€¦Ã˜Â­Ã˜Â¯Ã˜Â¯Ã˜Â© Ã¢â‚¬â€ Ã˜Â§Ã˜Â¶Ã˜ÂºÃ˜Â· "Ã˜ÂªÃ˜Â±Ã˜Â­Ã™Å Ã™â€ž Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã™Å Ã™â€  Ã˜Â§Ã™â€žÃ™â€šÃ˜Â¯Ã˜Â§Ã™â€¦Ã™â€°" Ã™â€žÃ˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€  Ã™Æ’Ã™â€žÃ™Å Ã˜Â© Ã™â€žÃ™â€¡Ã™â€¦
+                يوجد {unassignedCount} تدريسي بدون كلية محددة — اضغط "ترحيل التدريسيين القدامى" لتعيين كلية لهم
               </p>
             </div>
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {colleges.map((college, idx) => {
             const count = collegeTeacherCount[college.id] || 0;
             const admin = collegeAdminMap[college.id];
             return (
               <div
                 key={college.id}
-                className="animate-cardEnter border-2 border-white/10 rounded-xl hover:border-blue-400 hover:shadow-lg transition-colors duration-300 overflow-hidden bg-white/5"
+                className="animate-cardEnter border-2 border-white/10 rounded-xl hover:border-blue-400 hover:shadow-lg transition-all duration-300 overflow-hidden bg-white/5"
                 style={{ animationDelay: `${idx * 60}ms` }}
               >
-                {/* Ã˜Â±Ã˜Â£Ã˜Â³ Ã˜Â§Ã™â€žÃ˜Â¨Ã˜Â·Ã˜Â§Ã™â€šÃ˜Â© - Ã™â€šÃ˜Â§Ã˜Â¨Ã™â€žÃ˜Â© Ã™â€žÃ™â€žÃ˜Â¶Ã˜ÂºÃ˜Â· Ã™â€žÃ™â€žÃ˜Â¯Ã˜Â®Ã™Ë†Ã™â€ž Ã™â€žÃ™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â© */}
+                {/* رأس البطاقة - قابلة للضغط للدخول للكلية */}
                 <button
                   onClick={() => setSelectedCollegeId(college.id)}
-                  className="w-full p-5 text-start hover:bg-blue-500/10 transition-colors duration-200"
+                  className="w-full p-5 text-start hover:bg-blue-500/10 transition-colors"
                 >
-                  <div className="text-4xl mb-3">{college.icon || 'Ã°Å¸Ââ€ºÃ¯Â¸Â'}</div>
-                  <h3 className="text-base sm:text-lg font-semibold text-white">{college.name}</h3>
+                  <div className="text-4xl mb-3">{college.icon || '🏛️'}</div>
+                  <h3 className="text-xl font-bold text-white">{college.name}</h3>
                   <p className="text-sm text-slate-400 mt-1">
-                    {count} Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å {count !== 1 ? 'Ã™Å Ã™â€ ' : ''}
-                    {count === 0 && ' Ã¢â‚¬â€ Ã™â€žÃ˜Â§ Ã™Å Ã™Ë†Ã˜Â¬Ã˜Â¯ Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã™Å Ã™â€  Ã˜Â¨Ã˜Â¹Ã˜Â¯'}
+                    {count} تدريسي{count !== 1 ? 'ين' : ''}
+                    {count === 0 && ' — لا يوجد تدريسيين بعد'}
                   </p>
                 </button>
 
-                {/* Ã˜Â´Ã˜Â±Ã™Å Ã˜Â· Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã˜Â§Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â© */}
+                {/* شريط أدمن الكلية */}
                 <div className={`px-5 py-3 border-t ${admin ? 'bg-amber-500/10 border-amber-500/30' : 'bg-white/5 border-white/10'}`}>
                   {admin ? (
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <Landmark className="w-5 h-5 text-amber-300" />
                         <div className="min-w-0">
-                          <p className="text-xs text-amber-300 font-medium">Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã˜Â§Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â©</p>
+                          <p className="text-xs text-amber-300 font-medium">أدمن الكلية</p>
                           <p className="text-sm font-bold text-amber-200 truncate">{admin.displayName}</p>
                         </div>
                       </div>
@@ -495,24 +495,24 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
                             setAssignAdminCollegeName(college.name);
                             setShowAssignAdminModal(true);
                           }}
-                          className="text-xs bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 px-2.5 py-1.5 rounded-md font-medium transition duration-200"
+                          className="text-xs bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 px-2.5 py-1.5 rounded-md font-medium transition"
                         >
-                          <RefreshCw className="w-3.5 h-3.5" /> Ã˜ÂªÃ˜ÂºÃ™Å Ã™Å Ã˜Â±
+                          <RefreshCw className="w-3.5 h-3.5" /> تغيير
                         </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             setShowRemoveAdminConfirm(college.id);
                           }}
-                          className="text-xs bg-red-500/10 hover:bg-red-500/25 text-red-300 px-2.5 py-1.5 rounded-md font-medium transition duration-200"
+                          className="text-xs bg-red-500/10 hover:bg-red-500/25 text-red-300 px-2.5 py-1.5 rounded-md font-medium transition"
                         >
-                          <Trash2 className="w-3.5 h-3.5" /> Ã˜Â¥Ã™â€žÃ˜ÂºÃ˜Â§Ã˜Â¡
+                          <Trash2 className="w-3.5 h-3.5" /> إلغاء
                         </button>
                       </div>
                     </div>
                   ) : (
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs text-slate-400">Ã™â€žÃ˜Â§ Ã™Å Ã™Ë†Ã˜Â¬Ã˜Â¯ Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã™â€žÃ™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â©</p>
+                      <p className="text-xs text-slate-400">لا يوجد أدمن للكلية</p>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -521,13 +521,13 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
                           setShowAssignAdminModal(true);
                         }}
                         disabled={count === 0}
-                        className={`text-xs font-medium px-3 py-1.5 rounded-md transition duration-200 ${
+                        className={`text-xs font-medium px-3 py-1.5 rounded-md transition ${
                           count === 0
                             ? 'bg-white/10 text-slate-500 cursor-not-allowed'
                             : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300'
                         }`}
                       >
-                        Ã˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€  Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€ 
+                        تعيين أدمن
                       </button>
                     </div>
                   )}
@@ -535,27 +535,27 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
               </div>
             );
           })}
-          {/* Ã˜Â¨Ã˜Â·Ã˜Â§Ã™â€šÃ˜Â© Ã˜Â¹Ã˜Â±Ã˜Â¶ Ã˜Â§Ã™â€žÃ™Æ’Ã™â€ž */}
+          {/* بطاقة عرض الكل */}
           <button
             onClick={() => setSelectedCollegeId('__all__')}
-            className="p-6 border-2 border-dashed border-slate-600 rounded-xl hover:border-slate-400 hover:shadow-lg transition-colors duration-200 text-center bg-white/5"
+            className="p-6 border-2 border-dashed border-slate-600 rounded-xl hover:border-slate-400 hover:shadow-lg transition-all duration-300 text-center bg-white/5"
           >
             <Users className="w-12 h-12 text-slate-500 mx-auto mb-3" />
-            <h3 className="text-base sm:text-lg font-semibold text-white">Ã˜Â¹Ã˜Â±Ã˜Â¶ Ã˜Â§Ã™â€žÃ™Æ’Ã™â€ž</h3>
-            <p className="text-sm text-slate-400 mt-2">{allTeachersFull.length} Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å </p>
+            <h3 className="text-xl font-bold text-white">عرض الكل</h3>
+            <p className="text-sm text-slate-400 mt-2">{allTeachersFull.length} تدريسي</p>
           </button>
         </div>
 
-        {/* Ã°Å¸â€ â€¢ Ã™â€¦Ã™Ë†Ã˜Â¯Ã˜Â§Ã™â€ž Ã˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€  Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â© */}
+        {/* 🆕 مودال تعيين أدمن لكلية */}
         {showAssignAdminModal && assignAdminCollegeId && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fadeIn">
-            <div className="glass-modal w-[calc(100vw-2rem)] max-w-lg text-white space-y-4 animate-modalUp focus:outline-none">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <h3 className="text-base sm:text-lg font-semibold text-white flex items-center gap-2"><Landmark className="w-5 h-5 text-amber-300 shrink-0" /> Ã˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€  Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â© {assignAdminCollegeName}</h3>
-                  <p className="text-sm text-slate-400 mt-1">Ã˜Â§Ã˜Â®Ã˜ÂªÃ˜Â± Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å  Ã™â€¦Ã™â€  Ã˜Â§Ã™â€žÃ™â€šÃ˜Â§Ã˜Â¦Ã™â€¦Ã˜Â© Ã™â€žÃ˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€ Ã™â€¡ Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã™â€žÃ™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â©</p>
+            <div className="bg-slate-900 border border-white/10 text-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl animate-modalUp">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2"><Landmark className="w-5 h-5 text-amber-300" /> تعيين أدمن لكلية {assignAdminCollegeName}</h3>
+                  <p className="text-sm text-slate-400 mt-1">اختر التدريسي من القائمة لتعيينه أدمن للكلية</p>
                 </div>
-                <button onClick={() => setShowAssignAdminModal(false)} className="shrink-0 flex items-center justify-center w-10 h-10 text-3xl text-slate-500 hover:text-slate-400 leading-none transition-colors duration-200">&times;</button>
+                <button onClick={() => setShowAssignAdminModal(false)} className="text-3xl text-slate-500 hover:text-slate-400 leading-none">&times;</button>
               </div>
 
               {(() => {
@@ -568,8 +568,8 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
                   return (
                     <div className="text-center py-10 text-slate-400">
                       <UserIcon className="w-14 h-14 text-slate-600 mx-auto mb-4" />
-                      <p className="font-medium">Ã™â€žÃ˜Â§ Ã™Å Ã™Ë†Ã˜Â¬Ã˜Â¯ Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã™Å Ã™â€  Ã™ÂÃ™Å  Ã™â€¡Ã˜Â°Ã™â€¡ Ã˜Â§Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â©</p>
-                      <p className="text-sm mt-1">Ã˜Â£Ã˜Â¶Ã™Â Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã™Å Ã™â€  Ã˜Â£Ã™Ë†Ã™â€žÃ˜Â§Ã™â€¹ Ã™â€¦Ã™â€  Ã˜Â¯Ã˜Â§Ã˜Â®Ã™â€ž Ã˜Â§Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â©</p>
+                      <p className="font-medium">لا يوجد تدريسيين في هذه الكلية</p>
+                      <p className="text-sm mt-1">أضف تدريسيين أولاً من داخل الكلية</p>
                     </div>
                   );
                 }
@@ -577,10 +577,10 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
                 return (
                   <div className="space-y-2">
                     {currentAdmin && (
-                      <div className="p-3 bg-amber-500/10 border-2 border-amber-500/30 rounded-xl flex items-center gap-3">
+                      <div className="p-3 bg-amber-500/10 border-2 border-amber-500/30 rounded-xl mb-4 flex items-center gap-3">
                         <Crown className="w-8 h-8 text-amber-400" />
                         <div>
-                          <p className="text-xs text-amber-300 font-medium">Ã˜Â§Ã™â€žÃ˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã˜Â§Ã™â€žÃ˜Â­Ã˜Â§Ã™â€žÃ™Å </p>
+                          <p className="text-xs text-amber-300 font-medium">الأدمن الحالي</p>
                           <p className="font-bold text-amber-200">{currentAdmin.displayName}</p>
                         </div>
                       </div>
@@ -590,15 +590,15 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
                         key={t.uid}
                         onClick={async () => {
                           const ok = await confirmAction({
-                            title: 'Ã˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€  Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã™Æ’Ã™â€žÃ™Å Ã˜Â©',
-                            message: `Ã˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€  ${t.displayName} Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â© ${assignAdminCollegeName}Ã˜Å¸`,
-                            confirmLabel: 'Ã˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€ ',
+                            title: 'تعيين أدمن كلية',
+                            message: `تعيين ${t.displayName} أدمن لكلية ${assignAdminCollegeName}؟`,
+                            confirmLabel: 'تعيين',
                           });
                           if (!ok) return;
                           setLoading(true);
                           try {
                             await promoteToCollegeAdmin(t.uid, assignAdminCollegeId, assignAdminCollegeName);
-                            toast({ title: `Ã˜ÂªÃ™â€¦ Ã˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€  ${t.displayName} Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â© ${assignAdminCollegeName}` });
+                            toast({ title: `تم تعيين ${t.displayName} أدمن لكلية ${assignAdminCollegeName}` });
                             setShowAssignAdminModal(false);
                             await loadTeachers();
                           } catch (e: any) {
@@ -608,7 +608,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
                           }
                         }}
                         disabled={loading}
-                        className="w-full text-start p-4 border-2 border-white/10 rounded-xl hover:border-amber-400 hover:bg-amber-500/10 transition-colors duration-200 flex items-center gap-3 group"
+                        className="w-full text-start p-4 border-2 border-white/10 rounded-xl hover:border-amber-400 hover:bg-amber-500/10 transition-all duration-200 flex items-center gap-3 group"
                       >
                         <div className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center overflow-hidden shrink-0">
                           {t.photoURL ? (
@@ -621,43 +621,43 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
                           <p className="font-bold text-white">{t.displayName}</p>
                           <p className="text-xs text-slate-400 truncate">{t.email}</p>
                         </div>
-                        <ArrowLeft className="w-6 h-6 text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                        <ArrowLeft className="w-6 h-6 text-amber-400 opacity-0 group-hover:opacity-100 transition-all duration-200" />
                       </button>
                     ))}
                   </div>
                 );
               })()}
 
-              <div className="pt-4 border-t border-white/10 flex justify-end">
+              <div className="mt-6 pt-4 border-t border-white/10 flex justify-end">
                 <button
                   onClick={() => setShowAssignAdminModal(false)}
-                  className="btn-base btn-secondary"
+                  className="bg-white/10 hover:bg-white/20 text-white font-medium py-2 px-6 rounded-lg transition"
                 >
-                  Ã˜Â¥Ã™â€žÃ˜ÂºÃ˜Â§Ã˜Â¡
+                  إلغاء
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Ã°Å¸â€ â€¢ Ã˜ÂªÃ˜Â£Ã™Æ’Ã™Å Ã˜Â¯ Ã˜Â¥Ã™â€žÃ˜ÂºÃ˜Â§Ã˜Â¡ Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã™Æ’Ã™â€žÃ™Å Ã˜Â© */}
+        {/* 🆕 تأكيد إلغاء أدمن كلية */}
         {showRemoveAdminConfirm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fadeIn">
-            <div className="glass-modal w-[calc(100vw-2rem)] max-w-sm text-white space-y-4 animate-modalUp focus:outline-none">
-              <div className="text-center">
+            <div className="bg-slate-900 border border-white/10 text-white rounded-2xl max-w-sm w-full p-6 shadow-2xl animate-modalUp">
+              <div className="text-center mb-6">
                 <div className="mx-auto w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-4"><TriangleAlert className="w-7 h-7 text-red-400" /></div>
-                <h3 className="text-base sm:text-lg font-semibold text-white">Ã˜Â¥Ã™â€žÃ˜ÂºÃ˜Â§Ã˜Â¡ Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã˜Â§Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â©</h3>
+                <h3 className="text-xl font-bold text-white">إلغاء أدمن الكلية</h3>
                 <p className="text-sm text-slate-400 mt-2">
-                  Ã™â€¡Ã™â€ž Ã˜Â£Ã™â€ Ã˜Âª Ã™â€¦Ã˜ÂªÃ˜Â£Ã™Æ’Ã˜Â¯ Ã™â€¦Ã™â€  Ã˜Â¥Ã™â€žÃ˜ÂºÃ˜Â§Ã˜Â¡ Ã˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€  <strong className="text-slate-300">{collegeAdminMap[showRemoveAdminConfirm]?.displayName}</strong> Ã™Æ’Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â© {colleges.find(c => c.id === showRemoveAdminConfirm)?.name}Ã˜Å¸
+                  هل أنت متأكد من إلغاء تعيين <strong className="text-slate-300">{collegeAdminMap[showRemoveAdminConfirm]?.displayName}</strong> كأدمن لكلية {colleges.find(c => c.id === showRemoveAdminConfirm)?.name}؟
                 </p>
-                <p className="text-xs text-slate-500 mt-2">Ã˜Â³Ã™Å Ã˜ÂªÃ™â€¦ Ã˜ÂªÃ˜Â­Ã™Ë†Ã™Å Ã™â€žÃ™â€¡ Ã˜Â¥Ã™â€žÃ™â€° Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å  Ã˜Â¹Ã˜Â§Ã˜Â¯Ã™Å  Ã™â€¦Ã˜Â¹ Ã˜Â§Ã˜Â­Ã˜ÂªÃ™ÂÃ˜Â§Ã˜Â¸Ã™â€¡ Ã˜Â¨Ã™â€ Ã™ÂÃ˜Â³ Ã˜Â§Ã™â€žÃ˜ÂµÃ™â€žÃ˜Â§Ã˜Â­Ã™Å Ã˜Â§Ã˜Âª</p>
+                <p className="text-xs text-slate-500 mt-2">سيتم تحويله إلى تدريسي عادي مع احتفاظه بنفس الصلاحيات</p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex gap-3">
                 <button
                   onClick={() => setShowRemoveAdminConfirm(null)}
-                  className="flex-1 btn-base btn-secondary"
+                  className="flex-1 bg-white/10 hover:bg-white/20 text-slate-300 font-medium py-2.5 rounded-lg transition"
                 >
-                  Ã˜ÂªÃ˜Â±Ã˜Â§Ã˜Â¬Ã˜Â¹
+                  تراجع
                 </button>
                 <button
                   onClick={async () => {
@@ -666,7 +666,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
                     setLoading(true);
                     try {
                       await demoteFromCollegeAdmin(admin.uid);
-                      toast({ title: `Ã˜ÂªÃ™â€¦ Ã˜Â¥Ã™â€žÃ˜ÂºÃ˜Â§Ã˜Â¡ Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã˜Â§Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â© Ã˜Â¹Ã™â€  ${admin.displayName}` });
+                      toast({ title: `تم إلغاء أدمن الكلية عن ${admin.displayName}` });
                       setShowRemoveAdminConfirm(null);
                       await loadTeachers();
                     } catch (e: any) {
@@ -676,9 +676,9 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
                     }
                   }}
                   disabled={loading}
-                  className="flex-1 btn-base btn-danger"
+                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium py-2.5 rounded-lg transition flex items-center justify-center gap-2"
                 >
-                  {loading ? 'Ã˜Â¬Ã˜Â§Ã˜Â±Ã™Å ...' : <><CircleCheck className="w-4 h-4" /> Ã˜ÂªÃ˜Â£Ã™Æ’Ã™Å Ã˜Â¯ Ã˜Â§Ã™â€žÃ˜Â¥Ã™â€žÃ˜ÂºÃ˜Â§Ã˜Â¡</>}
+                  {loading ? 'جاري...' : <><CircleCheck className="w-4 h-4" /> تأكيد الإلغاء</>}
                 </button>
               </div>
             </div>
@@ -687,19 +687,19 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
 
         {showMigrationModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fadeIn">
-            <div className="glass-modal w-[calc(100vw-2rem)] max-w-2xl text-white space-y-4 animate-modalUp focus:outline-none">
-              <h3 className="text-base sm:text-lg font-semibold text-white flex items-center gap-2"><Truck className="w-5 h-5 shrink-0" /> Ã˜ÂªÃ˜Â±Ã˜Â­Ã™Å Ã™â€ž Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã™Å Ã™â€  Ã˜Â§Ã™â€žÃ™â€šÃ˜Â¯Ã˜Â§Ã™â€¦Ã™â€° Ã¢â‚¬â€ Ã˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€  Ã™Æ’Ã™â€žÃ™Å Ã˜Â©</h3>
-              <p className="text-sm text-slate-400">Ã˜Â§Ã˜Â®Ã˜ÂªÃ˜Â± Ã˜Â§Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â© Ã˜Â§Ã™â€žÃ™â€¦Ã™â€ Ã˜Â§Ã˜Â³Ã˜Â¨Ã˜Â© Ã™â€žÃ™Æ’Ã™â€ž Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å :</p>
+            <div className="bg-slate-900 border border-white/10 text-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 animate-modalUp">
+              <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Truck className="w-5 h-5" /> ترحيل التدريسيين القدامى — تعيين كلية</h3>
+              <p className="text-sm text-slate-400 mb-4">اختر الكلية المناسبة لكل تدريسي:</p>
               <div className="space-y-3">
                 {allTeachersFull.filter(t => !t.collegeId).map(t => (
-                  <div key={t.uid} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 border border-white/10 rounded-lg">
+                  <div key={t.uid} className="flex items-center gap-3 p-3 border border-white/10 rounded-lg">
                     <div className="flex-1 font-medium text-white">{t.displayName}</div>
                     <select
                       value={migrationMap[t.uid] || ''}
                       onChange={e => setMigrationMap(prev => ({...prev, [t.uid]: e.target.value}))}
-                      className="glass-input text-sm"
+                      className="border border-slate-600 bg-slate-800 text-white rounded px-3 py-2 text-sm"
                     >
-                      <option value="">-- Ã˜Â§Ã˜Â®Ã˜ÂªÃ˜Â± Ã™Æ’Ã™â€žÃ™Å Ã˜Â© --</option>
+                      <option value="">-- اختر كلية --</option>
                       {colleges.map(c => (
                         <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
                       ))}
@@ -707,20 +707,20 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
                   </div>
                 ))}
               </div>
-              <div className="flex flex-wrap gap-2 justify-end pt-4 border-t border-white/10">
+              <div className="flex gap-2 justify-end mt-6">
                 <button
                   onClick={() => { setShowMigrationModal(false); setMigrationMap({}); }}
                   disabled={loading}
-                  className="btn-base btn-secondary"
+                  className="bg-white/10 hover:bg-white/20 text-white font-medium py-2 px-4 rounded"
                 >
-                  Ã˜Â¥Ã™â€žÃ˜ÂºÃ˜Â§Ã˜Â¡
+                  إلغاء
                 </button>
                 <button
                   onClick={handleMigrateCollege}
                   disabled={loading}
-                  className="btn-base btn-primary"
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-2 px-4 rounded"
                 >
-                  {loading ? 'Ã˜Â¬Ã˜Â§Ã˜Â±Ã™Â Ã˜Â§Ã™â€žÃ˜Â­Ã™ÂÃ˜Â¸...' : 'Ã°Å¸â€™Â¾ Ã˜Â­Ã™ÂÃ˜Â¸'}
+                  {loading ? 'جارٍ الحفظ...' : '💾 حفظ'}
                 </button>
               </div>
             </div>
@@ -732,7 +732,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
     );
   }
 
-  // --- Ã˜Â´Ã˜Â§Ã˜Â´Ã˜Â© Ã˜Â¹Ã˜Â±Ã˜Â¶ Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã™Å Ã™â€  Ã™Æ’Ã™â€žÃ™Å Ã˜Â© Ã™â€¦Ã˜Â­Ã˜Â¯Ã˜Â¯Ã˜Â© Ã™â€žÃ™â€žÃ˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã˜Â§Ã™â€žÃ˜Â±Ã˜Â¦Ã™Å Ã˜Â³Ã™Å  Ã˜Â£Ã™Ë† Ã˜Â´Ã˜Â§Ã˜Â´Ã˜Â© Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã˜Â§Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â© ---
+  // --- شاشة عرض تدريسيين كلية محددة للأدمن الرئيسي أو شاشة أدمن الكلية ---
   const displayTeachers = selectedCollegeId === '__all__'
     ? teachers
     : teachers;
@@ -743,9 +743,9 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
     : '';
 
   return (
-    <div className="glass-card rounded-xl p-4 sm:p-6">
+    <div className="glass-card rounded-xl p-6">
       <PageTransition dep={`college-${selectedCollegeId}`}>
-      <div className="flex justify-between items-center mb-4 sm:mb-6 flex-wrap gap-3">
+      <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
           {isMainAdmin && (
             <button
@@ -753,42 +753,42 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
               className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 text-sm font-medium hover:underline transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
-              Ã˜Â§Ã™â€žÃ˜Â¹Ã™Ë†Ã˜Â¯Ã˜Â© Ã™â€žÃ™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â§Ã˜Âª
+              العودة للكليات
             </button>
           )}
-          <h2 className="text-xl sm:text-2xl font-semibold text-white flex items-center gap-2">
-            {isMainAdmin ? <><GraduationCap className="w-6 h-6" /> Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã™Ë†Ã™â€  Ã™Æ’Ã™â€žÃ™Å Ã˜Â© {collegeName}</> : <><Landmark className="w-6 h-6" /> Ã˜ÂµÃ™â€žÃ˜Â§Ã˜Â­Ã™Å Ã˜Â§Ã˜Âª Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã™Å Ã™â€ </>}
+          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+            {isMainAdmin ? <><GraduationCap className="w-6 h-6" /> تدريسيون كلية {collegeName}</> : <><Landmark className="w-6 h-6" /> صلاحيات التدريسيين</>}
           </h2>
         </div>
         <div className="flex gap-2 flex-wrap">
           {isMainAdmin && (
             <button 
               onClick={() => setShowAddForm(!showAddForm)} 
-              className="btn-base btn-primary"
+              className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-medium py-2 px-4 rounded-md flex items-center gap-2 shadow-md"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-              Ã˜Â¥Ã˜Â¶Ã˜Â§Ã™ÂÃ˜Â© Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å 
+              إضافة تدريسي
             </button>
           )}
         </div>
       </div>
 
       {displayTeachers.length > 0 && (
-        <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+        <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-center">
             <div className="text-2xl font-bold text-blue-300">{displayTeachers.length}</div>
-            <div className="text-xs text-blue-400">Ã˜Â¥Ã˜Â¬Ã™â€¦Ã˜Â§Ã™â€žÃ™Å  Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã™Å Ã™â€ </div>
+            <div className="text-xs text-blue-400">إجمالي التدريسيين</div>
           </div>
           <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-center">
             <div className="text-2xl font-bold text-green-300">{activeTeachers}</div>
-            <div className="text-xs text-green-400 flex items-center justify-center gap-1"><CircleCheck className="w-3.5 h-3.5" /> Ã™â€¦Ã™ÂÃ˜Â¹Ã™â€˜Ã™â€ž</div>
+            <div className="text-xs text-green-400 flex items-center justify-center gap-1"><CircleCheck className="w-3.5 h-3.5" /> مفعّل</div>
           </div>
           {deactivatedTeachers > 0 && (
             <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-center">
               <div className="text-2xl font-bold text-red-300">{deactivatedTeachers}</div>
-              <div className="text-xs text-red-400 flex items-center justify-center gap-1"><Lock className="w-3.5 h-3.5" /> Ã™â€¦Ã˜Â¹Ã˜Â·Ã™â€˜Ã™â€ž (Ã˜Â¨Ã˜Â¹Ã˜Â¯ Ã˜Â§Ã™â€žÃ˜ÂªÃ˜ÂµÃ™ÂÃ™Å Ã˜Â±)</div>
+              <div className="text-xs text-red-400 flex items-center justify-center gap-1"><Lock className="w-3.5 h-3.5" /> معطّل (بعد التصفير)</div>
             </div>
           )}
         </div>
@@ -799,10 +799,10 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
           <TriangleAlert className="w-7 h-7 text-yellow-600" />
           <div className="flex-1">
             <p className="text-sm font-bold text-yellow-300">
-              Ã™Å Ã™Ë†Ã˜Â¬Ã˜Â¯ {deactivatedTeachers} Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å  Ã™â€¦Ã˜Â¹Ã˜Â·Ã™â€˜Ã™â€ž Ã˜Â¨Ã˜Â¹Ã˜Â¯ Ã˜Â§Ã™â€žÃ˜ÂªÃ˜ÂµÃ™ÂÃ™Å Ã˜Â± Ã˜Â§Ã™â€žÃ˜Â³Ã™â€ Ã™Ë†Ã™Å 
+              يوجد {deactivatedTeachers} تدريسي معطّل بعد التصفير السنوي
             </p>
             <p className="text-xs text-yellow-400">
-              Ã˜Â§Ã˜Â¶Ã˜ÂºÃ˜Â· Ã˜Â²Ã˜Â± "Ã˜Â¥Ã˜Â¹Ã˜Â§Ã˜Â¯Ã˜Â© Ã˜ÂªÃ™ÂÃ˜Â¹Ã™Å Ã™â€ž" Ã˜Â¨Ã˜Â¬Ã˜Â§Ã™â€ Ã˜Â¨ Ã˜Â§Ã˜Â³Ã™â€¦ Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å  Ã™â€žÃ˜Â¥Ã˜Â¹Ã˜Â§Ã˜Â¯Ã˜Â© Ã˜ÂªÃ™ÂÃ˜Â¹Ã™Å Ã™â€žÃ™â€¡Ã˜Å’ Ã˜Â«Ã™â€¦ Ã˜Â­Ã˜Â¯Ã˜Â¯ Ã™â€žÃ™â€¡ Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â±Ã˜Â§Ã˜Â­Ã™â€ž Ã™â€¦Ã™â€  "Ã˜Â§Ã™â€žÃ˜ÂµÃ™â€žÃ˜Â§Ã˜Â­Ã™Å Ã˜Â§Ã˜Âª".
+              اضغط زر "إعادة تفعيل" بجانب اسم التدريسي لإعادة تفعيله، ثم حدد له المراحل من "الصلاحيات".
             </p>
           </div>
         </div>
@@ -816,56 +816,56 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
       )}
 
       {showAddForm && (
-        <form onSubmit={handleSubmit} className="mb-4 sm:mb-6 p-4 sm:p-5 space-y-4 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border-2 border-blue-500/30 rounded-lg">
-          <h3 className="text-base sm:text-lg font-semibold text-white flex items-center gap-2"><Plus className="w-5 h-5 shrink-0" /> Ã˜Â¥Ã˜Â¶Ã˜Â§Ã™ÂÃ˜Â© Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å  Ã˜Â¬Ã˜Â¯Ã™Å Ã˜Â¯</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-300">Ã˜Â§Ã™â€žÃ˜Â§Ã˜Â³Ã™â€¦ Ã˜Â§Ã™â€žÃ™Æ’Ã˜Â§Ã™â€¦Ã™â€ž</label>
-              <input type="text" value={formData.displayName} onChange={e => setFormData({...formData, displayName: e.target.value})} className="glass-input text-sm" placeholder="Ã˜Â¯. Ã˜Â£Ã˜Â­Ã™â€¦Ã˜Â¯ Ã™â€¦Ã˜Â­Ã™â€¦Ã˜Â¯" disabled={loading} />
+        <form onSubmit={handleSubmit} className="mb-6 p-5 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border-2 border-blue-500/30 rounded-lg">
+          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Plus className="w-5 h-5" /> إضافة تدريسي جديد</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">الاسم الكامل</label>
+              <input type="text" value={formData.displayName} onChange={e => setFormData({...formData, displayName: e.target.value})} className="w-full p-2 border border-slate-600 bg-slate-800 text-white rounded-md focus:ring-2 focus:ring-blue-500" placeholder="د. أحمد محمد" disabled={loading} />
             </div>
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-300">Ã˜Â§Ã™â€žÃ˜Â¨Ã˜Â±Ã™Å Ã˜Â¯ Ã˜Â§Ã™â€žÃ˜Â¥Ã™â€žÃ™Æ’Ã˜ÂªÃ˜Â±Ã™Ë†Ã™â€ Ã™Å </label>
-              <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="glass-input text-sm" placeholder="teacher@example.com" dir="ltr" disabled={loading} />
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">البريد الإلكتروني</label>
+              <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full p-2 border border-slate-600 bg-slate-800 text-white rounded-md focus:ring-2 focus:ring-blue-500" placeholder="teacher@example.com" dir="ltr" disabled={loading} />
             </div>
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-300">Ã™Æ’Ã™â€žÃ™â€¦Ã˜Â© Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â±Ã™Ë†Ã˜Â±</label>
-              <input type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="glass-input text-sm" placeholder="6 Ã˜Â£Ã˜Â­Ã˜Â±Ã™Â Ã˜Â¹Ã™â€žÃ™â€° Ã˜Â§Ã™â€žÃ˜Â£Ã™â€šÃ™â€ž" dir="ltr" disabled={loading} />
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">كلمة المرور</label>
+              <input type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full p-2 border border-slate-600 bg-slate-800 text-white rounded-md focus:ring-2 focus:ring-blue-500" placeholder="6 أحرف على الأقل" dir="ltr" disabled={loading} />
             </div>
           </div>
           {(isMainAdmin && !selectedCollegeId) && colleges.length > 0 && (
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-300">Ã˜Â§Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â©</label>
-              <select value={formData.collegeId} onChange={e => setFormData({...formData, collegeId: e.target.value})} className="glass-input text-sm">
-                <option value="">-- Ã˜Â§Ã˜Â®Ã˜ÂªÃ˜Â± Ã˜Â§Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â© --</option>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-slate-300 mb-2">الكلية</label>
+              <select value={formData.collegeId} onChange={e => setFormData({...formData, collegeId: e.target.value})} className="w-full p-2 border border-slate-600 bg-slate-800 text-white rounded-md focus:ring-2 focus:ring-blue-500">
+                <option value="">-- اختر الكلية --</option>
                 {colleges.map(c => (
                   <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
                 ))}
               </select>
             </div>
           )}
-          <div className="flex flex-wrap gap-2">
-            <button type="submit" disabled={loading} className="flex-1 btn-base btn-primary">
-              {loading ? <><MorphingSquare size="sm" /> Ã˜Â¬Ã˜Â§Ã˜Â±Ã™Â Ã˜Â§Ã™â€žÃ˜Â¥Ã™â€ Ã˜Â´Ã˜Â§Ã˜Â¡...</> : <><CircleCheck className="w-4 h-4" /> Ã˜Â¥Ã™â€ Ã˜Â´Ã˜Â§Ã˜Â¡ Ã˜Â§Ã™â€žÃ˜Â­Ã˜Â³Ã˜Â§Ã˜Â¨</>}
+          <div className="flex gap-2">
+            <button type="submit" disabled={loading} className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-6 rounded-md flex items-center justify-center gap-2">
+              {loading ? <><MorphingSquare size="sm" /> جارٍ الإنشاء...</> : <><CircleCheck className="w-4 h-4" /> إنشاء الحساب</>}
             </button>
-            <button type="button" onClick={() => { setShowAddForm(false); setFormData({ email: '', password: '', displayName: '', collegeId: '' }); setError(''); }} className="btn-base btn-secondary">
-              Ã˜Â¥Ã™â€žÃ˜ÂºÃ˜Â§Ã˜Â¡
+            <button type="button" onClick={() => { setShowAddForm(false); setFormData({ email: '', password: '', displayName: '', collegeId: '' }); setError(''); }} className="bg-white/10 hover:bg-white/20 text-white font-medium py-2 px-4 rounded-md">
+              إلغاء
             </button>
           </div>
           <div className="mt-3 p-3 bg-green-500/10 border border-green-500/30 rounded text-sm text-green-300 flex items-start gap-1">
-            <CircleCheck className="w-4 h-4 shrink-0 mt-0.5" /> <strong>Ã˜Â¬Ã™â€žÃ˜Â³Ã˜Â© Ã˜Â§Ã™â€žÃ˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã™â€¦Ã˜Â­Ã™ÂÃ™Ë†Ã˜Â¸Ã˜Â©:</strong> Ã˜Â§Ã™â€žÃ™â€ Ã˜Â¸Ã˜Â§Ã™â€¦ Ã™Å Ã˜Â³Ã˜ÂªÃ˜Â®Ã˜Â¯Ã™â€¦ Ã˜ÂªÃ˜Â·Ã˜Â¨Ã™Å Ã™â€š Firebase Ã˜Â«Ã˜Â§Ã™â€ Ã™Ë†Ã™Å  Ã™â€žÃ˜Â¥Ã™â€ Ã˜Â´Ã˜Â§Ã˜Â¡ Ã˜Â­Ã˜Â³Ã˜Â§Ã˜Â¨ Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å  Ã˜Â¨Ã˜Â¯Ã™Ë†Ã™â€  Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â£Ã˜Â«Ã™Å Ã˜Â± Ã˜Â¹Ã™â€žÃ™â€° Ã˜Â¬Ã™â€žÃ˜Â³Ã˜ÂªÃ™Æ’ Ã˜Â§Ã™â€žÃ˜Â­Ã˜Â§Ã™â€žÃ™Å Ã˜Â©.
+            <CircleCheck className="w-4 h-4 shrink-0 mt-0.5" /> <strong>جلسة الأدمن محفوظة:</strong> النظام يستخدم تطبيق Firebase ثانوي لإنشاء حساب التدريسي بدون التأثير على جلستك الحالية.
           </div>
         </form>
       )}
 
-      <div className="table-container">
-        <table className="glass-table min-w-full divide-y divide-white/10">
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-white/10">
           <thead className="bg-white/5">
             <tr>
-              <th scope="col" className="px-3 sm:px-6 py-3 text-start text-xs font-medium text-slate-400 uppercase">Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å </th>
-              <th scope="col" className="hidden sm:table-cell px-3 sm:px-6 py-3 text-start text-xs font-medium text-slate-400 uppercase">Ã˜Â§Ã™â€žÃ˜Â¨Ã˜Â±Ã™Å Ã˜Â¯</th>
-              <th scope="col" className="px-3 sm:px-6 py-3 text-start text-xs font-medium text-slate-400 uppercase">Ã˜Â§Ã™â€žÃ˜Â­Ã˜Â§Ã™â€žÃ˜Â©</th>
-              <th scope="col" className="hidden sm:table-cell px-3 sm:px-6 py-3 text-start text-xs font-medium text-slate-400 uppercase">Ã˜Â§Ã™â€žÃ˜ÂµÃ™â€žÃ˜Â§Ã˜Â­Ã™Å Ã˜Â§Ã˜Âª</th>
-              <th scope="col" className="px-3 sm:px-6 py-3 text-start text-xs font-medium text-slate-400 uppercase">Ã˜Â¥Ã˜Â¬Ã˜Â±Ã˜Â§Ã˜Â¡Ã˜Â§Ã˜Âª</th>
+              <th scope="col" className="px-3 sm:px-6 py-3 text-start text-xs font-medium text-slate-400 uppercase">التدريسي</th>
+              <th scope="col" className="hidden sm:table-cell px-3 sm:px-6 py-3 text-start text-xs font-medium text-slate-400 uppercase">البريد</th>
+              <th scope="col" className="px-3 sm:px-6 py-3 text-start text-xs font-medium text-slate-400 uppercase">الحالة</th>
+              <th scope="col" className="hidden sm:table-cell px-3 sm:px-6 py-3 text-start text-xs font-medium text-slate-400 uppercase">الصلاحيات</th>
+              <th scope="col" className="px-3 sm:px-6 py-3 text-start text-xs font-medium text-slate-400 uppercase">إجراءات</th>
             </tr>
           </thead>
           <tbody className="bg-white/5 divide-y divide-white/10">
@@ -878,7 +878,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
             ) : displayTeachers.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-6 py-8 text-center text-slate-400">
-                  Ã™â€žÃ˜Â§ Ã˜ÂªÃ™Ë†Ã˜Â¬Ã˜Â¯ Ã˜Â­Ã˜Â³Ã˜Â§Ã˜Â¨Ã˜Â§Ã˜Âª Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã™Å Ã™â€  Ã™ÂÃ™Å  Ã™â€¡Ã˜Â°Ã™â€¡ Ã˜Â§Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â©
+                  لا توجد حسابات تدريسيين في هذه الكلية
                 </td>
               </tr>
             ) : (
@@ -901,7 +901,7 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
                           <div className="font-bold text-white">
                             {t.displayName}
                             {isOldTeacher && (
-                              <span className="ms-2 text-xs bg-orange-500/15 text-orange-300 px-2 py-0.5 rounded-full">Ã™Å Ã˜Â­Ã˜ÂªÃ˜Â§Ã˜Â¬ Ã˜Â¥Ã˜ÂµÃ™â€žÃ˜Â§Ã˜Â­</span>
+                              <span className="me-2 text-xs bg-orange-500/15 text-orange-300 px-2 py-0.5 rounded-full">يحتاج إصلاح</span>
                             )}
                           </div>
                           {t.bio && <div className="text-xs text-slate-400 truncate max-w-xs">{t.bio}</div>}
@@ -911,41 +911,41 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
                     <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-xs sm:text-sm text-slate-400" dir="ltr">{t.email}</td>
                     <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm">
                       {isDeactivated ? (
-                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-red-500/15 text-red-300 font-medium text-xs sm:text-xs gap-1"><Lock className="w-3 h-3" /> Ã™â€¦Ã˜Â¹Ã˜Â·Ã™â€˜Ã™â€ž</span>
+                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-red-500/15 text-red-300 font-medium text-xs sm:text-xs gap-1"><Lock className="w-3 h-3" /> معطّل</span>
                       ) : (
-                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-green-500/15 text-green-300 font-medium text-xs sm:text-xs gap-1"><CircleCheck className="w-3 h-3" /> Ã™â€¦Ã™ÂÃ˜Â¹Ã™â€˜Ã™â€ž</span>
+                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-green-500/15 text-green-300 font-medium text-xs sm:text-xs gap-1"><CircleCheck className="w-3 h-3" /> مفعّل</span>
                       )}
                     </td>
                     <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-xs sm:text-sm">
                       {allowedCount === 0 ? (
-                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-red-500/15 text-red-300 font-medium text-xs sm:text-xs gap-1"><Lock className="w-3 h-3" /> Ã™â€žÃ˜Â§ Ã˜ÂªÃ™Ë†Ã˜Â¬Ã˜Â¯ Ã˜ÂµÃ™â€žÃ˜Â§Ã˜Â­Ã™Å Ã˜Â§Ã˜Âª</span>
+                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-red-500/15 text-red-300 font-medium text-xs sm:text-xs gap-1"><Lock className="w-3 h-3" /> لا توجد صلاحيات</span>
                       ) : (
-                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-green-500/15 text-green-300 font-medium text-xs sm:text-xs gap-1"><CircleCheck className="w-3 h-3" /> {allowedCount} Ã™â€¦Ã˜Â±Ã˜Â­Ã™â€žÃ˜Â©</span>
+                        <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full bg-green-500/15 text-green-300 font-medium text-xs sm:text-xs gap-1"><CircleCheck className="w-3 h-3" /> {allowedCount} مرحلة</span>
                       )}
                     </td>
                     <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm">
                       <div className="flex flex-wrap gap-1 sm:gap-2">
                         {isDeactivated && (
-                          <button onClick={() => handleReactivateTeacher(t)} disabled={loading} className="bg-green-500/15 hover:bg-green-500/25 text-green-300 px-2 sm:px-3 py-1 rounded font-medium text-xs sm:text-xs inline-flex items-center gap-1"><UserCheck className="w-3 h-3" /> Ã˜Â¥Ã˜Â¹Ã˜Â§Ã˜Â¯Ã˜Â© Ã˜ÂªÃ™ÂÃ˜Â¹Ã™Å Ã™â€ž</button>
+                          <button onClick={() => handleReactivateTeacher(t)} disabled={loading} className="bg-green-500/15 hover:bg-green-500/25 text-green-300 px-2 sm:px-3 py-1 rounded font-medium text-xs sm:text-xs inline-flex items-center gap-1"><UserCheck className="w-3 h-3" /> إعادة تفعيل</button>
                         )}
-                        <button onClick={() => { setSelectedTeacher(t); setShowPermissionModal(true); }} className="bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 px-2 sm:px-3 py-1 rounded font-medium text-xs sm:text-xs inline-flex items-center gap-1"><Settings className="w-3 h-3" /> Ã˜Â§Ã™â€žÃ˜ÂµÃ™â€žÃ˜Â§Ã˜Â­Ã™Å Ã˜Â§Ã˜Âª</button>
-                        <button onClick={() => { setSelectedTeacher(t); setEditProfileName(t.displayName); setEditProfileBio(t.bio || ''); setShowProfileModal(true); }} className="bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 px-2 sm:px-3 py-1 rounded font-medium text-xs sm:text-xs inline-flex items-center gap-1"><SquarePen className="w-3 h-3" /> Ã˜Â§Ã™â€žÃ™â€¦Ã™â€žÃ™Â</button>
+                        <button onClick={() => { setSelectedTeacher(t); setShowPermissionModal(true); }} className="bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 px-2 sm:px-3 py-1 rounded font-medium text-xs sm:text-xs inline-flex items-center gap-1"><Settings className="w-3 h-3" /> الصلاحيات</button>
+                        <button onClick={() => { setSelectedTeacher(t); setEditProfileName(t.displayName); setEditProfileBio(t.bio || ''); setShowProfileModal(true); }} className="bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 px-2 sm:px-3 py-1 rounded font-medium text-xs sm:text-xs inline-flex items-center gap-1"><SquarePen className="w-3 h-3" /> الملف</button>
                         {isMainAdmin && (
-                          <button onClick={() => handleOpenPasswordModal(t)} className="bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 px-2 sm:px-3 py-1 rounded font-medium text-xs sm:text-xs inline-flex items-center gap-1"><KeyRound className="w-3 h-3" /> Ã˜Â§Ã™â€žÃ˜Â±Ã™â€¦Ã˜Â²</button>
+                          <button onClick={() => handleOpenPasswordModal(t)} className="bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 px-2 sm:px-3 py-1 rounded font-medium text-xs sm:text-xs inline-flex items-center gap-1"><KeyRound className="w-3 h-3" /> الرمز</button>
                         )}
                           {isMainAdmin && t.role === 'college_admin' && (
-                            <button onClick={async () => { const ok = await confirmAction({ title: 'Ã˜Â¥Ã™â€žÃ˜ÂºÃ˜Â§Ã˜Â¡ Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€ ', message: `Ã˜Â¥Ã™â€žÃ˜ÂºÃ˜Â§Ã˜Â¡ Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã™Æ’Ã™â€žÃ™Å Ã˜Â© Ã˜Â¹Ã™â€  ${t.displayName}Ã˜Å¸`, confirmLabel: 'Ã˜Â¥Ã™â€žÃ˜ÂºÃ˜Â§Ã˜Â¡ Ã˜Â§Ã™â€žÃ˜Â£Ã˜Â¯Ã™â€¦Ã™â€ ' }); if (ok) { await demoteFromCollegeAdmin(t.uid); await loadTeachers(); } }} disabled={loading} className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 px-2 sm:px-3 py-1 rounded font-medium text-xs sm:text-xs inline-flex items-center gap-1"><UserIcon className="w-3 h-3" /> Ã˜Â¥Ã™â€žÃ˜ÂºÃ˜Â§Ã˜Â¡ Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€ </button>
+                            <button onClick={async () => { const ok = await confirmAction({ title: 'إلغاء أدمن', message: `إلغاء أدمن كلية عن ${t.displayName}؟`, confirmLabel: 'إلغاء الأدمن' }); if (ok) { await demoteFromCollegeAdmin(t.uid); await loadTeachers(); } }} disabled={loading} className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 px-2 sm:px-3 py-1 rounded font-medium text-xs sm:text-xs inline-flex items-center gap-1"><UserIcon className="w-3 h-3" /> إلغاء أدمن</button>
                           )}
                           {isMainAdmin && t.role !== 'college_admin' && (() => {
                             const cId = selectedCollegeId === '__all__' ? (t.collegeId || '') : (selectedCollegeId || '');
                             const cName = colleges.find(c => c.id === cId)?.name || '';
                             if (!cId) return null;
                             return (
-                              <button onClick={async () => { const ok = await confirmAction({ title: 'Ã˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€  Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã™Æ’Ã™â€žÃ™Å Ã˜Â©', message: `Ã˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€  ${t.displayName} Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€  Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â© ${cName}Ã˜Å¸`, confirmLabel: 'Ã˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€ ' }); if (ok) { await promoteToCollegeAdmin(t.uid, cId, cName); await loadTeachers(); } }} disabled={loading} className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 px-2 sm:px-3 py-1 rounded font-medium text-xs sm:text-xs inline-flex items-center gap-1"><Landmark className="w-3 h-3" /> Ã˜ÂªÃ˜Â¹Ã™Å Ã™Å Ã™â€  Ã˜Â£Ã˜Â¯Ã™â€¦Ã™â€ </button>
+                              <button onClick={async () => { const ok = await confirmAction({ title: 'تعيين أدمن كلية', message: `تعيين ${t.displayName} أدمن لكلية ${cName}؟`, confirmLabel: 'تعيين' }); if (ok) { await promoteToCollegeAdmin(t.uid, cId, cName); await loadTeachers(); } }} disabled={loading} className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 px-2 sm:px-3 py-1 rounded font-medium text-xs sm:text-xs inline-flex items-center gap-1"><Landmark className="w-3 h-3" /> تعيين أدمن</button>
                             );
                           })()}
                           {isMainAdmin && (
-                          <button onClick={() => handleDeleteTeacher(t)} disabled={loading} className="bg-red-500/10 hover:bg-red-500/25 text-red-300 px-2 sm:px-3 py-1 rounded font-medium text-xs sm:text-xs inline-flex items-center gap-1"><Trash2 className="w-3 h-3" /> Ã˜Â­Ã˜Â°Ã™Â</button>
+                          <button onClick={() => handleDeleteTeacher(t)} disabled={loading} className="bg-red-500/10 hover:bg-red-500/25 text-red-300 px-2 sm:px-3 py-1 rounded font-medium text-xs sm:text-xs inline-flex items-center gap-1"><Trash2 className="w-3 h-3" /> حذف</button>
                         )}
                       </div>
                     </td>
@@ -960,17 +960,17 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
 
       {showPermissionModal && selectedTeacher && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fadeIn">
-          <div className="glass-modal text-white w-[calc(100vw-2rem)] max-w-3xl animate-modalUp focus:outline-none">
-            <div className="px-4 sm:px-6 py-4 border-b flex flex-wrap justify-between items-center gap-3 sticky top-0 bg-slate-900/95 backdrop-blur-md z-10">
-              <div className="min-w-0">
-                <h3 className="text-base sm:text-lg font-semibold text-white flex items-center gap-2"><Settings className="w-5 h-5 shrink-0" /> Ã˜ÂµÃ™â€žÃ˜Â§Ã˜Â­Ã™Å Ã˜Â§Ã˜Âª: {selectedTeacher.displayName}</h3>
-                <p className="text-sm text-slate-400 mt-1">Ã˜Â­Ã˜Â¯Ã˜Â¯ Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â±Ã˜Â§Ã˜Â­Ã™â€ž Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â³Ã™â€¦Ã™Ë†Ã˜Â­ Ã™â€žÃ™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å  Ã˜Â¨Ã˜Â§Ã™â€žÃ™Ë†Ã˜ÂµÃ™Ë†Ã™â€ž Ã˜Â¥Ã™â€žÃ™Å Ã™â€¡Ã˜Â§</p>
+          <div className="bg-slate-900 border border-white/10 text-white rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto animate-modalUp">
+            <div className="p-6 border-b flex justify-between items-center sticky top-0 bg-slate-900 z-10">
+              <div>
+                <h3 className="text-xl font-bold flex items-center gap-2"><Settings className="w-5 h-5" /> صلاحيات: {selectedTeacher.displayName}</h3>
+                <p className="text-sm text-slate-400 mt-1">حدد المراحل المسموح للتدريسي بالوصول إليها</p>
               </div>
-              <button onClick={() => setShowPermissionModal(false)} className="flex items-center justify-center w-10 h-10 text-3xl text-slate-500 hover:text-slate-400 leading-none transition-colors duration-200">Ãƒâ€”</button>
+              <button onClick={() => setShowPermissionModal(false)} className="text-3xl text-slate-500 hover:text-slate-400">×</button>
             </div>
-            <div className="px-4 sm:px-6 py-4 space-y-4">
+            <div className="p-6 space-y-4">
               {colleges.length === 0 ? (
-                <div className="text-center py-8 text-slate-400">Ã™â€žÃ˜Â§ Ã˜ÂªÃ™Ë†Ã˜Â¬Ã˜Â¯ Ã™Æ’Ã™â€žÃ™Å Ã˜Â§Ã˜Âª. Ã˜Â£Ã˜Â¶Ã™Â Ã™Æ’Ã™â€žÃ™Å Ã˜Â© Ã˜Â£Ã™Ë†Ã™â€žÃ˜Â§Ã™â€¹ Ã™â€¦Ã™â€  Ã˜ÂªÃ˜Â¨Ã™Ë†Ã™Å Ã˜Â¨ "Ã˜Â¥Ã˜Â¯Ã˜Â§Ã˜Â±Ã˜Â© Ã˜Â§Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â§Ã˜Âª"</div>
+                <div className="text-center py-8 text-slate-400">لا توجد كليات. أضف كلية أولاً من تبويب "إدارة الكليات"</div>
               ) : (
                 colleges.map(college => {
                   const collegeStages = stages.filter(s => s.collegeId === college.id);
@@ -978,27 +978,27 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
                   const allSelected = collegeStages.length > 0 && allowedInCollege.length === collegeStages.length;
                   return (
                     <div key={college.id} className="border-2 border-white/10 rounded-lg overflow-hidden">
-                      <div className="bg-white/5 p-3 flex flex-wrap justify-between items-center gap-2">
-                        <div className="font-semibold text-base sm:text-lg">
+                      <div className="bg-white/5 p-3 flex justify-between items-center">
+                        <div className="font-bold text-lg">
                           {college.icon} {college.name}
-                          <span className="text-sm font-normal text-slate-400 ms-2">({allowedInCollege.length}/{collegeStages.length})</span>
+                          <span className="text-sm font-normal text-slate-400 me-2">({allowedInCollege.length}/{collegeStages.length})</span>
                         </div>
                         {collegeStages.length > 0 && (
                           <div className="flex gap-2">
-                            <button onClick={() => handleSelectAllStagesInCollege(selectedTeacher, college.id)} disabled={allSelected} className="btn-base btn-primary text-xs px-2">Ã˜ÂªÃ˜Â­Ã˜Â¯Ã™Å Ã˜Â¯ Ã˜Â§Ã™â€žÃ™Æ’Ã™â€ž</button>
-                            <button onClick={() => handleDeselectAllStagesInCollege(selectedTeacher, college.id)} disabled={allowedInCollege.length === 0} className="btn-base btn-danger text-xs px-2">Ã˜Â¥Ã™â€žÃ˜ÂºÃ˜Â§Ã˜Â¡ Ã˜Â§Ã™â€žÃ™Æ’Ã™â€ž</button>
+                            <button onClick={() => handleSelectAllStagesInCollege(selectedTeacher, college.id)} disabled={allSelected} className="text-xs bg-green-600 hover:bg-green-700 disabled:bg-white/10 text-white px-2 py-1 rounded">تحديد الكل</button>
+                            <button onClick={() => handleDeselectAllStagesInCollege(selectedTeacher, college.id)} disabled={allowedInCollege.length === 0} className="text-xs bg-red-600 hover:bg-red-700 disabled:bg-white/10 text-white px-2 py-1 rounded">إلغاء الكل</button>
                           </div>
                         )}
                       </div>
                       <div className="p-3">
                         {collegeStages.length === 0 ? (
-                          <p className="text-sm text-slate-400 text-center py-3">Ã™â€žÃ˜Â§ Ã˜ÂªÃ™Ë†Ã˜Â¬Ã˜Â¯ Ã™â€¦Ã˜Â±Ã˜Â§Ã˜Â­Ã™â€ž Ã™ÂÃ™Å  Ã™â€¡Ã˜Â°Ã™â€¡ Ã˜Â§Ã™â€žÃ™Æ’Ã™â€žÃ™Å Ã˜Â©</p>
+                          <p className="text-sm text-slate-400 text-center py-3">لا توجد مراحل في هذه الكلية</p>
                         ) : (
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                             {collegeStages.sort((a, b) => (a.order || 0) - (b.order || 0)).map(stage => {
                               const isAllowed = allowedInCollege.includes(stage.id);
                               return (
-                                <button key={stage.id} onClick={() => handleToggleStage(selectedTeacher, college.id, stage.id)} className={`p-3 rounded-md text-start flex justify-between items-center border-2 transition duration-200 ${isAllowed ? 'bg-green-500/10 text-green-300 border-green-500/50' : 'bg-white/5 text-slate-400 border-white/10 hover:border-white/30'}`}>
+                                <button key={stage.id} onClick={() => handleToggleStage(selectedTeacher, college.id, stage.id)} className={`p-3 rounded-md text-start flex justify-between items-center border-2 transition ${isAllowed ? 'bg-green-500/10 text-green-300 border-green-500/50' : 'bg-white/5 text-slate-400 border-white/10 hover:border-white/30'}`}>
                                   <span className="font-medium flex items-center gap-2"><BookOpen className="w-4 h-4" /> {stage.name}</span>
                                   {isAllowed ? <CircleCheck className="w-5 h-5 text-green-400" /> : <span className="w-5 h-5 border-2 border-slate-500 rounded" />}
                                 </button>
@@ -1012,10 +1012,10 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
                 })
               )}
             </div>
-            <div className="px-4 sm:px-6 py-4 border-t bg-white/5 sticky bottom-0">
-              <div className="flex flex-wrap justify-between items-center gap-3">
-                <p className="text-sm text-slate-400">Ã˜Â§Ã™â€žÃ˜Â¥Ã˜Â¬Ã™â€¦Ã˜Â§Ã™â€žÃ™Å : <strong>{countAllowedStages(selectedTeacher)}</strong> Ã™â€¦Ã˜Â±Ã˜Â­Ã™â€žÃ˜Â© Ã™â€¦Ã˜Â³Ã™â€¦Ã™Ë†Ã˜Â­Ã˜Â©</p>
-                <button onClick={() => setShowPermissionModal(false)} className="btn-base btn-primary"><CircleCheck className="w-4 h-4" /> Ã˜ÂªÃ™â€¦</button>
+            <div className="p-6 border-t bg-white/5 sticky bottom-0">
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-slate-400">الإجمالي: <strong>{countAllowedStages(selectedTeacher)}</strong> مرحلة مسموحة</p>
+                <button onClick={() => setShowPermissionModal(false)} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium flex items-center gap-2"><CircleCheck className="w-4 h-4" /> تم</button>
               </div>
             </div>
           </div>
@@ -1024,20 +1024,20 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
 
       {showProfileModal && selectedTeacher && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fadeIn">
-          <div className="glass-modal w-[calc(100vw-2rem)] max-w-md text-white space-y-4 animate-modalUp focus:outline-none">
-            <h3 className="text-base sm:text-lg font-semibold text-white flex items-center gap-2"><SquarePen className="w-5 h-5 shrink-0" /> Ã˜ÂªÃ˜Â¹Ã˜Â¯Ã™Å Ã™â€ž Ã™â€¦Ã™â€žÃ™Â Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å </h3>
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-300">Ã˜Â§Ã™â€žÃ˜Â§Ã˜Â³Ã™â€¦ Ã˜Â§Ã™â€žÃ™Æ’Ã˜Â§Ã™â€¦Ã™â€ž</label>
-              <input type="text" value={editProfileName} onChange={e => setEditProfileName(e.target.value)} className="glass-input text-sm" dir="rtl" />
+          <div className="bg-slate-900 border border-white/10 text-white rounded-lg p-6 max-w-md w-full animate-modalUp">
+            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><SquarePen className="w-5 h-5" /> تعديل ملف التدريسي</h3>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-slate-300 mb-2">الاسم الكامل</label>
+              <input type="text" value={editProfileName} onChange={e => setEditProfileName(e.target.value)} className="w-full px-4 py-2 border border-slate-600 bg-slate-800 text-white rounded-md focus:ring-2 focus:ring-blue-500" dir="rtl" />
             </div>
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-300">Ã˜Â§Ã™â€žÃ™Ë†Ã˜ÂµÃ™Â / Ã˜Â§Ã™â€žÃ˜Â¨Ã˜Â§Ã™Å Ã™Ë†</label>
-              <textarea value={editProfileBio} onChange={e => setEditProfileBio(e.target.value)} rows={3} maxLength={500} className="glass-input text-sm" dir="rtl" />
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-slate-300 mb-2">الوصف / البايو</label>
+              <textarea value={editProfileBio} onChange={e => setEditProfileBio(e.target.value)} rows={3} maxLength={500} className="w-full px-4 py-2 border border-slate-600 bg-slate-800 text-white rounded-md focus:ring-2 focus:ring-blue-500" dir="rtl" />
             </div>
-            {error && <div className="p-3 bg-red-500/10 border border-red-500/40 text-red-300 rounded text-sm">{error}</div>}
-            <div className="flex flex-wrap gap-2 justify-end">
-              <button onClick={() => { setShowProfileModal(false); setError(''); }} disabled={loading} className="btn-base btn-secondary">Ã˜Â¥Ã™â€žÃ˜ÂºÃ˜Â§Ã˜Â¡</button>
-              <button onClick={handleEditProfile} disabled={loading} className="btn-base btn-primary">{loading ? <><MorphingSquare size="sm" /> Ã˜Â¬Ã˜Â§Ã˜Â±Ã™Â Ã˜Â§Ã™â€žÃ˜Â­Ã™ÂÃ˜Â¸...</> : <><Save className="w-4 h-4" /> Ã˜Â­Ã™ÂÃ˜Â¸</>}</button>
+            {error && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/40 text-red-300 rounded text-sm">{error}</div>}
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => { setShowProfileModal(false); setError(''); }} disabled={loading} className="bg-white/10 hover:bg-white/20 text-white font-medium py-2 px-4 rounded">إلغاء</button>
+              <button onClick={handleEditProfile} disabled={loading} className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-2 px-4 rounded flex items-center gap-2">{loading ? <><MorphingSquare size="sm" /> جارٍ الحفظ...</> : <><Save className="w-4 h-4" /> حفظ</>}</button>
             </div>
           </div>
         </div>
@@ -1045,31 +1045,31 @@ export const TeacherManagement: React.FC<TeacherManagementProps> = React.memo(({
 
       {showPasswordModal && selectedTeacher && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fadeIn">
-          <div className="glass-modal w-[calc(100vw-2rem)] max-w-md text-white space-y-4 animate-modalUp focus:outline-none">
-            <h3 className="text-base sm:text-lg font-semibold text-white flex items-center gap-2"><KeyRound className="w-5 h-5 shrink-0" /> Ã˜ÂªÃ˜ÂºÃ™Å Ã™Å Ã˜Â± Ã™Æ’Ã™â€žÃ™â€¦Ã˜Â© Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â±Ã™Ë†Ã˜Â± - {selectedTeacher.displayName}</h3>
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-300">Ã™Æ’Ã™â€žÃ™â€¦Ã˜Â© Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â±Ã™Ë†Ã˜Â± Ã˜Â§Ã™â€žÃ˜Â¬Ã˜Â¯Ã™Å Ã˜Â¯Ã˜Â©</label>
-              <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="glass-input text-sm" placeholder="6 Ã˜Â£Ã˜Â­Ã˜Â±Ã™Â Ã˜Â¹Ã™â€žÃ™â€° Ã˜Â§Ã™â€žÃ˜Â£Ã™â€šÃ™â€ž" dir="ltr" autoFocus />
+          <div className="bg-slate-900 border border-white/10 text-white rounded-lg p-6 max-w-md w-full animate-modalUp">
+            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><KeyRound className="w-5 h-5" /> تغيير كلمة المرور - {selectedTeacher.displayName}</h3>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-slate-300 mb-2">كلمة المرور الجديدة</label>
+              <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full px-4 py-2 border border-slate-600 bg-slate-800 text-white rounded-md focus:ring-2 focus:ring-blue-500" placeholder="6 أحرف على الأقل" dir="ltr" autoFocus />
             </div>
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-300">Ã™Æ’Ã™â€žÃ™â€¦Ã˜Â© Ã˜Â§Ã™â€žÃ˜Â³Ã˜Â± Ã˜Â§Ã™â€žÃ˜Â­Ã˜Â§Ã™â€žÃ™Å Ã˜Â© Ã™â€žÃ™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å  (Ã˜Â§Ã˜Â®Ã˜ÂªÃ™Å Ã˜Â§Ã˜Â±Ã™Å )</label>
-              <input type="password" value={currentTeacherPassword} onChange={(e) => setCurrentTeacherPassword(e.target.value)} className="glass-input text-sm" placeholder="Ã˜Â§Ã˜ÂªÃ˜Â±Ã™Æ’Ã™â€¡Ã˜Â§ Ã™ÂÃ˜Â§Ã˜Â±Ã˜ÂºÃ˜Â© Ã˜Â¥Ã™â€  Ã™â€žÃ™â€¦ Ã˜ÂªÃ™Æ’Ã™â€  Ã™â€¦Ã˜Â¹Ã˜Â±Ã™Ë†Ã™ÂÃ˜Â©" dir="ltr" />
-              <p className="text-xs text-slate-400">Ã˜ÂªÃ™ÂÃ˜Â·Ã™â€žÃ˜Â¨ Ã™ÂÃ™â€šÃ˜Â· Ã˜Â¥Ã˜Â°Ã˜Â§ Ã˜ÂªÃ˜ÂºÃ™Å Ã™â€˜Ã˜Â±Ã˜Âª Ã™Æ’Ã™â€žÃ™â€¦Ã˜Â© Ã˜Â§Ã™â€žÃ˜Â³Ã˜Â± Ã™â€¦Ã™â€  Firebase Ã™Ë†Ã™â€žÃ™â€¦ Ã™Å Ã˜Â¯Ã˜Â®Ã™â€ž Ã˜Â§Ã™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å  Ã˜Â¨Ã˜Â¹Ã˜Â¯.</p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-slate-300 mb-2">كلمة السر الحالية للتدريسي (اختياري)</label>
+              <input type="password" value={currentTeacherPassword} onChange={(e) => setCurrentTeacherPassword(e.target.value)} className="w-full px-4 py-2 border border-slate-600 bg-slate-800 text-white rounded-md focus:ring-2 focus:ring-blue-500" placeholder="اتركها فارغة إن لم تكن معروفة" dir="ltr" />
+              <p className="text-xs text-slate-400 mt-1">تُطلب فقط إذا تغيّرت كلمة السر من Firebase ولم يدخل التدريسي بعد.</p>
             </div>
-            {error && <div className="p-3 bg-red-500/10 border border-red-500/40 text-red-300 rounded text-sm">{error}</div>}
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-3 text-sm text-yellow-300 flex items-start gap-2"><TriangleAlert className="w-4 h-4 shrink-0 mt-0.5" /> Ã˜ÂªÃ˜Â£Ã™Æ’Ã˜Â¯ Ã™â€¦Ã™â€  Ã˜Â­Ã™ÂÃ˜Â¸ Ã™Æ’Ã™â€žÃ™â€¦Ã˜Â© Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â±Ã™Ë†Ã˜Â± Ã™Ë†Ã˜Â¥Ã˜Â¨Ã™â€žÃ˜Â§Ã˜ÂºÃ™â€¡Ã˜Â§ Ã™â€žÃ™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å </div>
-            <div className="flex flex-wrap gap-2 justify-end">
-              <button onClick={() => { setShowPasswordModal(false); setNewPassword(''); setCurrentTeacherPassword(''); setError(''); }} disabled={loading} className="btn-base btn-secondary">Ã˜Â¥Ã™â€žÃ˜ÂºÃ˜Â§Ã˜Â¡</button>
-              <button onClick={handleChangePassword} disabled={loading} className="btn-base btn-primary">{loading ? 'Ã˜Â¬Ã˜Â§Ã˜Â±Ã™Â Ã˜Â§Ã™â€žÃ˜ÂªÃ˜ÂºÃ™Å Ã™Å Ã˜Â±...' : 'Ã˜ÂªÃ˜ÂºÃ™Å Ã™Å Ã˜Â±'}</button>
+            {error && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/40 text-red-300 rounded text-sm">{error}</div>}
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-3 mb-4 text-sm text-yellow-300 flex items-start gap-2"><TriangleAlert className="w-4 h-4 shrink-0 mt-0.5" /> تأكد من حفظ كلمة المرور وإبلاغها للتدريسي</div>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => { setShowPasswordModal(false); setNewPassword(''); setCurrentTeacherPassword(''); setError(''); }} disabled={loading} className="bg-white/10 hover:bg-white/20 text-white font-medium py-2 px-4 rounded">إلغاء</button>
+              <button onClick={handleChangePassword} disabled={loading} className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-4 rounded">{loading ? 'جارٍ التغيير...' : 'تغيير'}</button>
             </div>
           </div>
         </div>
       )}
 
       <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm text-blue-300 space-y-2">
-        <p className="flex items-start gap-2"><Lightbulb className="w-4 h-4 shrink-0 mt-0.5" /> <strong>Ã™Æ’Ã™Å Ã™Â Ã˜ÂªÃ˜Â¹Ã™â€¦Ã™â€ž Ã˜Â§Ã™â€žÃ˜ÂµÃ™â€žÃ˜Â§Ã˜Â­Ã™Å Ã˜Â§Ã˜Âª:</strong> Ã™â€žÃ™â€¦Ã˜Â§ Ã˜ÂªÃ˜Â­Ã˜Â¯Ã˜Â¯ Ã™â€¦Ã˜Â±Ã˜Â§Ã˜Â­Ã™â€ž Ã™â€žÃ˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å Ã˜Å’ Ã˜Â±Ã˜Â§Ã˜Â­ Ã™Å Ã˜Â´Ã™Ë†Ã™Â Ã™ÂÃ™â€šÃ˜Â· Ã™â€¡Ã˜Â°Ã™Å  Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â±Ã˜Â§Ã˜Â­Ã™â€ž Ã™Ë†Ã˜Â·Ã™â€žÃ˜Â§Ã˜Â¨Ã™â€¡Ã˜Â§. Ã™â€¦Ã˜Â§ Ã™Å Ã™â€šÃ˜Â¯Ã˜Â± Ã™Å Ã˜Â¶Ã™Å Ã™Â Ã˜Â£Ã™Ë† Ã™Å Ã˜Â­Ã˜Â°Ã™Â Ã˜Â§Ã™â€žÃ˜Â·Ã™â€žÃ˜Â§Ã˜Â¨ - Ã™ÂÃ™â€šÃ˜Â· Ã™Å Ã˜Â³Ã˜Â¬Ã™â€ž Ã˜Â§Ã™â€žÃ˜Â­Ã˜Â¶Ã™Ë†Ã˜Â±.</p>
+        <p className="flex items-start gap-2"><Lightbulb className="w-4 h-4 shrink-0 mt-0.5" /> <strong>كيف تعمل الصلاحيات:</strong> لما تحدد مراحل لتدريسي، راح يشوف فقط هذي المراحل وطلابها. ما يقدر يضيف أو يحذف الطلاب - فقط يسجل الحضور.</p>
 
-        <p className="flex items-start gap-2"><UserCheck className="w-4 h-4 shrink-0 mt-0.5" /> Ã˜Â¥Ã˜Â°Ã˜Â§ Ã˜ÂªÃ˜Â¯Ã˜Â±Ã™Å Ã˜Â³Ã™Å  Ã˜Â¸Ã™â€¡Ã˜Â± Ã˜Â¨Ã˜Â­Ã˜Â§Ã™â€žÃ˜Â© "Ã™â€¦Ã˜Â¹Ã˜Â·Ã™â€˜Ã™â€ž" Ã˜Â¨Ã˜Â¹Ã˜Â¯ Ã˜Â§Ã™â€žÃ˜ÂªÃ˜ÂµÃ™ÂÃ™Å Ã˜Â± Ã˜Â§Ã™â€žÃ˜Â³Ã™â€ Ã™Ë†Ã™Å Ã˜Å’ Ã˜Â§Ã˜Â¶Ã˜ÂºÃ˜Â· <strong>"Ã˜Â¥Ã˜Â¹Ã˜Â§Ã˜Â¯Ã˜Â© Ã˜ÂªÃ™ÂÃ˜Â¹Ã™Å Ã™â€ž"</strong> Ã˜Â«Ã™â€¦ Ã˜Â­Ã˜Â¯Ã˜Â¯ Ã™â€žÃ™â€¡ Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â±Ã˜Â§Ã˜Â­Ã™â€ž Ã˜Â§Ã™â€žÃ˜Â¬Ã˜Â¯Ã™Å Ã˜Â¯Ã˜Â©.</p>
+        <p className="flex items-start gap-2"><UserCheck className="w-4 h-4 shrink-0 mt-0.5" /> إذا تدريسي ظهر بحالة "معطّل" بعد التصفير السنوي، اضغط <strong>"إعادة تفعيل"</strong> ثم حدد له المراحل الجديدة.</p>
       </div>
 
       {ConfirmDialogEl}

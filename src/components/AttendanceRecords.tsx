@@ -532,7 +532,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
       {/* ============================================================ */}
       <div className="pt-4 sm:pt-6 border-t border-white/10">
         {/* 🧰 شريط الأدوات */}
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4 border-b border-white/10 pb-4 sm:pb-5 mb-4">
+        <div className="flex items-center gap-2 sm:gap-4 border-b border-white/10 pb-4 sm:pb-5 mb-4">
           <div className="flex items-center gap-2.5">
             <span className="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center shrink-0">
               <CircleCheck className="w-5 h-5 text-emerald-400" />
@@ -542,7 +542,7 @@ export const AttendanceRecords: React.FC<AttendanceRecordsProps> = React.memo(({
             </h3>
           </div>
 
-          <div className="ms-auto flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+          <div className="ms-auto flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="relative flex-1 min-w-0 sm:flex-none sm:min-w-[220px]">
               <select
                 value={selectedSessionId || ''}

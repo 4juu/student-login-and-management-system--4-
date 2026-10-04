@@ -22,7 +22,7 @@ interface SendAttendanceLinkProps {
   subjectName: string;
   teacherId?: string;
   onClose: () => void;
-  /** Ø§Ù„Ù…Ø±Ø­Ù„Ø© Ø§Ù„Ù…ÙØªÙˆØ­Ø© Ø­Ø§Ù„ÙŠØ§Ù‹ â€” ØªÙØ®ØªØ§Ø± ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹ Ø¨Ø¯Ù„ Ø¥Ø¬Ø¨Ø§Ø± Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… Ø¹Ù„Ù‰ Ø§Ø®ØªÙŠØ§Ø± Ø§Ù„ÙƒÙ„ÙŠØ© ÙˆØ§Ù„Ù…Ø±Ø­Ù„Ø© */
+  /** المرحلة المفتوحة حالياً — تُختار تلقائياً بدل إجبار المستخدم على اختيار الكلية والمرحلة */
   defaultStageId?: string | null;
 }
 
@@ -69,13 +69,13 @@ const generateExcel = async (
 
   const data: any[][] = [];
 
-  data.push(['Ø±Ø§Ø¨Ø· ØªÙ‚Ø±ÙŠØ± Ø§Ù„Ø­Ø¶ÙˆØ± ÙˆØ§Ù„ØºÙŠØ§Ø¨ Ù„Ù„Ø·Ù„Ø§Ø¨', '', '', '']);
+  data.push(['رابط تقرير الحضور والغياب للطلاب', '', '', '']);
   data.push(['', '', '', '']);
-  data.push(['Ø§Ù„ÙƒÙ„ÙŠØ©', 'Ø§Ù„Ù…Ø±Ø­Ù„Ø©', 'Ø§Ù„Ù…Ø§Ø¯Ø©', 'Ø±Ø§Ø¨Ø· Ø§Ù„ØªÙ‚Ø±ÙŠØ±']);
+  data.push(['الكلية', 'المرحلة', 'المادة', 'رابط التقرير']);
   data.push([link.collegeName, link.stageName, link.subjectName, link.url]);
   data.push(['', '', '', '']);
-  data.push(['ØµÙ„Ø§Ø­ÙŠØ© Ø§Ù„Ø±Ø§Ø¨Ø·', `${link.expiryDays} ÙŠÙˆÙ…`, '', '']);
-  data.push(['ØªØ§Ø±ÙŠØ® Ø§Ù„ØªÙˆÙ„ÙŠØ¯', link.date, '', '']);
+  data.push(['صلاحية الرابط', `${link.expiryDays} يوم`, '', '']);
+  data.push(['تاريخ التوليد', link.date, '', '']);
 
   const ws = XLSX.utils.aoa_to_sheet(data);
 
@@ -173,7 +173,7 @@ const generateExcel = async (
 
   const wb = XLSX.utils.book_new();
   wb.Workbook = { Views: [{ RTL: true }] };
-  XLSX.utils.book_append_sheet(wb, ws, 'Ø±Ø§Ø¨Ø· Ø§Ù„Ø­Ø¶ÙˆØ±');
+  XLSX.utils.book_append_sheet(wb, ws, 'رابط الحضور');
 
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
 
@@ -191,7 +191,7 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
   onClose,
   defaultStageId = null,
 }) => {
-  // Ø§Ù„Ù…Ø±Ø­Ù„Ø© Ø§Ù„Ù…ÙØªÙˆØ­Ø© Ø­Ø§Ù„ÙŠØ§Ù‹ â€” ØªÙØ®ØªØ§Ø± ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹ Ù…Ø§ Ø¯Ø§Ù…Øª Ø¶Ù…Ù† Ù†Ø·Ø§Ù‚ Ø§Ù„ØµÙ„Ø§Ø­ÙŠØ©
+  // المرحلة المفتوحة حالياً — تُختار تلقائياً ما دامت ضمن نطاق الصلاحية
   const autoStage = useMemo(() => {
     if (!defaultStageId) return null;
     const stage = stages.find(s => s.id === defaultStageId);
@@ -202,7 +202,7 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
 
   const [selectedCollegeId, setSelectedCollegeId] = useState(autoStage?.stage.collegeId ?? '');
   const [selectedStageId, setSelectedStageId] = useState(autoStage?.stage.id ?? '');
-  // Ø¹Ù†Ø¯ Ø§Ù„Ø§Ø®ØªÙŠØ§Ø± Ø§Ù„ØªÙ„Ù‚Ø§Ø¦ÙŠ ØªÙØ®ÙÙ‰ Ø§Ù„Ù‚ÙˆØ§Ø¦Ù… ÙˆÙŠØ¸Ù‡Ø± Ø§Ø³Ù… Ø§Ù„Ù…Ø±Ø­Ù„Ø© ÙÙ‚Ø· â€” Ù…Ø¹ Ø²Ø± Â«ØªØºÙŠÙŠØ±Â» ÙŠØ¹ÙŠØ¯Ù‡Ø§ ÙƒÙ…Ø§ ÙƒØ§Ù†Øª
+  // عند الاختيار التلقائي تُخفى القوائم ويظهر اسم المرحلة فقط — مع زر «تغيير» يعيدها كما كانت
   const [showPicker, setShowPicker] = useState(!autoStage);
   const [expiryDays, setExpiryDays] = useState(30);
   const [generatedLink, setGeneratedLink] = useState<GeneratedAttendanceLink | null>(null);
@@ -239,11 +239,11 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
   };
 
   const handleGenerateLink = () => {
-    if (!selectedStageId) { toast({ variant: 'destructive', title: 'Ø§Ù„Ø±Ø¬Ø§Ø¡ Ø§Ø®ØªÙŠØ§Ø± Ù…Ø±Ø­Ù„Ø©' }); return; }
+    if (!selectedStageId) { toast({ variant: 'destructive', title: 'الرجاء اختيار مرحلة' }); return; }
     setConfirmState({
-      title: 'ØªØ£ÙƒÙŠØ¯ ØªÙˆÙ„ÙŠØ¯ Ø±Ø§Ø¨Ø· Ø§Ù„Ø­Ø¶ÙˆØ±',
-      message: `Ø³ÙŠØªÙ… ØªÙˆÙ„ÙŠØ¯ Ø±Ø§Ø¨Ø· ØªÙ‚Ø±ÙŠØ± Ø§Ù„Ø­Ø¶ÙˆØ± ÙˆØ§Ù„ØºÙŠØ§Ø¨ Ù„Ù„Ù…Ø±Ø­Ù„Ø©: ${selectedStage?.name}\nØ§Ù„Ù…Ø§Ø¯Ø©: ${subjectName}\nÙ…ØªØ§Ø¨Ø¹Ø©ØŸ`,
-      confirmLabel: 'Ù†Ø¹Ù…ØŒ ØªÙˆÙ„ÙŠØ¯',
+      title: 'تأكيد توليد رابط الحضور',
+      message: `سيتم توليد رابط تقرير الحضور والغياب للمرحلة: ${selectedStage?.name}\nالمادة: ${subjectName}\nمتابعة؟`,
+      confirmLabel: 'نعم، توليد',
       onConfirm: () => {
         setConfirmState(null);
         doGenerateLink();
@@ -262,8 +262,8 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
         token,
         url,
         expiryDays,
-        stageName: selectedStage?.name || 'ØºÙŠØ± Ù…Ø­Ø¯Ø¯',
-        collegeName: selectedCollege?.name || 'ØºÙŠØ± Ù…Ø­Ø¯Ø¯',
+        stageName: selectedStage?.name || 'غير محدد',
+        collegeName: selectedCollege?.name || 'غير محدد',
         subjectName,
         date,
         copied: false,
@@ -271,7 +271,7 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
       setGeneratedLink(generated);
     } catch (e: any) {
       console.error(e);
-      toast({ variant: 'destructive', title: 'ÙØ´Ù„ ØªÙˆÙ„ÙŠØ¯ Ø§Ù„Ø±Ø§Ø¨Ø·', description: e.message || undefined });
+      toast({ variant: 'destructive', title: 'فشل توليد الرابط', description: e.message || undefined });
     } finally {
       setGenerating(false);
     }
@@ -285,7 +285,7 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
       setTimeout(() => {
         setGeneratedLink(prev => prev ? { ...prev, copied: false } : null);
       }, 2000);
-    } catch { toast({ variant: 'destructive', title: 'ÙØ´Ù„ Ø§Ù„Ù†Ø³Ø®' }); }
+    } catch { toast({ variant: 'destructive', title: 'فشل النسخ' }); }
   };
 
   const handleDownloadExcel = async () => {
@@ -304,12 +304,12 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
   const handleShareWhatsApp = () => {
     if (!generatedLink) return;
     const text = encodeURIComponent(
-      `ðŸ“Š ØªÙ‚Ø±ÙŠØ± Ø§Ù„Ø­Ø¶ÙˆØ± ÙˆØ§Ù„ØºÙŠØ§Ø¨\n\n` +
-      `Ø§Ù„ÙƒÙ„ÙŠØ©: ${generatedLink.collegeName}\n` +
-      `Ø§Ù„Ù…Ø±Ø­Ù„Ø©: ${generatedLink.stageName}\n` +
-      `Ø§Ù„Ù…Ø§Ø¯Ø©: ${generatedLink.subjectName}\n\n` +
-      `Ø±Ø§Ø¨Ø· Ø§Ù„ØªÙ‚Ø±ÙŠØ±:\n${generatedLink.url}\n\n` +
-      `Ø§Ù„Ø±Ø§Ø¨Ø· ØµØ§Ù„Ø­ Ù„Ù…Ø¯Ø© ${generatedLink.expiryDays} ÙŠÙˆÙ….`
+      `📊 تقرير الحضور والغياب\n\n` +
+      `الكلية: ${generatedLink.collegeName}\n` +
+      `المرحلة: ${generatedLink.stageName}\n` +
+      `المادة: ${generatedLink.subjectName}\n\n` +
+      `رابط التقرير:\n${generatedLink.url}\n\n` +
+      `الرابط صالح لمدة ${generatedLink.expiryDays} يوم.`
     );
     const a = document.createElement('a');
     a.href = `https://wa.me/?text=${text}`;
@@ -329,35 +329,35 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <h2 id="attendance-link-dialog-title" className="text-base sm:text-lg font-semibold text-white flex items-center gap-2">
-                  <CalendarDays className="w-5 h-5 text-emerald-400 shrink-0" /> Ø±Ø§Ø¨Ø· ØªÙ‚Ø±ÙŠØ± Ø§Ù„Ø­Ø¶ÙˆØ± Ø¬Ø§Ù‡Ø²
+                  <CalendarDays className="w-5 h-5 text-emerald-400 shrink-0" /> رابط تقرير الحضور جاهز
                 </h2>
                 <p className="text-sm text-slate-400 mt-1">
-                  <strong className="text-emerald-400">{generatedLink.stageName}</strong> â€¢ {generatedLink.collegeName}
+                  <strong className="text-emerald-400">{generatedLink.stageName}</strong> • {generatedLink.collegeName}
                 </p>
               </div>
-              <button type="button" aria-label="Ø¥ØºÙ„Ø§Ù‚" onClick={onClose} className="shrink-0 bg-red-500/20 hover:bg-red-500/30 text-red-300 w-10 h-10 rounded-full font-bold text-lg transition duration-200">âœ•</button>
+              <button type="button" aria-label="إغلاق" onClick={onClose} className="shrink-0 bg-red-500/20 hover:bg-red-500/30 text-red-300 w-10 h-10 rounded-full font-bold text-lg transition duration-200">✕</button>
             </div>
           </div>
 
           <div className="px-4 sm:px-6 py-4 border-b border-white/10 bg-white/5 shrink-0">
             <div className="flex flex-wrap gap-2 items-center">
               <button onClick={handleCopyLink} className="btn-base btn-primary">
-                <Copy className="w-4 h-4" /> {generatedLink.copied ? 'ØªÙ… Ø§Ù„Ù†Ø³Ø®!' : 'Ù†Ø³Ø® Ø§Ù„Ø±Ø§Ø¨Ø·'}
+                <Copy className="w-4 h-4" /> {generatedLink.copied ? 'تم النسخ!' : 'نسخ الرابط'}
               </button>
 
               <button onClick={handleDownloadExcel} className="btn-base btn-secondary">
-                <FileSpreadsheet className="w-4 h-4" /> ØªØ­Ù…ÙŠÙ„ Excel
+                <FileSpreadsheet className="w-4 h-4" /> تحميل Excel
               </button>
 
               <button onClick={handleShareWhatsApp} className="btn-base btn-secondary">
-                <Smartphone className="w-4 h-4" /> ÙˆØ§ØªØ³Ø§Ø¨
+                <Smartphone className="w-4 h-4" /> واتساب
               </button>
 
               <div className="hidden sm:block flex-1" />
 
               <div className="flex items-center gap-2 bg-emerald-500/15 px-3 py-1.5 rounded-lg border border-emerald-500/30">
                 <span className="text-xs text-emerald-300 font-medium flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" /> ØµØ§Ù„Ø­Ø© {generatedLink.expiryDays} ÙŠÙˆÙ…
+                  <Clock className="w-3.5 h-3.5" /> صالحة {generatedLink.expiryDays} يوم
                 </span>
               </div>
             </div>
@@ -371,17 +371,17 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
                 </div>
                 <div className="min-w-0">
                   <p className="font-bold text-white text-base sm:text-lg truncate">{generatedLink.subjectName}</p>
-                  <p className="text-xs text-slate-400">Ø§Ø³Ù… Ø§Ù„Ù…Ø§Ø¯Ø© (Ù…Ù† ÙˆØµÙ Ø§Ù„ØªØ¯Ø±ÙŠØ³ÙŠ)</p>
+                  <p className="text-xs text-slate-400">اسم المادة (من وصف التدريسي)</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                 <div className="bg-slate-800 p-3 rounded-lg border border-white/10">
-                  <p className="text-xs text-slate-400">Ø§Ù„ÙƒÙ„ÙŠØ©</p>
+                  <p className="text-xs text-slate-400">الكلية</p>
                   <p className="font-bold text-white">{generatedLink.collegeName}</p>
                 </div>
                 <div className="bg-slate-800 p-3 rounded-lg border border-white/10">
-                  <p className="text-xs text-slate-400">Ø§Ù„Ù…Ø±Ø­Ù„Ø©</p>
+                  <p className="text-xs text-slate-400">المرحلة</p>
                   <p className="font-bold text-white">{generatedLink.stageName}</p>
                 </div>
               </div>
@@ -394,7 +394,7 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
 
           <div className="px-4 sm:px-6 py-3 border-t border-white/10 bg-white/5 text-center shrink-0">
             <button onClick={() => setGeneratedLink(null)} className="text-sm text-emerald-400 hover:text-emerald-300 font-medium hover:underline flex items-center gap-1 mx-auto">
-              <ChevronRight className="w-4 h-4" /> ØªÙˆÙ„ÙŠØ¯ Ø±Ø§Ø¨Ø· Ø¢Ø®Ø±
+              <ChevronRight className="w-4 h-4" /> توليد رابط آخر
             </button>
           </div>
         </div>
@@ -411,11 +411,11 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h2 id="attendance-link-create-title" className="text-base sm:text-lg font-semibold text-white flex items-center gap-2">
-                <CalendarDays className="w-5 h-5 text-teal-400 shrink-0" /> Ø¥Ù†Ø´Ø§Ø¡ Ø±Ø§Ø¨Ø· ØªÙ‚Ø±ÙŠØ± Ø§Ù„Ø­Ø¶ÙˆØ±
+                <CalendarDays className="w-5 h-5 text-teal-400 shrink-0" /> إنشاء رابط تقرير الحضور
               </h2>
-              <p className="text-sm text-slate-400 mt-1">Ø±Ø§Ø¨Ø· ÙˆØ§Ø­Ø¯ Ù„Ù„Ù…Ø±Ø­Ù„Ø© - Ø§Ù„Ø·Ù„Ø§Ø¨ ÙŠØ±ÙØ¹ÙˆÙ† Ø§Ù„Ù‡ÙˆÙŠØ© ÙˆÙŠØ´ÙˆÙÙˆÙ† ØªÙ‚Ø±ÙŠØ±Ù‡Ù…</p>
+              <p className="text-sm text-slate-400 mt-1">رابط واحد للمرحلة - الطلاب يرفعون الهوية ويشوفون تقريرهم</p>
             </div>
-            <button type="button" aria-label="Ø¥ØºÙ„Ø§Ù‚" onClick={onClose} className="shrink-0 bg-red-500/20 hover:bg-red-500/30 text-red-300 w-10 h-10 rounded-full font-bold text-lg transition duration-200">âœ•</button>
+            <button type="button" aria-label="إغلاق" onClick={onClose} className="shrink-0 bg-red-500/20 hover:bg-red-500/30 text-red-300 w-10 h-10 rounded-full font-bold text-lg transition duration-200">✕</button>
           </div>
         </div>
 
@@ -424,7 +424,7 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
           {!showPicker && autoStage ? (
             <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-bold text-slate-400 mb-0.5">Ø§Ù„Ù…Ø±Ø­Ù„Ø© Ø§Ù„Ù…Ø®ØªØ§Ø±Ø© ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹</p>
+                <p className="text-xs font-bold text-slate-400 mb-0.5">المرحلة المختارة تلقائياً</p>
                 <p className="text-sm font-extrabold text-white truncate">
                   {autoStage.college ? `${autoStage.college.icon || ''} ` : ''}{autoStage.stage.name}
                 </p>
@@ -435,31 +435,31 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
                 onClick={() => setShowPicker(true)}
                 className="shrink-0 rounded-lg border border-teal-500/40 px-3 py-2 text-xs font-bold text-teal-300 transition hover:bg-teal-500/15 hover:text-teal-200 focus:outline-none focus:ring-2 focus:ring-teal-500/40"
               >
-                ØªØºÙŠÙŠØ± Ø§Ù„Ù…Ø±Ø­Ù„Ø©
+                تغيير المرحلة
               </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="block text-sm font-bold text-slate-300 flex items-center gap-1.5"><Landmark className="w-4 h-4" /> Ø§Ù„ÙƒÙ„ÙŠØ©</label>
+                <label className="block text-sm font-bold text-slate-300 flex items-center gap-1.5"><Landmark className="w-4 h-4" /> الكلية</label>
                 <select
                   value={selectedCollegeId}
                   onChange={e => { setSelectedCollegeId(e.target.value); setSelectedStageId(''); }}
                   className="glass-input appearance-none text-sm"
                 >
-                  <option value="">Ø§Ø®ØªØ± ÙƒÙ„ÙŠØ©...</option>
+                  <option value="">اختر كلية...</option>
                   {colleges.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className="block text-sm font-bold text-slate-300 flex items-center gap-1.5"><Library className="w-4 h-4" /> Ø§Ù„Ù…Ø±Ø­Ù„Ø©</label>
+                <label className="block text-sm font-bold text-slate-300 flex items-center gap-1.5"><Library className="w-4 h-4" /> المرحلة</label>
                 <select
                   value={selectedStageId}
                   onChange={e => handleStageChange(e.target.value)}
                   disabled={!selectedCollegeId}
                   className="glass-input appearance-none text-sm disabled:opacity-50"
                 >
-                  <option value="">Ø§Ø®ØªØ± Ù…Ø±Ø­Ù„Ø©...</option>
+                  <option value="">اختر مرحلة...</option>
                   {stagesForCollege.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
@@ -468,31 +468,31 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
 
           <div className="bg-teal-500/10 border border-teal-500/30 rounded-xl p-4">
             <label className="flex items-center justify-between text-sm font-bold text-teal-300 mb-2">
-              <span className="flex items-center gap-1.5"><CalendarDays className="w-4 h-4" /> Ù…Ø¯Ø© ØµÙ„Ø§Ø­ÙŠØ© Ø§Ù„Ø±Ø§Ø¨Ø·</span>
-              <span className="bg-teal-600 text-white px-3 py-1 rounded-full text-xs">{expiryDays} ÙŠÙˆÙ…</span>
+              <span className="flex items-center gap-1.5"><CalendarDays className="w-4 h-4" /> مدة صلاحية الرابط</span>
+              <span className="bg-teal-600 text-white px-3 py-1 rounded-full text-xs">{expiryDays} يوم</span>
             </label>
             <input type="range" min="1" max="90" value={expiryDays} onChange={e => setExpiryDays(Number(e.target.value))} className="w-full accent-teal-500 h-2" />
             <div className="flex justify-between text-xs text-teal-400 mt-1">
-              <span>1 ÙŠÙˆÙ…</span><span>30 ÙŠÙˆÙ…</span><span>90 ÙŠÙˆÙ…</span>
+              <span>1 يوم</span><span>30 يوم</span><span>90 يوم</span>
             </div>
           </div>
 
           <div className="bg-white/5 border border-white/10 rounded-xl p-4">
             <label className="block text-sm font-bold text-slate-300 mb-2 flex items-center gap-1.5">
-              <BookOpen className="w-4 h-4" /> Ø§Ù„Ù…Ø§Ø¯Ø©
+              <BookOpen className="w-4 h-4" /> المادة
             </label>
             <div className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white font-medium">
-              {subjectName || 'Ù„Ù… ÙŠØªÙ… ØªØ¹ÙŠÙŠÙ† ÙˆØµÙ Ù„Ù„Ù…Ø§Ø¯Ø© ÙÙŠ Ø§Ù„Ù…Ù„Ù Ø§Ù„Ø´Ø®ØµÙŠ'}
+              {subjectName || 'لم يتم تعيين وصف للمادة في الملف الشخصي'}
             </div>
-            <p className="text-xs text-slate-400 mt-1">ÙŠØ¤Ø®Ø° Ù…Ù† Ø§Ù„Ø¨Ø§ÙŠÙˆ ÙÙŠ Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Ø§Ù„Ù…Ù„Ù Ø§Ù„Ø´Ø®ØµÙŠ</p>
+            <p className="text-xs text-slate-400 mt-1">يؤخذ من البايو في إعدادات الملف الشخصي</p>
           </div>
 
           {selectedStageId && (
             <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
               <p className="text-sm text-emerald-300 font-medium flex items-center gap-1.5">
-                <Users className="w-4 h-4" /> Ø³ÙŠØªÙ… Ø¥Ù†Ø´Ø§Ø¡ Ø±Ø§Ø¨Ø· ÙˆØ§Ø­Ø¯ Ù…Ø´ØªØ±Ùƒ Ù„ÙƒÙ„ Ø·Ù„Ø§Ø¨ Ù…Ø±Ø­Ù„Ø© <strong>{selectedStage?.name}</strong>
+                <Users className="w-4 h-4" /> سيتم إنشاء رابط واحد مشترك لكل طلاب مرحلة <strong>{selectedStage?.name}</strong>
               </p>
-              <p className="text-xs text-emerald-400 mt-1">Ø§Ù„Ø·Ø§Ù„Ø¨ ÙŠØ±ÙØ¹ Ù‡ÙˆÙŠØªÙ‡ â†’ ÙŠØªØ·Ø§Ø¨Ù‚ Ø§Ù„Ø§Ø³Ù… â†’ ÙŠØ´ÙˆÙ Ø£ÙŠØ§Ù… Ø­Ø¶ÙˆØ±Ù‡ ÙˆØºÙŠØ§Ø¨Ù‡</p>
+              <p className="text-xs text-emerald-400 mt-1">الطالب يرفع هويته → يتطابق الاسم → يشوف أيام حضوره وغيابه</p>
             </div>
           )}
 
@@ -505,8 +505,8 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
             className="btn-base btn-primary w-full"
           >
             {generating
-              ? <><MorphingSquare size="sm" /> Ø¬Ø§Ø±ÙŠ Ø§Ù„ØªÙˆÙ„ÙŠØ¯...</>
-              : <><Rocket className="w-5 h-5" /> ØªÙˆÙ„ÙŠØ¯ Ø±Ø§Ø¨Ø· Ø§Ù„Ø­Ø¶ÙˆØ±</>}
+              ? <><MorphingSquare size="sm" /> جاري التوليد...</>
+              : <><Rocket className="w-5 h-5" /> توليد رابط الحضور</>}
           </button>
         </div>
 
@@ -518,10 +518,10 @@ export const SendAttendanceLink: React.FC<SendAttendanceLinkProps> = ({
                 <p className="text-sm text-slate-400 mb-6 whitespace-pre-line">{confirmState.message}</p>
                 <div className="flex flex-wrap gap-2">
                   <button onClick={confirmState.onConfirm} className="btn-base btn-primary flex-1">
-                    {confirmState.confirmLabel || 'Ù…ÙˆØ§ÙÙ‚'}
+                    {confirmState.confirmLabel || 'موافق'}
                   </button>
                   <button onClick={() => setConfirmState(null)} className="btn-base btn-secondary flex-1">
-                    Ø¥Ù„ØºØ§Ø¡
+                    إلغاء
                   </button>
                 </div>
               </div>
